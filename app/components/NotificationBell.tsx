@@ -10,20 +10,28 @@ type Notification = {
   created_at?: string;
 };
 
-export default function NotificationBell() {
+type NotificationBellProps = {
+  notifications?: Notification[];
+};
+
+export default function NotificationBell({
+  notifications = [],
+}: NotificationBellProps) {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<Notification[]>([]);
+  const [items, setItems] = useState<Notification[]>(notifications);
   const [userId, setUserId] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
 
-  /* ================= USER ================= */
+  useEffect(() => {
+    setItems(notifications);
+  }, [notifications]);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null);
     });
   }, []);
 
-  /* ================= LOAD ================= */
   const load = useCallback(async () => {
     if (!userId) return;
 
@@ -33,33 +41,26 @@ export default function NotificationBell() {
       .eq("user_id", userId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(20); // 🔥 menos dados = mais rápido
+      .limit(20);
 
-    setItems(data || []);
-  }, [userId]);
+    setItems(data || notifications || []);
+  }, [userId, notifications]);
 
   useEffect(() => {
     if (userId) load();
   }, [userId, load]);
 
-  /* ================= UNREAD ================= */
   const unread = useMemo(
     () => items.reduce((acc, n) => acc + (n.read ? 0 : 1), 0),
     [items]
   );
 
-  /* ================= ACTIONS ================= */
   async function markAsRead(id: string) {
     setItems((prev) =>
-      prev.map((n) =>
-        n.id === id ? { ...n, read: true } : n
-      )
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
 
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("id", id);
+    await supabase.from("notifications").update({ read: true }).eq("id", id);
   }
 
   async function clearAll() {
@@ -79,10 +80,8 @@ export default function NotificationBell() {
     }
   }
 
-  /* ================= UI ================= */
   return (
     <div className="relative">
-      {/* BELL */}
       <button
         onClick={() => setOpen((v) => !v)}
         className="
@@ -104,7 +103,6 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* BACKDROP */}
       {open && (
         <div
           onClick={() => setOpen(false)}
@@ -112,25 +110,21 @@ export default function NotificationBell() {
         />
       )}
 
-      {/* PANEL */}
       {open && (
         <div
-  className="
-    fixed sm:absolute
-    right-2 sm:right-0
-    top-14 sm:mt-2
-
-    w-[92vw] max-w-[320px] sm:w-80
-
-    bg-white
-    border border-gray-100
-    shadow-xl
-    rounded-xl
-    overflow-hidden
-    z-50
-  "
->
-          {/* HEADER */}
+          className="
+            fixed sm:absolute
+            right-2 sm:right-0
+            top-14 sm:mt-2
+            w-[92vw] max-w-[320px] sm:w-80
+            bg-white
+            border border-gray-100
+            shadow-xl
+            rounded-xl
+            overflow-hidden
+            z-50
+          "
+        >
           <div className="px-3 py-2 flex items-center justify-between border-b bg-gray-50">
             <p className="text-xs font-semibold text-gray-800">
               Notifications
@@ -139,24 +133,17 @@ export default function NotificationBell() {
             <button
               onClick={clearAll}
               disabled={clearing || items.length === 0}
-              className="
-                text-[10px]
-                text-red-500
-                disabled:opacity-40
-              "
+              className="text-[10px] text-red-500 disabled:opacity-40"
             >
               {clearing ? "..." : "clear"}
             </button>
           </div>
 
-          {/* LIST */}
           <div className="max-h-[55vh] overflow-y-auto">
             {items.length === 0 ? (
               <div className="p-6 text-center">
                 <div className="text-2xl mb-1">🔕</div>
-                <p className="text-xs text-gray-500">
-                  No notifications
-                </p>
+                <p className="text-xs text-gray-500">No notifications</p>
               </div>
             ) : (
               items.map((n) => (
@@ -169,7 +156,6 @@ export default function NotificationBell() {
                     transition
                   "
                 >
-                  {/* DOT */}
                   <div className="mt-1">
                     <div
                       className={`w-2 h-2 rounded-full ${
@@ -178,7 +164,6 @@ export default function NotificationBell() {
                     />
                   </div>
 
-                  {/* TEXT */}
                   <div className="flex-1">
                     <p className="text-xs text-gray-800 leading-snug">
                       {n.message}
@@ -191,7 +176,6 @@ export default function NotificationBell() {
                     </p>
                   </div>
 
-                  {/* ACTION */}
                   {!n.read && (
                     <button
                       onClick={() => markAsRead(n.id)}
@@ -205,7 +189,6 @@ export default function NotificationBell() {
             )}
           </div>
 
-          {/* FOOTER (compact) */}
           {items.length > 0 && (
             <div className="p-1 border-t bg-gray-50 text-center">
               <button
