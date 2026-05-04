@@ -7,7 +7,6 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isDev = process.env.NODE_ENV === "development";
 
-  // skip static files
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
@@ -18,7 +17,6 @@ export async function middleware(req: NextRequest) {
 
   const res = NextResponse.next();
 
-  // ================= SUPABASE SSR =================
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -38,37 +36,55 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // ================= ADMIN PROTECTION =================
- if (pathname.startsWith("/admin")) {
-  if (!user) {
-    return NextResponse.redirect(new URL("/login", req.url));
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const role = profile?.role;
-
-  if (role !== "admin") {
+  // logged user não volta ao login
+  if (pathname === "/login" && user) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
-}
 
-  // ================= SECURITY HEADERS =================
+  // protege rotas privadas
+  const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
+
+  const isProtectedRoute = protectedRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  if (isProtectedRoute && !user) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // protege admin
+  if (pathname.startsWith("/admin")) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user!.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+  }
+
   const nonce = crypto.randomBytes(16).toString("base64");
 
   res.headers.set("x-nonce", nonce);
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-
+  res.headers.set("X-DNS-Prefetch-Control", "off");
   res.headers.set(
-    "Strict-Transport-Security",
-    "max-age=63072000; includeSubDomains; preload"
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()"
   );
+
+  if (!isDev) {
+    res.headers.set(
+      "Strict-Transport-Security",
+      "max-age=63072000; includeSubDomains; preload"
+    );
+  }
 
   res.headers.set(
     "Content-Security-Policy",
@@ -77,8 +93,10 @@ export async function middleware(req: NextRequest) {
       `script-src 'self' 'nonce-${nonce}' ${isDev ? "'unsafe-eval'" : ""}`,
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https:",
-      "connect-src 'self' https:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
       "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
       "frame-ancestors 'none'",
     ].join("; ")
   );
