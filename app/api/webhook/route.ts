@@ -4,9 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +14,7 @@ const supabase = createClient(
 export async function POST(req: Request) {
   try {
     const sig = req.headers.get("stripe-signature");
+
     if (!sig) {
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
@@ -41,11 +40,11 @@ export async function POST(req: Request) {
     const session = event.data.object as Stripe.Checkout.Session;
 
     const orderId = session.metadata?.order_id;
+
     if (!orderId) {
       return NextResponse.json({ received: true });
     }
 
-    // 🔥 update only if pending
     await supabase
       .from("orders")
       .update({
@@ -56,9 +55,9 @@ export async function POST(req: Request) {
       .eq("status", "pending");
 
     return NextResponse.json({ received: true });
-
   } catch (err) {
     console.error("WEBHOOK ERROR:", err);
+
     return NextResponse.json({ error: "Webhook failed" }, { status: 500 });
   }
 }
