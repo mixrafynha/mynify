@@ -1,4 +1,8 @@
-export default function DesignUploader({ setDesign }) {
+type DesignUploaderProps = {
+  setDesign: (url: string) => void;
+};
+
+export default function DesignUploader({ setDesign }: DesignUploaderProps) {
   return (
     <div className="mt-6 border border-white/10 rounded-xl p-4">
       <p className="text-gray-400 mb-3">Upload design</p>
@@ -8,7 +12,10 @@ export default function DesignUploader({ setDesign }) {
         accept="image/*"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) setDesign(URL.createObjectURL(file));
+          if (file) {
+            const url = URL.createObjectURL(file);
+            setDesign(url);
+          }
         }}
       />
     </div>
