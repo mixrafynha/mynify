@@ -4,9 +4,15 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("Missing STRIPE_SECRET_KEY");
+}
+
+if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  throw new Error("Missing STRIPE_WEBHOOK_SECRET");
+}
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -16,6 +22,7 @@ const supabase = createClient(
 export async function POST(req: Request) {
   try {
     const sig = req.headers.get("stripe-signature");
+
     if (!sig) {
       return NextResponse.json({ error: "Missing signature" }, { status: 400 });
     }
@@ -30,7 +37,8 @@ export async function POST(req: Request) {
         sig,
         process.env.STRIPE_WEBHOOK_SECRET!
       );
-    } catch {
+    } catch (err) {
+      console.error("SIGNATURE ERROR:", err);
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
     }
 
@@ -39,14 +47,13 @@ export async function POST(req: Request) {
     }
 
     const session = event.data.object as Stripe.Checkout.Session;
-
     const orderId = session.metadata?.order_id;
+
     if (!orderId) {
       return NextResponse.json({ received: true });
     }
 
-    // 🔥 update only if pending
-    await supabase
+    const { error } = await supabase
       .from("orders")
       .update({
         status: "paid",
@@ -55,10 +62,14 @@ export async function POST(req: Request) {
       .eq("id", orderId)
       .eq("status", "pending");
 
-    return NextResponse.json({ received: true });
+    if (error) {
+      console.error("ORDER UPDATE ERROR:", error);
+    }
 
+    return NextResponse.json({ received: true });
   } catch (err) {
     console.error("WEBHOOK ERROR:", err);
+
     return NextResponse.json({ error: "Webhook failed" }, { status: 500 });
   }
 }
