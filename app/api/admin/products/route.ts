@@ -43,40 +43,70 @@ export async function POST(req: Request) {
     );
   }
 
-  const body = await req.json();
+  try {
+    const body = await req.json();
 
-  const title = body?.title?.trim();
-  const price = Number(body?.price);
+    const title = body?.title?.trim();
+    const description = body?.description?.trim() || "";
+    const category = body?.category?.trim() || null;
+    const image = body?.image?.trim() || null;
+    const price = Number(body?.price);
+    const is_active =
+      typeof body?.is_active === "boolean" ? body.is_active : true;
 
-  if (!title || Number.isNaN(price)) {
+    const tags = Array.isArray(body?.tags)
+      ? body.tags
+          .map((tag: unknown) => String(tag).trim())
+          .filter(Boolean)
+      : [];
+
+    if (!title) {
+      return NextResponse.json(
+        { error: "Title is required" },
+        { status: 400 }
+      );
+    }
+
+    if (Number.isNaN(price) || price < 0) {
+      return NextResponse.json(
+        { error: "Invalid price" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = createSupabaseServer();
+
+    const { data, error } = await supabase
+      .from("products")
+      .insert([
+        {
+          title,
+          description,
+          price,
+          image,
+          category,
+          is_active,
+          tags,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ data }, { status: 201 });
+  } catch (err) {
     return NextResponse.json(
-      { error: "Invalid title or price" },
+      {
+        error:
+          err instanceof Error ? err.message : "Invalid request body",
+      },
       { status: 400 }
     );
   }
-
-  const supabase = createSupabaseServer();
-
-  const { data, error } = await supabase
-    .from("products")
-    .insert([
-      {
-        title,
-        description: body.description?.trim() || "",
-        price,
-        image: body.image || null,
-        is_active: true,
-      },
-    ])
-    .select()
-    .maybeSingle(); // 🔥 mais seguro que single()
-
-  if (error) {
-    return NextResponse.json(
-      { error: error.message },
-      { status: 500 }
-    );
-  }
-
-  return NextResponse.json({ data });
 }
