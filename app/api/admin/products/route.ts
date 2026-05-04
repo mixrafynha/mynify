@@ -23,13 +23,14 @@ export async function GET() {
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error("GET PRODUCTS ERROR:", error); // 🔥 add debug
     return NextResponse.json(
       { error: error.message },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: data ?? [] }); // 🔥 garante array
 }
 
 /* ================= CREATE PRODUCT ================= */
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
     const category = body?.category?.trim() || null;
     const image = body?.image?.trim() || null;
     const price = Number(body?.price);
+
     const is_active =
       typeof body?.is_active === "boolean" ? body.is_active : true;
 
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
       );
     }
 
-    if (Number.isNaN(price) || price < 0) {
+    if (!Number.isFinite(price) || price < 0) { // 🔥 melhor validação
       return NextResponse.json(
         { error: "Invalid price" },
         { status: 400 }
@@ -93,6 +95,7 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
+      console.error("CREATE PRODUCT ERROR:", error); // 🔥 debug
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
@@ -101,6 +104,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ data }, { status: 201 });
   } catch (err) {
+    console.error("POST PRODUCT ERROR:", err); // 🔥 debug
+
     return NextResponse.json(
       {
         error:
@@ -109,8 +114,4 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
