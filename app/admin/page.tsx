@@ -2,7 +2,6 @@
 
 import Sidebar from "@/app/components/sidebar";
 import { useAdminDashboard } from "@/hooks/useAdminDashboard";
-import { useEffect, useState } from "react";
 
 import AdminHeader from "@/app/components/admin/AdminHeader";
 import AdminStats from "@/app/components/admin/AdminStats";
@@ -12,31 +11,20 @@ import Section from "@/app/components/ui/Section";
 
 export default function AdminDashboard() {
   const {
-    users,
-    revenue,
-    notifications,
-    deleteProduct,
-    loadingUser,
     user,
+    loadingUser,
+    products,
+    isLoading,
+    deleteProduct,
   } = useAdminDashboard();
-
-  const [products, setProducts] = useState<any[]>([]);
-  const [loadingProducts, setLoadingProducts] = useState(true);
-
-  useEffect(() => {
-    const load = async () => {
-      const res = await fetch("/api/products", { cache: "no-store" });
-      const json = await res.json();
-      setProducts(json?.data ?? []);
-      setLoadingProducts(false);
-    };
-
-    load();
-  }, []);
 
   const role = user?.profile?.role ?? null;
 
-  if (loadingUser || loadingProducts) {
+  const users = 0;
+  const revenue = 0;
+  const notifications: any[] = [];
+
+  if (loadingUser || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#0b0f17]">
         <p className="text-white/40 animate-pulse text-sm">Loading...</p>
@@ -47,28 +35,24 @@ export default function AdminDashboard() {
   return (
     <AdminGuard user={user} role={role}>
       <div className="min-h-screen flex bg-gradient-to-b from-[#0b0f17] to-[#0e1422] text-white">
-
         <Sidebar />
 
         <div className="flex-1 flex flex-col w-full">
-
           <AdminHeader notifications={notifications} />
 
           <main className="flex-1 p-4 space-y-6">
-
             <AdminStats
               users={users}
-              products={products}
+              products={products ?? []}
               revenue={revenue}
             />
 
             <Section title="Products">
               <ProductGrid
-                products={products}
+                products={products ?? []}
                 deleteProduct={deleteProduct}
               />
             </Section>
-
           </main>
         </div>
       </div>

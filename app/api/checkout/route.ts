@@ -43,11 +43,24 @@ export async function POST(req: Request) {
       .single();
 
     if (productError || !product) {
+<<<<<<< HEAD
+=======
+      console.error("PRODUCT ERROR:", productError);
+>>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
     if (!product.title || product.price == null) {
       return NextResponse.json({ error: "Product data missing" }, { status: 400 });
+<<<<<<< HEAD
+=======
+    }
+
+    const unitAmount = Math.round(Number(product.price) * 100);
+
+    if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
+      return NextResponse.json({ error: "Invalid product price" }, { status: 400 });
+>>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
     }
 
     const unitAmount = Math.round(Number(product.price) * 100);
@@ -74,8 +87,13 @@ export async function POST(req: Request) {
             reused: true,
           });
         }
+<<<<<<< HEAD
       } catch (err) {
         console.error("STRIPE REUSE ERROR:", err);
+=======
+      } catch (stripeError) {
+        console.error("STRIPE SESSION RETRIEVE ERROR:", stripeError);
+>>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
       }
     }
 

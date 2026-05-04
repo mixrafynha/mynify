@@ -34,7 +34,7 @@ export function useDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
 
-  /* 🔐 GET USER + PROFILE (IMPORTANTE) */
+  /* 🔐 GET USER + PROFILE */
   useEffect(() => {
     let mounted = true;
 
@@ -69,7 +69,7 @@ export function useDashboard() {
     };
   }, []);
 
-  /* 🔐 ROLE + PLAN REAL */
+  /* 🔐 ROLE  */
   const role = profile?.role ?? "user";
   const plan = profile?.plan ?? "free";
 
@@ -108,7 +108,7 @@ export function useDashboard() {
     return notifData.data;
   }, [notifData]);
 
-  /* 🛒 CART SAFE ACTIONS */
+  /* 🛒 CART  */
   const openCart = useCallback(() => {
     const now = Date.now();
     if (now - lastActionRef.current < 400) return;
@@ -144,9 +144,9 @@ export function useDashboard() {
     notifications,
 
     canSell,
-    isAdmin,        // 🔥 ADICIONADO
-    role,           // 🔥 ADICIONADO
-    plan,           // 🔥 ADICIONADO
+    isAdmin,        
+    role,           
+    plan,           
 
     loadingUser,
   };
