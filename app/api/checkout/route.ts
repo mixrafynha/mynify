@@ -16,10 +16,7 @@ export async function POST(req: Request) {
     const { id } = await req.json();
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Product id missing" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Product id missing" }, { status: 400 });
     }
 
     const auth = req.headers.get("authorization");
@@ -47,27 +44,17 @@ export async function POST(req: Request) {
 
     if (productError || !product) {
       console.error("PRODUCT ERROR:", productError);
-
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
     if (!product.title || product.price == null) {
-      return NextResponse.json(
-        { error: "Product data missing" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Product data missing" }, { status: 400 });
     }
 
     const unitAmount = Math.round(Number(product.price) * 100);
 
     if (!Number.isFinite(unitAmount) || unitAmount <= 0) {
-      return NextResponse.json(
-        { error: "Invalid product price" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid product price" }, { status: 400 });
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
@@ -97,6 +84,29 @@ export async function POST(req: Request) {
       }
     }
 
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        user_id: user.id,
+        product_id: product.id,
+        product_title: product.title,
+        product_price: product.price,
+        product_currency: product.currency || "eur",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      console.error("ORDER CREATE ERROR:", orderError);
+
+      return NextResponse.json(
+        { error: "Failed to create order" },
+        { status: 500 }
+      );
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -112,6 +122,7 @@ export async function POST(req: Request) {
         },
       ],
       metadata: {
+        order_id: order.id,
         user_id: user.id,
         product_id: product.id,
       },
@@ -119,22 +130,18 @@ export async function POST(req: Request) {
       cancel_url: `${baseUrl}/cancel`,
     });
 
-    const { error: insertError } = await supabase.from("orders").insert({
-      user_id: user.id,
-      product_id: product.id,
-      product_title: product.title,
-      product_price: product.price,
-      product_currency: product.currency || "eur",
-      status: "pending",
-      stripe_session_id: session.id,
-      created_at: new Date().toISOString(),
-    });
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        stripe_session_id: session.id,
+      })
+      .eq("id", order.id);
 
-    if (insertError) {
-      console.error("ORDER INSERT ERROR:", insertError);
+    if (updateError) {
+      console.error("ORDER UPDATE ERROR:", updateError);
 
       return NextResponse.json(
-        { error: insertError.message },
+        { error: updateError.message },
         { status: 500 }
       );
     }
