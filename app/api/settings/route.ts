@@ -14,7 +14,7 @@ export async function GET() {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 🔐 profile com role (IMPORTANTE PARA ADMIN UI)
+    // 🔐 profile 
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("name, username, role")
@@ -32,7 +32,7 @@ export async function GET() {
 
     return Response.json({
       email: user.email ?? "",
-      role: profile?.role ?? "user", // 🔥 CRÍTICO PARA SIDEBAR ADMIN
+      role: profile?.role ?? "user", 
       profile: profile ?? {
         name: "",
         username: "",
@@ -72,7 +72,7 @@ export async function PUT(req: Request) {
       );
     }
 
-    // 🔐 update seguro (self-only)
+    // 🔐 update 
     const { error } = await supabase
       .from("profiles")
       .update({
