@@ -37,8 +37,6 @@ const nextConfig = {
         hostname: "localhost",
       },
     ],
-    deviceSizes: [320, 420, 768, 1024, 1200, 1600],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
 
   async headers() {
