@@ -15,11 +15,7 @@ type NotificationBellProps = {
 };
 
 export default function NotificationBell({
-<<<<<<< HEAD
-  notifications,
-=======
   notifications = [],
->>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
 }: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>(notifications);
