@@ -42,12 +42,12 @@ export function useAdminDashboard() {
   }, []);
 
   /* =========================
-     ADMIN CHECK (FIXED)
+     ADMIN CHECK
   ========================= */
   const isAdmin = user?.profile?.role === "admin";
 
   /* =========================
-     PRODUCTS (ONLY IF ADMIN)
+     PRODUCTS
   ========================= */
   const shouldFetchProducts = !loadingUser && isAdmin;
 
@@ -59,7 +59,7 @@ export function useAdminDashboard() {
   const products = Array.isArray(data?.data) ? data.data : [];
 
   /* =========================
-     DELETE PRODUCT (SAFE)
+     DELETE PRODUCT
   ========================= */
   const deleteProduct = useCallback(async (id: string) => {
     const now = Date.now();
@@ -77,6 +77,13 @@ export function useAdminDashboard() {
   }, []);
 
   /* =========================
+     MOCK DATA (TEMP)
+  ========================= */
+  const users: any[] = [];
+  const revenue: number = 0;
+  const notifications: any[] = [];
+
+  /* =========================
      RETURN
   ========================= */
   return {
@@ -86,5 +93,8 @@ export function useAdminDashboard() {
     products,
     isLoading,
     deleteProduct,
+    users,
+    revenue,
+    notifications,
   };
 }

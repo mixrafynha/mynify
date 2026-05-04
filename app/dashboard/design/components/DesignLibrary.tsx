@@ -25,31 +25,35 @@ const FONTS = ["Arial", "Verdana", "Impact", "Arial Black"];
 
 const STICKERS = ["🔥", "⚡", "💀", "🚀", "💎", "😎"];
 
-export default function DesignEditor() {
+type Props = {
+  onAdd?: (element: ElementType) => void;
+};
+
+export default function DesignEditor({ onAdd }: Props) {
   const [elements, setElements] = useState<ElementType[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = elements.find((e) => e.id === selectedId) || null;
 
   // ================= ADD FIXED =================
-  const addElement = (el: Omit<ElementType, "id" | "x" | "y">) => {
-    setElements((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        x: 120,
-        y: 120,
-        text: el.text,
-        type: "text",
-        meta: {
-          fontFamily: el.meta?.fontFamily || "Arial",
-          color: el.meta?.color || "#000",
-          fontSize: el.meta?.fontSize || 20,
-        },
-      },
-    ]);
+ const addElement = (el: Omit<ElementType, "id" | "x" | "y">) => {
+  const newElement: ElementType = {
+    id: crypto.randomUUID(),
+    x: 120,
+    y: 120,
+    text: el.text,
+    type: "text",
+    meta: {
+      fontFamily: el.meta?.fontFamily || "Arial",
+      color: el.meta?.color || "#000",
+      fontSize: el.meta?.fontSize || 20,
+    },
   };
 
+  setElements((prev) => [...prev, newElement]);
+
+  onAdd?.(newElement);
+};
   // ================= UPDATE SAFE =================
   const updateSelected = (patch: Partial<ElementType>) => {
     if (!selectedId) return;

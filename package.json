@@ -16,6 +16,7 @@
     "bcrypt": "^6.0.0",
     "bcryptjs": "^3.0.3",
     "disposable-email-domains": "^1.0.62",
+    "dotenv": "^17.4.2",
     "fabric": "^7.2.0",
     "firebase": "^12.12.1",
     "framer-motion": "^12.38.0",

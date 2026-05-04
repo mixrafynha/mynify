@@ -10,7 +10,13 @@ type Notification = {
   created_at?: string;
 };
 
-export default function NotificationBell() {
+type NotificationBellProps = {
+  notifications?: Notification[];
+};
+
+export default function NotificationBell({
+  notifications,
+}: NotificationBellProps) {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [userId, setUserId] = useState<string | null>(null);

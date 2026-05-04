@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { formatProduct } from "@/lib/formatProduct"
-import type { Product } from "@/types/product"
+import type { Product, ProductAPI } from "@/types/product" // 🔥 ADD
 
 export function useProducts() {
   const [products, setProducts] = useState<Product[]>([])
@@ -21,7 +21,7 @@ export function useProducts() {
         })
 
         const json = await res.json()
-        const data = json.data ?? []
+        const data: ProductAPI[] = json.data ?? [] // 🔥 FIX
 
         const formatted: Product[] = data.map(formatProduct)
 

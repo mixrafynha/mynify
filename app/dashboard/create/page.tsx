@@ -3,9 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import DesignUploader from "@/app/components/create/editor/DesignUploader";
-import PreviewStudio from "@/app/components/create/editor/PreviewStudio";
-import PricingPanel from "@/app/components/create/editor/PricingPanel";
 
 const CATEGORIES = [
   { id: "tshirt", label: "T-Shirt", desc: "Everyday essentials", emoji: "👕" },
@@ -73,6 +70,20 @@ export default function CreatePage() {
 
     load();
   }, [category]);
+
+  function RedirectToEditor({ id }: { id: string }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.push(`/dashboard/design/${id}`);
+  }, [id, router]);
+
+  return (
+    <div className="w-full h-screen flex items-center justify-center">
+      <p className="text-gray-400">Opening editor...</p>
+    </div>
+  );
+}
 
   return (
     <div className="min-h-screen bg-[#f5f5f7] text-[#1d1d1f] px-9 sm:px-7 lg:px-10 py-10">
@@ -252,22 +263,9 @@ export default function CreatePage() {
         )}
 
         {/* ================= STEP 3 ================= */}
-        {step === 3 && selected && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-
-            <DesignUploader setDesign={setDesign} />
-
-            <PreviewStudio selected={selected} design={design} />
-
-            <PricingPanel
-              selected={selected}
-              markup={markup}
-              setMarkup={setMarkup}
-              price={price}
-            />
-
-          </div>
-        )}
+          {step === 3 && selected && (
+            <RedirectToEditor id={selected.id} />
+          )}
 
       </div>
     </div>
