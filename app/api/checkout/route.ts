@@ -4,9 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,9 +15,10 @@ export async function POST(req: Request) {
   try {
     const { id } = await req.json();
 
-    // =========================
-    // AUTH
-    // =========================
+    if (!id) {
+      return NextResponse.json({ error: "Product id missing" }, { status: 400 });
+    }
+
     const auth = req.headers.get("authorization");
 
     if (!auth?.startsWith("Bearer ")) {
@@ -37,9 +36,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // =========================
-    // GET PRODUCT (SAFE)
-    // =========================
     const { data: product, error: productError } = await supabase
       .from("products")
       .select("id, title, price, currency")
@@ -47,26 +43,17 @@ export async function POST(req: Request) {
       .single();
 
     if (productError || !product) {
-      console.error("PRODUCT ERROR:", productError);
-
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
 
-    if (!product.title) {
-      return NextResponse.json(
-        { error: "Product title missing" },
-        { status: 400 }
-      );
+    if (!product.title || product.price == null) {
+      return NextResponse.json({ error: "Product data missing" }, { status: 400 });
     }
+
+    const unitAmount = Math.round(Number(product.price) * 100);
 
     const baseUrl = process.env.NEXT_PUBLIC_URL || "http://localhost:3000";
 
-    // =========================
-    // REUSE EXISTING ORDER
-    // =========================
     const { data: existing } = await supabase
       .from("orders")
       .select("id, stripe_session_id")
@@ -76,21 +63,45 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (existing?.stripe_session_id) {
-      const session = await stripe.checkout.sessions.retrieve(
-        existing.stripe_session_id
-      );
+      try {
+        const existingSession = await stripe.checkout.sessions.retrieve(
+          existing.stripe_session_id
+        );
 
-      if (session.url) {
-        return NextResponse.json({
-          url: session.url,
-          reused: true,
-        });
+        if (existingSession.url) {
+          return NextResponse.json({
+            url: existingSession.url,
+            reused: true,
+          });
+        }
+      } catch (err) {
+        console.error("STRIPE REUSE ERROR:", err);
       }
     }
 
-    // =========================
-    // CREATE STRIPE SESSION
-    // =========================
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        user_id: user.id,
+        product_id: product.id,
+        product_title: product.title,
+        product_price: product.price,
+        product_currency: product.currency || "eur",
+        status: "pending",
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      console.error("ORDER CREATE ERROR:", orderError);
+
+      return NextResponse.json(
+        { error: "Failed to create order" },
+        { status: 500 }
+      );
+    }
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       line_items: [
@@ -100,12 +111,13 @@ export async function POST(req: Request) {
             product_data: {
               name: product.title,
             },
-            unit_amount: Math.round(Number(product.price) * 100),
+            unit_amount: unitAmount,
           },
           quantity: 1,
         },
       ],
       metadata: {
+        order_id: order.id,
         user_id: user.id,
         product_id: product.id,
       },
@@ -113,35 +125,22 @@ export async function POST(req: Request) {
       cancel_url: `${baseUrl}/cancel`,
     });
 
-    // =========================
-    // INSERT ORDER (SAFE)
-    // =========================
-    const { error: insertError } = await supabase.from("orders").insert({
-      user_id: user.id,
-      product_id: product.id,
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        stripe_session_id: session.id,
+      })
+      .eq("id", order.id);
 
-      // SNAPSHOT (o teu fix real)
-      product_title: product.title,
-      product_price: product.price,
-      product_currency: product.currency || "eur",
-
-      status: "pending",
-      stripe_session_id: session.id,
-      created_at: new Date().toISOString(),
-    });
-
-    if (insertError) {
-      console.error("ORDER INSERT ERROR:", insertError);
+    if (updateError) {
+      console.error("ORDER UPDATE ERROR:", updateError);
 
       return NextResponse.json(
-        { error: insertError.message },
+        { error: updateError.message },
         { status: 500 }
       );
     }
 
-    // =========================
-    // RESPONSE
-    // =========================
     return NextResponse.json({
       url: session.url,
       reused: false,
@@ -149,9 +148,6 @@ export async function POST(req: Request) {
   } catch (err) {
     console.error("CHECKOUT ERROR:", err);
 
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

@@ -20,20 +20,40 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-
     const getUserRole = async () => {
-      const { data: auth } = await supabase.auth.getUser();
+      try {
+        const { data: auth, error } = await supabase.auth.getUser();
 
-      if (!auth?.user) return;
+        if (error) {
+          console.error("Auth error:", error);
+          setRole("guest"); // ✅ evita travar
+          return;
+        }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", auth.user.id)
-        .single();
+        if (!auth?.user) {
+          setRole("guest"); // ✅ 🔥 FIX PRINCIPAL (anonimo)
+          return;
+        }
 
-      setRole(profile?.role ?? "user");
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", auth.user.id)
+          .maybeSingle(); // ✅ evita crash
+
+        if (profileError) {
+          console.error("Profile error:", profileError);
+          setRole("user"); // fallback seguro
+          return;
+        }
+
+        setRole(profile?.role ?? "user");
+      } catch (err) {
+        console.error("Unexpected error:", err);
+        setRole("guest"); // fallback total
+      } finally {
+        setMounted(true); // ✅ sempre libera render
+      }
     };
 
     getUserRole();
@@ -51,7 +71,7 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
   const hideGlobalLayout =
     isAuthPage || isAdminPage || isDashboard;
 
-  /* 🔥 FIX REAL: evita render errado antes do role */
+  /* 🔥 mantém tua lógica intacta */
   const isReady = mounted && role !== null;
 
   if (!isReady) {
@@ -60,12 +80,10 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* NAVBAR only for public pages */}
       {!hideGlobalLayout && <Navbar />}
 
       <div className="w-full min-h-screen flex flex-col">
         <main className="flex-1">{children}</main>
-
         {!hideGlobalLayout && <Footer />}
       </div>
     </>

@@ -1,46 +1,27 @@
-import NotificationBell from "@/app/components/NotificationBell";
-import SmartCreateButton from "@/app/components/SmartCreateButton";
+type AdminHeaderProps = {
+  notifications?: any[];
+};
 
 export default function AdminHeader({
-  notifications,
-  title = "Admin Dashboard",
-}: any) {
+  notifications = [],
+}: AdminHeaderProps) {
   return (
-    <header
-      className="sticky top-0 z-50 h-14 flex items-center justify-between
-      px-4 sm:px-6
-      bg-[#0b0f17]/70 backdrop-blur-xl
-      border-b border-white/10"
-    >
+    <div className="w-full flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#0b0f17]">
+      
+      <h1 className="text-white font-semibold text-lg">
+        Admin Panel
+      </h1>
 
-      {/* LEFT SIDE */}
-      <div className="flex flex-col leading-tight">
+      {/* 🔔 Notifications */}
+      <div className="flex items-center gap-2">
+        <span className="text-white/50 text-sm">
+          Notifications
+        </span>
 
-        <h1 className="text-sm font-semibold text-white/90">
-          {title}
-        </h1>
-
-        <p className="text-[11px] text-white/40 hidden sm:block">
-          Manage your products, users and analytics
-        </p>
-
-      </div>
-
-      {/* RIGHT SIDE ACTIONS */}
-      <div className="flex items-center gap-2 sm:gap-3">
-
-        {/* Notifications */}
-        <div className="hover:scale-105 transition">
-          <NotificationBell notifications={notifications ?? []} />
+        <div className="bg-white/10 px-3 py-1 rounded-full text-xs">
+          {notifications.length}
         </div>
-
-        {/* Create Button */}
-        <div className="hover:scale-105 transition">
-          <SmartCreateButton />
-        </div>
-
       </div>
-
-    </header>
+    </div>
   );
 }

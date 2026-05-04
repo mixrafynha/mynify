@@ -168,7 +168,7 @@ export default function ProductsPage() {
                     className="aspect-square bg-gray-200 animate-pulse rounded-2xl"
                   />
                 ))
-              : filtered.map((p: Product) => {
+              : filtered.map((p) => {
                   const isLiked = Boolean(likes?.[p.id]);
 
                   // 🔒 hard guard (evita crashes / undefined injection)

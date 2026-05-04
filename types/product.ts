@@ -1,10 +1,17 @@
 export type ProductAPI = {
-  id: string | number
-  title: string
-  price?: number
-  image?: string
-  updated_at?: string
+  id: string;
+  title: string;
+  price?: number | null;
+  image?: string | null;
+  updated_at?: string | null;
   variants?: {
-    price?: number
-  }[]
-}
+    price?: number | null;
+  }[] | null;
+};
+
+export type Product = {
+  id: string;
+  title: string;
+  price: number;
+  image?: string | null;
+};
