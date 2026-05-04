@@ -296,8 +296,5 @@ function Toggle({ label, value, onChange }: ToggleProps) {
       </button>
     </div>
   );
-<<<<<<< HEAD
+
 }
-=======
-}
->>>>>>> 3df94af36dadd9a8d3ed1ab1e713db0d4d0b81c5
