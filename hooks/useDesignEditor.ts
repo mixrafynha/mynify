@@ -49,7 +49,7 @@ export function useDesignEditor() {
     elements,
     setElements,
     selectedId,
-    setSelectedId,   // 🔥 ISTO ESTAVA A FALTAR
+    setSelectedId,  
     addText,
     addImage,
     update,
