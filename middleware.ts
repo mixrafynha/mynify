@@ -6,14 +6,22 @@ import { Ratelimit } from "@upstash/ratelimit";
 
 const redis = Redis.fromEnv();
 
-const apiLimiter = new Ratelimit({
+const globalLimiter = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(30, "1 m"),
+  limiter: Ratelimit.slidingWindow(300, "1 m"),
+  analytics: true,
+});
+
+const strictLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, "1 m"),
+  analytics: true,
 });
 
 const adminLimiter = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(60, "1 m"),
+  analytics: true,
 });
 
 function getIp(req: NextRequest) {
@@ -28,18 +36,24 @@ function getIp(req: NextRequest) {
 async function checkRateLimit(req: NextRequest, pathname: string) {
   const ip = getIp(req);
 
-  const sensitiveApiRoutes = [
+  const globalRate = await globalLimiter.limit(`global:${ip}`);
+
+  if (!globalRate.success) {
+    return globalRate;
+  }
+
+  const strictRoutes = [
+    "/login",
+    "/signup",
     "/api/contact",
     "/api/checkout",
     "/api/select",
   ];
 
-  const isSensitiveApi = sensitiveApiRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isStrict = strictRoutes.some((route) => pathname.startsWith(route));
 
-  if (isSensitiveApi) {
-    return apiLimiter.limit(`api:${ip}:${pathname}`);
+  if (isStrict) {
+    return strictLimiter.limit(`strict:${ip}:${pathname}`);
   }
 
   if (pathname.startsWith("/admin")) {
@@ -146,13 +160,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/settings/:path*",
-    "/profile/:path*",
-    "/login",
-    "/api/contact/:path*",
-    "/api/checkout/:path*",
-    "/api/select/:path*",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\..*).*)",
   ],
 };
