@@ -1,17 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Script from "next/script";
 import { Eye, EyeOff } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-/* =========================
-   🔐 SAFE HELPERS
-========================= */
-
-// prevent open redirects / invalid routing
 const safeRoute = (path: string) => {
   if (typeof path !== "string") return "/";
   if (path.startsWith("javascript:")) return "/";
@@ -19,10 +15,9 @@ const safeRoute = (path: string) => {
   return path;
 };
 
-// sanitize user input (light XSS + injection protection)
 const sanitize = (value: string) =>
   value
-    .replace(/[^\w@.\-+]/gi, "") // keep only safe email chars
+    .replace(/[^\w@.\-+]/gi, "")
     .trim()
     .slice(0, 254);
 
@@ -33,13 +28,16 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [token, setToken] = useState("");
+  const [scriptReady, setScriptReady] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
 
-  // =========================
-  // 🔐 SESSION CHECK (HARDENED)
-  // =========================
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     let ignore = false;
     let redirected = false;
@@ -76,52 +74,95 @@ export default function LoginPage() {
     };
   }, [router]);
 
-  // =========================
-  // 🔥 EMAIL LOGIN (HARDENED)
-  // =========================
-  const handleLogin = useCallback(async () => {
-  if (loading) return;
+  useEffect(() => {
+    if (!scriptReady) return;
+    if (!captchaRef.current) return;
+    if (widgetIdRef.current) return;
 
-  setLoading(true);
-  setError("");
+    const turnstile = (window as any).turnstile;
+    if (!turnstile) return;
 
-  try {
-    const safeEmail = sanitize(email.toLowerCase());
+    const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
-    if (!safeEmail || !password) {
-      throw new Error("invalid");
+    if (!sitekey) {
+      setError("Missing captcha site key");
+      return;
     }
 
-    if (safeEmail.length < 5) {
-      throw new Error("invalid");
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: safeEmail,
-      password,
+    widgetIdRef.current = turnstile.render(captchaRef.current, {
+      sitekey,
+      callback: (value: string) => {
+        setToken(value);
+        setError("");
+      },
+      "expired-callback": () => setToken(""),
+      "error-callback": () => {
+        setToken("");
+        setError("Captcha error");
+      },
     });
+  }, [scriptReady]);
 
-    if (error) {
-      console.error("Login error:", error.message);
-      throw error;
+  const resetCaptcha = useCallback(() => {
+    const turnstile = (window as any).turnstile;
+
+    if (turnstile && widgetIdRef.current) {
+      turnstile.reset(widgetIdRef.current);
     }
 
-    if (!data.session) {
-      throw new Error("No session created");
+    setToken("");
+  }, []);
+
+  const handleLogin = useCallback(async () => {
+    if (loading) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const safeEmail = sanitize(email.toLowerCase());
+
+      if (!safeEmail || !password) {
+        throw new Error("invalid");
+      }
+
+      if (safeEmail.length < 5) {
+        throw new Error("invalid");
+      }
+
+      if (!token) {
+        setError("Verify captcha");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: safeEmail,
+        password,
+        options: {
+          captchaToken: token,
+        },
+      });
+
+      if (error) {
+        console.error("Login error:", error.message);
+        throw error;
+      }
+
+      if (!data.session) {
+        throw new Error("No session created");
+      }
+
+      router.replace("/dashboard");
+    } catch (err) {
+      console.error("Login failed:", err);
+      setError("Invalid email or password");
+      resetCaptcha();
+    } finally {
+      setLoading(false);
     }
+  }, [email, password, token, loading, router, resetCaptcha]);
 
-    router.replace("/dashboard");
-  } catch (err) {
-    console.error("Login failed:", err);
-    setError("Invalid email or password");
-  } finally {
-    setLoading(false);
-  }
-}, [email, password, loading, router]);
-
-  // =========================
-  // 🔵 GOOGLE OAUTH (HARDENED)
-  // =========================
   const handleGoogle = useCallback(async () => {
     if (loading) return;
 
@@ -142,9 +183,6 @@ export default function LoginPage() {
     }
   }, [loading]);
 
-  // =========================
-  // 🍎 APPLE OAUTH (HARDENED)
-  // =========================
   const handleApple = useCallback(async () => {
     if (loading) return;
 
@@ -169,10 +207,14 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-[100dvh] grid md:grid-cols-2">
+      <Script
+        id="turnstile-script-login"
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onLoad={() => setScriptReady(true)}
+      />
 
-      {/* LEFT */}
       <div className="hidden md:flex relative bg-black text-white overflow-hidden">
-
         <img
           src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
           className="absolute inset-0 w-full h-full object-cover"
@@ -183,7 +225,6 @@ export default function LoginPage() {
 
         <div className="relative z-10 flex flex-col justify-center items-start p-12 w-full">
           <div className="max-w-md">
-
             <div className="flex items-center gap-3 mb-8">
               <div className="bg-white text-black w-10 h-10 flex items-center justify-center rounded-lg font-bold">
                 M
@@ -200,15 +241,12 @@ export default function LoginPage() {
             <p className="text-gray-200 text-lg">
               Log in to manage your store, orders, and grow your brand worldwide.
             </p>
-
           </div>
         </div>
       </div>
 
-      {/* RIGHT */}
       <div className="flex items-center justify-center bg-[#f5f5f3] p-6">
         <div className="w-full max-w-md relative">
-
           <button
             onClick={() => router.push(safeRoute("/"))}
             className="absolute top-2 right-2 text-gray-500 hover:text-black"
@@ -229,9 +267,7 @@ export default function LoginPage() {
             Welcome back
           </h2>
 
-          {/* SOCIAL */}
           <div className="space-y-3 mb-6">
-
             <button
               disabled={loading}
               onClick={handleGoogle}
@@ -249,7 +285,6 @@ export default function LoginPage() {
               <FaApple size={20} />
               Continue with Apple
             </button>
-
           </div>
 
           <div className="flex items-center gap-3 my-6">
@@ -258,9 +293,7 @@ export default function LoginPage() {
             <div className="flex-1 h-px bg-gray-300" />
           </div>
 
-          {/* FORM */}
           <div className="space-y-5">
-
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -287,26 +320,28 @@ export default function LoginPage() {
             </div>
 
             <div className="flex justify-end">
-  <span
-    onClick={() => router.push("/login/forgot-password")}
-    className="text-sm text-gray-600 hover:text-black cursor-pointer"
-  >
-    Forgot password?
-  </span>
-</div>
+              <span
+                onClick={() => router.push("/login/forgot-password")}
+                className="text-sm text-gray-600 hover:text-black cursor-pointer"
+              >
+                Forgot password?
+              </span>
+            </div>
 
-            {error && (
-              <div className="text-red-500 text-sm">{error}</div>
-            )}
+            <div className="flex justify-center min-h-[65px]">
+              <div ref={captchaRef} />
+            </div>
 
-           <button
+            {error && <div className="text-red-500 text-sm">{error}</div>}
+
+            <button
               type="button"
               onClick={handleLogin}
               disabled={loading}
               className="w-full bg-[#39E58C] py-3.5 rounded-lg font-semibold disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
-         </button>
+            </button>
 
             <p className="text-sm text-gray-600 text-center md:text-left">
               Don’t have an account?{" "}
@@ -317,9 +352,7 @@ export default function LoginPage() {
                 Sign up
               </span>
             </p>
-
           </div>
-
         </div>
       </div>
     </div>
