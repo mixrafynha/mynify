@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -13,34 +14,106 @@ const safeRoute = (path: string) => {
 
 export default function ForgotPassword() {
   const router = useRouter();
+
   const [email, setEmail] = useState("");
+  const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+
+  const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const turnstile = (window as any).turnstile;
+
+      if (!turnstile) return;
+      if (!captchaRef.current) return;
+      if (widgetIdRef.current) return;
+
+      const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+
+      if (!sitekey) {
+        setError("Missing captcha site key");
+        clearInterval(interval);
+        return;
+      }
+
+      widgetIdRef.current = turnstile.render(captchaRef.current, {
+        sitekey,
+        callback: (value: string) => {
+          setToken(value);
+          setError("");
+        },
+        "expired-callback": () => setToken(""),
+        "error-callback": () => {
+          setToken("");
+          setError("Captcha error");
+        },
+      });
+
+      clearInterval(interval);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const resetCaptcha = useCallback(() => {
+    const turnstile = (window as any).turnstile;
+
+    if (turnstile && widgetIdRef.current) {
+      turnstile.reset(widgetIdRef.current);
+    }
+
+    setToken("");
+  }, []);
 
   const handleReset = async () => {
-    if (!email) return;
+    if (loading) return;
 
-    setLoading(true);
+    setError("");
     setSuccess("");
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login/update-password`,
-    });
+    if (!email) {
+      setError("Enter your email");
+      return;
+    }
 
-    setLoading(false);
+    if (!token) {
+      setError("Verify captcha");
+      return;
+    }
 
-    if (error) {
-      setSuccess("");
-      alert(error.message);
-    } else {
-      setSuccess("Check your email 📩");
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/login/update-password`,
+        captchaToken: token,
+      });
+
+      if (error) throw error;
+
+      setSuccess("Check your email");
+      setEmail("");
+      resetCaptcha();
+    } catch (err: any) {
+      setError(err?.message || "Reset failed");
+      resetCaptcha();
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div className="min-h-[100dvh] grid md:grid-cols-2">
+      <Script
+        id="turnstile-script-forgot-password"
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+      />
 
-      {/* LEFT */}
       <div className="hidden md:flex relative bg-black text-white overflow-hidden">
         <img
           src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
@@ -71,10 +144,8 @@ export default function ForgotPassword() {
         </div>
       </div>
 
-      {/* RIGHT */}
       <div className="flex items-center justify-center bg-[#f5f5f3] p-6">
         <div className="w-full max-w-md relative">
-
           <button
             onClick={() => router.push(safeRoute("/login"))}
             className="absolute top-2 right-2 text-gray-500 hover:text-black"
@@ -96,28 +167,29 @@ export default function ForgotPassword() {
           </h2>
 
           <div className="space-y-4">
-
             <input
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value.trim())}
               placeholder="Email"
               className="w-full border px-4 py-3 rounded-lg focus:ring-2 focus:ring-black"
             />
 
-            {success && (
-              <p className="text-green-600 text-sm">{success}</p>
-            )}
+            <div className="flex justify-center min-h-[65px]">
+              <div ref={captchaRef} />
+            </div>
+
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {success && <p className="text-green-600 text-sm">{success}</p>}
 
             <button
+              type="button"
               onClick={handleReset}
               disabled={loading}
               className="w-full bg-[#39E58C] py-3.5 rounded-lg font-semibold disabled:opacity-50"
             >
               {loading ? "Sending..." : "Send reset link"}
             </button>
-
           </div>
-
         </div>
       </div>
     </div>
