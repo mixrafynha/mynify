@@ -6,6 +6,7 @@ import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
+import { Gamepad2, X } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 /* =========================
@@ -72,112 +73,146 @@ export default function SignupPage() {
   );
 
   return (
-    <div className="min-h-[100dvh] grid grid-cols-1 md:grid-cols-2 w-full m-0 p-0 overflow-x-hidden">
-      {/* LEFT */}
-      <div className="hidden md:flex relative bg-black text-white overflow-hidden min-h-[100dvh]">
-        <Image
-          src={img(bgImage)}
-          alt="Business background"
-          fill
-          priority
-          sizes="50vw"
-          className="object-cover"
-        />
+    <main className="min-h-[100dvh] overflow-hidden bg-[#03030a] text-white">
+      <div className="grid min-h-[100dvh] grid-cols-1 md:grid-cols-2">
+        {/* LEFT */}
+        <div className="relative hidden min-h-[100dvh] overflow-hidden bg-[#03030a] text-white md:flex">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+          <Image
+            src={img(bgImage)}
+            alt="Business background"
+            fill
+            priority
+            sizes="50vw"
+            className="object-cover opacity-35"
+          />
 
-        <div className="relative z-10 flex flex-col justify-between w-full h-full px-8 lg:px-10 py-10 lg:py-12">
-          <div>
-            <h1 className="text-4xl lg:text-5xl font-extrabold leading-tight mb-4 tracking-tight">
-              BUILD YOUR <br /> ONLINE BUSINESS
-            </h1>
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.85)_45%,rgba(3,3,10,0.45)_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.25),transparent_45%)]" />
 
-            <p className="text-gray-200 max-w-md text-base lg:text-lg leading-relaxed tracking-wide">
-              Launch your brand, customize premium products, and start selling worldwide — all in one place.
-            </p>
-          </div>
-
-          <div className="text-sm text-gray-300 tracking-wide">
-            Trusted by thousands of creators worldwide
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT */}
-      <div className="w-full min-h-[100dvh] bg-[#f5f5f3] flex">
-        <div className="relative w-full min-h-[100dvh] flex flex-col px-5 sm:px-8 md:px-10 py-6">
-          <button
-            type="button"
-            onClick={goHome}
-            className="absolute top-4 right-4 text-gray-500 hover:text-black z-20"
-          >
-            ✕
-          </button>
-
-          <div className="flex-1 flex items-center justify-center py-10">
-            <div className="w-full max-w-md text-center md:text-left">
-              {/* LOGO */}
-              <div className="flex items-center gap-3 mb-6 justify-center md:justify-start">
-                <div className="bg-black text-white w-10 h-10 flex items-center justify-center rounded-lg font-bold shrink-0">
+          <div className="relative z-10 flex h-full w-full flex-col justify-center px-8 py-10 lg:px-12 lg:py-12">
+            <div className="max-w-md">
+              <div className="mb-8 flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
                   M
                 </div>
-                <span className="text-xl sm:text-2xl font-extrabold">
+
+                <span className="text-xl font-black tracking-tight">
                   MYNIFY
                 </span>
               </div>
 
-              <h2 className="text-2xl sm:text-3xl font-extrabold mb-6">
-                Create your account
-              </h2>
-
-              {/* SOCIAL */}
-              <div className="space-y-3 mb-6">
-                <button
-                  type="button"
-                  onClick={() => handleOAuth("google")}
-                  disabled={loadingProvider !== null}
-                  className="w-full border py-3.5 px-4 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  <FcGoogle size={20} />
-                  {loadingProvider === "google"
-                    ? "Connecting..."
-                    : "Continue with Google"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOAuth("apple")}
-                  disabled={loadingProvider !== null}
-                  className="w-full border py-3.5 px-4 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  <FaApple size={20} />
-                  {loadingProvider === "apple"
-                    ? "Connecting..."
-                    : "Continue with Apple"}
-                </button>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
+                <Gamepad2 size={15} className="text-purple-400" />
+                Start your creator brand
               </div>
 
-              <div className="flex items-center gap-3 my-6">
-                <div className="flex-1 h-px bg-gray-300" />
-                <span className="text-xs text-gray-500">OR</span>
-                <div className="flex-1 h-px bg-gray-300" />
-              </div>
-
-              <SignupForm />
-
-              <p className="text-sm text-gray-600 mt-6 text-center md:text-left">
-                Already have an account?{" "}
-                <span
-                  onClick={goLogin}
-                  className="font-semibold cursor-pointer hover:underline"
-                >
-                  Log in
+              <h1 className="mb-5 text-5xl font-black uppercase leading-[0.9] tracking-tight lg:text-7xl">
+                Build your{" "}
+                <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+                  online business.
                 </span>
+              </h1>
+
+              <p className="max-w-md text-lg leading-relaxed text-white/65">
+                Launch your brand, customize premium products, and start selling
+                worldwide — all in one place.
               </p>
+            </div>
+
+            <div className="absolute bottom-10 left-12 text-sm tracking-wide text-white/45">
+              Trusted by thousands of creators worldwide
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT */}
+        <div className="relative flex min-h-[100dvh] w-full overflow-hidden bg-[#03030a]">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
+
+          <div className="relative flex min-h-[100dvh] w-full flex-col px-5 py-6 sm:px-8 md:px-10">
+            <button
+              type="button"
+              onClick={goHome}
+              className="absolute right-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex flex-1 items-center justify-center py-10">
+              <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-center shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl md:text-left sm:p-8">
+                {/* LOGO */}
+                <div className="mb-6 flex items-center justify-center gap-3 md:justify-start">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
+                    M
+                  </div>
+
+                  <span className="text-xl font-black tracking-tight sm:text-2xl">
+                    MYNIFY
+                  </span>
+                </div>
+
+                <h2 className="mb-2 text-3xl font-black uppercase">
+                  Create your account
+                </h2>
+
+                <p className="mb-6 text-sm leading-relaxed text-white/50">
+                  Sign up and start building your custom product brand today.
+                </p>
+
+                {/* SOCIAL */}
+                <div className="mb-6 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => handleOAuth("google")}
+                    disabled={loadingProvider !== null}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FcGoogle size={20} />
+                    {loadingProvider === "google"
+                      ? "Connecting..."
+                      : "Continue with Google"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOAuth("apple")}
+                    disabled={loadingProvider !== null}
+                    className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <FaApple size={20} />
+                    {loadingProvider === "apple"
+                      ? "Connecting..."
+                      : "Continue with Apple"}
+                  </button>
+                </div>
+
+                <div className="my-6 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-white/10" />
+                  <span className="text-xs font-bold text-white/35">OR</span>
+                  <div className="h-px flex-1 bg-white/10" />
+                </div>
+
+                <SignupForm />
+
+                <p className="mt-6 text-center text-sm text-white/50 md:text-left">
+                  Already have an account?{" "}
+                  <span
+                    onClick={goLogin}
+                    className="cursor-pointer font-bold text-fuchsia-400 transition hover:text-purple-300"
+                  >
+                    Log in
+                  </span>
+                </p>
+
+                <div className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full bg-purple-600/20 blur-[60px]" />
+                <div className="pointer-events-none absolute -left-10 top-20 h-24 w-24 rounded-full bg-sky-500/10 blur-[50px]" />
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
