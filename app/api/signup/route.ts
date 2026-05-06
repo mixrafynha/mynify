@@ -2,10 +2,6 @@ import { NextResponse } from "next/server";
 import disposable from "disposable-email-domains";
 import { createClient } from "@supabase/supabase-js";
 
-/* =========================
-   ⚡ RATE LIMIT (LIGHT + SAFE)
-========================= */
-
 const requestLimit = new Map<string, number[]>();
 const dailyLimit = new Map<string, number>();
 
@@ -13,23 +9,14 @@ const RATE_WINDOW = 60 * 1000;
 const RATE_MAX = 5;
 const DAILY_MAX = 3;
 
-/* =========================
-   IP SAFE
-========================= */
-
 function getIP(req: Request) {
   const xf = req.headers.get("x-forwarded-for");
   return (xf?.split(",")[0] || "unknown").slice(0, 45);
 }
 
-/* =========================
-   RATE LIMIT
-========================= */
-
 function checkRateLimit(ip: string) {
   const now = Date.now();
   const logs = requestLimit.get(ip) || [];
-
   const recent = logs.filter((t) => now - t < RATE_WINDOW);
 
   if (recent.length >= RATE_MAX) return false;
@@ -39,37 +26,6 @@ function checkRateLimit(ip: string) {
 
   return true;
 }
-
-/* =========================
-   CAPTCHA VERIFY
-========================= */
-
-async function verifyTurnstile(token: string, ip: string) {
-  if (!token) return false;
-
-  try {
-    const res = await fetch(
-      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
-      {
-        method: "POST",
-        body: new URLSearchParams({
-          secret: process.env.TURNSTILE_SECRET_KEY || "",
-          response: token,
-          remoteip: ip,
-        }),
-      }
-    );
-
-    const data = await res.json();
-    return data?.success === true;
-  } catch {
-    return false;
-  }
-}
-
-/* =========================
-   VALIDATION (LEAN)
-========================= */
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length < 254;
@@ -84,10 +40,6 @@ function isStrongPassword(pw: string) {
     /[0-9]/.test(pw)
   );
 }
-
-/* =========================
-   MAIN
-========================= */
 
 export async function POST(req: Request) {
   try {
@@ -105,8 +57,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const ok = await verifyTurnstile(token, ip);
-    if (!ok) return fail();
+    if (!token || typeof token !== "string") return fail();
 
     if (!isValidEmail(email)) return fail();
 
@@ -121,6 +72,7 @@ export async function POST(req: Request) {
     const key = `${ip}-${day}`;
 
     const used = dailyLimit.get(key) || 0;
+
     if (used >= DAILY_MAX) {
       return NextResponse.json(
         { message: "Too many accounts today" },
@@ -162,10 +114,6 @@ export async function POST(req: Request) {
     );
   }
 }
-
-/* =========================
-   RESPONSES
-========================= */
 
 function success(status = 200) {
   return NextResponse.json(
