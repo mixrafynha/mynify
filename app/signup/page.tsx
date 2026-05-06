@@ -12,7 +12,6 @@ import { supabase } from "../../lib/supabase";
    🔐 SECURITY HELPERS
 ========================= */
 
-// prevent open redirect / injection
 const safeUrl = (url: string) => {
   if (typeof url !== "string") return "/";
   const clean = url.trim().toLowerCase();
@@ -21,7 +20,6 @@ const safeUrl = (url: string) => {
   return url;
 };
 
-// safe image helper
 const img = (url: string, w: number = 1600) => {
   if (typeof url !== "string") return "";
   if (!url.startsWith("http")) return "";
@@ -38,7 +36,6 @@ export default function SignupPage() {
     "google" | "apple" | null
   >(null);
 
-  // 🧱 safe navigation
   const goHome = useCallback(() => {
     router.replace(safeUrl("/"));
   }, [router]);
@@ -47,14 +44,9 @@ export default function SignupPage() {
     router.replace(safeUrl("/login"));
   }, [router]);
 
-  // =========================
-  // 🔐 OAUTH HARDENED
-  // =========================
   const handleOAuth = useCallback(
     async (provider: "google" | "apple") => {
       if (!provider) return;
-
-      // prevent double click race condition
       if (loadingProvider !== null) return;
 
       setLoadingProvider(provider);
@@ -63,8 +55,6 @@ export default function SignupPage() {
         if (typeof window === "undefined") return;
 
         const origin = window.location.origin;
-
-        // 🛑 harden redirect (no injection possible)
         const redirectTo = `${origin}/auth/callback`;
 
         await supabase.auth.signInWithOAuth({
@@ -82,10 +72,9 @@ export default function SignupPage() {
   );
 
   return (
-    <div className="min-h-[100dvh] grid md:grid-cols-2 w-full m-0 p-0">
-
+    <div className="min-h-[100dvh] grid grid-cols-1 md:grid-cols-2 w-full m-0 p-0 overflow-x-hidden">
       {/* LEFT */}
-      <div className="hidden md:flex relative bg-black text-white overflow-hidden">
+      <div className="hidden md:flex relative bg-black text-white overflow-hidden min-h-[100dvh]">
         <Image
           src={img(bgImage)}
           alt="Business background"
@@ -97,13 +86,13 @@ export default function SignupPage() {
 
         <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
 
-        <div className="relative z-10 flex flex-col justify-between w-full h-full px-10 py-12">
+        <div className="relative z-10 flex flex-col justify-between w-full h-full px-8 lg:px-10 py-10 lg:py-12">
           <div>
             <h1 className="text-4xl lg:text-5xl font-extrabold leading-tight mb-4 tracking-tight">
               BUILD YOUR <br /> ONLINE BUSINESS
             </h1>
 
-            <p className="text-gray-200 max-w-md text-lg leading-relaxed tracking-wide">
+            <p className="text-gray-200 max-w-md text-base lg:text-lg leading-relaxed tracking-wide">
               Launch your brand, customize premium products, and start selling worldwide — all in one place.
             </p>
           </div>
@@ -115,25 +104,21 @@ export default function SignupPage() {
       </div>
 
       {/* RIGHT */}
-      <div className="w-full h-screen bg-[#f5f5f3] flex">
-
-        <div className="relative w-full h-full flex flex-col">
-
+      <div className="w-full min-h-[100dvh] bg-[#f5f5f3] flex">
+        <div className="relative w-full min-h-[100dvh] flex flex-col px-5 sm:px-8 md:px-10 py-6">
           <button
             type="button"
             onClick={goHome}
-            className="absolute top-4 right-4 text-gray-500 hover:text-black"
+            className="absolute top-4 right-4 text-gray-500 hover:text-black z-20"
           >
             ✕
           </button>
 
-          <div className="flex-1 flex items-center justify-center">
-
+          <div className="flex-1 flex items-center justify-center py-10">
             <div className="w-full max-w-md text-center md:text-left">
-
               {/* LOGO */}
               <div className="flex items-center gap-3 mb-6 justify-center md:justify-start">
-                <div className="bg-black text-white w-10 h-10 flex items-center justify-center rounded-lg font-bold">
+                <div className="bg-black text-white w-10 h-10 flex items-center justify-center rounded-lg font-bold shrink-0">
                   M
                 </div>
                 <span className="text-xl sm:text-2xl font-extrabold">
@@ -147,11 +132,11 @@ export default function SignupPage() {
 
               {/* SOCIAL */}
               <div className="space-y-3 mb-6">
-
                 <button
+                  type="button"
                   onClick={() => handleOAuth("google")}
                   disabled={loadingProvider !== null}
-                  className="w-full border py-3.5 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full border py-3.5 px-4 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <FcGoogle size={20} />
                   {loadingProvider === "google"
@@ -160,16 +145,16 @@ export default function SignupPage() {
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => handleOAuth("apple")}
                   disabled={loadingProvider !== null}
-                  className="w-full border py-3.5 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
+                  className="w-full border py-3.5 px-4 rounded-lg bg-white flex items-center justify-center gap-3 disabled:opacity-50"
                 >
                   <FaApple size={20} />
                   {loadingProvider === "apple"
                     ? "Connecting..."
                     : "Continue with Apple"}
                 </button>
-
               </div>
 
               <div className="flex items-center gap-3 my-6">
@@ -180,7 +165,7 @@ export default function SignupPage() {
 
               <SignupForm />
 
-              <p className="text-sm text-gray-600 mt-6">
+              <p className="text-sm text-gray-600 mt-6 text-center md:text-left">
                 Already have an account?{" "}
                 <span
                   onClick={goLogin}
@@ -189,7 +174,6 @@ export default function SignupPage() {
                   Log in
                 </span>
               </p>
-
             </div>
           </div>
         </div>
