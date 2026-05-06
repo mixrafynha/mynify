@@ -3,18 +3,31 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useCallback } from "react";
+import {
+  ArrowUpRight,
+  BookOpen,
+  Calendar,
+  Gamepad2,
+  Rocket,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 
 /* ================= SECURITY HELPERS ================= */
 
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
-  if (href.trim().toLowerCase().startsWith("javascript:")) return "/";
-  if (href.trim().toLowerCase().startsWith("data:")) return "/";
+  const clean = href.trim().toLowerCase();
+
+  if (clean.startsWith("javascript:")) return "/";
+  if (clean.startsWith("data:")) return "/";
+
   return href;
 };
 
-const safeText = (val: any) => {
+const safeText = (val: unknown) => {
   if (typeof val !== "string") return "";
+
   return val
     .replace(/<script.*?>.*?<\/script>/gi, "")
     .replace(/</g, "&lt;")
@@ -60,8 +73,9 @@ export default function BlogPage() {
   const handleImageError = useCallback(
     (e: React.SyntheticEvent<HTMLImageElement>) => {
       const target = e.currentTarget;
+
       try {
-        if (target && target.src !== FALLBACK_IMAGE) {
+        if (target.src !== FALLBACK_IMAGE) {
           target.src = FALLBACK_IMAGE;
         }
       } catch {}
@@ -70,91 +84,146 @@ export default function BlogPage() {
   );
 
   return (
-    <div className="bg-gradient-to-b from-white to-gray-50 text-gray-900 min-h-screen">
-
+    <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
       {/* HERO */}
-      <section className="max-w-6xl mx-auto px-4 md:px-8 py-16 text-center">
-        <h1 className="text-4xl md:text-5xl font-extrabold mb-4">
-          MYNIFY{" "}
-          <span className="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">
-            Blog
-          </span>
-        </h1>
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)]" />
 
-        <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-          Tips, strategies, and insights to help you grow your brand and sell more.
-        </p>
+        <div className="relative mx-auto max-w-7xl px-4 pb-20 pt-20 text-center md:px-8 lg:px-12 lg:pt-28">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
+            <Gamepad2 size={15} className="text-purple-400" />
+            Tips for creators & gamer brands
+          </div>
+
+          <h1 className="mx-auto mb-6 max-w-5xl text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
+            MYNIFY{" "}
+            <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+              Blog
+            </span>
+          </h1>
+
+          <p className="mx-auto max-w-2xl text-base leading-relaxed text-white/65 sm:text-lg md:text-xl">
+            Tips, strategies, and insights to help you grow your brand and sell
+            more.
+          </p>
+        </div>
       </section>
 
       {/* POSTS GRID */}
-      <section className="max-w-7xl mx-auto px-4 md:px-8 pb-20">
-        <div className="grid md:grid-cols-3 gap-8">
+      <section className="relative bg-[#03030a] pb-24">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_28%)]" />
 
-          {POSTS.map((post) => (
-            <article
-              key={post.slug}
-              className="group bg-white rounded-3xl overflow-hidden shadow-md hover:shadow-2xl transition duration-300"
-            >
-              {/* IMAGE */}
-              <div className="relative h-52 w-full overflow-hidden">
-                <Image
-                  src={post.image}
-                  alt={safeText(post.title)}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                  onError={handleImageError}
-                  className="object-cover group-hover:scale-105 transition duration-300"
-                />
-              </div>
+        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
+          <div className="mb-10 flex items-center gap-4">
+            <div className="h-[2px] w-10 bg-purple-500 sm:w-12" />
+            <h2 className="text-xl font-black uppercase italic tracking-tight sm:text-2xl md:text-3xl">
+              Latest articles
+            </h2>
+          </div>
 
-              {/* CONTENT */}
-              <div className="p-6">
-
-                <p className="text-sm text-gray-400 mb-2">
-                  {safeText(post.date)}
-                </p>
-
-                <h2 className="text-xl font-semibold mb-3">
-                  {safeText(post.title)}
-                </h2>
-
-                <p className="text-gray-600 mb-5">
-                  {safeText(post.excerpt)}
-                </p>
-
+          <div className="grid gap-6 md:grid-cols-3">
+            {POSTS.map((post) => (
+              <article
+                key={post.slug}
+                className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45"
+              >
+                {/* IMAGE */}
                 <Link
                   href={safeHref(`/blog/${post.slug}`)}
-                  className="text-green-500 font-medium hover:underline"
+                  className="relative block h-56 w-full overflow-hidden"
                 >
-                  Read more →
+                  <Image
+                    src={post.image}
+                    alt={safeText(post.title)}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 33vw"
+                    onError={handleImageError}
+                    className="object-cover opacity-70 transition duration-500 group-hover:scale-110"
+                  />
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#03030a] via-black/30 to-transparent" />
                 </Link>
 
-              </div>
-            </article>
-          ))}
+                {/* CONTENT */}
+                <div className="p-6">
+                  <p className="mb-3 flex items-center gap-2 text-sm text-white/40">
+                    <Calendar size={15} className="text-purple-400" />
+                    {safeText(post.date)}
+                  </p>
 
+                  <h2 className="mb-3 text-xl font-black text-white">
+                    {safeText(post.title)}
+                  </h2>
+
+                  <p className="mb-6 leading-relaxed text-white/60">
+                    {safeText(post.excerpt)}
+                  </p>
+
+                  <Link
+                    href={safeHref(`/blog/${post.slug}`)}
+                    className="inline-flex items-center gap-2 font-bold text-fuchsia-400 transition hover:text-purple-300"
+                  >
+                    Read more
+                    <ArrowUpRight size={18} />
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURE STRIP */}
+      <section className="relative overflow-hidden bg-[#05050d] py-16">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.14),transparent_40%)]" />
+
+        <div className="relative mx-auto max-w-5xl px-4 text-center md:px-8">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-purple-300">
+            <BookOpen size={14} />
+            Learn & grow
+          </div>
+
+          <h3 className="mb-4 text-3xl font-black uppercase md:text-4xl">
+            Build smarter, sell better
+          </h3>
+
+          <p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60">
+            Discover practical guides about product design, marketing, branding,
+            and scaling your custom product business.
+          </p>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20 bg-gradient-to-br from-gray-900 to-black text-white text-center">
+      <section className="relative overflow-hidden bg-[#03030a] py-28 text-center">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.35),transparent_45%)]" />
 
-        <h2 className="text-3xl md:text-4xl font-bold mb-4">
-          Want to grow faster?
-        </h2>
+        <div className="relative mx-auto max-w-5xl px-4 md:px-8 lg:px-12">
+          <h2 className="mb-6 text-4xl font-black uppercase leading-tight tracking-tight md:text-6xl">
+            Want to{" "}
+            <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
+              grow faster?
+            </span>
+          </h2>
 
-        <p className="text-gray-300 mb-6">
-          Start building your brand and apply what you learn today.
-        </p>
+          <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
+            Start building your brand and apply what you learn today.
+          </p>
 
-        <Link
-          href={safeHref("/login")}
-          className="bg-gradient-to-r from-green-400 to-emerald-500 px-8 py-3 rounded-xl font-semibold hover:scale-105 transition inline-block"
-        >
-          Start now 🚀
-        </Link>
+          <Link
+            href={safeHref("/login")}
+            className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-10 py-4 text-lg font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
+          >
+            Start now
+            <Rocket size={20} />
+          </Link>
 
+          <p className="mt-6 text-sm text-white/35">
+            No credit card required • Free to start
+          </p>
+        </div>
       </section>
-    </div>
+    </main>
   );
 }
