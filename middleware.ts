@@ -50,7 +50,9 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
     "/api/select",
   ];
 
-  const isStrict = strictRoutes.some((route) => pathname.startsWith(route));
+  const isStrict = strictRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
 
   if (isStrict) {
     return strictLimiter.limit(`strict:${ip}:${pathname}`);
@@ -87,6 +89,7 @@ export async function middleware(req: NextRequest) {
         getAll() {
           return req.cookies.getAll();
         },
+
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => {
             req.cookies.set(name, value);
@@ -108,24 +111,36 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
+  const protectedRoutes = [
+    "/dashboard",
+    "/admin",
+    "/settings",
+    "/profile",
+  ];
+
   const isProtected = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
   if (isProtected && !user) {
     const loginUrl = new URL("/login", req.url);
+
     loginUrl.searchParams.set("redirect", pathname);
+
     return NextResponse.redirect(loginUrl);
   }
 
   if (pathname === "/login" && user) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(
+      new URL("/dashboard", req.url)
+    );
   }
 
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(
+        new URL("/login", req.url)
+      );
     }
 
     const { data: profile } = await supabase
@@ -135,18 +150,53 @@ export async function middleware(req: NextRequest) {
       .maybeSingle();
 
     if (profile?.role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(
+        new URL("/dashboard", req.url)
+      );
     }
   }
 
+  // SECURITY HEADERS
+
   res.headers.set("X-Frame-Options", "DENY");
-  res.headers.set("X-Content-Type-Options", "nosniff");
-  res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  res.headers.set(
+    "X-Content-Type-Options",
+    "nosniff"
+  );
+
+  res.headers.set(
+    "Referrer-Policy",
+    "strict-origin-when-cross-origin"
+  );
+
   res.headers.set(
     "Permissions-Policy",
-    "camera=(), microphone=(), geolocation=()"
+    "camera=(), microphone=(), geolocation=(), payment=()"
   );
-  res.headers.set("X-DNS-Prefetch-Control", "off");
+
+  res.headers.set(
+    "X-DNS-Prefetch-Control",
+    "off"
+  );
+
+  res.headers.set(
+    "Content-Security-Policy",
+    `
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com;
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: blob: https:;
+      font-src 'self' data:;
+      connect-src 'self' https://challenges.cloudflare.com https:;
+      frame-src https://challenges.cloudflare.com;
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    `
+      .replace(/\n/g, " ")
+      .trim()
+  );
 
   if (!isDev) {
     res.headers.set(
