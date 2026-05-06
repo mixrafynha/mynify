@@ -80,32 +80,44 @@ export default function LoginPage() {
   // 🔥 EMAIL LOGIN (HARDENED)
   // =========================
   const handleLogin = useCallback(async () => {
-    if (loading) return;
+  if (loading) return;
 
-    setLoading(true);
-    setError("");
+  setLoading(true);
+  setError("");
 
-    try {
-      const safeEmail = sanitize(email.toLowerCase());
+  try {
+    const safeEmail = sanitize(email.toLowerCase());
 
-      if (!safeEmail || !password) {
-        throw new Error("invalid");
-      }
-
-      if (safeEmail.length < 5) throw new Error("invalid");
-
-      const { error } = await supabase.auth.signInWithPassword({
-        email: safeEmail,
-        password,
-      });
-
-      if (error) throw error;
-    } catch {
-      setError("Invalid email or password");
-    } finally {
-      setLoading(false);
+    if (!safeEmail || !password) {
+      throw new Error("invalid");
     }
-  }, [email, password, loading]);
+
+    if (safeEmail.length < 5) {
+      throw new Error("invalid");
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: safeEmail,
+      password,
+    });
+
+    if (error) {
+      console.error("Login error:", error.message);
+      throw error;
+    }
+
+    if (!data.session) {
+      throw new Error("No session created");
+    }
+
+    router.replace("/dashboard");
+  } catch (err) {
+    console.error("Login failed:", err);
+    setError("Invalid email or password");
+  } finally {
+    setLoading(false);
+  }
+}, [email, password, loading, router]);
 
   // =========================
   // 🔵 GOOGLE OAUTH (HARDENED)
@@ -287,13 +299,14 @@ export default function LoginPage() {
               <div className="text-red-500 text-sm">{error}</div>
             )}
 
-            <button
+           <button
+              type="button"
               onClick={handleLogin}
               disabled={loading}
               className="w-full bg-[#39E58C] py-3.5 rounded-lg font-semibold disabled:opacity-50"
             >
               {loading ? "Signing in..." : "Sign in"}
-            </button>
+         </button>
 
             <p className="text-sm text-gray-600 text-center md:text-left">
               Don’t have an account?{" "}
