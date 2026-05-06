@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Script from "next/script";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Gamepad2, Sparkles, X, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
@@ -206,154 +206,182 @@ export default function LoginPage() {
   if (checking) return null;
 
   return (
-    <div className="min-h-[100dvh] grid md:grid-cols-2">
+    <main className="min-h-[100dvh] overflow-hidden bg-[#03030a] text-white">
       <Script
         id="turnstile-script-login"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
       />
 
-      <div className="hidden md:flex relative bg-black text-white overflow-hidden">
-        <img
-          src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
-          className="absolute inset-0 w-full h-full object-cover"
-          alt="background"
-        />
+      <div className="grid min-h-[100dvh] md:grid-cols-2">
+        <div className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
-        <div className="absolute inset-0 bg-black/60" />
+          <img
+            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
+            className="absolute inset-0 h-full w-full object-cover opacity-35"
+            alt="background"
+          />
 
-        <div className="relative z-10 flex flex-col justify-center items-start p-12 w-full">
-          <div className="max-w-md">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="bg-white text-black w-10 h-10 flex items-center justify-center rounded-lg font-bold">
-                M
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.85)_45%,rgba(3,3,10,0.45)_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.25),transparent_45%)]" />
+
+          <div className="relative z-10 flex w-full flex-col justify-center p-12">
+            <div className="max-w-md">
+              <div className="mb-8 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
+                  M
+                </div>
+
+                <span className="text-xl font-black tracking-tight">
+                  MYNIFY
+                </span>
               </div>
-              <span className="text-xl font-extrabold tracking-tight">
-                MYNIFY
-              </span>
+
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
+                <Gamepad2 size={15} className="text-purple-400" />
+                Welcome back creator
+              </div>
+
+              <h1 className="mb-5 text-5xl font-black uppercase leading-[0.9] tracking-tight lg:text-7xl">
+                Welcome{" "}
+                <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+                  back.
+                </span>
+              </h1>
+
+              <p className="text-lg leading-relaxed text-white/65">
+                Log in to manage your store, orders, and grow your brand
+                worldwide.
+              </p>
             </div>
-
-            <h1 className="text-4xl lg:text-5xl font-extrabold leading-tight mb-4">
-              WELCOME BACK.
-            </h1>
-
-            <p className="text-gray-200 text-lg">
-              Log in to manage your store, orders, and grow your brand worldwide.
-            </p>
           </div>
         </div>
-      </div>
 
-      <div className="flex items-center justify-center bg-[#f5f5f3] p-6">
-        <div className="w-full max-w-md relative">
-          <button
-            onClick={() => router.push(safeRoute("/"))}
-            className="absolute top-2 right-2 text-gray-500 hover:text-black"
-          >
-            ✕
-          </button>
+        <div className="relative flex items-center justify-center overflow-hidden bg-[#03030a] p-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
 
-          <div className="flex items-center gap-3 mb-6 justify-center md:justify-start">
-            <div className="bg-black text-white w-10 h-10 flex items-center justify-center rounded-lg font-bold">
-              M
+          <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:p-8">
+            <button
+              onClick={() => router.push(safeRoute("/"))}
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="mb-6 flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
+                M
+              </div>
+
+              <span className="text-xl font-black tracking-tight">MYNIFY</span>
             </div>
-            <span className="text-xl font-extrabold tracking-tight">
-              MYNIFY
-            </span>
-          </div>
 
-          <h2 className="text-2xl sm:text-3xl font-extrabold mb-6">
-            Welcome back
-          </h2>
+            <h2 className="mb-2 text-3xl font-black uppercase">
+              Welcome back
+            </h2>
 
-          <div className="space-y-3 mb-6">
-            <button
-              disabled={loading}
-              onClick={handleGoogle}
-              className="w-full border py-3.5 rounded-lg bg-white hover:bg-gray-50 flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              <FcGoogle size={20} />
-              Continue with Google
-            </button>
+            <p className="mb-6 text-sm leading-relaxed text-white/50">
+              Sign in to continue building your custom product brand.
+            </p>
 
-            <button
-              disabled={loading}
-              onClick={handleApple}
-              className="w-full border py-3.5 rounded-lg bg-white hover:bg-gray-50 flex items-center justify-center gap-3 disabled:opacity-50"
-            >
-              <FaApple size={20} />
-              Continue with Apple
-            </button>
-          </div>
-
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-gray-300" />
-            <span className="text-xs text-gray-500">OR</span>
-            <div className="flex-1 h-px bg-gray-300" />
-          </div>
-
-          <div className="space-y-5">
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              className="w-full border px-4 py-3 rounded-lg focus:ring-2 focus:ring-black"
-            />
-
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                className="w-full border px-4 py-3 rounded-lg focus:ring-2 focus:ring-black"
-              />
+            <div className="mb-6 space-y-3">
+              <button
+                disabled={loading}
+                onClick={handleGoogle}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <FcGoogle size={20} />
+                Continue with Google
+              </button>
 
               <button
-                type="button"
-                onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-3 top-3 text-gray-500"
+                disabled={loading}
+                onClick={handleApple}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                <FaApple size={20} />
+                Continue with Apple
               </button>
             </div>
 
-            <div className="flex justify-end">
-              <span
-                onClick={() => router.push("/login/forgot-password")}
-                className="text-sm text-gray-600 hover:text-black cursor-pointer"
-              >
-                Forgot password?
-              </span>
+            <div className="my-6 flex items-center gap-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <span className="text-xs font-bold text-white/35">OR</span>
+              <div className="h-px flex-1 bg-white/10" />
             </div>
 
-            <div className="flex justify-center min-h-[65px]">
-              <div ref={captchaRef} />
+            <div className="space-y-5">
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Email"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+              />
+
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-12 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((p) => !p)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/45 transition hover:text-purple-300"
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              <div className="flex justify-end">
+                <span
+                  onClick={() => router.push("/login/forgot-password")}
+                  className="cursor-pointer text-sm font-semibold text-fuchsia-400 transition hover:text-purple-300"
+                >
+                  Forgot password?
+                </span>
+              </div>
+
+              <div className="flex min-h-[65px] justify-center rounded-2xl border border-white/10 bg-white/5 p-2">
+                <div ref={captchaRef} />
+              </div>
+
+              {error && (
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleLogin}
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+              >
+                {loading ? "Signing in..." : "Sign in"}
+                <Zap size={18} />
+              </button>
+
+              <p className="text-center text-sm text-white/50 md:text-left">
+                Don’t have an account?{" "}
+                <span
+                  onClick={() => router.push("/signup")}
+                  className="cursor-pointer font-bold text-fuchsia-400 transition hover:text-purple-300"
+                >
+                  Sign up
+                </span>
+              </p>
             </div>
 
-            {error && <div className="text-red-500 text-sm">{error}</div>}
-
-            <button
-              type="button"
-              onClick={handleLogin}
-              disabled={loading}
-              className="w-full bg-[#39E58C] py-3.5 rounded-lg font-semibold disabled:opacity-50"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-
-            <p className="text-sm text-gray-600 text-center md:text-left">
-              Don’t have an account?{" "}
-              <span
-                onClick={() => router.push("/signup")}
-                className="font-semibold cursor-pointer hover:underline"
-              >
-                Sign up
-              </span>
-            </p>
+            <div className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full bg-purple-600/20 blur-[60px]" />
+            <div className="pointer-events-none absolute -left-10 top-20 h-24 w-24 rounded-full bg-sky-500/10 blur-[50px]" />
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
