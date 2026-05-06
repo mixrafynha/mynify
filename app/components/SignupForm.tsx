@@ -10,47 +10,50 @@ export default function SignupForm() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-
-  const [mounted, setMounted] = useState(false);
   const [scriptReady, setScriptReady] = useState(false);
+
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  /* -------------------------
-     ✅ CLIENT READY
-  ------------------------- */
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  /* -------------------------
-     🔐 TURNSTILE (ROBUST)
-  ------------------------- */
-  useEffect(() => {
-    if (!mounted || !scriptReady) return;
+    if (!scriptReady) return;
     if (!captchaRef.current) return;
     if (widgetIdRef.current) return;
 
-    const w = window as any;
+    const turnstile = (window as any).turnstile;
+    if (!turnstile) return;
 
-    if (!w.turnstile) return;
+    const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
-    widgetIdRef.current = w.turnstile.render(captchaRef.current, {
-      sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!,
-      callback: (token: string) => setToken(token),
+    if (!sitekey) {
+      setError("Missing captcha site key");
+      return;
+    }
+
+    widgetIdRef.current = turnstile.render(captchaRef.current, {
+      sitekey,
+      callback: (value: string) => {
+        setToken(value);
+        setError("");
+      },
       "expired-callback": () => setToken(""),
       "error-callback": () => {
         setToken("");
-        setError("Captcha error. Refresh the page.");
+        setError("Captcha error");
       },
-      appearance: "always",
-      execution: "render",
     });
-  }, [mounted, scriptReady]);
+  }, [scriptReady]);
 
-  /* -------------------------
-     📧 VALIDATION
-  ------------------------- */
+  const resetCaptcha = useCallback(() => {
+    const turnstile = (window as any).turnstile;
+
+    if (turnstile && widgetIdRef.current) {
+      turnstile.reset(widgetIdRef.current);
+    }
+
+    setToken("");
+  }, []);
+
   const isValidEmail = (email: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
@@ -60,12 +63,10 @@ export default function SignupForm() {
     /[a-z]/.test(password) &&
     /[0-9]/.test(password);
 
-  /* -------------------------
-     🚀 SUBMIT
-  ------------------------- */
   const handleEmailSignup = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
+
       if (loading) return;
 
       setError("");
@@ -90,10 +91,7 @@ export default function SignupForm() {
 
       try {
         const controller = new AbortController();
-
-        const timeout = setTimeout(() => {
-          controller.abort();
-        }, 10000);
+        const timeout = setTimeout(() => controller.abort(), 10000);
 
         const res = await fetch("/api/signup", {
           method: "POST",
@@ -106,42 +104,35 @@ export default function SignupForm() {
 
         clearTimeout(timeout);
 
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
 
         if (!res.ok) {
-          throw new Error(data.message || "Signup failed");
+          throw new Error(data?.message || "Signup failed");
         }
 
-        setMessage("Account created 🚀");
+        setMessage("Account created");
         setEmail("");
         setPassword("");
-        setToken("");
-
-        if ((window as any).turnstile && widgetIdRef.current) {
-          (window as any).turnstile.reset(widgetIdRef.current);
-        }
+        resetCaptcha();
       } catch (err: any) {
-        if (err.name === "AbortError") {
-          setError("Timeout. Try again.");
-        } else {
-          setError(err.message || "Server error");
-        }
+        setError(
+          err?.name === "AbortError"
+            ? "Timeout. Try again."
+            : err?.message || "Server error"
+        );
 
-        if ((window as any).turnstile && widgetIdRef.current) {
-          (window as any).turnstile.reset(widgetIdRef.current);
-        }
-
-        setToken("");
+        resetCaptcha();
       } finally {
         setLoading(false);
       }
     },
-    [email, password, token, loading]
+    [email, password, token, loading, resetCaptcha]
   );
 
   return (
     <div className="w-full">
       <Script
+        id="turnstile-script"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
         onLoad={() => setScriptReady(true)}
@@ -168,9 +159,8 @@ export default function SignupForm() {
           required
         />
 
-        {/* CAPTCHA */}
         <div className="flex justify-center min-h-[65px]">
-          {mounted && <div ref={captchaRef} />}
+          <div ref={captchaRef} />
         </div>
 
         <button
