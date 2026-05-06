@@ -1,3 +1,5 @@
+/** @type {import('next').NextConfig} */
+
 const securityHeaders = [
   {
     key: "X-Frame-Options",
@@ -32,12 +34,18 @@ const securityHeaders = [
       frame-ancestors 'none';
       base-uri 'self';
       form-action 'self';
-    `.replace(/\n/g, ""),
+      object-src 'none';
+      upgrade-insecure-requests;
+    `
+      .replace(/\s{2,}/g, " ")
+      .trim(),
   },
 ];
 
 const nextConfig = {
   reactStrictMode: true,
+
+  poweredByHeader: false,
 
   async headers() {
     return [
