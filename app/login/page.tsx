@@ -29,8 +29,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const [token, setToken] = useState("");
-  const [scriptReady, setScriptReady] = useState(false);
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
@@ -75,33 +73,41 @@ export default function LoginPage() {
   }, [router]);
 
   useEffect(() => {
-    if (!scriptReady) return;
-    if (!captchaRef.current) return;
-    if (widgetIdRef.current) return;
+    if (checking) return;
 
-    const turnstile = (window as any).turnstile;
-    if (!turnstile) return;
+    const interval = setInterval(() => {
+      const turnstile = (window as any).turnstile;
 
-    const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+      if (!turnstile) return;
+      if (!captchaRef.current) return;
+      if (widgetIdRef.current) return;
 
-    if (!sitekey) {
-      setError("Missing captcha site key");
-      return;
-    }
+      const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
-    widgetIdRef.current = turnstile.render(captchaRef.current, {
-      sitekey,
-      callback: (value: string) => {
-        setToken(value);
-        setError("");
-      },
-      "expired-callback": () => setToken(""),
-      "error-callback": () => {
-        setToken("");
-        setError("Captcha error");
-      },
-    });
-  }, [scriptReady]);
+      if (!sitekey) {
+        setError("Missing captcha site key");
+        clearInterval(interval);
+        return;
+      }
+
+      widgetIdRef.current = turnstile.render(captchaRef.current, {
+        sitekey,
+        callback: (value: string) => {
+          setToken(value);
+          setError("");
+        },
+        "expired-callback": () => setToken(""),
+        "error-callback": () => {
+          setToken("");
+          setError("Captcha error");
+        },
+      });
+
+      clearInterval(interval);
+    }, 200);
+
+    return () => clearInterval(interval);
+  }, [checking]);
 
   const resetCaptcha = useCallback(() => {
     const turnstile = (window as any).turnstile;
@@ -144,18 +150,14 @@ export default function LoginPage() {
         },
       });
 
-      if (error) {
-        console.error("Login error:", error.message);
-        throw error;
-      }
+      if (error) throw error;
 
       if (!data.session) {
         throw new Error("No session created");
       }
 
       router.replace("/dashboard");
-    } catch (err) {
-      console.error("Login failed:", err);
+    } catch {
       setError("Invalid email or password");
       resetCaptcha();
     } finally {
@@ -177,8 +179,7 @@ export default function LoginPage() {
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-    } catch (err) {
-      console.error(err);
+    } catch {
       setLoading(false);
     }
   }, [loading]);
@@ -197,8 +198,7 @@ export default function LoginPage() {
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
-    } catch (err) {
-      console.error(err);
+    } catch {
       setLoading(false);
     }
   }, [loading]);
@@ -211,7 +211,6 @@ export default function LoginPage() {
         id="turnstile-script-login"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="afterInteractive"
-        onLoad={() => setScriptReady(true)}
       />
 
       <div className="hidden md:flex relative bg-black text-white overflow-hidden">
