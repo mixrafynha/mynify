@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import Script from "next/script";
 
 export default function SignupForm() {
   const [email, setEmail] = useState("");
@@ -11,7 +12,9 @@ export default function SignupForm() {
   const [error, setError] = useState("");
 
   const [mounted, setMounted] = useState(false);
+  const [scriptReady, setScriptReady] = useState(false);
   const captchaRef = useRef<HTMLDivElement | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
 
   /* -------------------------
      ✅ CLIENT READY
@@ -24,30 +27,26 @@ export default function SignupForm() {
      🔐 TURNSTILE (ROBUST)
   ------------------------- */
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || !scriptReady) return;
+    if (!captchaRef.current) return;
+    if (widgetIdRef.current) return;
 
-    let interval: any;
+    const w = window as any;
 
-    const renderCaptcha = () => {
-      const w = window as any;
+    if (!w.turnstile) return;
 
-      if (w.turnstile && captchaRef.current) {
-        w.turnstile.render(captchaRef.current, {
-          sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!,
-          callback: (token: string) => setToken(token),
-          "expired-callback": () => setToken(""),
-          appearance: "always",
-          execution: "render",
-        });
-
-        clearInterval(interval);
-      }
-    };
-
-    interval = setInterval(renderCaptcha, 300);
-
-    return () => clearInterval(interval);
-  }, [mounted]);
+    widgetIdRef.current = w.turnstile.render(captchaRef.current, {
+      sitekey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!,
+      callback: (token: string) => setToken(token),
+      "expired-callback": () => setToken(""),
+      "error-callback": () => {
+        setToken("");
+        setError("Captcha error. Refresh the page.");
+      },
+      appearance: "always",
+      execution: "render",
+    });
+  }, [mounted, scriptReady]);
 
   /* -------------------------
      📧 VALIDATION
@@ -118,9 +117,9 @@ export default function SignupForm() {
         setPassword("");
         setToken("");
 
-        // 🔥 reset captcha
-        (window as any).turnstile.reset();
-
+        if ((window as any).turnstile && widgetIdRef.current) {
+          (window as any).turnstile.reset(widgetIdRef.current);
+        }
       } catch (err: any) {
         if (err.name === "AbortError") {
           setError("Timeout. Try again.");
@@ -128,10 +127,11 @@ export default function SignupForm() {
           setError(err.message || "Server error");
         }
 
-        // 🔥 reset captcha on error
-        (window as any).turnstile.reset();
-        setToken("");
+        if ((window as any).turnstile && widgetIdRef.current) {
+          (window as any).turnstile.reset(widgetIdRef.current);
+        }
 
+        setToken("");
       } finally {
         setLoading(false);
       }
@@ -141,8 +141,13 @@ export default function SignupForm() {
 
   return (
     <div className="w-full">
-      <form onSubmit={handleEmailSignup} className="space-y-4">
+      <Script
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
+        strategy="afterInteractive"
+        onLoad={() => setScriptReady(true)}
+      />
 
+      <form onSubmit={handleEmailSignup} className="space-y-4">
         <input
           type="email"
           autoComplete="email"
@@ -164,7 +169,7 @@ export default function SignupForm() {
         />
 
         {/* CAPTCHA */}
-        <div className="flex justify-center">
+        <div className="flex justify-center min-h-[65px]">
           {mounted && <div ref={captchaRef} />}
         </div>
 
