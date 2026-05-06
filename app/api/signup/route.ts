@@ -98,7 +98,6 @@ export async function POST(req: Request) {
 
     const ip = getIP(req);
 
-    /* 🔒 RATE LIMIT */
     if (!checkRateLimit(ip)) {
       return NextResponse.json(
         { message: "Too many requests" },
@@ -106,11 +105,9 @@ export async function POST(req: Request) {
       );
     }
 
-    /* 🤖 CAPTCHA */
     const ok = await verifyTurnstile(token, ip);
     if (!ok) return fail();
 
-    /* 📧 EMAIL */
     if (!isValidEmail(email)) return fail();
 
     email = email.toLowerCase().trim();
@@ -118,10 +115,8 @@ export async function POST(req: Request) {
     const domain = email.split("@")[1];
     if (!domain || disposable.includes(domain)) return fail();
 
-    /* 🔐 PASSWORD */
     if (!isStrongPassword(password)) return fail();
 
-    /* 🚫 DAILY LIMIT */
     const day = new Date().toISOString().slice(0, 10);
     const key = `${ip}-${day}`;
 
@@ -133,24 +128,34 @@ export async function POST(req: Request) {
       );
     }
 
-    /* 🔧 SUPABASE */
     const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
 
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        captchaToken: token,
+      },
     });
+
+    if (error) {
+      console.error("Supabase signup error:", error.message);
+
+      return NextResponse.json(
+        { message: error.message },
+        { status: 400 }
+      );
+    }
 
     dailyLimit.set(key, used + 1);
 
-    /* 🔒 ANTI ENUMERATION */
-    if (error) return success();
-
     return success(201);
-  } catch {
+  } catch (err) {
+    console.error("Signup API error:", err);
+
     return NextResponse.json(
       { message: "Internal error" },
       { status: 500 }
@@ -164,7 +169,7 @@ export async function POST(req: Request) {
 
 function success(status = 200) {
   return NextResponse.json(
-    { message: "If valid, account will be created" },
+    { message: "Account created successfully" },
     { status }
   );
 }
