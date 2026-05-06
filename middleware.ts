@@ -6,15 +6,27 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isDev = process.env.NODE_ENV === "development";
 
-  const res = NextResponse.next();
+  let res = NextResponse.next({
+    request: req,
+  });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll: () => req.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            req.cookies.set(name, value);
+          });
+
+          res = NextResponse.next({
+            request: req,
+          });
+
           cookiesToSet.forEach(({ name, value, options }) => {
             res.cookies.set(name, value, options);
           });
@@ -54,11 +66,6 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  const nonce = btoa(
-    String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))
-  );
-
-  res.headers.set("x-nonce", nonce);
   res.headers.set("X-Frame-Options", "DENY");
   res.headers.set("X-Content-Type-Options", "nosniff");
   res.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -70,24 +77,15 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  res.headers.set(
-    "Content-Security-Policy",
-    [
-      "default-src 'self'",
-      `script-src 'self' 'nonce-${nonce}' ${isDev ? "'unsafe-eval'" : ""}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-    ].join("; ")
-  );
-
   return res;
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/settings/:path*", "/profile/:path*", "/login"],
+  matcher: [
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/settings/:path*",
+    "/profile/:path*",
+    "/login",
+  ],
 };
