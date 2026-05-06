@@ -33,131 +33,10 @@ function getIp(req: NextRequest) {
   );
 }
 
-async function checkRateLimit(req: NextRequest, pathname: string) {
-  const ip = getIp(req);
-
-  const globalRate = await globalLimiter.limit(`global:${ip}`);
-
-  if (!globalRate.success) {
-    return globalRate;
-  }
-
-  const strictRoutes = [
-    "/login",
-    "/signup",
-    "/api/contact",
-    "/api/checkout",
-    "/api/select",
-  ];
-
-  const isStrict = strictRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  if (isStrict) {
-    return strictLimiter.limit(`strict:${ip}:${pathname}`);
-  }
-
-  if (pathname.startsWith("/admin")) {
-    return adminLimiter.limit(`admin:${ip}`);
-  }
-
-  return { success: true };
-}
-
-export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-  const isDev = process.env.NODE_ENV === "development";
-
-  const rate = await checkRateLimit(req, pathname);
-
-  if (!rate.success) {
-    return new NextResponse("Too many requests", {
-      status: 429,
-    });
-  }
-
-  let res = NextResponse.next({
-    request: req,
-  });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return req.cookies.getAll();
-        },
-
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            req.cookies.set(name, value);
-          });
-
-          res = NextResponse.next({
-            request: req,
-          });
-
-          cookiesToSet.forEach(({ name, value, options }) => {
-            res.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const protectedRoutes = [
-    "/dashboard",
-    "/admin",
-    "/settings",
-    "/profile",
-  ];
-
-  const isProtected = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
-  if (isProtected && !user) {
-    const loginUrl = new URL("/login", req.url);
-
-    loginUrl.searchParams.set("redirect", pathname);
-
-    return NextResponse.redirect(loginUrl);
-  }
-
-  if (pathname === "/login" && user) {
-    return NextResponse.redirect(
-      new URL("/dashboard", req.url)
-    );
-  }
-
-  if (pathname.startsWith("/admin")) {
-    if (!user) {
-      return NextResponse.redirect(
-        new URL("/login", req.url)
-      );
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.redirect(
-        new URL("/dashboard", req.url)
-      );
-    }
-  }
-
-  // SECURITY HEADERS
-
+function applySecurityHeaders(
+  res: NextResponse,
+  isDev: boolean
+) {
   res.headers.set("X-Frame-Options", "DENY");
 
   res.headers.set(
@@ -184,15 +63,17 @@ export async function middleware(req: NextRequest) {
     "Content-Security-Policy",
     `
       default-src 'self';
-      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com;
-      style-src 'self' 'unsafe-inline';
+      script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com;
+      style-src 'self' 'unsafe-inline' https:;
       img-src 'self' data: blob: https:;
-      font-src 'self' data:;
+      font-src 'self' data: https:;
       connect-src 'self' https://challenges.cloudflare.com https:;
       frame-src https://challenges.cloudflare.com;
+      object-src 'none';
       frame-ancestors 'none';
       base-uri 'self';
       form-action 'self';
+      upgrade-insecure-requests;
     `
       .replace(/\n/g, " ")
       .trim()
@@ -206,6 +87,190 @@ export async function middleware(req: NextRequest) {
   }
 
   return res;
+}
+
+async function checkRateLimit(
+  req: NextRequest,
+  pathname: string
+) {
+  const ip = getIp(req);
+
+  const globalRate = await globalLimiter.limit(
+    `global:${ip}`
+  );
+
+  if (!globalRate.success) {
+    return globalRate;
+  }
+
+  const strictRoutes = [
+    "/login",
+    "/signup",
+    "/api/contact",
+    "/api/checkout",
+    "/api/select",
+  ];
+
+  const isStrict = strictRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  if (isStrict) {
+    return strictLimiter.limit(
+      `strict:${ip}:${pathname}`
+    );
+  }
+
+  if (pathname.startsWith("/admin")) {
+    return adminLimiter.limit(`admin:${ip}`);
+  }
+
+  return { success: true };
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  const isDev =
+    process.env.NODE_ENV === "development";
+
+  const rate = await checkRateLimit(
+    req,
+    pathname
+  );
+
+  if (!rate.success) {
+    const rateRes = new NextResponse(
+      "Too many requests",
+      {
+        status: 429,
+      }
+    );
+
+    return applySecurityHeaders(
+      rateRes,
+      isDev
+    );
+  }
+
+  let res = NextResponse.next({
+    request: req,
+  });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(
+            ({ name, value }) => {
+              req.cookies.set(name, value);
+            }
+          );
+
+          res = NextResponse.next({
+            request: req,
+          });
+
+          cookiesToSet.forEach(
+            ({ name, value, options }) => {
+              res.cookies.set(
+                name,
+                value,
+                options
+              );
+            }
+          );
+        },
+      },
+    }
+  );
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const protectedRoutes = [
+    "/dashboard",
+    "/admin",
+    "/settings",
+    "/profile",
+  ];
+
+  const isProtected = protectedRoutes.some(
+    (route) => pathname.startsWith(route)
+  );
+
+  if (isProtected && !user) {
+    const loginUrl = new URL(
+      "/login",
+      req.url
+    );
+
+    loginUrl.searchParams.set(
+      "redirect",
+      pathname
+    );
+
+    const redirectRes =
+      NextResponse.redirect(loginUrl);
+
+    return applySecurityHeaders(
+      redirectRes,
+      isDev
+    );
+  }
+
+  if (pathname === "/login" && user) {
+    const redirectRes =
+      NextResponse.redirect(
+        new URL("/dashboard", req.url)
+      );
+
+    return applySecurityHeaders(
+      redirectRes,
+      isDev
+    );
+  }
+
+  if (pathname.startsWith("/admin")) {
+    if (!user) {
+      const redirectRes =
+        NextResponse.redirect(
+          new URL("/login", req.url)
+        );
+
+      return applySecurityHeaders(
+        redirectRes,
+        isDev
+      );
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (profile?.role !== "admin") {
+      const redirectRes =
+        NextResponse.redirect(
+          new URL("/dashboard", req.url)
+        );
+
+      return applySecurityHeaders(
+        redirectRes,
+        isDev
+      );
+    }
+  }
+
+  return applySecurityHeaders(res, isDev);
 }
 
 export const config = {
