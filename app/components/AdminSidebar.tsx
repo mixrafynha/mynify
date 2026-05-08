@@ -41,16 +41,12 @@ export default function AdminSidebar() {
         });
 
         if (!res.ok) {
-          if (!mounted) return;
-          setUser(null);
+          if (mounted) setUser(null);
           return;
         }
 
         const data = await res.json();
-
-        if (!mounted) return;
-
-        setUser(data?.user ?? null);
+        if (mounted) setUser(data?.user ?? null);
       } catch {
         if (mounted) setUser(null);
       } finally {
@@ -64,15 +60,6 @@ export default function AdminSidebar() {
       mounted = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-
-    document.documentElement.style.setProperty(
-      "--admin-sidebar-width",
-      isMobile ? "0px" : collapsed ? "80px" : "270px"
-    );
-  }, [collapsed, isMobile]);
 
   const role = user?.profile?.role ?? user?.role ?? null;
   const isAdmin = role === "admin";
@@ -103,10 +90,8 @@ export default function AdminSidebar() {
 
   if (loading) {
     return (
-      <div className="fixed left-0 top-0 z-40 flex h-screen w-[270px] items-center justify-center border-r border-white/10 bg-[#03030a] text-white">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-bold text-white/45 shadow-[0_0_35px_rgba(168,85,247,0.18)] backdrop-blur-xl">
-          Loading sidebar...
-        </div>
+      <div className="text-white p-4 text-sm opacity-60">
+        Loading sidebar...
       </div>
     );
   }
@@ -125,17 +110,21 @@ export default function AdminSidebar() {
       {isMobile && mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
         />
       )}
 
       <aside
-        data-sidebar={expanded ? "expanded" : "collapsed"}
-        className={`fixed left-0 top-0 z-40 flex h-screen flex-col overflow-hidden border-r border-white/10 bg-[#03030a]/95 text-white shadow-[0_0_55px_rgba(168,85,247,0.16)] backdrop-blur-2xl transition-[width,transform] duration-300 ease-out ${
+        className={`fixed top-0 left-0 z-40 h-screen
+        overflow-x-hidden overflow-y-auto
+        bg-[#03030a]/95 text-white border-r border-white/10
+        backdrop-blur-2xl
+        shadow-[0_0_55px_rgba(168,85,247,0.16)]
+        flex flex-col transition-all duration-300 ${
           isMobile
             ? mobileOpen
-              ? "w-[250px] translate-x-0"
-              : "w-[250px] -translate-x-full"
+              ? "translate-x-0 w-[250px]"
+              : "-translate-x-full w-[250px]"
             : collapsed
             ? "w-[80px]"
             : "w-[270px]"
@@ -143,7 +132,7 @@ export default function AdminSidebar() {
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_32%),radial-gradient(circle_at_90%_25%,rgba(14,165,233,0.10),transparent_28%)]" />
 
-        <div className="relative z-10 flex h-full min-h-0 flex-col">
+        <div className="relative z-10 flex min-h-screen flex-col">
           <SidebarHeader expanded={expanded} />
 
           <SidebarMenu
@@ -160,14 +149,16 @@ export default function AdminSidebar() {
           <button
             type="button"
             onClick={() => setCollapsed((v) => !v)}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-[#070711] text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition hover:scale-110 hover:border-purple-500/45 hover:bg-purple-500/20 active:scale-95"
+            className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
+            bg-[#070711] border border-white/20 text-white
+            flex items-center justify-center
+            shadow-[0_0_25px_rgba(168,85,247,0.35)]
+            hover:scale-110 hover:border-purple-500/45 hover:bg-purple-500/20
+            active:scale-95 transition-all"
           >
             <ChevronLeft
               size={18}
-              className={`transition-transform duration-300 ${
-                collapsed ? "rotate-180" : ""
-              }`}
+              className={collapsed ? "rotate-180" : ""}
             />
           </button>
         )}
