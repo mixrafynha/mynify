@@ -203,7 +203,7 @@ export default function Navbar() {
                 </Link>
               </>
             ) : (
-              <Link href="/dashboard">
+              <Link href={user?.role === "admin" ? "/admin" : "/dashboard"}>
                 <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
                   Dashboard
                 </button>
