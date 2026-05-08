@@ -97,7 +97,7 @@ export const metadata = {
   },
 
   icons: {
-    icon: "/mynify-favicon.ico",
+    icon: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
 };
