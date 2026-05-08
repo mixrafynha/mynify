@@ -62,10 +62,10 @@ export default function Navbar() {
           return;
         }
 
-        const data = await res.json();
-
+       const data = await res.json();
+        
         setIsAuthenticated(true);
-        setRole(data?.user?.role ?? data?.role ?? null);
+        setRole(data?.user?.profile?.role ?? "user");
       } catch {
         setIsAuthenticated(false);
         setRole(null);
