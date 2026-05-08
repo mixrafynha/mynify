@@ -17,7 +17,7 @@ export default function SidebarHeader({ expanded }: any) {
             <div className="absolute inset-0 rounded-2xl bg-purple-500/10 blur-xl" />
 
             <Image
-              src="/logo.png"
+              src="/Logo.png"
               alt="Mynify"
               width={38}
               height={38}
@@ -36,7 +36,6 @@ export default function SidebarHeader({ expanded }: any) {
             </h1>
 
             <p className="mt-1 truncate text-[10px] font-bold uppercase tracking-[0.28em] text-white/35">
-              AI CREATOR PLATFORM
             </p>
           </div>
 
