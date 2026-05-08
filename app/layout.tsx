@@ -81,7 +81,7 @@ export const metadata = {
     title: "MYNIFY – Create Your Brand with AI",
     description:
       "Generate designs, customize products, launch your store, and sell online without inventory.",
-    images: ["https://www.mynify.com/og-image.jpg"],
+    images: ["https://www.mynify.com/ogimage.jpg"],
   },
 
   robots: {
