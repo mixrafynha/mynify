@@ -59,18 +59,18 @@ export default function Footer() {
   };
 
   return (
-    <footer className="relative overflow-hidden border-t border-white/10 bg-[#03030a] text-white">
+    <footer className="relative overflow-x-hidden border-t border-white/10 bg-[#03030a] text-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_30%),radial-gradient(circle_at_85%_100%,rgba(14,165,233,0.12),transparent_28%)]" />
 
       <div className="relative mx-auto max-w-7xl px-4 py-16 md:px-8 lg:px-12">
         <div className="grid gap-12 lg:grid-cols-[1.4fr_1fr]">
-          <div>
+          <div className="min-w-0">
             <div className="mb-5 flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_35px_rgba(168,85,247,0.45)]">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_35px_rgba(168,85,247,0.45)]">
                 <Gamepad2 size={24} />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <h2 className="text-2xl font-black uppercase tracking-tight">
                   MYNIFY
                 </h2>
@@ -84,19 +84,19 @@ export default function Footer() {
               Build, customize, and sell your own products worldwide — without inventory.
             </p>
 
-            <div className="flex max-w-md flex-col gap-3 sm:flex-row">
+            <div className="flex w-full max-w-md flex-col gap-3 sm:flex-row">
               <input
                 type="email"
                 placeholder="Your email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="h-14 flex-1 rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm text-white placeholder:text-white/30 outline-none backdrop-blur-xl transition focus:border-purple-500/50"
+                className="h-14 w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm text-white placeholder:text-white/30 outline-none backdrop-blur-xl transition focus:border-purple-500/50 sm:flex-1"
               />
 
               <button
                 type="button"
                 onClick={handleSubscribe}
-                className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-6 text-sm font-black uppercase tracking-wide text-white shadow-[0_0_30px_rgba(168,85,247,0.4)] transition hover:scale-[1.02]"
+                className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-6 text-sm font-black uppercase tracking-wide text-white shadow-[0_0_30px_rgba(168,85,247,0.4)] transition hover:scale-[1.02] sm:w-auto"
               >
                 Join
                 <ArrowUpRight size={16} />
@@ -106,7 +106,7 @@ export default function Footer() {
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-4 lg:grid-cols-4">
             {Object.entries(LINKS).map(([section, items]) => (
-              <div key={section}>
+              <div key={section} className="min-w-0">
                 <h3 className="mb-5 text-sm font-black uppercase tracking-[0.2em] text-white">
                   {safeText(section)}
                 </h3>
@@ -134,10 +134,8 @@ export default function Footer() {
               <Sparkles size={20} />
             </div>
 
-            <div>
-              <h4 className="font-black text-white">
-                Earn with MYNIFY 🎟️
-              </h4>
+            <div className="min-w-0">
+              <h4 className="font-black text-white">Earn with MYNIFY 🎟️</h4>
               <p className="mt-1 text-sm text-white/50">
                 Join our creator program and monetize your audience.
               </p>
@@ -146,7 +144,7 @@ export default function Footer() {
 
           <Link
             href={safeHref("/login")}
-            className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-6 py-3 text-sm font-black text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-105"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-6 py-3 text-sm font-black text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-105 sm:w-auto"
           >
             Start earning
             <ArrowUpRight size={16} />
