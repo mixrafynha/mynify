@@ -188,28 +188,29 @@ export default function Navbar() {
 
           {/* RIGHT */}
          <div className="flex items-center gap-2 sm:gap-3">
-  {!isAuthenticated ? (
-    <>
-      <Link href="/login">
-        <button className="px-4 py-2 border border-purple-500/40 rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400 transition">
-          Log in
-        </button>
-      </Link>
-
-      <Link href="/signup">
-        <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
-          Sign up
-        </button>
-      </Link>
-    </>
-  ) : (
-    <Link href={(user as any)?.role === "admin" ? "/admin" : "/dashboard"}>
-      <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
-        Dashboard
-      </button>
-    </Link>
-  )}
-</div>
+        {!isAuthenticated ? (
+          <>
+            <Link href="/login">
+              <button className="px-4 py-2 border border-purple-500/40 rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400 transition">
+                Log in
+              </button>
+            </Link>
+      
+            <Link href="/signup">
+              <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
+                Sign up
+              </button>
+            </Link>
+          </>
+        ) : (
+          <Link href={(user as any)?.role === "admin" ? "/admin" : "/dashboard"}>
+            <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
+              Dashboard
+            </button>
+          </Link>
+        )}
+      </div>
+   </div>  
       </nav>
 
       {/* OVERLAY */}
