@@ -36,7 +36,7 @@ export default function Navbar() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [role, setRole] = useState<string | null>(null);
-    
+
   const [open, setOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [clickedDropdown, setClickedDropdown] = useState<string | null>(null);
@@ -55,15 +55,15 @@ export default function Navbar() {
           cache: "no-store",
           signal: controller.signal,
         });
-    
+
         if (!res.ok) {
           setIsAuthenticated(false);
           setRole(null);
           return;
         }
-    
+
         const data = await res.json();
-    
+
         setIsAuthenticated(true);
         setRole(data?.user?.role ?? data?.role ?? null);
       } catch {
@@ -73,6 +73,11 @@ export default function Navbar() {
         setAuthChecked(true);
       }
     };
+
+    checkAuth();
+
+    return () => controller.abort();
+  }, []);
 
   const isOpen = useCallback(
     (name: string) => clickedDropdown === name || activeDropdown === name,
@@ -103,7 +108,7 @@ export default function Navbar() {
 
   return (
     <>
-        <nav className="sticky top-0 z-50 w-full border-b border-purple-500/20 bg-[#05050b]/90 backdrop-blur-xl shadow-[0_0_45px_rgba(168,85,247,0.15)]">
+      <nav className="sticky top-0 z-50 w-full border-b border-purple-500/20 bg-[#05050b]/90 backdrop-blur-xl shadow-[0_0_45px_rgba(168,85,247,0.15)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
             <button
@@ -114,7 +119,7 @@ export default function Navbar() {
             >
               ☰
             </button>
-      
+
             <Link href="/" className="group overflow-visible select-none shrink-0 ml-3">
               <img
                 src="/Logo.png"
@@ -124,7 +129,7 @@ export default function Navbar() {
               />
             </Link>
           </div>
-      
+
           {/* DESKTOP */}
           <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
             {links.map((link) => (
@@ -148,7 +153,7 @@ export default function Navbar() {
                       {link.name}
                     </button>
                   )}
-      
+
                   {link.dropdown && (
                     <ChevronDown
                       size={16}
@@ -158,7 +163,7 @@ export default function Navbar() {
                     />
                   )}
                 </div>
-      
+
                 {link.dropdown && (
                   <div
                     className={`absolute top-full left-0 pt-4 transition ${
@@ -181,33 +186,33 @@ export default function Navbar() {
               </div>
             ))}
           </div>
-  
-      {/* RIGHT */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {!isAuthenticated ? (
-          <>
-            <Link href="/login">
-              <button className="px-4 py-2 border border-purple-500/40 rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400 transition">
-                Log in
-              </button>
-            </Link>
-  
-            <Link href="/signup">
-              <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
-                Sign up
-              </button>
-            </Link>
-          </>
-        ) : (
-         <Link href={role === "admin" ? "/admin" : "/dashboard"}>
-            <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
-              Dashboard
-            </button>
-          </Link>
-        )}
-      </div>
-    </div>
-  </nav>  
+
+          {/* RIGHT */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {!isAuthenticated ? (
+              <>
+                <Link href="/login">
+                  <button className="px-4 py-2 border border-purple-500/40 rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400 transition">
+                    Log in
+                  </button>
+                </Link>
+
+                <Link href="/signup">
+                  <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
+                    Sign up
+                  </button>
+                </Link>
+              </>
+            ) : (
+              <Link href={role === "admin" ? "/admin" : "/dashboard"}>
+                <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
+                  Dashboard
+                </button>
+              </Link>
+            )}
+          </div>
+        </div>
+      </nav>
 
       {/* OVERLAY */}
       {open && (
