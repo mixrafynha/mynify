@@ -35,7 +35,8 @@ export default function Navbar() {
   const [mounted, setMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
-
+  const [role, setRole] = useState<string | null>(null);
+    
   const [open, setOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [clickedDropdown, setClickedDropdown] = useState<string | null>(null);
@@ -54,19 +55,24 @@ export default function Navbar() {
           cache: "no-store",
           signal: controller.signal,
         });
-
-        setIsAuthenticated(res.ok);
+    
+        if (!res.ok) {
+          setIsAuthenticated(false);
+          setRole(null);
+          return;
+        }
+    
+        const data = await res.json();
+    
+        setIsAuthenticated(true);
+        setRole(data?.user?.role ?? data?.role ?? null);
       } catch {
         setIsAuthenticated(false);
+        setRole(null);
       } finally {
         setAuthChecked(true);
       }
     };
-
-    checkAuth();
-
-    return () => controller.abort();
-  }, []);
 
   const isOpen = useCallback(
     (name: string) => clickedDropdown === name || activeDropdown === name,
@@ -193,7 +199,7 @@ export default function Navbar() {
             </Link>
           </>
         ) : (
-          <Link href={(user as any)?.role === "admin" ? "/admin" : "/dashboard"}>
+         <Link href={role === "admin" ? "/admin" : "/dashboard"}>
             <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
               Dashboard
             </button>
