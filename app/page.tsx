@@ -247,52 +247,102 @@ export default function HomePage() {
     </div>
   </div>
 </section>
-      {/* CUSTOMIZATION */}
-      <section className="relative overflow-hidden bg-[#05050d] py-24">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_45%,rgba(14,165,233,0.18),transparent_25%),radial-gradient(circle_at_15%_30%,rgba(168,85,247,0.22),transparent_28%)]" />
+        {/* CUSTOMIZATION */}
+<section className="relative overflow-hidden bg-[#03030a] py-24">
+  {/* BACKGROUND GLOW */}
+  <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_50%,rgba(14,165,233,0.14),transparent_24%)]" />
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 md:px-8 lg:grid-cols-2 lg:px-12">
-          <Link
-            href={safeHref("/login")}
-            className="relative h-[360px] overflow-hidden rounded-[36px] border border-purple-500/20 shadow-[0_0_60px_rgba(168,85,247,0.18)] transition hover:scale-[1.01] md:h-[420px]"
-          >
-            <Image
-              src="https://images.unsplash.com/photo-1492724441997-5dc865305da7?auto=format&fit=crop&w=1200&q=80"
-              alt="Designing custom products"
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover opacity-75"
-            />
-            <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/35 to-purple-600/20" />
-          </Link>
+  <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
+    
+    {/* MAIN CARD */}
+    <div className="relative overflow-hidden rounded-[30px] bg-[#070711]/90 shadow-[0_0_80px_rgba(168,85,247,0.08)] backdrop-blur-2xl">
 
-          <div>
-            <div className="mb-4 text-sm font-black uppercase tracking-widest text-purple-400">
-              Customize
-            </div>
+      <div className="grid items-center lg:grid-cols-[1.1fr_1fr]">
 
-            <h2 className="mb-6 text-4xl font-black uppercase leading-tight md:text-6xl">
-              Create your gamer style
-            </h2>
+        {/* LEFT IMAGE */}
+        <Link
+          href={safeHref("/dashoard/create")}
+          className="relative h-[300px] overflow-hidden md:h-[420px]"
+        >
+          <Image
+            src="/1.png"
+            alt="Customize products"
+            fill
+            priority
+            className="object-cover object-center opacity-90"
+          />
 
-            <p className="mb-8 text-lg leading-relaxed text-white/60">
-              Let your customers customize products with names, tags, colors, and unique visuals.
-            </p>
+          {/* OVERLAY */}
+          <div className="absolute inset-0 bg-gradient-to-r from-[#03030a]/70 via-transparent to-transparent" />
 
-            <div className="space-y-4 text-white/75">
-              <Link href={safeHref("/login")} className="block transition hover:text-purple-300">
-                ✔ Upload your own designs
-              </Link>
-              <Link href={safeHref("/login")} className="block transition hover:text-purple-300">
-                ✔ Customize colors and styles
-              </Link>
-              <Link href={safeHref("/login")} className="block transition hover:text-purple-300">
-                ✔ Preview before buying
-              </Link>
-            </div>
+          {/* PURPLE GLOW */}
+          <div className="absolute -bottom-20 left-0 h-52 w-52 rounded-full bg-purple-600/25 blur-[100px]" />
+        </Link>
+
+        {/* RIGHT CONTENT */}
+        <div className="relative p-8 md:p-12 lg:p-16">
+
+          {/* MINI LABEL */}
+          <div className="mb-4 text-xs font-black uppercase tracking-[0.35em] text-purple-400">
+            Customize
           </div>
+
+          {/* TITLE */}
+          <h2 className="mb-6 text-4xl font-black uppercase leading-[0.92] tracking-tight md:text-6xl">
+            Create your
+            <span className="block bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
+              gamer style
+            </span>
+          </h2>
+
+          {/* DESCRIPTION */}
+          <p className="mb-8 max-w-xl text-lg leading-relaxed text-white/55">
+            Let creators customize products with names, tags, colors and unique AI-powered visuals.
+          </p>
+
+          {/* FEATURES */}
+          <div className="space-y-4">
+
+            {[
+              "Upload your own designs",
+              "Customize colors and styles",
+              "Preview before buying",
+            ].map((item) => (
+              <div
+                key={item}
+                className="flex items-center gap-4"
+              >
+                {/* ICON */}
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-xs font-black text-white shadow-[0_0_20px_rgba(168,85,247,0.45)]">
+                  ✓
+                </div>
+
+                {/* TEXT */}
+                <p className="text-base font-medium text-white/75">
+                  {item}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* BUTTON */}
+          <div className="mt-10">
+            <Link
+              href={safeHref("/login")}
+              className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-105"
+            >
+              Start customizing
+              <Zap size={18} />
+            </Link>
+          </div>
+
+          {/* EXTRA GLOW */}
+          <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-500/10 blur-[90px]" />
         </div>
-      </section>
+      </div>
+    </div>
+  </div>
+</section>
 
       {/* CTA */}
       <section className="relative overflow-hidden bg-[#03030a] py-28 text-white">
