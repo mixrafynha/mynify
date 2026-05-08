@@ -99,48 +99,99 @@ export default function HomePage() {
      {/* HERO */}
 <section className="relative overflow-hidden">
   <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
-  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)] lg:bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.9)_34%,rgba(3,3,10,0.35)_72%,#03030a_100%)]" />
 
-  <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-10 pt-14 sm:pt-16 md:px-8 lg:min-h-[690px] lg:grid-cols-2 lg:px-12 lg:pt-24">
-    <div className="z-10 text-center lg:text-left">
-      <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:px-4 sm:text-xs">
-        <Gamepad2 size={15} className="text-purple-400" />
-        Made for gamers & streamers
+  <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)] lg:bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.92)_34%,rgba(3,3,10,0.45)_72%,#03030a_100%)]" />
+
+  <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-10 pt-10 sm:pt-14 md:px-8 lg:min-h-[690px] lg:grid-cols-2 lg:px-12 lg:pt-24">
+
+    {/* LEFT CONTENT */}
+    <div className="z-10 order-1 text-center lg:text-left">
+
+      {/* BADGE */}
+      <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
+        <Zap size={14} className="text-purple-400" />
+        AI-powered creator platform
       </div>
 
-      <h1 className="mb-6 text-[48px] font-black uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-        <span className="block">Customize.</span>
-        <span className="block">Play.</span>
+      {/* TITLE */}
+      <h1 className="mb-6 text-[44px] font-black uppercase leading-[0.84] tracking-[-0.04em] sm:text-6xl md:text-7xl lg:text-[105px]">
+
+        <span className="block text-white">
+          Create your
+        </span>
+
         <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-          Stand out.
+          brand
+        </span>
+
+        <span className="block text-white">
+          with AI
         </span>
       </h1>
 
-      <p className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-white/65 sm:text-lg md:text-xl lg:mx-0">
-        Create unique products with your name, tag, or style and take your gamer identity to the next level.
+      {/* DESCRIPTION */}
+      <p className="mx-auto mb-8 max-w-xl text-base font-medium leading-relaxed text-white/60 sm:text-lg md:text-xl lg:mx-0">
+        Generate designs, customize products, launch your online store and sell worldwide without inventory.
       </p>
 
+      {/* BUTTONS */}
       <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+
         <Link
           href={safeHref("/login")}
-          className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-7 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
+          className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-8 py-4 text-base font-black text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition duration-300 hover:scale-105"
         >
-          Create my design
+          Generate my brand
           <Zap size={18} />
         </Link>
 
         <Link
           href={safeHref("/login")}
-          className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-7 py-4 font-bold text-white/90 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
+          className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-base font-bold text-white/90 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
         >
-          View products
+          Explore products
           <ShoppingBag size={18} />
         </Link>
+      </div>
+
+      {/* STATS */}
+      <div className="mt-10 flex flex-wrap items-center justify-center gap-8 lg:justify-start">
+
+        <div>
+          <div className="text-2xl font-black tracking-tight text-white">
+            10K+
+          </div>
+
+          <div className="text-sm font-medium text-white/40">
+            creators
+          </div>
+        </div>
+
+        <div>
+          <div className="text-2xl font-black tracking-tight text-white">
+            AI
+          </div>
+
+          <div className="text-sm font-medium text-white/40">
+            generated designs
+          </div>
+        </div>
+
+        <div>
+          <div className="text-2xl font-black tracking-tight text-white">
+            Global
+          </div>
+
+          <div className="text-sm font-medium text-white/40">
+            shipping
+          </div>
+        </div>
       </div>
     </div>
 
     {/* HERO IMAGE */}
-    <div className="relative z-0 mx-auto h-[300px] w-full max-w-[520px] sm:h-[380px] md:h-[460px] lg:h-[560px] lg:max-w-none">
+    <div className="relative z-0 order-2 mx-auto h-[280px] w-full max-w-[520px] sm:h-[360px] md:h-[430px] lg:h-[560px] lg:max-w-none">
+
       <div className="absolute inset-0 rounded-full bg-purple-600/20 blur-[80px]" />
 
       <Link
@@ -149,7 +200,7 @@ export default function HomePage() {
       >
         <Image
           src="/hero2.png"
-          alt="Mynify products"
+          alt="Mynify AI ecommerce platform"
           fill
           priority
           quality={100}
@@ -162,7 +213,9 @@ export default function HomePage() {
 
   {/* FEATURES BAR */}
   <div className="relative mx-auto max-w-7xl px-4 pb-12 md:px-8 lg:px-12">
+
     <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:grid-cols-2 lg:grid-cols-4">
+
       {FEATURES.map((item) => {
         const Icon = item.icon;
 
@@ -176,10 +229,12 @@ export default function HomePage() {
               className="shrink-0 text-purple-400 drop-shadow-[0_0_16px_rgba(168,85,247,0.85)]"
               size={38}
             />
+
             <div>
-              <h3 className="mb-1 font-bold text-white">
+              <h3 className="mb-1 text-base font-black tracking-tight text-white">
                 {safeText(item.title)}
               </h3>
+
               <p className="text-sm leading-relaxed text-white/55">
                 {safeText(item.desc)}
               </p>
