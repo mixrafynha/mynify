@@ -2,7 +2,7 @@ import "./globals.css";
 import Providers from "./providers";
 import { Manrope, Inter } from "next/font/google";
 import Script from "next/script";
-import Footer from "@/app/components/Footer"; // ✅ ADD
+import Footer from "@/app/components/Footer";
 
 // ================= FONTS (PREMIUM SAAS / APPLE STYLE) =================
 
@@ -23,42 +23,82 @@ const inter = Inter({
 // ================= METADATA =================
 
 export const metadata = {
-  title:
-    "MYNIFY – Create and Sell Custom Products Online | Print on Demand Platform",
+  title: "MYNIFY – Create Your Brand with AI | Sell Products Without Inventory",
+
   description:
-    "Create and sell custom products online with MYNIFY. Design t-shirts, hoodies, mugs, and more with print-on-demand. No inventory, no hassle. Start your online business today.",
+    "Create your own brand with AI using MYNIFY. Generate designs, customize products, launch your online store, and sell t-shirts, hoodies, mugs, and more without inventory.",
+
   keywords: [
-    "custom products",
+    "AI ecommerce platform",
+    "AI brand generator",
+    "create brand with AI",
     "print on demand",
-    "sell custom t-shirts",
-    "create online store",
-    "dropshipping custom products",
-    "design your own products",
+    "sell custom products",
     "custom merch platform",
+    "AI product design",
+    "AI mockup generator",
+    "creator commerce",
+    "sell merch online",
+    "create online store",
+    "custom t-shirts",
+    "custom hoodies",
+    "no inventory ecommerce",
+    "dropshipping custom products",
   ],
+
+  authors: [{ name: "MYNIFY" }],
+  creator: "MYNIFY",
+  publisher: "MYNIFY",
+
+  metadataBase: new URL("https://www.mynify.com"),
+
+  alternates: {
+    canonical: "https://www.mynify.com",
+  },
+
   openGraph: {
-    title:
-      "MYNIFY – Create and Sell Custom Products Online | Print on Demand Platform",
+    title: "MYNIFY – Create Your Brand with AI",
     description:
-      "Create and sell custom products online with MYNIFY. Design t-shirts, hoodies, mugs, and more with print-on-demand.",
+      "Turn your ideas into products, brands, and online stores with AI. Create and sell custom merch without inventory.",
     url: "https://www.mynify.com",
-    site_name: "MYNIFY",
+    siteName: "MYNIFY",
+    type: "website",
+    locale: "en_US",
     images: [
       {
-        url: "https://example.com/path/to/image.jpg",
-        width: 800,
-        height: 600,
-        alt: "MYNIFY Platform Image",
+        url: "https://www.mynify.com/og-image.jpg",
+        width: 1200,
+        height: 630,
+        alt: "MYNIFY AI Ecommerce Platform",
       },
     ],
   },
+
   twitter: {
     card: "summary_large_image",
     site: "@mynify",
-    title: "MYNIFY – Create and Sell Custom Products Online",
+    creator: "@mynify",
+    title: "MYNIFY – Create Your Brand with AI",
     description:
-      "Start your online business today with MYNIFY. Create custom products on demand.",
-    image: "https://example.com/path/to/image.jpg",
+      "Generate designs, customize products, launch your store, and sell online without inventory.",
+    images: ["https://www.mynify.com/og-image.jpg"],
+  },
+
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
 
@@ -71,7 +111,7 @@ export default function RootLayout({
 }) {
   return (
     <html
-      lang="pt"
+      lang="en"
       className={`${manrope.variable} ${inter.variable} w-full h-full`}
     >
       <body
@@ -92,15 +132,12 @@ export default function RootLayout({
           strategy="lazyOnload"
         />
 
-        {/* ✅ FIX IMPORTANTE: evita hidration mismatch em sidebars */}
         <div className="flex flex-col flex-1 w-full min-h-screen">
           <Providers>
-            <main className="flex-1 w-full">
-              {children}
-            </main>
+            <main className="flex-1 w-full">{children}</main>
+            <Footer />
           </Providers>
         </div>
-
       </body>
     </html>
   );
