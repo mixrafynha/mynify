@@ -97,7 +97,7 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full border-b border-purple-500/20 bg-[#05050b]/90 backdrop-blur-xl shadow-[0_0_45px_rgba(168,85,247,0.15)]">
+        <nav className="sticky top-0 z-50 w-full border-b border-purple-500/20 bg-[#05050b]/90 backdrop-blur-xl shadow-[0_0_45px_rgba(168,85,247,0.15)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
             <button
@@ -108,11 +108,8 @@ export default function Navbar() {
             >
               ☰
             </button>
-
-            <Link
-              href="/"
-              className="group overflow-visible select-none shrink-0 ml-3"
-            >
+      
+            <Link href="/" className="group overflow-visible select-none shrink-0 ml-3">
               <img
                 src="/Logo.png"
                 alt="Mynify Logo"
@@ -121,7 +118,7 @@ export default function Navbar() {
               />
             </Link>
           </div>
-
+      
           {/* DESKTOP */}
           <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
             {links.map((link) => (
@@ -133,10 +130,7 @@ export default function Navbar() {
               >
                 <div className="flex items-center gap-1 cursor-pointer group">
                   {!link.dropdown ? (
-                    <Link
-                      href={link.href ?? "/"}
-                      className="hover:text-purple-400 transition"
-                    >
+                    <Link href={link.href ?? "/"} className="hover:text-purple-400 transition">
                       {link.name}
                     </Link>
                   ) : (
@@ -148,25 +142,21 @@ export default function Navbar() {
                       {link.name}
                     </button>
                   )}
-
+      
                   {link.dropdown && (
                     <ChevronDown
                       size={16}
                       className={`transition ${
-                        isOpen(link.name)
-                          ? "rotate-180 text-purple-400"
-                          : "text-white/70"
+                        isOpen(link.name) ? "rotate-180 text-purple-400" : "text-white/70"
                       }`}
                     />
                   )}
                 </div>
-
+      
                 {link.dropdown && (
                   <div
                     className={`absolute top-full left-0 pt-4 transition ${
-                      isOpen(link.name)
-                        ? "opacity-100"
-                        : "opacity-0 pointer-events-none"
+                      isOpen(link.name) ? "opacity-100" : "opacity-0 pointer-events-none"
                     }`}
                   >
                     <div className="bg-[#0b0b16]/95 shadow-2xl rounded-2xl p-3 min-w-[220px] border border-purple-500/20 backdrop-blur-xl">
@@ -185,9 +175,9 @@ export default function Navbar() {
               </div>
             ))}
           </div>
-
-          {/* RIGHT */}
-         <div className="flex items-center gap-2 sm:gap-3">
+  
+      {/* RIGHT */}
+      <div className="flex items-center gap-2 sm:gap-3">
         {!isAuthenticated ? (
           <>
             <Link href="/login">
@@ -195,7 +185,7 @@ export default function Navbar() {
                 Log in
               </button>
             </Link>
-      
+  
             <Link href="/signup">
               <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_25px_rgba(168,85,247,0.55)] hover:scale-105 transition">
                 Sign up
@@ -210,8 +200,8 @@ export default function Navbar() {
           </Link>
         )}
       </div>
-   </div>  
-      </nav>
+    </div>
+  </nav>  
 
       {/* OVERLAY */}
       {open && (
