@@ -52,7 +52,7 @@ export default function SidebarHeader({ expanded }: any) {
           <div className="absolute inset-0 bg-purple-500/10 blur-xl" />
 
           <Image
-            src="/logo.png"
+            src="/Logo.png"
             alt="Mynify"
             width={34}
             height={34}
