@@ -105,8 +105,8 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full overflow-hidden border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
+      <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
           <div className="flex items-center gap-3 sm:gap-4">
@@ -169,10 +169,10 @@ export default function Navbar() {
 
                 {link.dropdown && (
                   <div
-                    className={`absolute top-full left-0 pt-4 transition ${
+                    className={`absolute left-0 top-full z-[999] pt-4 transition duration-200 ${
                       isOpen(link.name)
-                        ? "opacity-100"
-                        : "opacity-0 pointer-events-none"
+                        ? "translate-y-0 opacity-100"
+                        : "-translate-y-1 opacity-0 pointer-events-none"
                     }`}
                   >
                     <div className="bg-[#070711]/95 shadow-[0_0_45px_rgba(168,85,247,0.22)] rounded-2xl p-3 min-w-[220px] border border-white/10 backdrop-blur-2xl">
@@ -181,6 +181,7 @@ export default function Navbar() {
                           key={item}
                           href={formatLink(item)}
                           className="block px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-purple-500/15 rounded-lg transition"
+                          onClick={() => setClickedDropdown(null)}
                         >
                           {item}
                         </Link>
