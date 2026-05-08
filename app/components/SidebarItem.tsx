@@ -23,9 +23,7 @@ export default function SidebarItem({
 
   if (!item?.path || !Icon) return null;
 
-  // 🔥 NORMALIZAÇÃO FORTE (production safe)
-  const normalize = (p: string) =>
-    p.split("?")[0].replace(/\/+$/, "");
+  const normalize = (p: string) => p.split("?")[0].replace(/\/+$/, "");
 
   const active = useMemo(() => {
     return normalize(pathname) === normalize(item.path);
@@ -42,48 +40,51 @@ export default function SidebarItem({
       onClick={handleClick}
       aria-current={active ? "page" : undefined}
       className={[
-        "group relative w-full flex items-center rounded-xl",
-        "transition-all duration-200 ease-out",
-        "active:scale-[0.98]",
-        "hover:scale-[1.01]",
-
-        expanded ? "gap-4 px-4 py-3" : "justify-center py-3",
+        "group relative flex w-full items-center overflow-hidden rounded-2xl",
+        "transition-all duration-300 ease-out active:scale-[0.98]",
+        expanded ? "gap-4 px-4 py-3.5" : "justify-center px-3 py-3.5",
 
         active
-          ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
-          : "text-gray-400 hover:bg-white/5 hover:text-white",
+          ? "bg-gradient-to-r from-purple-600/20 via-fuchsia-500/15 to-cyan-500/10 text-white shadow-[0_0_28px_rgba(168,85,247,0.22)]"
+          : "text-white/45 hover:bg-white/[0.045] hover:text-white",
       ].join(" ")}
     >
-      {/* background */}
-      <div className="absolute inset-0 rounded-xl backdrop-blur-sm transition-all duration-200" />
+      {/* ACTIVE GLOW */}
+      {active && (
+        <>
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(168,85,247,0.28),transparent_55%)]" />
+          <div className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-r-full bg-gradient-to-b from-violet-300 via-fuchsia-500 to-cyan-400 shadow-[0_0_18px_rgba(168,85,247,0.85)]" />
+        </>
+      )}
 
-      {/* icon */}
+      {/* ICON */}
       <div
         className={[
-          "relative z-10 flex items-center justify-center",
-          "transition-colors duration-200",
-          active ? "text-emerald-400" : "text-gray-400 group-hover:text-white",
+          "relative z-10 flex items-center justify-center rounded-xl transition-all duration-300",
+          expanded ? "h-9 w-9" : "h-10 w-10",
+          active
+            ? "bg-white/10 text-purple-300 shadow-[0_0_18px_rgba(168,85,247,0.35)]"
+            : "text-white/45 group-hover:bg-white/5 group-hover:text-purple-300",
         ].join(" ")}
       >
         <Icon size={20} />
       </div>
 
-      {/* label */}
+      {/* LABEL */}
       {expanded && (
         <span
           className={[
-            "relative z-10 text-sm font-medium",
-            "transition-colors duration-200",
-            active ? "text-emerald-400" : "group-hover:text-white",
+            "relative z-10 truncate text-sm font-bold tracking-tight transition-colors duration-300",
+            active ? "text-white" : "text-white/55 group-hover:text-white",
           ].join(" ")}
         >
           {item.name}
         </span>
       )}
 
-      {/* active indicator */}
-      {active && (
-        <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.8)]" />
+      {/* ACTIVE DOT */}
+      {active && expanded && (
+        <div className="absolute right-4 h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.95)]" />
       )}
     </button>
   );
