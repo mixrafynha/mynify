@@ -3,7 +3,7 @@ import Image from "next/image";
 export default function SidebarHeader({ expanded }: any) {
   return (
     <div className="relative flex items-center justify-center px-4 pb-8 pt-7">
-      
+
       {/* PREMIUM GLOW */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.18),transparent_72%)]" />
 
@@ -17,7 +17,7 @@ export default function SidebarHeader({ expanded }: any) {
             <div className="absolute inset-0 rounded-2xl bg-purple-500/10 blur-xl" />
 
             <Image
-              src="/favicon.ico"
+              src="/logo.png"
               alt="Mynify"
               width={38}
               height={38}
@@ -53,7 +53,7 @@ export default function SidebarHeader({ expanded }: any) {
           <div className="absolute inset-0 bg-purple-500/10 blur-xl" />
 
           <Image
-            src="/favicon.ico"
+            src="/logo.png"
             alt="Mynify"
             width={34}
             height={34}
