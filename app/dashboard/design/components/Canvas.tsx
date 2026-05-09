@@ -1,12 +1,17 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useParams } from "next/navigation";
 import DraggableElement from "@/app/dashboard/design/components/DraggableElement";
 
-const PRODUCTS = {
+const PRODUCTS: Record<string, { front: string; back: string }> = {
   tshirt: {
     front: "/mockups/tshirt-front.png",
     back: "/mockups/tshirt-back.png",
+  },
+  hoodie: {
+    front: "/mockups/hoodie-front.png",
+    back: "/mockups/hoodie-back.png",
   },
 };
 
@@ -26,6 +31,9 @@ export default function Canvas({
   selectedElement,
   setSelectedElement,
 }: any) {
+  const params = useParams();
+  const mockupId = String(params?.id || "hoodie").toLowerCase();
+
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
   const lastPointer = useRef({
@@ -35,19 +43,19 @@ export default function Canvas({
 
   const lastDistance = useRef<number | null>(null);
 
+  const productMockup = PRODUCTS[mockupId] || PRODUCTS.hoodie;
+
   const mockup =
     side === "front"
-      ? PRODUCTS.tshirt.front
-      : PRODUCTS.tshirt.back;
+      ? productMockup.front
+      : productMockup.back;
 
-  // ================= SAFE UPDATE =================
   const safeSetSelectedElement = (el: any) => {
     if (typeof setSelectedElement === "function") {
       setSelectedElement(el);
     }
   };
 
-  // ================= UPDATE ELEMENT =================
   const updateElement = (id: string, patch: any) => {
     setElements((prev: any[]) =>
       prev.map((el) =>
@@ -76,7 +84,6 @@ export default function Canvas({
     }
   };
 
-  // ================= DRAG FIX (CURSOR LOCKED) =================
   const onMove = useCallback(
     (e: PointerEvent) => {
       if (!draggingId) return;
@@ -104,25 +111,23 @@ export default function Canvas({
     return () => window.removeEventListener("pointerup", up);
   }, []);
 
-  // ================= START DRAG FIX =================
   const startDrag = (e: any, id: string) => {
     e.preventDefault();
     e.stopPropagation();
 
     const el = elements.find((x: any) => x.id === id);
+    if (!el) return;
 
     setDraggingId(id);
     setSelectedId(id);
     safeSetSelectedElement(el);
 
-    // 🔥 FIX PRINCIPAL: cursor cola no elemento (NUNCA SALTA)
     lastPointer.current = {
       offsetX: e.clientX - el.x,
       offsetY: e.clientY - el.y,
     };
   };
 
-  // ================= PINCH ZOOM =================
   const getDistance = (touches: TouchList) => {
     const dx = touches[0].clientX - touches[1].clientX;
     const dy = touches[0].clientY - touches[1].clientY;
@@ -162,12 +167,10 @@ export default function Canvas({
 
   return (
     <div
-      className="flex-1 flex items-center justify-center relative bg-[#efefe9]"
+      className="flex-1 flex items-center justify-center relative bg-transparent"
       onPointerDown={() => setSelectedId(null)}
     >
       <div className="relative w-full max-w-[1100px] h-[90vh] flex items-center justify-center px-4">
-
-        {/* STAGE */}
         <div
           className="relative"
           style={{
@@ -177,14 +180,12 @@ export default function Canvas({
             transformOrigin: "center",
           }}
         >
-
-          {/* MOCKUP */}
           <img
             src={mockup}
+            alt={mockupId}
             className="absolute inset-0 w-full h-full object-contain pointer-events-none"
           />
 
-          {/* SAFE ZONE */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
             <div
               className="border border-dashed border-black/30 rounded-md"
@@ -192,7 +193,6 @@ export default function Canvas({
             />
           </div>
 
-          {/* ELEMENTS */}
           {elements.map((el: any) => (
             <DraggableElement
               key={el.id}
@@ -204,7 +204,6 @@ export default function Canvas({
               }
             />
           ))}
-
         </div>
       </div>
     </div>
