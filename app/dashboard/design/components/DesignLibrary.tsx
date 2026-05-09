@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type ElementType = {
   id: string;
@@ -15,6 +15,8 @@ type ElementType = {
   };
 };
 
+const STORAGE_KEY = "design-editor-draft";
+
 const TEMPLATES = [
   { text: "NEW DROP", fontFamily: "Impact", color: "#000", fontSize: 28 },
   { text: "LIMITED EDITION", fontFamily: "Arial Black", color: "#111", fontSize: 24 },
@@ -27,34 +29,57 @@ const STICKERS = ["🔥", "⚡", "💀", "🚀", "💎", "😎"];
 
 type Props = {
   onAdd?: (element: ElementType) => void;
+  onSaveDesign?: (elements: ElementType[]) => void;
+  onPreviewDesign?: (elements: ElementType[]) => void;
+  saving?: boolean;
 };
 
-export default function DesignEditor({ onAdd }: Props) {
+export default function DesignEditor({
+  onAdd,
+  onSaveDesign,
+  onPreviewDesign,
+  saving,
+}: Props) {
   const [elements, setElements] = useState<ElementType[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selected = elements.find((e) => e.id === selectedId) || null;
 
-  // ================= ADD FIXED =================
- const addElement = (el: Omit<ElementType, "id" | "x" | "y">) => {
-  const newElement: ElementType = {
-    id: crypto.randomUUID(),
-    x: 120,
-    y: 120,
-    text: el.text,
-    type: "text",
-    meta: {
-      fontFamily: el.meta?.fontFamily || "Arial",
-      color: el.meta?.color || "#000",
-      fontSize: el.meta?.fontSize || 20,
-    },
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (saved) {
+      try {
+        setElements(JSON.parse(saved));
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(elements));
+  }, [elements]);
+
+  const addElement = (el: Omit<ElementType, "id" | "x" | "y">) => {
+    const newElement: ElementType = {
+      id: crypto.randomUUID(),
+      x: 120,
+      y: 120,
+      text: el.text,
+      type: "text",
+      meta: {
+        fontFamily: el.meta?.fontFamily || "Arial",
+        color: el.meta?.color || "#000",
+        fontSize: el.meta?.fontSize || 20,
+      },
+    };
+
+    setElements((prev) => [...prev, newElement]);
+
+    onAdd?.(newElement);
   };
 
-  setElements((prev) => [...prev, newElement]);
-
-  onAdd?.(newElement);
-};
-  // ================= UPDATE SAFE =================
   const updateSelected = (patch: Partial<ElementType>) => {
     if (!selectedId) return;
 
@@ -74,13 +99,44 @@ export default function DesignEditor({ onAdd }: Props) {
     );
   };
 
+  const handleSave = () => {
+    const confirmSave = window.confirm(
+      "Queres guardar este produto com o design?"
+    );
+
+    if (!confirmSave) return;
+
+    onSaveDesign?.(elements);
+    localStorage.removeItem(STORAGE_KEY);
+  };
+
+  const handlePreview = () => {
+    onPreviewDesign?.(elements);
+  };
+
   return (
     <div className="flex gap-6 p-4">
-
-      {/* LEFT */}
       <div className="w-60 flex flex-col gap-4">
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 px-3 py-2 rounded bg-black text-white text-xs disabled:opacity-40"
+          >
+            {saving ? "A guardar..." : "Guardar"}
+          </button>
 
-        {/* TEMPLATES */}
+          <button
+            type="button"
+            onClick={handlePreview}
+            disabled={saving}
+            className="flex-1 px-3 py-2 rounded border text-xs disabled:opacity-40"
+          >
+            Preview
+          </button>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           {TEMPLATES.map((t) => (
             <button
@@ -103,7 +159,6 @@ export default function DesignEditor({ onAdd }: Props) {
           ))}
         </div>
 
-        {/* STICKERS */}
         <div className="flex flex-wrap gap-2">
           {STICKERS.map((s) => (
             <button
@@ -126,9 +181,7 @@ export default function DesignEditor({ onAdd }: Props) {
           ))}
         </div>
 
-        {/* EDITOR */}
         <div className="border p-2 rounded space-y-2">
-
           <h3 className="text-sm font-bold">Editor</h3>
 
           {!selected ? (
@@ -137,7 +190,6 @@ export default function DesignEditor({ onAdd }: Props) {
             </p>
           ) : (
             <>
-              {/* TEXT */}
               <input
                 className="border p-1 w-full text-sm"
                 value={selected.text}
@@ -148,7 +200,6 @@ export default function DesignEditor({ onAdd }: Props) {
                 }
               />
 
-              {/* COLOR */}
               <input
                 type="color"
                 value={selected.meta.color}
@@ -162,7 +213,6 @@ export default function DesignEditor({ onAdd }: Props) {
                 }
               />
 
-              {/* FONT */}
               <select
                 value={selected.meta.fontFamily}
                 onChange={(e) =>
@@ -182,7 +232,6 @@ export default function DesignEditor({ onAdd }: Props) {
                 ))}
               </select>
 
-              {/* SIZE */}
               <input
                 type="range"
                 min={10}
@@ -202,9 +251,7 @@ export default function DesignEditor({ onAdd }: Props) {
         </div>
       </div>
 
-      {/* CANVAS */}
       <div className="flex-1 border relative h-[500px] bg-gray-50">
-
         {elements.map((el) => (
           <div
             key={el.id}
@@ -223,7 +270,6 @@ export default function DesignEditor({ onAdd }: Props) {
             {el.text}
           </div>
         ))}
-
       </div>
     </div>
   );
