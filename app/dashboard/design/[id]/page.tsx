@@ -1,10 +1,20 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+} from "react";
+
+import {
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 import Canvas from "@/app/dashboard/design/components/Canvas";
 import Sidebar from "@/app/dashboard/design/components/Sidebar";
 import TopBar from "@/app/dashboard/design/components/TopBar";
+
 import { useElements } from "@/features/elements/useElements";
 import { useUpload } from "@/features/upload/useUpload";
 
@@ -25,7 +35,19 @@ type ElementType = {
 };
 
 export default function EditorPage() {
-  const [side, setSide] = useState<"front" | "back">("front");
+  const router = useRouter();
+
+  const searchParams = useSearchParams();
+
+  const productId =
+    searchParams.get("productId");
+
+  const [side, setSide] = useState<
+    "front" | "back"
+  >("front");
+
+  const [saving, setSaving] =
+    useState(false);
 
   // ================= ZOOM LIMITADO =================
   const MIN_ZOOM = 0.4;
@@ -33,42 +55,78 @@ export default function EditorPage() {
 
   const [zoom, _setZoom] = useState(1);
 
-  const setZoom = (value: number | ((z: number) => number)) => {
+  const setZoom = (
+    value:
+      | number
+      | ((z: number) => number)
+  ) => {
     _setZoom((prev) => {
       const next =
-        typeof value === "function" ? value(prev) : value;
+        typeof value === "function"
+          ? value(prev)
+          : value;
 
       return Math.min(
         MAX_ZOOM,
-        Math.max(MIN_ZOOM, Number(next.toFixed(2)))
+        Math.max(
+          MIN_ZOOM,
+          Number(next.toFixed(2))
+        )
       );
     });
   };
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] =
+    useState<string | null>(null);
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef =
+    useRef<HTMLInputElement>(null);
 
-  const [frontElements, setFrontElements] = useState<ElementType[]>([]);
-  const [backElements, setBackElements] = useState<ElementType[]>([]);
+  const [frontElements, setFrontElements] =
+    useState<ElementType[]>([]);
 
-  const elements = side === "back" ? backElements : frontElements;
-  const setElements = side === "back" ? setBackElements : setFrontElements;
+  const [backElements, setBackElements] =
+    useState<ElementType[]>([]);
 
-  const { addText, updateSelected, addElement } = useElements({
+  const elements =
+    side === "back"
+      ? backElements
+      : frontElements;
+
+  const setElements =
+    side === "back"
+      ? setBackElements
+      : setFrontElements;
+
+  const {
+    addText,
+    updateSelected,
+    addElement,
+  } = useElements({
     setElements,
     selectedId,
   });
 
-  const handleUpload = useUpload({ setElements });
+  const handleUpload = useUpload({
+    setElements,
+  });
 
-  const selectedElement = elements.find((el) => el.id === selectedId);
+  const selectedElement =
+    elements.find(
+      (el) => el.id === selectedId
+    );
 
   // cleanup memory
   useEffect(() => {
     return () => {
-      [...frontElements, ...backElements].forEach((el) => {
-        if (el.type === "image" && el.src?.startsWith("blob:")) {
+      [
+        ...frontElements,
+        ...backElements,
+      ].forEach((el) => {
+        if (
+          el.type === "image" &&
+          el.src?.startsWith("blob:")
+        ) {
           URL.revokeObjectURL(el.src);
         }
       });
@@ -76,21 +134,109 @@ export default function EditorPage() {
   }, [frontElements, backElements]);
 
   // ================= ZOOM CONTROLS =================
- const zoomIn = () =>
-  setZoom((z) => Math.min(1.3, z + 0.1));
+  const zoomIn = () =>
+    setZoom((z) =>
+      Math.min(1.3, z + 0.1)
+    );
 
-const zoomOut = () =>
-  setZoom((z) => Math.max(0.8, z - 0.1));
+  const zoomOut = () =>
+    setZoom((z) =>
+      Math.max(0.8, z - 0.1)
+    );
+
+  // ================= SAVE DESIGN =================
+  const handleSaveDesign =
+    async () => {
+      try {
+        if (!productId) {
+          alert("Missing product ID");
+          return;
+        }
+
+        setSaving(true);
+
+        const response = await fetch(
+          "/api/user-products/save-design",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+            body: JSON.stringify({
+              baseProductId:
+                productId,
+
+              designFront:
+                frontElements,
+
+              designBack:
+                backElements,
+
+              markup: 0,
+            }),
+          }
+        );
+
+        const data =
+          await response.json();
+
+        console.log(
+          "SAVE RESPONSE:",
+          data
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Failed to save design"
+          );
+        }
+
+        alert(
+          "Design saved successfully!"
+        );
+
+        // ✅ PREVIEW PAGE
+        router.push(
+          `/dashboard/design/preview/${data.product.id}`
+        );
+      } catch (error) {
+        console.error(
+          "SAVE ERROR:",
+          error
+        );
+
+        alert(
+          "Error saving design"
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  // ================= PREVIEW =================
+  const handlePreviewDesign =
+    async () => {
+      try {
+        await handleSaveDesign();
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
   return (
     <div className="h-screen flex flex-col md:flex-row bg-[#efefe9] overflow-hidden">
-
       {/* ================= SIDEBAR ================= */}
       <div className="md:block hidden">
         <Sidebar
           addElement={addElement}
-          updateSelected={updateSelected}
-          selectedElement={selectedElement}
+          updateSelected={
+            updateSelected
+          }
+          selectedElement={
+            selectedElement
+          }
         />
       </div>
 
@@ -98,19 +244,30 @@ const zoomOut = () =>
       <div className="md:hidden">
         <Sidebar
           addElement={addElement}
-          updateSelected={updateSelected}
-          selectedElement={selectedElement}
+          updateSelected={
+            updateSelected
+          }
+          selectedElement={
+            selectedElement
+          }
         />
       </div>
 
       {/* ================= MAIN ================= */}
       <div className="flex-1 flex flex-col min-w-0">
-
         {/* TOPBAR */}
         <TopBar
+          side={side}
           setSide={setSide}
           zoomIn={zoomIn}
           zoomOut={zoomOut}
+          onSaveDesign={
+            handleSaveDesign
+          }
+          onPreviewDesign={
+            handlePreviewDesign
+          }
+          saving={saving}
         />
 
         {/* CANVAS RESPONSIVO */}
@@ -123,7 +280,9 @@ const zoomOut = () =>
               zoom={zoom}
               setZoom={setZoom}
               selectedId={selectedId}
-              setSelectedId={setSelectedId}
+              setSelectedId={
+                setSelectedId
+              }
             />
           </div>
         </div>
