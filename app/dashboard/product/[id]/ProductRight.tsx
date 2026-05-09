@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function ProductRight({ product, selectedVariant }: any) {
+  const router = useRouter();
+
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +30,41 @@ export function ProductRight({ product, selectedVariant }: any) {
     }
 
     setQuantity((prev) => prev + 1);
+  };
+
+  const getMockup = () => {
+    const mockup = String(product?.mockup || "").toLowerCase().trim();
+
+    if (mockup === "tshirt" || mockup === "t-shirt" || mockup === "shirt") {
+      return "tshirt";
+    }
+
+    if (mockup === "hoodie" || mockup === "hooded" || mockup === "sweatshirt") {
+      return "hoodie";
+    }
+
+    const value = `${product?.type || ""} ${product?.category || ""} ${
+      product?.title || ""
+    }`.toLowerCase();
+
+    if (
+      value.includes("tshirt") ||
+      value.includes("t-shirt") ||
+      value.includes("t shirt") ||
+      value.includes("tee")
+    ) {
+      return "tshirt";
+    }
+
+    if (
+      value.includes("hoodie") ||
+      value.includes("hooded") ||
+      value.includes("sweatshirt")
+    ) {
+      return "hoodie";
+    }
+
+    return "hoodie";
   };
 
   const handleAddToCart = async () => {
@@ -67,6 +105,16 @@ export function ProductRight({ product, selectedVariant }: any) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStartDesigning = () => {
+    if (!product?.id || !selectedVariant || loading) return;
+
+    const mockup = getMockup();
+
+    router.push(
+      `/dashboard/design/${mockup}?productId=${encodeURIComponent(product.id)}`
+    );
   };
 
   return (
@@ -165,11 +213,9 @@ export function ProductRight({ product, selectedVariant }: any) {
       </button>
 
       <button
+        type="button"
         disabled={!selectedVariant || loading}
-        onClick={() => {
-          if (!selectedVariant) return;
-          window.location.href = `/dashboard/design/hoodie`;
-        }}
+        onClick={handleStartDesigning}
         className="w-full py-4 rounded-2xl border border-black text-black font-medium hover:bg-gray-100 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
         🎨 Start Designing
