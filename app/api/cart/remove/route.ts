@@ -6,24 +6,26 @@ export async function DELETE(req: Request) {
 
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
 
-    if (!user) {
+    if (authError || !user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get("id");
+    const body = await req.json();
+
+    const id = String(body.id ?? "");
 
     if (!id) {
-      return Response.json({ error: "Missing id" }, { status: 400 });
+      return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
 
     const { error } = await supabase
-      .from("carts")
+      .from("cart_items")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.id); // 🔐 segurança SaaS
+      .eq("user_id", user.id);
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500 });
