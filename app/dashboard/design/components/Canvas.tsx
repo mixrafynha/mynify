@@ -13,6 +13,14 @@ const PRODUCTS: Record<string, { front: string; back: string }> = {
     front: "/mockups/hoodie-front.png",
     back: "/mockups/hoodie-back.png",
   },
+  cap: {
+    front: "/mockups/cap-front.png",
+    back: "/mockups/cap-back.png",
+  },
+  mug: {
+    front: "/mockups/mug-front.png",
+    back: "/mockups/mug-back.png",
+  },
 };
 
 const PRINT_AREA = {
