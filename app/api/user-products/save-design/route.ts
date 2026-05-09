@@ -17,8 +17,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const { baseProductId, designFront, designBack, markup } =
-      await req.json();
+    const body = await req.json();
+
+    const {
+      baseProductId,
+      designFront,
+      designBack,
+      markup,
+    } = body;
 
     if (!baseProductId) {
       return NextResponse.json(
@@ -29,11 +35,23 @@ export async function POST(req: Request) {
 
     const { data: baseProduct, error: productError } = await supabase
       .from("products")
-      .select("id,title,description,price,currency,image,images,category,slug")
+      .select(`
+        id,
+        title,
+        description,
+        price,
+        currency,
+        image,
+        images,
+        category,
+        slug
+      `)
       .eq("id", baseProductId)
       .single();
 
     if (productError || !baseProduct) {
+      console.error("PRODUCT ERROR:", productError);
+
       return NextResponse.json(
         { error: "Base product not found" },
         { status: 404 }
@@ -56,7 +74,7 @@ export async function POST(req: Request) {
         image: baseProduct.image || null,
         images: baseProduct.images || null,
         category: baseProduct.category || null,
-        slug: `${baseProduct.slug || baseProduct.title}-${Date.now()}`,
+        slug: `${baseProduct.slug || "product"}-${Date.now()}`,
         design_front: designFront || [],
         design_back: designBack || [],
         markup: productMarkup,
@@ -68,6 +86,8 @@ export async function POST(req: Request) {
       .single();
 
     if (error) {
+      console.error("INSERT ERROR:", error);
+
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
@@ -78,11 +98,15 @@ export async function POST(req: Request) {
       success: true,
       product: data,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro ao guardar produto com design:", error);
 
     return NextResponse.json(
-      { error: "Erro ao guardar produto com design" },
+      {
+        error:
+          error?.message ||
+          "Erro ao guardar produto com design",
+      },
       { status: 500 }
     );
   }
