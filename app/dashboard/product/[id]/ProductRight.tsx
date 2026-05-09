@@ -1,14 +1,76 @@
 "use client";
 
-import StripeButton from "@/app/components/StripeButton";
+import { useState } from "react";
 
 export function ProductRight({ product, selectedVariant }: any) {
+  const [quantity, setQuantity] = useState(1);
+  const [loading, setLoading] = useState(false);
+
   const stock = selectedVariant?.stock ?? null;
+  const isOutOfStock = typeof stock === "number" && stock <= 0;
+
+  const price = Number(
+    selectedVariant?.price ??
+      product?.discount_price ??
+      product?.price ??
+      0
+  );
+
+  const decreaseQuantity = () => {
+    setQuantity((prev) => Math.max(1, prev - 1));
+  };
+
+  const increaseQuantity = () => {
+    if (typeof stock === "number") {
+      setQuantity((prev) => Math.min(stock, prev + 1));
+      return;
+    }
+
+    setQuantity((prev) => prev + 1);
+  };
+
+  const handleAddToCart = async () => {
+    if (!selectedVariant || isOutOfStock || loading) return;
+
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/cart/add", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          productId: product?.id,
+          variantId: selectedVariant?.id,
+          color: selectedVariant?.color,
+          size: selectedVariant?.size,
+          sku: selectedVariant?.sku,
+          title: product?.title,
+          image: product?.image ?? product?.images?.[0] ?? null,
+          price,
+          quantity,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to add to cart");
+      }
+
+      alert("Added to cart!");
+      setQuantity(1);
+    } catch (error) {
+      console.error("Error adding to cart:", error);
+      alert("Error adding to cart");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-7">
-
-      {/* TITLE */}
       <div className="space-y-2">
         <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
           {product?.title ?? "Untitled product"}
@@ -19,22 +81,15 @@ export function ProductRight({ product, selectedVariant }: any) {
         </p>
       </div>
 
-      {/* PRICE BLOCK */}
       <div className="flex items-end justify-between">
-
         <div className="space-y-1">
           <div className="text-3xl font-bold tracking-tight">
-            $
-            {Number(
-              selectedVariant?.price ??
-              product?.price ??
-              0
-            ).toFixed(2)}
+            ${price.toFixed(2)}
           </div>
 
           {product?.discount_price && (
             <div className="text-sm text-gray-400 line-through">
-              ${Number(product.discount_price).toFixed(2)}
+              ${Number(product.price).toFixed(2)}
             </div>
           )}
         </div>
@@ -42,10 +97,8 @@ export function ProductRight({ product, selectedVariant }: any) {
         <div className="text-[11px] px-3 py-1 rounded-full bg-black text-white">
           Made on demand
         </div>
-
       </div>
 
-      {/* STOCK STATUS (MODERNO) */}
       <div className="text-sm">
         {typeof stock === "number" ? (
           stock > 0 ? (
@@ -58,77 +111,90 @@ export function ProductRight({ product, selectedVariant }: any) {
             </span>
           )
         ) : (
-          <span className="text-gray-400">
-            Select variant
-          </span>
+          <span className="text-gray-400">Select variant</span>
         )}
       </div>
 
-      {/* META INFO (SEM BOX) */}
       <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-        {selectedVariant?.sku && (
-          <span>SKU {selectedVariant.sku}</span>
-        )}
-        {selectedVariant?.size && (
-          <span>Size {selectedVariant.size}</span>
-        )}
-        {selectedVariant?.color && (
-          <span>Color {selectedVariant.color}</span>
-        )}
+        {selectedVariant?.sku && <span>SKU {selectedVariant.sku}</span>}
+        {selectedVariant?.size && <span>Size {selectedVariant.size}</span>}
+        {selectedVariant?.color && <span>Color {selectedVariant.color}</span>}
       </div>
 
-      {/* PRIMARY CTA */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium text-gray-700">
+          Quantity
+        </span>
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={decreaseQuantity}
+            disabled={quantity <= 1 || loading}
+            className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-lg font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            -
+          </button>
+
+          <span className="min-w-8 text-center text-sm font-medium">
+            {quantity}
+          </span>
+
+          <button
+            type="button"
+            onClick={increaseQuantity}
+            disabled={
+              loading ||
+              isOutOfStock ||
+              (typeof stock === "number" && quantity >= stock)
+            }
+            className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center text-lg font-medium hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            +
+          </button>
+        </div>
+      </div>
+
       <button
-        disabled={!selectedVariant}
+        type="button"
+        disabled={!selectedVariant || isOutOfStock || loading}
+        onClick={handleAddToCart}
+        className="w-full py-4 rounded-2xl bg-black text-white font-medium hover:opacity-90 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {loading ? "Adding..." : "Add to cart"}
+      </button>
+
+      <button
+        disabled={!selectedVariant || loading}
         onClick={() => {
           if (!selectedVariant) return;
           window.location.href = `/dashboard/design/hoodie`;
         }}
-        className="
-          w-full py-4 rounded-2xl
-          bg-black text-white
-          font-medium
-          hover:opacity-90 active:scale-[0.99]
-          transition
-        "
+        className="w-full py-4 rounded-2xl border border-black text-black font-medium hover:bg-gray-100 active:scale-[0.99] transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
         🎨 Start Designing
       </button>
 
-      {/* STRIPE */}
-      <div className="scale-[1.01]">
-        <StripeButton product={{ ...product, variant: selectedVariant }} />
-      </div>
-
-      {/* DELIVERY INFO (SEM CAIXA) */}
       <div className="text-sm text-gray-500 space-y-1">
-        <p className="font-medium text-gray-700">
-          Production & Delivery
-        </p>
-
+        <p className="font-medium text-gray-700">Production & Delivery</p>
         <p>Production: 2–4 business days</p>
         <p>Shipping: 3–7 business days</p>
       </div>
 
-      {/* BADGES (MODERN LOOK) */}
       <div className="flex flex-wrap gap-2 text-[11px] text-gray-600">
         <span className="px-3 py-1 rounded-full bg-gray-100">
           ✔ Secure checkout
         </span>
-
         <span className="px-3 py-1 rounded-full bg-gray-100">
           ✔ Quality tested
         </span>
-
         <span className="px-3 py-1 rounded-full bg-gray-100">
           ✔ Fast production
         </span>
-
         <span className="px-3 py-1 rounded-full bg-gray-100">
           ✔ Worldwide shipping
         </span>
       </div>
-
     </div>
   );
 }
