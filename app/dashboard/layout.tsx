@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import Sidebar from "@/app/components/sidebar";
+import Sidebar from "@/app/components/Sidebar";
 
 export default function DashboardLayout({
   children,
