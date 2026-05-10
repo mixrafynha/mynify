@@ -2,6 +2,7 @@ import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
 import Footer from "@/app/components/Footer";
+import { Manrope } from "next/font/google";
 
 // ================= FONTS (PREMIUM SAAS / APPLE STYLE) =================
 
