@@ -64,8 +64,7 @@ export default function AdminSidebar() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved === "true") setCollapsed(true);
-      if (saved === "false") setCollapsed(false);
+      setCollapsed(saved === "true");
     } catch {}
   }, []);
 
@@ -122,7 +121,6 @@ export default function AdminSidebar() {
 
   const role = user?.profile?.role ?? user?.role ?? null;
   const isAdmin = role === "admin";
-
   const expanded = isMobile ? mobileOpen : !collapsed;
 
   const menu = useMemo<MenuItem[]>(() => ADMIN_MENU, []);
@@ -132,14 +130,19 @@ export default function AdminSidebar() {
   }, []);
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed((value) => {
-      const nextValue = !value;
+    setCollapsed((current) => {
+      const next = !current;
 
       try {
-        window.localStorage.setItem(STORAGE_KEY, String(nextValue));
+        window.localStorage.setItem(STORAGE_KEY, String(next));
       } catch {}
 
-      return nextValue;
+      document.documentElement.style.setProperty(
+        "--admin-sidebar-width",
+        next ? "80px" : "270px"
+      );
+
+      return next;
     });
   }, []);
 
@@ -155,7 +158,7 @@ export default function AdminSidebar() {
 
   if (loading) {
     return (
-      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[270px] border-r border-white/10 p-5 backdrop-blur-2xl md:block">
+      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[270px] border-r border-white/10 p-5 md:block">
         <div className="mb-10 h-11 w-36 animate-pulse rounded-2xl bg-white/10" />
 
         <div className="space-y-4">
@@ -186,31 +189,31 @@ export default function AdminSidebar() {
           type="button"
           aria-label="Close sidebar"
           onClick={closeMobile}
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-40 bg-black/55"
         />
       )}
 
       <aside
         className={`
-          fixed left-0 top-0 z-50 h-dvh overflow-hidden
-          text-white border-r border-white/10
-          backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.16)]
-          transition-[width,transform] duration-300 ease-out will-change-transform
+          fixed left-0 top-0 z-50 flex h-dvh flex-col overflow-hidden
+          border-r border-white/10 text-white
+          transition-[width,transform] duration-300 ease-out
+          md:will-change-[width] will-change-transform
           ${
             isMobile
               ? mobileOpen
-                ? "translate-x-0 w-[min(82vw,270px)]"
-                : "-translate-x-full w-[min(82vw,270px)]"
+                ? "w-[min(82vw,270px)] translate-x-0"
+                : "w-[min(82vw,270px)] -translate-x-full"
               : collapsed
-              ? "translate-x-0 w-[80px]"
-              : "translate-x-0 w-[270px]"
+                ? "w-[80px] translate-x-0"
+                : "w-[270px] translate-x-0"
           }
         `}
       >
-        <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarHeader expanded={expanded} />
 
-          <div className="flex-1">
+          <div className="min-h-0 flex-1">
             <SidebarMenu
               menu={menu}
               expanded={expanded}
@@ -226,7 +229,8 @@ export default function AdminSidebar() {
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black shadow-lg transition-all hover:scale-110 active:scale-95"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black text-white shadow-md transition-transform hover:scale-105 active:scale-95"
           >
             <ChevronLeft
               size={18}
