@@ -11,13 +11,11 @@ import {
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
-/* 🧩 IMPORT COMPONENTS */
 import SidebarHeader from "./SidebarHeader";
 import SidebarMenu from "./SidebarMenu";
 import SidebarFooter from "./SidebarFooter";
 import SidebarMobileToggle from "./SidebarMobileToggle";
 
-/* 🧩 IMPORT HOOKS */
 import { useUser } from "@/hooks/useUser";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -40,8 +38,16 @@ export default function Sidebar() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved === "true") setCollapsed(true);
+      if (saved === "false") setCollapsed(false);
     } catch {}
   }, []);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--user-sidebar-width",
+      isMobile ? "0px" : collapsed ? "80px" : "270px"
+    );
+  }, [collapsed, isMobile]);
 
   useEffect(() => {
     if (!isMobile) setMobileOpen(false);
@@ -67,6 +73,11 @@ export default function Sidebar() {
       try {
         localStorage.setItem(STORAGE_KEY, String(next));
       } catch {}
+
+      document.documentElement.style.setProperty(
+        "--user-sidebar-width",
+        next ? "80px" : "270px"
+      );
 
       return next;
     });
@@ -94,21 +105,19 @@ export default function Sidebar() {
       {isMobile && mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-40 h-screen 
-        bg-black text-white border-r border-white/10 
-        flex flex-col transition-all duration-300 ${
+        className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-white/10 bg-black text-white transition-all duration-300 ${
           isMobile
             ? mobileOpen
-              ? "translate-x-0 w-[250px]"
-              : "-translate-x-full w-[250px]"
+              ? "w-[250px] translate-x-0"
+              : "w-[250px] -translate-x-full"
             : collapsed
-            ? "w-[80px]"
-            : "w-[270px]"
+              ? "w-[80px] translate-x-0"
+              : "w-[270px] translate-x-0"
         }`}
       >
         <SidebarHeader expanded={expanded} />
@@ -123,11 +132,9 @@ export default function Sidebar() {
 
         {!isMobile && (
           <button
+            type="button"
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
-            bg-black border border-white/30 
-            flex items-center justify-center
-            shadow-lg hover:scale-110 active:scale-95 transition-all"
+            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black shadow-lg transition-all hover:scale-110 active:scale-95"
           >
             <ChevronLeft
               size={18}
