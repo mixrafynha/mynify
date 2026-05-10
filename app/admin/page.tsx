@@ -97,9 +97,7 @@ export default function AdminDashboard() {
     <AdminGuard user={user} role={role}>
       <div className="relative flex min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
-
-        <div className="relative z-10 flex min-h-screen w-full">
-          <AdminSidebar />
+          
 
           <div className="flex min-w-0 flex-1 flex-col">
             <AdminHeader notifications={notifications} />
