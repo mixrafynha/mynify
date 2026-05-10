@@ -132,34 +132,69 @@ export default function Navbar() {
   href="/"
   className="group overflow-visible select-none shrink-0 ml-3"
 >
-  <div className="relative flex items-center">
-    <span
-      className="
-        text-3xl
-        md:text-4xl
-        font-black
-        tracking-tight
-        bg-gradient-to-r
-        from-purple-400
-        via-fuchsia-300
-        to-cyan-300
-        bg-clip-text
-        text-transparent
-        drop-shadow-[0_0_25px_rgba(168,85,247,0.75)]
-        transition-all
-        duration-300
-        group-hover:scale-105
-        group-hover:drop-shadow-[0_0_40px_rgba(168,85,247,1)]
-      "
-      style={{
-        fontFamily:
-          "'Space Grotesk', 'Poppins', sans-serif",
-      }}
-    >
-      Mynify
-    </span>
+  <div className="relative flex items-center gap-3">
+    {/* ICON */}
+    <div className="relative flex items-center justify-center">
+      <div
+        className="
+          w-11
+          h-11
+          rounded-2xl
+          bg-gradient-to-br
+          from-fuchsia-500
+          via-purple-600
+          to-cyan-500
+          shadow-[0_0_35px_rgba(168,85,247,0.65)]
+          flex
+          items-center
+          justify-center
+          transition-all
+          duration-300
+          group-hover:scale-105
+          group-hover:rotate-[-6deg]
+        "
+      >
+        <span
+          className="
+            text-white
+            text-2xl
+            font-black
+            tracking-[-0.08em]
+            translate-y-[-1px]
+          "
+          style={{
+            fontFamily:
+              "'Clash Display','Satoshi','Poppins',sans-serif",
+          }}
+        >
+          M
+        </span>
+      </div>
 
-    <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
+      <div className="absolute -inset-3 bg-purple-500/20 blur-2xl rounded-full pointer-events-none" />
+    </div>
+
+    {/* TEXT */}
+    <div className="flex items-center">
+      <span
+        className="
+          text-3xl
+          md:text-[34px]
+          font-black
+          tracking-[-0.04em]
+          text-white
+          transition-all
+          duration-300
+          group-hover:text-purple-200
+        "
+        style={{
+          fontFamily:
+            "'Clash Display','Satoshi','Inter',sans-serif",
+        }}
+      >
+        ynify
+      </span>
+    </div>
   </div>
 </Link>
           </div>
