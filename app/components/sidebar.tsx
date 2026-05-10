@@ -6,14 +6,10 @@ import {
   Package,
   Tag,
   Truck,
-  DollarSign,
-  BarChart3,
   Settings,
   ChevronLeft,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
-
-import { supabase } from "@/lib/supabase";
 
 /* 🧩 IMPORT COMPONENTS */
 import SidebarHeader from "./SidebarHeader";
@@ -25,6 +21,8 @@ import SidebarMobileToggle from "./SidebarMobileToggle";
 import { useUser } from "@/hooks/useUser";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
+const STORAGE_KEY = "user-sidebar-collapsed";
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -32,21 +30,25 @@ export default function Sidebar() {
   const router = useRouter();
   const pathname = usePathname();
 
-  const { user, loading } = useUser();
+  const { user } = useUser();
   const isMobile = useIsMobile();
 
-  /* 🚨 FIX IMPORTANTE: evita render em rotas admin */
   const isAdminRoute = pathname?.startsWith("/admin");
-  const isAuthRoute =
-    pathname === "/login" || pathname === "/signup";
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
 
-  /* ❌ NÃO MOSTRAR SIDEBAR NO ADMIN (evita duplicação) */
-  if (isAdminRoute || isAuthRoute) return null;
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved === "true") setCollapsed(true);
+    } catch {}
+  }, []);
 
-  /* ================= STATE ================= */
+  useEffect(() => {
+    if (!isMobile) setMobileOpen(false);
+  }, [isMobile]);
+
   const expanded = isMobile ? mobileOpen : !collapsed;
 
-  /* ================= MENU ================= */
   const menu = useMemo(
     () => [
       { name: "Dashboard", icon: Home, path: "/dashboard" },
@@ -58,19 +60,30 @@ export default function Sidebar() {
     []
   );
 
-  /* ================= NAV ================= */
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      const next = !v;
+
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next));
+      } catch {}
+
+      return next;
+    });
+  }, []);
+
   const handleNav = useCallback(
     (path: string) => {
-      router.push(path);
+      if (pathname !== path) router.push(path);
       if (isMobile) setMobileOpen(false);
     },
-    [router, isMobile]
+    [router, pathname, isMobile]
   );
 
-  /* ================= UI ================= */
+  if (isAdminRoute || isAuthRoute) return null;
+
   return (
     <>
-      {/* MOBILE TOGGLE */}
       {isMobile && (
         <SidebarMobileToggle
           mobileOpen={mobileOpen}
@@ -78,7 +91,6 @@ export default function Sidebar() {
         />
       )}
 
-      {/* OVERLAY MOBILE */}
       {isMobile && mobileOpen && (
         <div
           onClick={() => setMobileOpen(false)}
@@ -86,7 +98,6 @@ export default function Sidebar() {
         />
       )}
 
-      {/* SIDEBAR */}
       <aside
         className={`fixed top-0 left-0 z-40 h-screen 
         bg-black text-white border-r border-white/10 
@@ -100,23 +111,19 @@ export default function Sidebar() {
             : "w-[270px]"
         }`}
       >
-        {/* HEADER */}
         <SidebarHeader expanded={expanded} />
 
-        {/* MENU */}
         <SidebarMenu
           menu={menu}
           expanded={expanded}
           onNavigate={handleNav}
         />
 
-        {/* FOOTER */}
         <SidebarFooter user={user} expanded={expanded} />
 
-        {/* DESKTOP TOGGLE */}
         {!isMobile && (
           <button
-            onClick={() => setCollapsed((v) => !v)}
+            onClick={toggleCollapsed}
             className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
             bg-black border border-white/30 
             flex items-center justify-center
