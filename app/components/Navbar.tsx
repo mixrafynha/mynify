@@ -127,77 +127,53 @@ export default function Navbar() {
             >
               ☰
             </button>
-
-            <Link
+              <Link
   href="/"
   className="group overflow-visible select-none shrink-0 ml-3"
 >
-  <div className="relative flex items-center gap-3">
-    {/* ICON */}
-    <div className="relative flex items-center justify-center">
-      <div
-        className="
-          w-11
-          h-11
-          rounded-2xl
-          bg-gradient-to-br
-          from-fuchsia-500
-          via-purple-600
-          to-cyan-500
-          shadow-[0_0_35px_rgba(168,85,247,0.65)]
-          flex
-          items-center
-          justify-center
-          transition-all
-          duration-300
-          group-hover:scale-105
-          group-hover:rotate-[-6deg]
-        "
-      >
-        <span
-          className="
-            text-white
-            text-2xl
-            font-black
-            tracking-[-0.08em]
-            translate-y-[-1px]
-          "
-          style={{
-            fontFamily:
-              "'Clash Display','Satoshi','Poppins',sans-serif",
-          }}
-        >
-          M
-        </span>
-      </div>
-
-      <div className="absolute -inset-3 bg-purple-500/20 blur-2xl rounded-full pointer-events-none" />
-    </div>
-
-    {/* TEXT */}
-    <div className="flex items-center">
+  <div className="relative flex items-center">
+    <span
+      className="
+        text-3xl
+        md:text-4xl
+        font-black
+        tracking-[-0.06em]
+        text-white
+        transition-all
+        duration-300
+        group-hover:scale-[1.03]
+      "
+      style={{
+        fontFamily:
+          "'Clash Display', 'Space Grotesk', sans-serif",
+      }}
+    >
       <span
         className="
-          text-3xl
-          md:text-[34px]
-          font-black
-          tracking-[-0.04em]
-          text-white
-          transition-all
-          duration-300
-          group-hover:text-purple-200
+          inline-block
+          bg-gradient-to-br
+          from-fuchsia-400
+          via-purple-500
+          to-cyan-400
+          bg-clip-text
+          text-transparent
+          drop-shadow-[0_0_20px_rgba(168,85,247,0.7)]
         "
-        style={{
-          fontFamily:
-            "'Clash Display','Satoshi','Inter',sans-serif",
-        }}
       >
+        M
+      </span>
+      <span className="text-white">
         ynify
       </span>
-    </div>
+    </span>
+
+    <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
   </div>
 </Link>
-          </div>
+            
+
+          
+        </div>
 
           <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
             {links.map((link) => (
