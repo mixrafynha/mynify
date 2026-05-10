@@ -14,8 +14,6 @@ import {
   LockKeyhole,
   MonitorCog,
 } from "lucide-react";
-
-import AdminSidebar from "@/app/components/AdminSidebar";
 import AdminHeader from "@/app/components/admin/AdminHeader";
 import AdminGuard from "@/app/components/admin/AdminGuard";
 import { useAdminDashboard } from "@/hooks/useAdminDashboard";
