@@ -37,8 +37,7 @@ export default function Sidebar() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved === "true") setCollapsed(true);
-      if (saved === "false") setCollapsed(false);
+      setCollapsed(saved === "true");
     } catch {}
   }, []);
 
@@ -67,8 +66,8 @@ export default function Sidebar() {
   );
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed((v) => {
-      const next = !v;
+    setCollapsed((current) => {
+      const next = !current;
 
       try {
         localStorage.setItem(STORAGE_KEY, String(next));
@@ -81,6 +80,10 @@ export default function Sidebar() {
 
       return next;
     });
+  }, []);
+
+  const closeMobile = useCallback(() => {
+    setMobileOpen(false);
   }, []);
 
   const handleNav = useCallback(
@@ -103,38 +106,48 @@ export default function Sidebar() {
       )}
 
       {isMobile && mobileOpen && (
-        <div
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          onClick={closeMobile}
+          className="fixed inset-0 z-40 bg-black/55"
         />
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-white/10 bg-black text-white transition-all duration-300 ${
-          isMobile
-            ? mobileOpen
-              ? "w-[250px] translate-x-0"
-              : "w-[250px] -translate-x-full"
-            : collapsed
-              ? "w-[80px] translate-x-0"
-              : "w-[270px] translate-x-0"
-        }`}
+        className={`
+          fixed left-0 top-0 z-50 flex h-dvh flex-col
+          border-r border-white/10 bg-black text-white
+          transition-[width,transform] duration-300 ease-out
+          ${
+            isMobile
+              ? mobileOpen
+                ? "w-[min(82vw,270px)] translate-x-0"
+                : "w-[min(82vw,270px)] -translate-x-full"
+              : collapsed
+                ? "w-[80px] translate-x-0"
+                : "w-[270px] translate-x-0"
+          }
+        `}
       >
-        <SidebarHeader expanded={expanded} />
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <SidebarHeader expanded={expanded} />
 
-        <SidebarMenu
-          menu={menu}
-          expanded={expanded}
-          onNavigate={handleNav}
-        />
+          <SidebarMenu
+            menu={menu}
+            expanded={expanded}
+            onNavigate={handleNav}
+          />
 
-        <SidebarFooter user={user} expanded={expanded} />
+          <SidebarFooter user={user} expanded={expanded} />
+        </div>
 
         {!isMobile && (
           <button
             type="button"
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black shadow-lg transition-all hover:scale-110 active:scale-95"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/25 bg-black text-white shadow-md transition-transform hover:scale-105 active:scale-95"
           >
             <ChevronLeft
               size={18}
