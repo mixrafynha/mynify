@@ -1,4 +1,4 @@
-import AdminSidebar from "@/app/components/AdminSidebar";
+import AdminSidebar from "@/app/components/admin/AdminSidebar";
 import type { ReactNode } from "react";
 
 export default function AdminLayout({
@@ -10,14 +10,7 @@ export default function AdminLayout({
     <div className="min-h-screen bg-[#0b0f17] flex">
 
       {/* SIDEBAR */}
-      <div className="hidden md:block">
-        <AdminSidebar />
-      </div>
-
-      {/* MOBILE SIDEBAR OVERLAY (se tiveres botão de abrir) */}
-      <div className="md:hidden">
-        <AdminSidebar />
-      </div>
+      <AdminSidebar />
 
       {/* MAIN CONTENT */}
       <main className="flex-1 w-full md:pl-[280px] relative z-10">
