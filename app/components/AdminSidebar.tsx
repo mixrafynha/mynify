@@ -37,6 +37,8 @@ type MenuItem = {
   path: string;
 };
 
+const STORAGE_KEY = "admin-sidebar-collapsed";
+
 const ADMIN_MENU: MenuItem[] = [
   { name: "Dashboard", icon: Home, path: "/admin" },
   { name: "Products", icon: Package, path: "/admin/products" },
@@ -57,8 +59,15 @@ export default function AdminSidebar() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const isAuthRoute =
-    pathname === "/login" || pathname === "/signup";
+  const isAuthRoute = pathname === "/login" || pathname === "/signup";
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(STORAGE_KEY);
+      if (saved === "true") setCollapsed(true);
+      if (saved === "false") setCollapsed(false);
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (isAuthRoute) {
@@ -101,9 +110,7 @@ export default function AdminSidebar() {
   }, [isAuthRoute]);
 
   useEffect(() => {
-    if (!isMobile) {
-      setMobileOpen(false);
-    }
+    if (!isMobile) setMobileOpen(false);
   }, [isMobile]);
 
   const role = user?.profile?.role ?? user?.role ?? null;
@@ -118,18 +125,21 @@ export default function AdminSidebar() {
   }, []);
 
   const toggleCollapsed = useCallback(() => {
-    setCollapsed((value) => !value);
+    setCollapsed((value) => {
+      const nextValue = !value;
+
+      try {
+        window.localStorage.setItem(STORAGE_KEY, String(nextValue));
+      } catch {}
+
+      return nextValue;
+    });
   }, []);
 
   const handleNav = useCallback(
     (path: string) => {
-      if (pathname !== path) {
-        router.push(path);
-      }
-
-      if (isMobile) {
-        setMobileOpen(false);
-      }
+      if (pathname !== path) router.push(path);
+      if (isMobile) setMobileOpen(false);
     },
     [router, pathname, isMobile]
   );
@@ -138,14 +148,7 @@ export default function AdminSidebar() {
 
   if (loading) {
     return (
-      <aside
-        className="
-          fixed left-0 top-0 z-40 h-dvh w-[270px]
-          bg-[#03030a]/95 border-r border-white/10
-          backdrop-blur-2xl p-5
-          hidden md:block
-        "
-      >
+      <aside className="fixed left-0 top-0 z-40 h-dvh w-[270px] bg-[#03030a]/95 border-r border-white/10 backdrop-blur-2xl p-5 hidden md:block">
         <div className="h-11 w-36 rounded-2xl bg-white/10 animate-pulse mb-10" />
 
         <div className="space-y-4">
@@ -176,24 +179,16 @@ export default function AdminSidebar() {
           type="button"
           aria-label="Close sidebar"
           onClick={closeMobile}
-          className="
-            fixed inset-0 z-40
-            bg-black/70 backdrop-blur-sm
-            transition-opacity
-          "
+          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm transition-opacity"
         />
       )}
 
       <aside
         className={`
-          fixed left-0 top-0 z-50 h-dvh
-          overflow-hidden
-          bg-[#03030a]/95 text-white
-          border-r border-white/10
-          backdrop-blur-2xl
-          shadow-[0_0_55px_rgba(168,85,247,0.16)]
-          transition-[width,transform] duration-300 ease-out
-          will-change-transform
+          fixed left-0 top-0 z-50 h-dvh overflow-hidden
+          bg-[#03030a]/95 text-white border-r border-white/10
+          backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.16)]
+          transition-[width,transform] duration-300 ease-out will-change-transform
           ${
             isMobile
               ? mobileOpen
@@ -207,15 +202,7 @@ export default function AdminSidebar() {
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_32%),radial-gradient(circle_at_90%_25%,rgba(14,165,233,0.10),transparent_28%)]" />
 
-        <div
-          className="
-            relative z-10 flex h-full flex-col
-            overflow-y-auto overflow-x-hidden
-            [-ms-overflow-style:none]
-            [scrollbar-width:none]
-            [&::-webkit-scrollbar]:hidden
-          "
-        >
+        <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarHeader expanded={expanded} />
 
           <div className="flex-1">
