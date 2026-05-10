@@ -129,19 +129,39 @@ export default function Navbar() {
             </button>
 
             <Link
-              href="/"
-              className="group overflow-visible select-none shrink-0 ml-3"
-            >
-              <Image
-                src="/Logo.png"
-                alt="Mynify Logo"
-                width={40}
-                height={40}
-                priority
-                draggable={false}
-                className="w-10 h-10 object-contain scale-[3.5] md:scale-[4.5] translate-y-2 origin-center pointer-events-none drop-shadow-[0_0_30px_rgba(168,85,247,1)] transition duration-300"
-              />
-            </Link>
+  href="/"
+  className="group overflow-visible select-none shrink-0 ml-3"
+>
+  <div className="relative flex items-center">
+    <span
+      className="
+        text-3xl
+        md:text-4xl
+        font-black
+        tracking-tight
+        bg-gradient-to-r
+        from-purple-400
+        via-fuchsia-300
+        to-cyan-300
+        bg-clip-text
+        text-transparent
+        drop-shadow-[0_0_25px_rgba(168,85,247,0.75)]
+        transition-all
+        duration-300
+        group-hover:scale-105
+        group-hover:drop-shadow-[0_0_40px_rgba(168,85,247,1)]
+      "
+      style={{
+        fontFamily:
+          "'Space Grotesk', 'Poppins', sans-serif",
+      }}
+    >
+      Mynify
+    </span>
+
+    <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
+  </div>
+</Link>
           </div>
 
           <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
