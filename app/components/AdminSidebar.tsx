@@ -70,6 +70,13 @@ export default function AdminSidebar() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--admin-sidebar-width",
+      isMobile ? "0px" : collapsed ? "80px" : "270px"
+    );
+  }, [collapsed, isMobile]);
+
+  useEffect(() => {
     if (isAuthRoute) {
       setLoading(false);
       return;
@@ -148,17 +155,17 @@ export default function AdminSidebar() {
 
   if (loading) {
     return (
-      <aside className="fixed left-0 top-0 z-40 h-dvh w-[270px] bg-[#03030a]/95 border-r border-white/10 backdrop-blur-2xl p-5 hidden md:block">
-        <div className="h-11 w-36 rounded-2xl bg-white/10 animate-pulse mb-10" />
+      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[270px] border-r border-white/10 p-5 backdrop-blur-2xl md:block">
+        <div className="mb-10 h-11 w-36 animate-pulse rounded-2xl bg-white/10" />
 
         <div className="space-y-4">
-          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
-          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
-          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
-          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
+          <div className="h-11 animate-pulse rounded-2xl bg-white/10" />
+          <div className="h-11 animate-pulse rounded-2xl bg-white/10" />
+          <div className="h-11 animate-pulse rounded-2xl bg-white/10" />
+          <div className="h-11 animate-pulse rounded-2xl bg-white/10" />
         </div>
 
-        <div className="absolute bottom-5 left-5 right-5 h-14 rounded-2xl bg-white/10 animate-pulse" />
+        <div className="absolute bottom-5 left-5 right-5 h-14 animate-pulse rounded-2xl bg-white/10" />
       </aside>
     );
   }
@@ -186,7 +193,7 @@ export default function AdminSidebar() {
       <aside
         className={`
           fixed left-0 top-0 z-50 h-dvh overflow-hidden
-          bg-[#03030a]/95 text-white border-r border-white/10
+          text-white border-r border-white/10
           backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.16)]
           transition-[width,transform] duration-300 ease-out will-change-transform
           ${
@@ -200,8 +207,6 @@ export default function AdminSidebar() {
           }
         `}
       >
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_32%),radial-gradient(circle_at_90%_25%,rgba(14,165,233,0.10),transparent_28%)]" />
-
         <div className="relative z-10 flex h-full flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarHeader expanded={expanded} />
 
@@ -219,11 +224,9 @@ export default function AdminSidebar() {
 
         {!isMobile && (
           <button
+            type="button"
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
-            bg-black border border-white/30 
-            flex items-center justify-center
-            shadow-lg hover:scale-110 active:scale-95 transition-all"
+            className="absolute -right-3 top-8 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black shadow-lg transition-all hover:scale-110 active:scale-95"
           >
             <ChevronLeft
               size={18}
