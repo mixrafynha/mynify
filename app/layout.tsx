@@ -1,4 +1,5 @@
 import "./globals.css";
+import { Clash_Display } from "next/font/google";
 import Providers from "./providers";
 import { Manrope, Inter } from "next/font/google";
 import Script from "next/script";
