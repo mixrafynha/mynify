@@ -1,7 +1,14 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import {
+  useState,
+  useCallback,
+  useMemo,
+  useEffect,
+} from "react";
+
 import Link from "next/link";
+import Image from "next/image";
 import { ChevronDown } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 
@@ -30,7 +37,6 @@ export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
 
-  const [mounted, setMounted] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [role, setRole] = useState<string | null>(null);
@@ -41,8 +47,6 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState<string | null>(null);
 
   useEffect(() => {
-    setMounted(true);
-
     const controller = new AbortController();
 
     const checkAuth = async () => {
@@ -78,16 +82,21 @@ export default function Navbar() {
   }, []);
 
   const isOpen = useCallback(
-    (name: string) => clickedDropdown === name || activeDropdown === name,
+    (name: string) =>
+      clickedDropdown === name || activeDropdown === name,
     [clickedDropdown, activeDropdown]
   );
 
   const toggleDropdown = useCallback((name: string) => {
-    setClickedDropdown((prev) => (prev === name ? null : name));
+    setClickedDropdown((prev) =>
+      prev === name ? null : name
+    );
   }, []);
 
   const toggleMobileDropdown = useCallback((name: string) => {
-    setMobileOpen((prev) => (prev === name ? null : name));
+    setMobileOpen((prev) =>
+      prev === name ? null : name
+    );
   }, []);
 
   const toggleSidebar = useCallback(() => {
@@ -101,7 +110,7 @@ export default function Navbar() {
 
   const links = useMemo(() => LINKS, []);
 
-  if (!mounted || !authChecked || pathname === "/signup") return null;
+  if (pathname === "/signup") return null;
 
   return (
     <>
@@ -119,11 +128,17 @@ export default function Navbar() {
               ☰
             </button>
 
-            <Link href="/" className="group overflow-visible select-none shrink-0 ml-3">
-              <img
+            <Link
+              href="/"
+              className="group overflow-visible select-none shrink-0 ml-3"
+            >
+              <Image
                 src="/Logo.png"
                 alt="Mynify Logo"
-                draggable="false"
+                width={40}
+                height={40}
+                priority
+                draggable={false}
                 className="w-10 h-10 object-contain scale-[3.5] md:scale-[4.5] translate-y-2 origin-center pointer-events-none drop-shadow-[0_0_30px_rgba(168,85,247,1)] transition duration-300"
               />
             </Link>
@@ -134,8 +149,12 @@ export default function Navbar() {
               <div
                 key={link.name}
                 className="relative"
-                onMouseEnter={() => setActiveDropdown(link.name)}
-                onMouseLeave={() => setActiveDropdown(null)}
+                onMouseEnter={() =>
+                  setActiveDropdown(link.name)
+                }
+                onMouseLeave={() =>
+                  setActiveDropdown(null)
+                }
               >
                 <div className="flex items-center gap-1 cursor-pointer group">
                   {!link.dropdown ? (
@@ -148,7 +167,9 @@ export default function Navbar() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => toggleDropdown(link.name)}
+                      onClick={() =>
+                        toggleDropdown(link.name)
+                      }
                       className="hover:text-purple-400 transition"
                     >
                       {link.name}
@@ -181,7 +202,9 @@ export default function Navbar() {
                           key={item}
                           href={formatLink(item)}
                           className="block px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-purple-500/15 rounded-lg transition"
-                          onClick={() => setClickedDropdown(null)}
+                          onClick={() =>
+                            setClickedDropdown(null)
+                          }
                         >
                           {item}
                         </Link>
@@ -194,7 +217,12 @@ export default function Navbar() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {!isAuthenticated ? (
+            {!authChecked ? (
+              <div className="flex items-center gap-2">
+                <div className="h-10 w-24 rounded-xl bg-white/10 animate-pulse" />
+                <div className="h-10 w-28 rounded-xl bg-purple-500/20 animate-pulse" />
+              </div>
+            ) : !isAuthenticated ? (
               <>
                 <Link href="/login">
                   <button className="px-4 py-2 border border-white/10 bg-white/[0.04] rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400/50 transition">
@@ -209,7 +237,13 @@ export default function Navbar() {
                 </Link>
               </>
             ) : (
-              <Link href={role === "admin" ? "/admin" : "/dashboard"}>
+              <Link
+                href={
+                  role === "admin"
+                    ? "/admin"
+                    : "/dashboard"
+                }
+              >
                 <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-white shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
                   Dashboard
                 </button>
@@ -247,8 +281,9 @@ export default function Navbar() {
                   <div
                     className="flex items-center justify-between cursor-pointer hover:text-purple-400 transition"
                     onClick={() => {
-                      if (link.dropdown) toggleMobileDropdown(link.name);
-                      else if (link.href) {
+                      if (link.dropdown) {
+                        toggleMobileDropdown(link.name);
+                      } else if (link.href) {
                         closeSidebar();
                         router.push(link.href);
                       }
