@@ -219,17 +219,11 @@ export default function AdminSidebar() {
 
         {!isMobile && (
           <button
-            type="button"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             onClick={toggleCollapsed}
-            className="
-              absolute -right-3 top-8 z-50
-              grid h-9 w-9 place-items-center rounded-full
-              bg-[#070711] border border-white/20 text-white
-              shadow-[0_0_25px_rgba(168,85,247,0.35)]
-              hover:scale-110 hover:border-purple-500/45 hover:bg-purple-500/20
-              active:scale-95 transition-all
-            "
+            className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
+            bg-black border border-white/30 
+            flex items-center justify-center
+            shadow-lg hover:scale-110 active:scale-95 transition-all"
           >
             <ChevronLeft
               size={18}
