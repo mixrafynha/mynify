@@ -9,6 +9,7 @@ import {
   Settings,
   ChevronLeft,
   BarChart3,
+  type LucideIcon,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -20,7 +21,7 @@ import SidebarMobileToggle from "./SidebarMobileToggle";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 type UserProfile = {
-  role?: "admin" | "user" | string;
+  role?: string;
 };
 
 type AuthUser = {
@@ -30,14 +31,20 @@ type AuthUser = {
   profile?: UserProfile;
 };
 
-const ADMIN_MENU = Object.freeze([
+type MenuItem = {
+  name: string;
+  icon: LucideIcon;
+  path: string;
+};
+
+const ADMIN_MENU: MenuItem[] = [
   { name: "Dashboard", icon: Home, path: "/admin" },
   { name: "Products", icon: Package, path: "/admin/products" },
   { name: "Users", icon: Users, path: "/admin/users" },
   { name: "Analytics", icon: BarChart3, path: "/admin/analytics" },
   { name: "Revenue", icon: DollarSign, path: "/admin/revenue" },
   { name: "Settings", icon: Settings, path: "/admin/settings" },
-]);
+];
 
 export default function AdminSidebar() {
   const router = useRouter();
@@ -77,7 +84,7 @@ export default function AdminSidebar() {
 
         const data = await res.json();
         setUser(data?.user ?? null);
-      } catch (error) {
+      } catch {
         if (!controller.signal.aborted) {
           setUser(null);
         }
@@ -93,16 +100,32 @@ export default function AdminSidebar() {
     return () => controller.abort();
   }, [isAuthRoute]);
 
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileOpen(false);
+    }
+  }, [isMobile]);
+
   const role = user?.profile?.role ?? user?.role ?? null;
   const isAdmin = role === "admin";
 
   const expanded = isMobile ? mobileOpen : !collapsed;
 
+  const menu = useMemo<MenuItem[]>(() => ADMIN_MENU, []);
+
+  const closeMobile = useCallback(() => {
+    setMobileOpen(false);
+  }, []);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((value) => !value);
+  }, []);
+
   const handleNav = useCallback(
     (path: string) => {
-      if (pathname === path) return;
-
-      router.push(path);
+      if (pathname !== path) {
+        router.push(path);
+      }
 
       if (isMobile) {
         setMobileOpen(false);
@@ -111,27 +134,28 @@ export default function AdminSidebar() {
     [router, pathname, isMobile]
   );
 
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((value) => !value);
-  }, []);
-
-  const closeMobile = useCallback(() => {
-    setMobileOpen(false);
-  }, []);
-
-  const menu = useMemo(() => ADMIN_MENU, []);
-
   if (isAuthRoute) return null;
 
   if (loading) {
     return (
-      <aside className="fixed top-0 left-0 z-40 h-screen w-[270px] bg-[#03030a]/95 border-r border-white/10 p-5">
-        <div className="h-10 w-32 rounded-xl bg-white/10 animate-pulse mb-8" />
+      <aside
+        className="
+          fixed left-0 top-0 z-40 h-dvh w-[270px]
+          bg-[#03030a]/95 border-r border-white/10
+          backdrop-blur-2xl p-5
+          hidden md:block
+        "
+      >
+        <div className="h-11 w-36 rounded-2xl bg-white/10 animate-pulse mb-10" />
+
         <div className="space-y-4">
-          <div className="h-10 rounded-xl bg-white/10 animate-pulse" />
-          <div className="h-10 rounded-xl bg-white/10 animate-pulse" />
-          <div className="h-10 rounded-xl bg-white/10 animate-pulse" />
+          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
+          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
+          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
+          <div className="h-11 rounded-2xl bg-white/10 animate-pulse" />
         </div>
+
+        <div className="absolute bottom-5 left-5 right-5 h-14 rounded-2xl bg-white/10 animate-pulse" />
       </aside>
     );
   }
@@ -150,39 +174,58 @@ export default function AdminSidebar() {
       {isMobile && mobileOpen && (
         <button
           type="button"
-          aria-label="Close sidebar overlay"
+          aria-label="Close sidebar"
           onClick={closeMobile}
-          className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+          className="
+            fixed inset-0 z-40
+            bg-black/70 backdrop-blur-sm
+            transition-opacity
+          "
         />
       )}
 
       <aside
-        className={`fixed top-0 left-0 z-40 h-screen
-        overflow-x-hidden overflow-y-auto
-        bg-[#03030a]/95 text-white border-r border-white/10
-        backdrop-blur-2xl
-        shadow-[0_0_55px_rgba(168,85,247,0.16)]
-        flex flex-col transition-all duration-300 ${
-          isMobile
-            ? mobileOpen
-              ? "translate-x-0 w-[250px]"
-              : "-translate-x-full w-[250px]"
-            : collapsed
-            ? "w-[80px]"
-            : "w-[270px]"
-        }`}
+        className={`
+          fixed left-0 top-0 z-50 h-dvh
+          overflow-hidden
+          bg-[#03030a]/95 text-white
+          border-r border-white/10
+          backdrop-blur-2xl
+          shadow-[0_0_55px_rgba(168,85,247,0.16)]
+          transition-[width,transform] duration-300 ease-out
+          will-change-transform
+          ${
+            isMobile
+              ? mobileOpen
+                ? "translate-x-0 w-[min(82vw,270px)]"
+                : "-translate-x-full w-[min(82vw,270px)]"
+              : collapsed
+              ? "translate-x-0 w-[80px]"
+              : "translate-x-0 w-[270px]"
+          }
+        `}
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_32%),radial-gradient(circle_at_90%_25%,rgba(14,165,233,0.10),transparent_28%)]" />
 
-        <div className="relative z-10 flex min-h-screen flex-col">
+        <div
+          className="
+            relative z-10 flex h-full flex-col
+            overflow-y-auto overflow-x-hidden
+            [-ms-overflow-style:none]
+            [scrollbar-width:none]
+            [&::-webkit-scrollbar]:hidden
+          "
+        >
           <SidebarHeader expanded={expanded} />
 
-          <SidebarMenu
-            menu={menu}
-            expanded={expanded}
-            onNavigate={handleNav}
-            isAdmin
-          />
+          <div className="flex-1">
+            <SidebarMenu
+              menu={menu}
+              expanded={expanded}
+              onNavigate={handleNav}
+              isAdmin
+            />
+          </div>
 
           <SidebarFooter user={user} expanded={expanded} />
         </div>
@@ -192,12 +235,14 @@ export default function AdminSidebar() {
             type="button"
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             onClick={toggleCollapsed}
-            className="absolute -right-3 top-8 z-50 w-9 h-9 rounded-full 
-            bg-[#070711] border border-white/20 text-white
-            flex items-center justify-center
-            shadow-[0_0_25px_rgba(168,85,247,0.35)]
-            hover:scale-110 hover:border-purple-500/45 hover:bg-purple-500/20
-            active:scale-95 transition-all"
+            className="
+              absolute -right-3 top-8 z-50
+              grid h-9 w-9 place-items-center rounded-full
+              bg-[#070711] border border-white/20 text-white
+              shadow-[0_0_25px_rgba(168,85,247,0.35)]
+              hover:scale-110 hover:border-purple-500/45 hover:bg-purple-500/20
+              active:scale-95 transition-all
+            "
           >
             <ChevronLeft
               size={18}
