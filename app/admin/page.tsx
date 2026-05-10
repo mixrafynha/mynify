@@ -86,9 +86,9 @@ export default function AdminDashboard() {
   if (loadingUser || isLoading) {
     return (
       <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7fb] text-[#111]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(168,85,247,0.14),transparent_34%),radial-gradient(circle_at_70%_65%,rgba(14,165,233,0.10),transparent_30%)]" />
+        <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_50%_30%,rgba(168,85,247,0.14),transparent_34%),radial-gradient(circle_at_70%_65%,rgba(14,165,233,0.10),transparent_30%)] md:block" />
 
-        <div className="relative rounded-[28px] border border-black/5 bg-white/80 px-7 py-5 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+        <div className="relative rounded-[28px] border border-black/5 bg-white px-7 py-5 shadow-sm md:bg-white/80 md:shadow-[0_30px_100px_rgba(15,23,42,0.10)] md:backdrop-blur-xl">
           <p className="animate-pulse text-sm font-black tracking-wide text-black/45">
             Loading admin workspace...
           </p>
@@ -100,15 +100,15 @@ export default function AdminDashboard() {
   return (
     <AdminGuard user={user} role={role}>
       <div className="relative min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
+        <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)] md:block" />
 
         <div className="relative z-10 flex min-h-screen min-w-0 flex-1 flex-col">
           <AdminHeader notifications={notifications} />
 
           <main className="flex-1 overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-8">
             <div className="mx-auto w-full max-w-[1500px] space-y-5 sm:space-y-6">
-              <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white/75 p-5 shadow-[0_30px_120px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:rounded-[36px] sm:p-8 lg:p-10">
-                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(168,85,247,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(14,165,233,0.12),transparent_28%)]" />
+              <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm md:bg-white/75 md:shadow-[0_30px_120px_rgba(15,23,42,0.10)] md:backdrop-blur-xl sm:rounded-[36px] sm:p-8 lg:p-10">
+                <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_22%_0%,rgba(168,85,247,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(14,165,233,0.12),transparent_28%)] md:block" />
 
                 <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
                   <div className="max-w-3xl">
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
                     {["Admin", "Pro", "Safe"].map((item) => (
                       <div
                         key={item}
-                        className="rounded-[26px] border border-black/5 bg-white/70 p-5 shadow-sm"
+                        className="rounded-[26px] border border-black/5 bg-white p-5 shadow-sm md:bg-white/70"
                       >
                         <p className="text-2xl font-black text-black">{item}</p>
                         <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
                   <Link
                     key={item.title}
                     href={item.path}
-                    className="group rounded-[30px] border border-black/5 bg-white/75 p-5 shadow-[0_20px_70px_rgba(15,23,42,0.07)] backdrop-blur-2xl transition hover:-translate-y-1 hover:border-purple-500/20 hover:shadow-[0_30px_90px_rgba(168,85,247,0.14)]"
+                    className="group rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition active:scale-[0.99] md:rounded-[30px] md:bg-white/75 md:shadow-[0_20px_70px_rgba(15,23,42,0.07)] md:backdrop-blur-xl md:hover:-translate-y-1 md:hover:border-purple-500/20 md:hover:shadow-[0_30px_90px_rgba(168,85,247,0.14)]"
                   >
                     <div className="mb-5 flex items-center justify-between">
                       <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/10 text-purple-700 ring-1 ring-purple-500/10">
@@ -179,7 +179,7 @@ export default function AdminDashboard() {
               </section>
 
               <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[32px] border border-black/5 bg-white/75 p-5 shadow-[0_25px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:p-6">
+                <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm md:rounded-[32px] md:bg-white/75 md:shadow-[0_25px_90px_rgba(15,23,42,0.08)] md:backdrop-blur-xl sm:p-6">
                   <div className="mb-6">
                     <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">
                       Quick Actions
@@ -195,7 +195,7 @@ export default function AdminDashboard() {
                       <Link
                         key={action.name}
                         href={action.path}
-                        className="group flex items-center justify-between rounded-3xl border border-black/5 bg-black/[0.025] px-4 py-4 text-left transition hover:border-purple-500/20 hover:bg-purple-500/10"
+                        className="group flex items-center justify-between rounded-3xl border border-black/5 bg-black/[0.025] px-4 py-4 text-left transition active:scale-[0.99] md:hover:border-purple-500/20 md:hover:bg-purple-500/10"
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-black/65 shadow-sm">
@@ -214,18 +214,18 @@ export default function AdminDashboard() {
 
                         <ArrowRight
                           size={16}
-                          className="shrink-0 text-black/25 transition group-hover:translate-x-1 group-hover:text-purple-700"
+                          className="shrink-0 text-black/25 transition md:group-hover:translate-x-1 md:group-hover:text-purple-700"
                         />
                       </Link>
                     ))}
                   </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[32px] border border-purple-500/10 bg-white/75 p-5 shadow-[0_25px_100px_rgba(168,85,247,0.13)] backdrop-blur-2xl sm:p-6">
-                  <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-purple-500/15 blur-3xl" />
+                <div className="relative overflow-hidden rounded-[28px] border border-purple-500/10 bg-white p-5 shadow-sm md:rounded-[32px] md:bg-white/75 md:shadow-[0_25px_100px_rgba(168,85,247,0.13)] md:backdrop-blur-xl sm:p-6">
+                  <div className="absolute -right-16 -top-16 hidden h-44 w-44 rounded-full bg-purple-500/15 blur-3xl md:block" />
 
                   <div className="relative">
-                    <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 to-cyan-500 text-white shadow-[0_20px_50px_rgba(168,85,247,0.28)]">
+                    <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 to-cyan-500 text-white shadow-sm md:shadow-[0_20px_50px_rgba(168,85,247,0.28)]">
                       <LockKeyhole size={25} />
                     </div>
 
@@ -245,7 +245,7 @@ export default function AdminDashboard() {
 
                     <Link
                       href="/admin/pro"
-                      className="mt-6 inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-black text-white shadow-[0_18px_50px_rgba(0,0,0,0.18)] transition hover:scale-[1.03] active:scale-95"
+                      className="mt-6 inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-black text-white shadow-sm transition active:scale-95 md:shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:hover:scale-[1.03]"
                     >
                       Configure Pro
                     </Link>
