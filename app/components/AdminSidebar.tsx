@@ -158,7 +158,7 @@ export default function AdminSidebar() {
 
   if (loading) {
     return (
-      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[270px] border-r border-white/10 p-5 md:block">
+      <aside className="fixed left-0 top-0 z-40 hidden h-dvh w-[270px] border-r border-white/10 bg-black p-5 md:block">
         <div className="mb-10 h-11 w-36 animate-pulse rounded-2xl bg-white/10" />
 
         <div className="space-y-4">
@@ -196,7 +196,7 @@ export default function AdminSidebar() {
       <aside
         className={`
           fixed left-0 top-0 z-50 flex h-dvh flex-col overflow-hidden
-          border-r border-white/10 text-white
+          border-r border-white/10 bg-black text-white
           transition-[width,transform] duration-300 ease-out
           md:will-change-[width] will-change-transform
           ${
