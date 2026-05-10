@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   Crown,
   ShieldCheck,
@@ -19,68 +20,30 @@ import AdminGuard from "@/app/components/admin/AdminGuard";
 import { useAdminDashboard } from "@/hooks/useAdminDashboard";
 
 const QUICK_ACTIONS = [
-  {
-    name: "Manage users",
-    desc: "Control accounts, roles and permissions.",
-    icon: Users,
-    path: "/admin/users",
-  },
-  {
-    name: "Analytics",
-    desc: "Track platform growth and performance.",
-    icon: BarChart3,
-    path: "/admin/analytics",
-  },
-  {
-    name: "Page control",
-    desc: "Edit public sections, banners and visibility.",
-    icon: LayoutDashboard,
-    path: "/admin/pages",
-  },
-  {
-    name: "Settings",
-    desc: "Configure platform rules and admin tools.",
-    icon: Settings,
-    path: "/admin/settings",
-  },
+  { name: "Manage users", desc: "Control accounts, roles and permissions.", icon: Users, path: "/admin/users" },
+  { name: "Analytics", desc: "Track platform growth and performance.", icon: BarChart3, path: "/admin/analytics" },
+  { name: "Page control", desc: "Edit public sections, banners and visibility.", icon: LayoutDashboard, path: "/admin/pages" },
+  { name: "Settings", desc: "Configure platform rules and admin tools.", icon: Settings, path: "/admin/settings" },
 ];
 
 const CONTROL_CARDS = [
-  {
-    title: "Advertising Control",
-    desc: "Manage public campaigns, promo banners and homepage announcements.",
-    icon: Megaphone,
-    label: "Marketing",
-  },
-  {
-    title: "Mynify Pro",
-    desc: "Create premium features, subscriptions and exclusive admin controls.",
-    icon: Crown,
-    label: "Premium",
-  },
-  {
-    title: "Security Center",
-    desc: "Protect admin access, user data and sensitive platform actions.",
-    icon: ShieldCheck,
-    label: "Secure",
-  },
-  {
-    title: "Platform Control",
-    desc: "Monitor pages, visibility, roles and important system settings.",
-    icon: MonitorCog,
-    label: "Control",
-  },
+  { title: "Advertising Control", desc: "Manage public campaigns, promo banners and homepage announcements.", icon: Megaphone, label: "Marketing" },
+  { title: "Mynify Pro", desc: "Create premium features, subscriptions and exclusive admin controls.", icon: Crown, label: "Premium" },
+  { title: "Security Center", desc: "Protect admin access, user data and sensitive platform actions.", icon: ShieldCheck, label: "Secure" },
+  { title: "Platform Control", desc: "Monitor pages, visibility, roles and important system settings.", icon: MonitorCog, label: "Control" },
 ];
 
 export default function AdminDashboard() {
   const { user, loadingUser, isLoading } = useAdminDashboard();
-
   const role = user?.profile?.role ?? null;
+  const notifications = useMemo(() => [], []);
 
   if (loadingUser || isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-[#111]">
-        <div className="rounded-[28px] border border-black/5 bg-white/80 px-7 py-5 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7fb] text-[#111]">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(168,85,247,0.14),transparent_34%),radial-gradient(circle_at_70%_65%,rgba(14,165,233,0.10),transparent_30%)]" />
+
+        <div className="relative rounded-[28px] border border-black/5 bg-white/80 px-7 py-5 shadow-[0_30px_100px_rgba(15,23,42,0.10)] backdrop-blur-2xl">
           <p className="animate-pulse text-sm font-black tracking-wide text-black/45">
             Loading admin workspace...
           </p>
@@ -91,12 +54,14 @@ export default function AdminDashboard() {
 
   return (
     <AdminGuard user={user} role={role}>
-      <div className="min-h-screen text-[#111]">
-        <div className="flex min-w-0 flex-1 flex-col transition-all duration-300 md:pl-[var(--admin-sidebar-width,280px)]">
-          <AdminHeader />
+      <div className="relative flex min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
 
-          <main className="flex-1 overflow-x-hidden p-0">
-            <div className="w-full space-y-6 p-4 sm:p-6 lg:p-8">
+        <div className="relative z-10 flex min-w-0 flex-1 flex-col transition-all duration-300 md:pl-[var(--admin-sidebar-width,280px)]">
+          <AdminHeader notifications={notifications} />
+
+          <main className="flex-1 overflow-x-hidden px-4 py-5 sm:px-6 lg:px-8">
+            <div className="mx-auto w-full max-w-[1500px] space-y-6">
               <section className="relative overflow-hidden rounded-[36px] border border-black/5 bg-white/75 p-6 shadow-[0_30px_120px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:p-8 lg:p-10">
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_22%_0%,rgba(168,85,247,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(14,165,233,0.12),transparent_28%)]" />
 
@@ -123,23 +88,17 @@ export default function AdminDashboard() {
                   <div className="grid w-full max-w-xl grid-cols-2 gap-3 sm:grid-cols-3">
                     <div className="rounded-[26px] border border-black/5 bg-white/70 p-5 shadow-sm">
                       <p className="text-2xl font-black text-black">Admin</p>
-                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">
-                        Access
-                      </p>
+                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">Access</p>
                     </div>
 
                     <div className="rounded-[26px] border border-black/5 bg-white/70 p-5 shadow-sm">
                       <p className="text-2xl font-black text-black">Pro</p>
-                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">
-                        Ready
-                      </p>
+                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">Ready</p>
                     </div>
 
                     <div className="col-span-2 rounded-[26px] border border-black/5 bg-white/70 p-5 shadow-sm sm:col-span-1">
                       <p className="text-2xl font-black text-black">Safe</p>
-                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">
-                        Protected
-                      </p>
+                      <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">Protected</p>
                     </div>
                   </div>
                 </div>
@@ -175,13 +134,8 @@ export default function AdminDashboard() {
               <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
                 <div className="rounded-[32px] border border-black/5 bg-white/75 p-6 shadow-[0_25px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl">
                   <div className="mb-6">
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">
-                      Quick Actions
-                    </p>
-
-                    <h2 className="mt-2 text-2xl font-black tracking-[-0.045em] text-black">
-                      Admin shortcuts
-                    </h2>
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">Quick Actions</p>
+                    <h2 className="mt-2 text-2xl font-black tracking-[-0.045em] text-black">Admin shortcuts</h2>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -197,12 +151,8 @@ export default function AdminDashboard() {
                           </div>
 
                           <div>
-                            <p className="text-sm font-black text-black/80">
-                              {action.name}
-                            </p>
-                            <p className="mt-0.5 text-xs font-semibold text-black/38">
-                              {action.desc}
-                            </p>
+                            <p className="text-sm font-black text-black/80">{action.name}</p>
+                            <p className="mt-0.5 text-xs font-semibold text-black/38">{action.desc}</p>
                           </div>
                         </div>
 
@@ -223,18 +173,15 @@ export default function AdminDashboard() {
                       <LockKeyhole size={25} />
                     </div>
 
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">
-                      Premium Admin
-                    </p>
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">Premium Admin</p>
 
                     <h2 className="mt-2 text-3xl font-black tracking-[-0.055em] text-black">
                       Build the Pro layer.
                     </h2>
 
                     <p className="mt-4 text-sm font-semibold leading-7 text-black/50">
-                      Prepare advanced controls, premium visibility, paid
-                      features, page modules and exclusive tools for future Pro
-                      users.
+                      Prepare advanced controls, premium visibility, paid features,
+                      page modules and exclusive tools for future Pro users.
                     </p>
 
                     <button
