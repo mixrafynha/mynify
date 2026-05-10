@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import NotificationBell from "@/app/components/NotificationBell";
 import SmartCreateButton from "@/app/components/SmartCreateButton";
@@ -12,6 +12,8 @@ import {
   Store,
   PackageCheck,
   ArrowRight,
+  Layers3,
+  Rocket,
 } from "lucide-react";
 
 import { motion } from "framer-motion";
@@ -22,13 +24,31 @@ import Section from "@/app/components/ui/Section";
 import CartDrawer from "@/app/components/ui/CartDrawer";
 import ProductGrid from "@/app/components/products/ProductGrid";
 
-const safeArray = (v: any) => (Array.isArray(v) ? v : []);
+const safeArray = <T,>(v: T[] | unknown): T[] => (Array.isArray(v) ? v : []);
 
 let lastClick = 0;
 
 type CartItem = {
   quantity: number;
 };
+
+const HERO_FEATURES = [
+  {
+    title: "Brand setup",
+    desc: "Generate your name, niche, tone, and visual direction with AI.",
+    icon: Store,
+  },
+  {
+    title: "Products ready",
+    desc: "Prepare product ideas, descriptions, and launch content faster.",
+    icon: PackageCheck,
+  },
+  {
+    title: "Launch flow",
+    desc: "Move from idea to store, ads, and sales in one clean workspace.",
+    icon: Rocket,
+  },
+];
 
 export default function Dashboard() {
   const {
@@ -43,10 +63,13 @@ export default function Dashboard() {
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
-  const safeProducts = safeArray(products);
-  const safeNotifications = safeArray(notifications);
+  const safeProducts = useMemo(() => safeArray<any>(products), [products]);
+  const safeNotifications = useMemo(
+    () => safeArray<any>(notifications),
+    [notifications]
+  );
 
-  const loadCartCount = async () => {
+  const loadCartCount = useCallback(async () => {
     try {
       const response = await fetch("/api/cart", {
         method: "GET",
@@ -57,20 +80,20 @@ export default function Dashboard() {
 
       if (!response.ok) return;
 
-      setCartItems(safeArray(data?.items));
+      setCartItems(safeArray<CartItem>(data?.items));
     } catch (error) {
       console.error("Error loading cart count:", error);
       setCartItems([]);
     }
-  };
-
-  useEffect(() => {
-    loadCartCount();
   }, []);
 
   useEffect(() => {
+    loadCartCount();
+  }, [loadCartCount]);
+
+  useEffect(() => {
     if (!cartOpen) loadCartCount();
-  }, [cartOpen]);
+  }, [cartOpen, loadCartCount]);
 
   const totalCartItems = useMemo(
     () =>
@@ -81,7 +104,7 @@ export default function Dashboard() {
     [cartItems]
   );
 
-  const safeOpenCart = () => {
+  const safeOpenCart = useCallback(() => {
     const now = Date.now();
 
     if (now - lastClick < 300) return;
@@ -89,34 +112,34 @@ export default function Dashboard() {
     lastClick = now;
 
     openCart();
-  };
+  }, [openCart]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        {/* HEADER */}
-        <header className="sticky top-0 z-30 border-b border-black/5 bg-white/60 px-4 py-4 backdrop-blur-2xl sm:px-6 lg:px-8">
-          <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-purple-700">
+        <header className="sticky top-0 z-30 border-b border-black/5 bg-white/65 px-3 py-3 backdrop-blur-2xl sm:px-5 lg:px-8">
+          <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-purple-700 sm:text-xs">
                 Dashboard
               </p>
 
-              <h1 className="mt-1 text-xl font-black tracking-[-0.045em] text-black sm:text-2xl">
+              <h1 className="mt-1 truncate text-lg font-black tracking-[-0.045em] text-black sm:text-2xl">
                 Brand workspace
               </h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <NotificationBell notifications={safeNotifications} />
 
               <motion.button
+                type="button"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 onClick={safeOpenCart}
-                className="relative grid h-11 w-11 place-items-center rounded-2xl border border-black/5 bg-white/80 text-black/75 shadow-sm backdrop-blur-xl transition hover:border-purple-500/20 hover:text-purple-700"
+                className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/5 bg-white/80 text-black/75 shadow-sm backdrop-blur-xl transition hover:border-purple-500/20 hover:text-purple-700 sm:h-11 sm:w-11"
               >
                 <ShoppingCart size={18} />
 
@@ -132,22 +155,23 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* MAIN */}
-        <main className="flex-1 px-4 py-5 sm:px-6 lg:px-8">
-          <div className="mx-auto w-full max-w-[1500px] space-y-6">
-            {/* HERO */}
-            <section className="relative overflow-hidden rounded-[36px] border border-black/5 bg-white/80 p-6 shadow-[0_30px_120px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:p-8 lg:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(168,85,247,0.18),transparent_34%),radial-gradient(circle_at_82%_10%,rgba(14,165,233,0.14),transparent_30%)]" />
+        <main className="flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-8">
+          <div className="mx-auto w-full max-w-[1500px] space-y-5 sm:space-y-6">
+            <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white/80 p-5 shadow-[0_30px_120px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:rounded-[36px] sm:p-8 lg:p-10">
+              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(168,85,247,0.20),transparent_34%),radial-gradient(circle_at_86%_8%,rgba(14,165,233,0.16),transparent_30%)]" />
 
-              <div className="relative grid gap-10 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
-                {/* LEFT */}
-                <div>
-                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-purple-700">
+              <div className="relative grid gap-8 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
+                <motion.div
+                  initial={{ opacity: 0, y: 14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.45 }}
+                >
+                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-purple-700 sm:text-xs">
                     <Sparkles size={14} />
                     AI Brand Builder
                   </div>
 
-                  <h2 className="max-w-4xl text-4xl font-black tracking-[-0.07em] text-black sm:text-5xl lg:text-6xl">
+                  <h2 className="max-w-4xl text-[2.65rem] font-black leading-[0.92] tracking-[-0.075em] text-black sm:text-6xl lg:text-7xl">
                     Create your brand
                     <span className="block bg-gradient-to-r from-purple-700 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent">
                       easily with AI.
@@ -155,9 +179,9 @@ export default function Dashboard() {
                   </h2>
 
                   <p className="mt-5 max-w-2xl text-sm font-semibold leading-7 text-black/50 sm:text-base">
-                    Turn ideas into products, campaigns, and a store ready to
-                    sell. Use AI to speed up names, descriptions, products, and
-                    content for your brand.
+                    Turn an idea into products, campaigns, and a store ready to
+                    sell. Use Mynify AI to generate your brand direction,
+                    product content, and launch assets faster.
                   </p>
 
                   <div className="mt-7 flex flex-col gap-3 sm:flex-row">
@@ -178,64 +202,69 @@ export default function Dashboard() {
                       Promote brand
                     </button>
                   </div>
-                </div>
+                </motion.div>
 
-                {/* RIGHT */}
-                <div className="relative">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.45, delay: 0.08 }}
+                  className="relative"
+                >
                   <div className="absolute -inset-6 rounded-[40px] bg-gradient-to-br from-purple-500/15 via-fuchsia-500/10 to-cyan-500/15 blur-2xl" />
 
-                  <div className="relative overflow-hidden rounded-[34px] border border-black/5 bg-white/85 p-5 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur-2xl">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-[26px] border border-black/5 bg-black/[0.025] p-5">
-                        <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/10 text-purple-700">
-                          <Store size={22} />
-                        </div>
-
-                        <p className="text-lg font-black text-black">
-                          Brand setup
+                  <div className="relative overflow-hidden rounded-[30px] border border-black/5 bg-white/85 p-4 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur-2xl sm:rounded-[34px] sm:p-5">
+                    <div className="mb-4 flex items-center justify-between rounded-[26px] border border-black/5 bg-black/[0.025] p-4">
+                      <div>
+                        <p className="text-xs font-black uppercase tracking-[0.22em] text-black/35">
+                          Mynify AI
                         </p>
-
-                        <p className="mt-2 text-sm font-semibold leading-6 text-black/45">
-                          Name, niche, style and identity generated with AI.
+                        <p className="mt-1 text-2xl font-black tracking-[-0.045em] text-black">
+                          Build. Launch. Sell.
                         </p>
                       </div>
 
-                      <div className="rounded-[26px] border border-black/5 bg-black/[0.025] p-5">
-                        <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-cyan-500/10 text-cyan-700">
-                          <PackageCheck size={22} />
-                        </div>
-
-                        <p className="text-lg font-black text-black">
-                          Products ready
-                        </p>
-
-                        <p className="mt-2 text-sm font-semibold leading-6 text-black/45">
-                          Products prepared to sell and promote.
-                        </p>
+                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/10 text-purple-700">
+                        <Layers3 size={22} />
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-[28px] border border-purple-500/10 bg-gradient-to-r from-purple-600 to-cyan-500 p-5 text-white">
+                    <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                      {HERO_FEATURES.map((item) => (
+                        <div
+                          key={item.title}
+                          className="rounded-[24px] border border-black/5 bg-white/75 p-4 shadow-sm"
+                        >
+                          <div className="mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-purple-500/10 text-purple-700">
+                            <item.icon size={20} />
+                          </div>
+
+                          <p className="text-sm font-black text-black">
+                            {item.title}
+                          </p>
+
+                          <p className="mt-2 text-xs font-semibold leading-5 text-black/45">
+                            {item.desc}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-4 rounded-[26px] border border-purple-500/10 bg-gradient-to-r from-purple-600 to-cyan-500 p-5 text-white">
                       <p className="text-xs font-black uppercase tracking-[0.25em] text-white/70">
-                        Mynify AI
+                        Launch system
                       </p>
 
-                      <p className="mt-2 text-2xl font-black tracking-[-0.045em]">
-                        Build. Launch. Sell.
-                      </p>
-
-                      <p className="mt-2 text-sm font-semibold leading-6 text-white/70">
-                        Everything in one clean dashboard to create and control
-                        your brand.
+                      <p className="mt-2 text-sm font-semibold leading-6 text-white/75">
+                        One dashboard to create your brand, prepare your
+                        products, promote your store, and keep everything moving.
                       </p>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               </div>
             </section>
 
-            {/* PRODUCTS */}
-            <section className="rounded-[32px] border border-black/5 bg-white/75 p-5 shadow-[0_25px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:p-6">
+            <section className="rounded-[28px] border border-black/5 bg-white/75 p-4 shadow-[0_25px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
               <Section title="Hot new products">
                 <ProductGrid
                   products={safeProducts}
