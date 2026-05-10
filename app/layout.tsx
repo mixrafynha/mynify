@@ -1,5 +1,4 @@
 import "./globals.css";
-import { Clash_Display } from "next/font/google";
 import Providers from "./providers";
 import Script from "next/script";
 import Footer from "@/app/components/Footer";
