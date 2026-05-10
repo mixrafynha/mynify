@@ -1,9 +1,8 @@
 import "./globals.css";
 import { Clash_Display } from "next/font/google";
 import Providers from "./providers";
-import { Manrope, Inter } from "next/font/google";
 import Script from "next/script";
-import Footer from "@/app/components/Footer"; // ✅ ADD
+import Footer from "@/app/components/Footer";
 
 // ================= FONTS (PREMIUM SAAS / APPLE STYLE) =================
 
@@ -132,8 +131,6 @@ export default function RootLayout({
           src="https://example.com/analytics.js"
           strategy="lazyOnload"
         />
-
-        {/* ✅ FIX IMPORTANTE: evita hidration mismatch em sidebars */}
         <div className="flex flex-col flex-1 w-full min-h-screen">
           <Providers>
             <main className="flex-1 w-full">
