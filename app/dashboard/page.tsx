@@ -16,8 +16,6 @@ import {
   Rocket,
 } from "lucide-react";
 
-import { motion } from "framer-motion";
-
 import { useDashboard } from "@/hooks/useDashboard";
 
 import Section from "@/app/components/ui/Section";
@@ -35,17 +33,17 @@ type CartItem = {
 const HERO_FEATURES = [
   {
     title: "Brand setup",
-    desc: "Generate your name, niche, tone, and visual direction with AI.",
+    desc: "Generate your name, niche and style with AI.",
     icon: Store,
   },
   {
     title: "Products ready",
-    desc: "Prepare product ideas, descriptions, and launch content faster.",
+    desc: "Prepare ideas, descriptions and launch content.",
     icon: PackageCheck,
   },
   {
     title: "Launch flow",
-    desc: "Move from idea to store, ads, and sales in one clean workspace.",
+    desc: "Move from idea to store, ads and sales.",
     icon: Rocket,
   },
 ];
@@ -76,10 +74,9 @@ export default function Dashboard() {
         cache: "no-store",
       });
 
-      const data = await response.json();
-
       if (!response.ok) return;
 
+      const data = await response.json();
       setCartItems(safeArray<CartItem>(data?.items));
     } catch (error) {
       console.error("Error loading cart count:", error);
@@ -106,20 +103,18 @@ export default function Dashboard() {
 
   const safeOpenCart = useCallback(() => {
     const now = Date.now();
-
     if (now - lastClick < 300) return;
 
     lastClick = now;
-
     openCart();
   }, [openCart]);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
+      <div className="pointer-events-none absolute inset-0 hidden md:block md:bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.12),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.09),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)]" />
 
       <div className="relative z-10 flex min-h-screen flex-col">
-        <header className="sticky top-0 z-30 border-b border-black/5 bg-white/65 px-3 py-3 backdrop-blur-2xl sm:px-5 lg:px-8">
+        <header className="sticky top-0 z-30 border-b border-black/5 bg-white/90 px-3 py-3 backdrop-blur-md md:bg-white/65 md:px-6 md:py-4 md:backdrop-blur-xl lg:px-8">
           <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-purple-700 sm:text-xs">
@@ -134,12 +129,10 @@ export default function Dashboard() {
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               <NotificationBell notifications={safeNotifications} />
 
-              <motion.button
+              <button
                 type="button"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={safeOpenCart}
-                className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/5 bg-white/80 text-black/75 shadow-sm backdrop-blur-xl transition hover:border-purple-500/20 hover:text-purple-700 sm:h-11 sm:w-11"
+                className="relative grid h-10 w-10 place-items-center rounded-2xl border border-black/5 bg-white text-black/75 shadow-sm transition active:scale-95 md:h-11 md:w-11 md:bg-white/80 md:hover:border-purple-500/20 md:hover:text-purple-700"
               >
                 <ShoppingCart size={18} />
 
@@ -148,30 +141,26 @@ export default function Dashboard() {
                     {totalCartItems}
                   </span>
                 )}
-              </motion.button>
+              </button>
 
               <SmartCreateButton />
             </div>
           </div>
         </header>
 
-        <main className="flex-1 px-3 py-4 sm:px-5 sm:py-5 lg:px-8">
-          <div className="mx-auto w-full max-w-[1500px] space-y-5 sm:space-y-6">
-            <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white/80 p-5 shadow-[0_30px_120px_rgba(15,23,42,0.10)] backdrop-blur-2xl sm:rounded-[36px] sm:p-8 lg:p-10">
-              <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(168,85,247,0.20),transparent_34%),radial-gradient(circle_at_86%_8%,rgba(14,165,233,0.16),transparent_30%)]" />
+        <main className="flex-1 px-3 py-4 sm:px-5 md:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[1500px] space-y-5 md:space-y-6">
+            <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm md:rounded-[36px] md:bg-white/80 md:p-8 md:shadow-[0_30px_120px_rgba(15,23,42,0.10)] md:backdrop-blur-xl lg:p-10">
+              <div className="pointer-events-none absolute inset-0 hidden md:block md:bg-[radial-gradient(circle_at_18%_0%,rgba(168,85,247,0.18),transparent_34%),radial-gradient(circle_at_86%_8%,rgba(14,165,233,0.14),transparent_30%)]" />
 
-              <div className="relative grid gap-8 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
-                <motion.div
-                  initial={{ opacity: 0, y: 14 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.45 }}
-                >
-                  <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] text-purple-700 sm:text-xs">
+              <div className="relative grid gap-7 xl:grid-cols-[1.05fr_0.95fr] xl:items-center">
+                <div>
+                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-purple-700 sm:px-4 sm:text-xs">
                     <Sparkles size={14} />
                     AI Brand Builder
                   </div>
 
-                  <h2 className="max-w-4xl text-[2.65rem] font-black leading-[0.92] tracking-[-0.075em] text-black sm:text-6xl lg:text-7xl">
+                  <h2 className="max-w-4xl text-[2.45rem] font-black leading-[0.92] tracking-[-0.075em] text-black sm:text-6xl lg:text-7xl">
                     Create your brand
                     <span className="block bg-gradient-to-r from-purple-700 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent">
                       easily with AI.
@@ -184,10 +173,10 @@ export default function Dashboard() {
                     product content, and launch assets faster.
                   </p>
 
-                  <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                  <div className="mt-6 grid gap-3 sm:flex sm:flex-wrap">
                     <button
                       type="button"
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-black px-6 py-4 text-sm font-black text-white shadow-[0_20px_60px_rgba(0,0,0,0.18)] transition hover:scale-[1.03] active:scale-95"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl bg-black px-5 py-3.5 text-sm font-black text-white shadow-sm transition active:scale-95 md:px-6 md:py-4 md:shadow-[0_20px_60px_rgba(0,0,0,0.18)] md:hover:scale-[1.03]"
                     >
                       <Wand2 size={18} />
                       Create with AI
@@ -197,23 +186,18 @@ export default function Dashboard() {
                     <button
                       type="button"
                       onClick={goAdvertise}
-                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-black/5 bg-white/80 px-6 py-4 text-sm font-black text-black/75 shadow-sm transition hover:border-purple-500/20 hover:bg-purple-500/10 hover:text-purple-700"
+                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-black/5 bg-white px-5 py-3.5 text-sm font-black text-black/75 shadow-sm transition active:scale-95 md:px-6 md:py-4 md:hover:border-purple-500/20 md:hover:bg-purple-500/10 md:hover:text-purple-700"
                     >
                       Promote brand
                     </button>
                   </div>
-                </motion.div>
+                </div>
 
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.97 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.45, delay: 0.08 }}
-                  className="relative"
-                >
-                  <div className="absolute -inset-6 rounded-[40px] bg-gradient-to-br from-purple-500/15 via-fuchsia-500/10 to-cyan-500/15 blur-2xl" />
+                <div className="relative">
+                  <div className="absolute -inset-6 hidden rounded-[40px] bg-gradient-to-br from-purple-500/15 via-fuchsia-500/10 to-cyan-500/15 blur-2xl md:block" />
 
-                  <div className="relative overflow-hidden rounded-[30px] border border-black/5 bg-white/85 p-4 shadow-[0_30px_100px_rgba(15,23,42,0.12)] backdrop-blur-2xl sm:rounded-[34px] sm:p-5">
-                    <div className="mb-4 flex items-center justify-between rounded-[26px] border border-black/5 bg-black/[0.025] p-4">
+                  <div className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-4 shadow-sm md:rounded-[34px] md:bg-white/85 md:p-5 md:shadow-[0_30px_100px_rgba(15,23,42,0.12)] md:backdrop-blur-xl">
+                    <div className="mb-4 flex items-center justify-between rounded-[24px] border border-black/5 bg-black/[0.025] p-4 md:rounded-[26px]">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.22em] text-black/35">
                           Mynify AI
@@ -232,7 +216,7 @@ export default function Dashboard() {
                       {HERO_FEATURES.map((item) => (
                         <div
                           key={item.title}
-                          className="rounded-[24px] border border-black/5 bg-white/75 p-4 shadow-sm"
+                          className="rounded-[22px] border border-black/5 bg-white p-4 shadow-sm md:rounded-[24px] md:bg-white/75"
                         >
                           <div className="mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-purple-500/10 text-purple-700">
                             <item.icon size={20} />
@@ -249,7 +233,7 @@ export default function Dashboard() {
                       ))}
                     </div>
 
-                    <div className="mt-4 rounded-[26px] border border-purple-500/10 bg-gradient-to-r from-purple-600 to-cyan-500 p-5 text-white">
+                    <div className="mt-4 rounded-[24px] border border-purple-500/10 bg-gradient-to-r from-purple-600 to-cyan-500 p-5 text-white md:rounded-[26px]">
                       <p className="text-xs font-black uppercase tracking-[0.25em] text-white/70">
                         Launch system
                       </p>
@@ -260,16 +244,13 @@ export default function Dashboard() {
                       </p>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               </div>
             </section>
 
-            <section className="rounded-[28px] border border-black/5 bg-white/75 p-4 shadow-[0_25px_90px_rgba(15,23,42,0.08)] backdrop-blur-2xl sm:rounded-[32px] sm:p-6">
+            <section className="rounded-[28px] border border-black/5 bg-white p-4 shadow-sm md:rounded-[32px] md:bg-white/75 md:p-6 md:shadow-[0_25px_90px_rgba(15,23,42,0.08)] md:backdrop-blur-xl">
               <Section title="Hot new products">
-                <ProductGrid
-                  products={safeProducts}
-                  isLoading={isLoading}
-                />
+                <ProductGrid products={safeProducts} isLoading={isLoading} />
               </Section>
             </section>
           </div>
