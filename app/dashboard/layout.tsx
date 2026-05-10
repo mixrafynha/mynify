@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import Sidebar from "@/app/components/Sidebar";
+import Sidebar from "@/app/components/sidebar";
 
 /* BUTTONS */
 import NotificationBell from "@/app/components/NotificationBell";
