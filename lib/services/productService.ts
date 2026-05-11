@@ -1,93 +1,146 @@
 import { supabase } from "@/lib/supabase";
 
+type GetProductsParams = {
+  limit: number;
+  category?: string | null;
+  collection?: string | null;
+};
+
+type ProductVariant = {
+  id: string;
+  product_id: string;
+  color?: string | null;
+  size?: string | null;
+  stock?: number | null;
+  price?: number | null;
+  color_hex?: string | null;
+  sku?: string | null;
+  name?: string | null;
+};
+
 export async function getProducts({
   limit,
   category,
   collection,
-}: {
-  limit: number;
-  category?: string | null;
-  collection?: string | null;
-}) {
+}: GetProductsParams) {
+  const safeLimit = Number.isFinite(limit)
+    ? Math.min(Math.max(limit, 1), 50)
+    : 12;
+
   let query = supabase
     .from("products")
     .select("*")
     .eq("is_active", true)
     .order("position", { ascending: true })
-    .limit(limit);
+    .limit(safeLimit);
 
-  if (category) query = query.eq("category", category);
-  if (collection) query = query.eq("collection", collection);
+  if (category?.trim()) {
+    query = query.eq("category", category.trim());
+  }
+
+  if (collection?.trim()) {
+    query = query.eq("collection", collection.trim());
+  }
 
   const { data: products, error } = await query;
 
-  if (error || !products?.length) {
+  if (error) {
+    console.error("GET_PRODUCTS_QUERY_ERROR:", error);
+
     return {
       data: [],
-      meta: { limit, count: 0, hasMore: false },
+      meta: {
+        limit: safeLimit,
+        count: 0,
+        hasMore: false,
+      },
     };
   }
 
-  const productIds = products.map((p) => p.id);
+  if (!products?.length) {
+    return {
+      data: [],
+      meta: {
+        limit: safeLimit,
+        count: 0,
+        hasMore: false,
+      },
+    };
+  }
 
-  const { data: variants } = await supabase
+  const productIds = products.map((product) => product.id).filter(Boolean);
+
+  const { data: variants, error: variantsError } = await supabase
     .from("product_variants")
-    .select("*")
+    .select(
+      "id, product_id, color, size, stock, price, color_hex, sku, name"
+    )
     .in("product_id", productIds);
 
-  const safeVariants = variants ?? [];
+  if (variantsError) {
+    console.error("GET_PRODUCT_VARIANTS_QUERY_ERROR:", variantsError);
+  }
+
+  const variantsByProduct = new Map<string, ProductVariant[]>();
+
+  for (const variant of (variants ?? []) as ProductVariant[]) {
+    if (!variant.product_id) continue;
+
+    const existing = variantsByProduct.get(variant.product_id) ?? [];
+    existing.push(variant);
+    variantsByProduct.set(variant.product_id, existing);
+  }
 
   const formatted = products.map((product) => {
-    const productVariants = safeVariants.filter(
-      (v) => v.product_id === product.id
-    );
+    const productVariants = variantsByProduct.get(product.id) ?? [];
 
-    // 🔥 PREÇO CORRETO (menor preço das variantes)
     const variantPrices = productVariants
-      .map((v) => v.price)
-      .filter((p) => typeof p === "number");
+      .map((variant) => variant.price)
+      .filter(
+        (price): price is number =>
+          typeof price === "number" && Number.isFinite(price)
+      );
 
     const price =
-      variantPrices.length > 0
-        ? Math.min(...variantPrices)
-        : product.price;
+      variantPrices.length > 0 ? Math.min(...variantPrices) : product.price;
 
-    // 🎨 cores únicas
-    const colorsMap = new Map();
+    const colorsMap = new Map<
+      string,
+      {
+        color: string;
+        color_hex: string;
+      }
+    >();
 
-    for (const v of productVariants) {
-      if (!v.color) continue;
+    for (const variant of productVariants) {
+      const color = variant.color?.trim();
 
-      if (!colorsMap.has(v.color)) {
-        colorsMap.set(v.color, {
-          color: v.color,
-          color_hex: v.color_hex || "#ccc",
+      if (!color) continue;
+
+      if (!colorsMap.has(color)) {
+        colorsMap.set(color, {
+          color,
+          color_hex: variant.color_hex || "#ccc",
         });
       }
     }
 
-    const colors = Array.from(colorsMap.values());
-
     return {
       ...product,
-
-      price, // 🔥 corrigido
-
-      variants: productVariants.map((v) => ({
-        id: v.id,
-        color: v.color,
-        size: v.size,
-        stock: v.stock,
-        price: v.price,
-        color_hex: v.color_hex,
-        sku: v.sku,
-        name: v.name,
+      price,
+      variants: productVariants.map((variant) => ({
+        id: variant.id,
+        color: variant.color,
+        size: variant.size,
+        stock: variant.stock,
+        price: variant.price,
+        color_hex: variant.color_hex,
+        sku: variant.sku,
+        name: variant.name,
       })),
-
-      colors,
-
+      colors: Array.from(colorsMap.values()),
       defaultVariant:
-        productVariants.find((v) => v.stock > 0) ||
+        productVariants.find((variant) => Number(variant.stock) > 0) ||
         productVariants[0] ||
         null,
     };
@@ -96,9 +149,9 @@ export async function getProducts({
   return {
     data: formatted,
     meta: {
-      limit,
+      limit: safeLimit,
       count: formatted.length,
-      hasMore: formatted.length === limit,
+      hasMore: formatted.length === safeLimit,
     },
   };
 }
