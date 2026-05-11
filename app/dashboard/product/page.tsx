@@ -67,11 +67,11 @@ export default function ProductsPage() {
 
   return (
     <div className="min-h-screen bg-[#f8f6ff] text-[#060817]">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_8%,rgba(14,165,233,0.10),transparent_26%),linear-gradient(180deg,#ffffff_0%,#f8f6ff_48%,#f2efff_100%)]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.16),transparent_28%),radial-gradient(circle_at_85%_8%,rgba(14,165,233,0.09),transparent_26%),linear-gradient(180deg,#ffffff_0%,#f8f6ff_48%,#f2efff_100%)]" />
 
-      <main className="relative z-10 min-h-screen transition-all duration-300 md:pl-[92px] xl:pl-[280px]">
-        <div className="mx-auto max-w-7xl px-4 pb-10 pt-2 sm:px-6 md:px-8">
-          <header className="sticky top-0 z-30 -mx-4 bg-[#f8f6ff]/90 px-4 pb-4 pt-2 backdrop-blur-2xl sm:-mx-6 sm:px-6 md:-mx-8 md:px-8">
+      <main className="relative z-10 min-h-screen md:pl-[280px]">
+        <div className="w-full px-3 pb-10 pt-2 sm:px-4 md:px-5 xl:px-6">
+          <header className="sticky top-0 z-30 -mx-3 bg-[#f8f6ff]/90 px-3 pb-4 pt-2 backdrop-blur-2xl sm:-mx-4 sm:px-4 md:-mx-5 md:px-5 xl:-mx-6 xl:px-6">
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Search
@@ -125,7 +125,7 @@ export default function ProductsPage() {
                 Categories
               </p>
 
-              <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_36px] gap-2 sm:grid-cols-[repeat(6,minmax(0,1fr))_44px] sm:gap-3">
+              <div className="grid grid-cols-[repeat(6,minmax(0,1fr))_38px] gap-2 sm:grid-cols-[repeat(6,minmax(0,1fr))_44px] sm:gap-3">
                 {CATEGORIES.map(({ name, icon: Icon }) => {
                   const active = category === name;
 
@@ -157,15 +157,15 @@ export default function ProductsPage() {
                   type="button"
                   className="grid h-[62px] place-items-center rounded-[15px] bg-white/90 text-[#111127] shadow-[0_12px_30px_rgba(101,85,143,0.10)] transition hover:-translate-y-0.5 hover:text-purple-700 sm:h-[86px] sm:rounded-[22px]"
                 >
-                  <ChevronRight size={18} className="sm:size-[22px]" />
+                  <ChevronRight size={17} className="sm:size-[20px]" />
                 </button>
               </div>
             </div>
           </header>
 
-          <section className="grid grid-cols-2 gap-3 pt-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4">
+          <section className="grid grid-cols-2 gap-3 pt-2 sm:gap-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {loading
-              ? Array.from({ length: 8 }).map((_, i) => (
+              ? Array.from({ length: 10 }).map((_, i) => (
                   <div
                     key={i}
                     className="h-[236px] animate-pulse rounded-[22px] bg-white/85 shadow-[0_12px_30px_rgba(101,85,143,0.10)] sm:h-[340px]"
@@ -189,7 +189,7 @@ export default function ProductsPage() {
                             alt={p.title || "Product image"}
                             fill
                             className="object-cover transition duration-500 group-hover:scale-105"
-                            sizes="(max-width: 768px) 50vw, 25vw"
+                            sizes="(max-width: 768px) 50vw, (max-width: 1280px) 33vw, 20vw"
                           />
                         </div>
 
@@ -213,11 +213,11 @@ export default function ProductsPage() {
                         </button>
 
                         <div className="px-1 pb-1 pt-3 sm:pt-4">
-                          <h3 className="line-clamp-1 text-[13px] font-bold tracking-[-0.02em] text-[#050816] sm:text-lg">
+                          <h3 className="line-clamp-1 text-[13px] font-bold tracking-[-0.02em] text-[#050816] sm:text-base">
                             {p.title?.slice(0, 80) || "Untitled product"}
                           </h3>
 
-                          <p className="mt-1 text-sm font-black text-purple-600 sm:text-lg">
+                          <p className="mt-1 text-sm font-black text-purple-600 sm:text-base">
                             {symbols[currency]}{" "}
                             {convertPrice(p.price ?? 0, currency)}
                           </p>
