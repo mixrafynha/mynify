@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, Trash2, Minus, Plus } from "lucide-react";
+import { X, Trash2, Minus, Plus, ShoppingBag, ArrowRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 type CartItem = {
@@ -18,6 +18,8 @@ type CartItem = {
   stock?: number | null;
 };
 
+const safeArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? v : []);
+
 export default function CartDrawer({
   open,
   onClose,
@@ -31,109 +33,96 @@ export default function CartDrawer({
   const [loading, setLoading] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
-  const loadCart = async () => {
+  const loadCart = useCallback(async () => {
     setLoading(true);
 
     try {
-      const response = await fetch("/api/cart", {
+      const res = await fetch("/api/cart", {
         method: "GET",
         cache: "no-store",
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Error loading cart");
-      }
+      if (!res.ok) throw new Error(data?.error || "Error loading cart");
 
-      setItems(data?.items || []);
+      setItems(safeArray<CartItem>(data?.items));
     } catch (error) {
       console.error("Erro ao carregar carrinho:", error);
       setItems([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (open) loadCart();
-  }, [open]);
+  }, [open, loadCart]);
 
-  const updateQuantity = async (id: string, newQuantity: number) => {
-    if (newQuantity < 1 || updatingId) return;
+  const updateQuantity = useCallback(
+    async (id: string, quantity: number) => {
+      if (quantity < 1 || updatingId) return;
 
-    setUpdatingId(id);
+      setUpdatingId(id);
 
-    const oldItems = items;
+      const oldItems = items;
 
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, quantity: newQuantity } : item
-      )
-    );
+      setItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+      );
 
-    try {
-      const response = await fetch("/api/cart/update", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id,
-          quantity: newQuantity,
-        }),
-      });
+      try {
+        const res = await fetch("/api/cart/update", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, quantity }),
+        });
 
-      const data = await response.json();
+        const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Error updating cart");
+        if (!res.ok) throw new Error(data?.error || "Error updating cart");
+      } catch (error) {
+        console.error("Erro ao atualizar quantidade:", error);
+        setItems(oldItems);
+      } finally {
+        setUpdatingId(null);
       }
-    } catch (error) {
-      console.error("Erro ao atualizar quantidade:", error);
-      setItems(oldItems);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
+    },
+    [items, updatingId]
+  );
 
-  const removeItem = async (id: string) => {
-    if (updatingId) return;
+  const removeItem = useCallback(
+    async (id: string) => {
+      if (updatingId) return;
 
-    setUpdatingId(id);
+      setUpdatingId(id);
 
-    const oldItems = items;
+      const oldItems = items;
 
-    setItems((prev) => prev.filter((item) => item.id !== id));
+      setItems((prev) => prev.filter((item) => item.id !== id));
 
-    try {
-      const response = await fetch("/api/cart/remove", {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id }),
-      });
+      try {
+        const res = await fetch("/api/cart/remove", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
 
-      const data = await response.json();
+        const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Error removing item");
+        if (!res.ok) throw new Error(data?.error || "Error removing item");
+      } catch (error) {
+        console.error("Erro ao remover item:", error);
+        setItems(oldItems);
+      } finally {
+        setUpdatingId(null);
       }
-    } catch (error) {
-      console.error("Erro ao remover item:", error);
-      setItems(oldItems);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
+    },
+    [items, updatingId]
+  );
 
   const subtotal = useMemo(
-    () =>
-      items.reduce(
-        (sum, item) => sum + Number(item.price) * Number(item.quantity),
-        0
-      ),
+    () => items.reduce((sum, item) => sum + Number(item.price) * Number(item.quantity), 0),
     [items]
   );
 
@@ -142,189 +131,257 @@ export default function CartDrawer({
     [items]
   );
 
-  const handleCheckout = () => {
-    if (items.length === 0) return;
+  const handleCheckout = useCallback(() => {
+    if (!items.length) return;
 
     onClose();
     router.push("/stepcategory");
-  };
+  }, [items.length, onClose, router]);
 
   return (
     <AnimatePresence>
       {open && (
         <>
-          <motion.div
+          <motion.button
+            aria-label="Close cart overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+            className="fixed inset-0 z-50 bg-black/65 backdrop-blur-md"
           />
 
-          <motion.div
-            initial={{ x: 120 }}
+          <motion.aside
+            initial={{ x: "100%" }}
             animate={{ x: 0 }}
-            exit={{ x: 120 }}
-            transition={{ type: "tween", duration: 0.2 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "tween", duration: 0.22, ease: "easeOut" }}
             className="
-              fixed right-0 top-0 z-50
-              h-full w-[300px] sm:w-[340px] md:w-[380px]
-              bg-white shadow-2xl
-              flex flex-col
-              border-l border-black/10
+              fixed right-0 top-0 z-50 flex h-dvh w-full flex-col overflow-hidden
+              border-l border-white/10 bg-[#0b0b14]/95 text-white shadow-[0_0_80px_rgba(168,85,247,0.22)]
+              backdrop-blur-2xl sm:w-[390px] md:w-[430px]
             "
           >
-            <div className="p-3 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-sm md:text-base">
-                  Your Cart
-                </h2>
+            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.22),transparent_34%),radial-gradient(circle_at_95%_18%,rgba(14,165,233,0.16),transparent_30%)]" />
+
+            <header className="relative flex items-center justify-between border-b border-white/10 px-4 py-4">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 shadow-[0_0_26px_rgba(168,85,247,0.45)]">
+                  <ShoppingBag size={18} />
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-purple-200/75">
+                    Mynify cart
+                  </p>
+
+                  <h2 className="text-lg font-black tracking-[-0.04em]">
+                    Your Cart
+                  </h2>
+                </div>
 
                 {totalItems > 0 && (
-                  <span className="min-w-5 h-5 px-1.5 rounded-full bg-black text-white text-[11px] flex items-center justify-center font-medium">
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-white/10 px-2 text-xs font-black text-white">
                     {totalItems}
                   </span>
                 )}
               </div>
 
               <button
+                type="button"
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition"
+                className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/[0.05] text-white/75 transition hover:border-purple-400/40 hover:bg-white/[0.10] hover:text-white active:scale-95"
               >
-                <X size={16} />
+                <X size={17} />
               </button>
-            </div>
+            </header>
 
-            <div className="flex-1 p-3 overflow-y-auto">
+            <div className="relative flex-1 overflow-y-auto px-4 py-4">
               {loading ? (
-                <div className="h-full flex items-center justify-center text-sm text-gray-500">
+                <div className="grid h-full place-items-center text-sm font-semibold text-white/55">
                   Loading cart...
                 </div>
               ) : items.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center">
-                  <p className="text-sm text-gray-500">Your cart is empty</p>
-                  <span className="text-xs text-gray-400 mt-1">
-                    Add products to continue
+                <div className="flex h-full flex-col items-center justify-center text-center">
+                  <div className="mb-5 grid h-20 w-20 place-items-center rounded-[28px] bg-white/[0.05] text-purple-300 shadow-[0_0_35px_rgba(168,85,247,0.18)]">
+                    <ShoppingBag size={34} />
+                  </div>
+
+                  <p className="text-xl font-black tracking-[-0.04em]">
+                    Your cart is empty
+                  </p>
+
+                  <span className="mt-2 max-w-[240px] text-sm font-medium leading-6 text-white/50">
+                    Add products to continue your custom brand order.
                   </span>
+
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="mt-6 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-5 py-3 text-sm font-black text-white shadow-[0_0_25px_rgba(168,85,247,0.35)] transition hover:scale-[1.02] active:scale-95"
+                  >
+                    Continue shopping
+                  </button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {items.map((item) => {
                     const itemLoading = updatingId === item.id;
-                    const itemQuantity = Number(item.quantity);
+                    const quantity = Number(item.quantity);
+                    const price = Number(item.price);
+                    const total = price * quantity;
 
                     return (
-                      <div
+                      <article
                         key={item.id}
-                        className="border-b pb-3 flex flex-col gap-2"
+                        className="group relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.045] p-3 shadow-[0_0_30px_rgba(168,85,247,0.06)] transition hover:bg-white/[0.065]"
                       >
-                        <div className="flex justify-between gap-3">
-                          <div className="flex gap-3">
-                            {item.image && (
+                        {itemLoading && (
+                          <div className="absolute inset-0 z-20 grid place-items-center bg-[#0b0b14]/55 backdrop-blur-sm">
+                            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-purple-300" />
+                          </div>
+                        )}
+
+                        <div className="flex gap-3">
+                          <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
+                            {item.image ? (
                               <img
                                 src={item.image}
                                 alt={item.title}
-                                className="w-12 h-12 rounded-lg object-cover bg-gray-100"
+                                loading="lazy"
+                                className="h-full w-full object-cover"
                               />
+                            ) : (
+                              <div className="grid h-full w-full place-items-center text-purple-300">
+                                <ShoppingBag size={24} />
+                              </div>
                             )}
+                          </div>
 
-                            <div>
-                              <p className="text-sm font-medium">
-                                {item.title}
-                              </p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="line-clamp-2 text-sm font-black leading-5 text-white">
+                                  {item.title}
+                                </p>
 
-                              <div className="text-xs text-gray-500 space-y-0.5">
-                                <p>${Number(item.price).toFixed(2)}</p>
+                                <p className="mt-1 text-xs font-black text-purple-200">
+                                  ${price.toFixed(2)}
+                                </p>
+                              </div>
 
-                                {(item.color || item.size) && (
-                                  <p>
-                                    {item.color && `Color: ${item.color}`}
-                                    {item.color && item.size && " · "}
-                                    {item.size && `Size: ${item.size}`}
-                                  </p>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(item.id)}
+                                disabled={itemLoading}
+                                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white/45 transition hover:bg-red-500/10 hover:text-red-300 disabled:opacity-40"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+
+                            {(item.color || item.size || typeof item.stock === "number") && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {item.color && (
+                                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-white/60">
+                                    Color: {item.color}
+                                  </span>
+                                )}
+
+                                {item.size && (
+                                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-white/60">
+                                    Size: {item.size}
+                                  </span>
                                 )}
 
                                 {typeof item.stock === "number" && (
-                                  <p>Stock: {item.stock}</p>
+                                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-1 text-[10px] font-bold text-white/60">
+                                    Stock: {item.stock}
+                                  </span>
                                 )}
                               </div>
-                            </div>
+                            )}
                           </div>
-
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item.id)}
-                            disabled={itemLoading}
-                            className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center disabled:opacity-40"
-                          >
-                            <Trash2 size={15} />
-                          </button>
                         </div>
 
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center rounded-2xl border border-white/10 bg-[#131320] p-1">
                             <button
                               type="button"
-                              onClick={() =>
-                                updateQuantity(item.id, itemQuantity - 1)
-                              }
-                              disabled={itemQuantity <= 1 || itemLoading}
-                              className="w-7 h-7 rounded-full border flex items-center justify-center disabled:opacity-40"
+                              onClick={() => updateQuantity(item.id, quantity - 1)}
+                              disabled={quantity <= 1 || itemLoading}
+                              className="grid h-8 w-8 place-items-center rounded-xl text-white/75 transition hover:bg-white/10 disabled:opacity-35"
                             >
                               <Minus size={13} />
                             </button>
 
-                            <span className="text-sm min-w-5 text-center">
-                              {itemQuantity}
+                            <span className="min-w-8 text-center text-sm font-black">
+                              {quantity}
                             </span>
 
                             <button
                               type="button"
-                              onClick={() =>
-                                updateQuantity(item.id, itemQuantity + 1)
-                              }
+                              onClick={() => updateQuantity(item.id, quantity + 1)}
                               disabled={
                                 itemLoading ||
-                                (typeof item.stock === "number" &&
-                                  itemQuantity >= item.stock)
+                                (typeof item.stock === "number" && quantity >= item.stock)
                               }
-                              className="w-7 h-7 rounded-full border flex items-center justify-center disabled:opacity-40"
+                              className="grid h-8 w-8 place-items-center rounded-xl text-white/75 transition hover:bg-white/10 disabled:opacity-35"
                             >
                               <Plus size={13} />
                             </button>
                           </div>
 
-                          <p className="text-sm font-semibold">
-                            ${(Number(item.price) * itemQuantity).toFixed(2)}
+                          <p className="text-base font-black tracking-[-0.03em]">
+                            ${total.toFixed(2)}
                           </p>
                         </div>
-                      </div>
+                      </article>
                     );
                   })}
                 </div>
               )}
             </div>
 
-            <div className="p-3 border-t space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">Subtotal</span>
-                <span className="font-semibold">${subtotal.toFixed(2)}</span>
+            <footer className="relative border-t border-white/10 bg-[#0b0b14]/80 px-4 py-4 backdrop-blur-xl">
+              <div className="mb-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-semibold text-white/55">Items</span>
+                  <span className="font-black text-white">{totalItems}</span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-white/55">
+                    Subtotal
+                  </span>
+                  <span className="text-2xl font-black tracking-[-0.05em] text-white">
+                    ${subtotal.toFixed(2)}
+                  </span>
+                </div>
               </div>
 
               <button
                 type="button"
-                disabled={items.length === 0}
+                disabled={!items.length}
                 onClick={handleCheckout}
                 className="
-                  w-full h-10 rounded-full
-                  bg-black text-white text-sm
-                  disabled:opacity-40 disabled:cursor-not-allowed
+                  flex h-12 w-full items-center justify-center gap-2 rounded-2xl
+                  bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500
+                  text-sm font-black text-white
+                  shadow-[0_0_35px_rgba(168,85,247,0.42)]
+                  transition hover:scale-[1.01] active:scale-[0.98]
+                  disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100
                 "
               >
                 Checkout {totalItems > 0 ? `(${totalItems})` : ""}
+                <ArrowRight size={16} />
               </button>
-            </div>
-          </motion.div>
+
+              <p className="mt-3 text-center text-[11px] font-medium text-white/38">
+                Secure checkout • Fast custom production
+              </p>
+            </footer>
+          </motion.aside>
         </>
       )}
     </AnimatePresence>
