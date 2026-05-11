@@ -152,11 +152,21 @@ export default function Dashboard() {
       <div className="relative z-10">
         <header className="sticky top-0 z-30 border-b border-white/10 bg-[#03030a]/80 px-3 py-3 backdrop-blur-xl sm:px-5 md:px-8">
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3">
-            <div className="min-w-0">
+            <div className="md:hidden pl-[40px]">
+              <p className="truncate text-[11px] font-extrabold uppercase tracking-[0.28em] text-purple-300 drop-shadow-sm">
+                Dashboard
+              </p>
+            
+              <h1 className="truncate text-xl font-black tracking-[-0.05em] text-white leading-tight">
+                Brand workspace
+              </h1>
+            </div>
+            
+            <div className="hidden md:block">
               <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-purple-300 sm:text-xs">
                 Dashboard
               </p>
-
+            
               <h1 className="truncate text-lg font-black tracking-[-0.045em] text-white sm:text-2xl">
                 Brand workspace
               </h1>
