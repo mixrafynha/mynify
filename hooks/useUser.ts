@@ -1,68 +1,95 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
+export type AuthUser = {
+  id: string;
+  email: string | null;
+  role: string;
+  name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
+type ProfileRow = {
+  role: string | null;
+  name: string | null;
+  username: string | null;
+  avatar_url: string | null;
+};
+
 export function useUser() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
-  useEffect(() => {
-    let mounted = true;
+  const loadUser = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
 
-    const loadUser = async () => {
-      setLoading(true);
+    try {
+      const {
+        data: { user: authUser },
+        error: authError,
+      } = await supabase.auth.getUser();
 
-      const { data: authData } = await supabase.auth.getUser();
+      if (requestId !== requestIdRef.current) return;
 
-      if (!authData?.user) {
-        if (mounted) {
-          setUser(null);
-          setLoading(false);
-        }
+      if (authError || !authUser) {
+        setUser(null);
         return;
       }
 
       const { data: profile } = await supabase
         .from("profiles")
         .select("role, name, username, avatar_url")
-        .eq("id", authData.user.id)
-        .maybeSingle();
+        .eq("id", authUser.id)
+        .maybeSingle<ProfileRow>();
 
-      if (!mounted) return;
+      if (requestId !== requestIdRef.current) return;
 
       setUser({
-        id: authData.user.id,
-        email: authData.user.email,
-
-        // 🔥 FLAT STRUCTURE (IMPORTANTE PARA SAAS)
+        id: authUser.id,
+        email: authUser.email ?? null,
         role: profile?.role ?? "user",
         name: profile?.name ?? null,
         username: profile?.username ?? null,
         avatar_url: profile?.avatar_url ?? null,
       });
+    } catch {
+      if (requestId === requestIdRef.current) {
+        setUser(null);
+      }
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, []);
 
-      setLoading(false);
-    };
-
+  useEffect(() => {
     loadUser();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        if (!session?.user) {
-          setUser(null);
-          setLoading(false);
-        } else {
-          loadUser();
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      requestIdRef.current++;
+
+      if (event === "SIGNED_OUT" || !session?.user) {
+        setUser(null);
+        setLoading(false);
+        return;
       }
-    );
+
+      setLoading(true);
+      loadUser();
+    });
 
     return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
+      requestIdRef.current++;
+      subscription.unsubscribe();
     };
-  }, []);
+  }, [loadUser]);
 
   return { user, loading };
 }
