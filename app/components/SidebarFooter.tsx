@@ -1,40 +1,40 @@
 "use client";
 
-import Image from "next/image";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type Props = {
-  user: {
-    email?: string | null;
-    profile?: {
-      username?: string | null;
-      avatar_url?: string | null;
-    } | null;
-  } | null;
+  user: any;
   expanded: boolean;
 };
 
 export default function SidebarFooter({ user, expanded }: Props) {
   const router = useRouter();
 
+  const profile = user?.profile ?? {};
   const username =
-    user?.profile?.username?.trim() ||
+    profile?.name ||
+    profile?.full_name ||
+    profile?.username ||
+    user?.user_metadata?.name ||
+    user?.user_metadata?.full_name ||
     user?.email?.split("@")[0] ||
     "User";
 
-  const email = user?.email || "";
-  const avatarUrl = user?.profile?.avatar_url || "";
+  const avatarUrl =
+    profile?.avatar ||
+    profile?.avatar_url ||
+    user?.user_metadata?.avatar_url ||
+    "";
+
+  const email = user?.email ?? "";
   const initial = username.charAt(0).toUpperCase();
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-
-    if (!error) {
-      router.replace("/login");
-      router.refresh();
-    }
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
   };
 
   return (
@@ -42,14 +42,12 @@ export default function SidebarFooter({ user, expanded }: Props) {
       <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
       <div className="flex items-center gap-3 rounded-2xl bg-white/[0.04] p-2.5 transition-colors hover:bg-white/[0.07]">
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-bold text-black">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-sm font-bold text-black">
           {avatarUrl ? (
-            <Image
+            <img
               src={avatarUrl}
               alt={username}
-              fill
-              sizes="36px"
-              className="object-cover"
+              className="h-full w-full object-cover"
             />
           ) : (
             initial
@@ -75,12 +73,7 @@ export default function SidebarFooter({ user, expanded }: Props) {
         type="button"
         onClick={handleLogout}
         aria-label="Sign out"
-        className="
-          group flex w-full items-center gap-3 rounded-2xl
-          px-3.5 py-2.5 text-sm font-semibold text-red-300
-          transition-colors hover:bg-red-500/10 hover:text-red-200
-          active:scale-[0.98]
-        "
+        className="group flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 active:scale-[0.98]"
       >
         <LogOut
           size={17}
