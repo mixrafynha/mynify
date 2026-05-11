@@ -1,10 +1,6 @@
-"use client";
-
-export const dynamic = "force-dynamic";
-
 import Link from "next/link";
 import Image from "next/image";
-import { memo, useCallback, type SyntheticEvent } from "react";
+import { memo } from "react";
 import {
   ArrowUpRight,
   Headphones,
@@ -17,9 +13,6 @@ import {
 
 const LOGIN_HREF = "/login";
 const CREATE_HREF = "/dashboard/create";
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=80";
 
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
@@ -145,10 +138,8 @@ const FeatureCard = memo(function FeatureCard({ item }: { item: Feature }) {
 
 const ProductCard = memo(function ProductCard({
   product,
-  onImageError,
 }: {
   product: Product;
-  onImageError: (e: SyntheticEvent<HTMLImageElement>) => void;
 }) {
   return (
     <Link
@@ -166,7 +157,6 @@ const ProductCard = memo(function ProductCard({
         alt={safeText(product.name)}
         fill
         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-        onError={onImageError}
         className="object-cover opacity-55 transition duration-500 group-hover:scale-110"
       />
 
@@ -192,17 +182,6 @@ const ProductCard = memo(function ProductCard({
 });
 
 export default function HomePage() {
-  const handleImageError = useCallback(
-    (e: SyntheticEvent<HTMLImageElement>) => {
-      const target = e.currentTarget;
-
-      if (target.src !== FALLBACK_IMAGE) {
-        target.src = FALLBACK_IMAGE;
-      }
-    },
-    []
-  );
-
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
       {/* HERO */}
@@ -291,7 +270,7 @@ export default function HomePage() {
                 alt="Mynify AI ecommerce platform"
                 fill
                 priority
-                quality={90}
+                quality={85}
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 900px"
                 className="object-contain object-center drop-shadow-[0_0_55px_rgba(168,85,247,0.45)]"
               />
@@ -322,11 +301,7 @@ export default function HomePage() {
 
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {PRODUCTS.map((product) => (
-              <ProductCard
-                key={product.name}
-                product={product}
-                onImageError={handleImageError}
-              />
+              <ProductCard key={product.name} product={product} />
             ))}
           </div>
         </div>
@@ -347,7 +322,6 @@ export default function HomePage() {
                   src="/1.png"
                   alt="Customize products"
                   fill
-                  priority
                   sizes="(max-width: 1024px) 100vw, 55vw"
                   className="object-cover object-center opacity-90"
                 />
