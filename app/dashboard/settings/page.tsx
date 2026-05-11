@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
-import Sidebar from "@/app/components/sidebar";
 import { fetcher } from "@/lib/fetcher";
+import {
+  CheckCircle2,
+  Lock,
+  Mail,
+  Save,
+  Settings,
+  User,
+} from "lucide-react";
 
 type Profile = {
   name: string;
@@ -14,6 +21,12 @@ type SettingsResponse = {
   email: string;
   profile: Profile;
 };
+
+const inputClass =
+  "h-12 w-full rounded-2xl border border-white bg-white/90 px-4 text-sm font-semibold text-slate-700 shadow-[0_12px_35px_rgba(101,85,143,0.10)] outline-none placeholder:text-slate-400 transition focus:ring-4 focus:ring-purple-500/15";
+
+const buttonClass =
+  "flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-fuchsia-500 text-sm font-black text-white shadow-[0_18px_35px_rgba(124,58,237,0.24)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50";
 
 export default function SettingsPage() {
   const { data, isLoading, mutate } = useSWR<SettingsResponse>(
@@ -60,7 +73,14 @@ export default function SettingsPage() {
     }
   }, []);
 
-  /* ================= PROFILE ================= */
+  const flashSaved = useCallback((key: keyof typeof saved) => {
+    setSaved((p) => ({ ...p, [key]: true }));
+
+    setTimeout(() => {
+      setSaved((p) => ({ ...p, [key]: false }));
+    }, 2000);
+  }, []);
+
   const updateProfile = useCallback(async () => {
     setLoading((p) => ({ ...p, profile: true }));
     setSaved((p) => ({ ...p, profile: false }));
@@ -75,19 +95,12 @@ export default function SettingsPage() {
 
     if (result) {
       mutate();
-      setSaved((p) => ({ ...p, profile: true }));
+      flashSaved("profile");
 
-      window.dispatchEvent(
-        new CustomEvent("profile-updated", { detail: form })
-      );
-
-      setTimeout(() => {
-        setSaved((p) => ({ ...p, profile: false }));
-      }, 2000);
+      window.dispatchEvent(new CustomEvent("profile-updated", { detail: form }));
     }
-  }, [form, mutate, safeFetch]);
+  }, [form, mutate, safeFetch, flashSaved]);
 
-  /* ================= PASSWORD ================= */
   const changePassword = useCallback(async () => {
     if (!newPassword.trim()) return;
 
@@ -106,15 +119,10 @@ export default function SettingsPage() {
 
     if (result) {
       setNewPassword("");
-      setSaved((p) => ({ ...p, password: true }));
-
-      setTimeout(() => {
-        setSaved((p) => ({ ...p, password: false }));
-      }, 2000);
+      flashSaved("password");
     }
-  }, [newPassword, safeFetch]);
+  }, [newPassword, safeFetch, flashSaved]);
 
-  /* ================= EMAIL ================= */
   const changeEmail = useCallback(async () => {
     if (!newEmail.trim()) return;
 
@@ -132,155 +140,203 @@ export default function SettingsPage() {
 
     if (result) {
       mutate();
-      setSaved((p) => ({ ...p, email: true }));
+      flashSaved("email");
 
-      window.dispatchEvent(
-        new CustomEvent("email-updated", { detail: payload })
-      );
-
-      setTimeout(() => {
-        setSaved((p) => ({ ...p, email: false }));
-      }, 2000);
+      window.dispatchEvent(new CustomEvent("email-updated", { detail: payload }));
     }
-  }, [newEmail, mutate, safeFetch]);
+  }, [newEmail, mutate, safeFetch, flashSaved]);
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f4f4f2] text-gray-500">
+      <div className="grid min-h-screen place-items-center bg-[#f8f6ff] text-sm font-bold text-slate-500">
         Loading settings...
       </div>
     );
   }
 
-  const inputClass =
-    "w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-200 focus:outline-none focus:ring-2 focus:ring-black/10 transition";
-
-  const buttonClass =
-    "w-full py-3 rounded-xl font-medium transition active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md";
-
   return (
-    <div className="min-h-screen flex bg-[#f4f4f2] text-gray-900">
-      <Sidebar />
+    <div className="min-h-screen bg-[#f8f6ff] text-[#060817]">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.16),transparent_28%),radial-gradient(circle_at_85%_8%,rgba(14,165,233,0.09),transparent_26%),linear-gradient(180deg,#ffffff_0%,#f8f6ff_48%,#f2efff_100%)]" />
 
-      <div className="flex-1 md:pl-[280px]">
-        <main className="max-w-3xl mx-auto py-14 px-6 space-y-10">
+      <main className="relative z-10 min-h-screen">
+        <div className="px-3 py-5 sm:px-5 md:px-8 md:py-7">
+          <div className="mx-auto max-w-[1500px] space-y-5">
+            <header className="sticky top-0 z-30 -mx-3 bg-[#f8f6ff]/90 px-3 pb-4 pt-0 backdrop-blur-2xl sm:-mx-5 sm:px-5 md:-mx-8 md:px-8">
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 via-violet-600 to-fuchsia-500 text-white shadow-[0_18px_35px_rgba(124,58,237,0.24)]">
+                  <Settings size={22} />
+                </div>
 
-          {/* HEADER */}
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">
-              Account Settings
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage your profile, security and email preferences
-            </p>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-purple-600">
+                    Settings
+                  </p>
+
+                  <h1 className="truncate text-3xl font-black tracking-[-0.06em] text-[#060817] sm:text-4xl">
+                    Account Settings
+                  </h1>
+
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Manage your profile, security and email preferences.
+                  </p>
+                </div>
+              </div>
+            </header>
+
+            <section className="grid gap-4 lg:grid-cols-3">
+              {/* PROFILE */}
+              <article className="rounded-[28px] bg-white/90 p-4 shadow-[0_12px_35px_rgba(101,85,143,0.12)] backdrop-blur-xl sm:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-purple-500/10 text-purple-600">
+                      <User size={20} />
+                    </div>
+
+                    <div>
+                      <h2 className="text-lg font-black tracking-[-0.04em]">
+                        Profile
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-400">
+                        Public account info
+                      </p>
+                    </div>
+                  </div>
+
+                  {saved.profile && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-600">
+                      <CheckCircle2 size={13} />
+                      Saved
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <input
+                    className={inputClass}
+                    value={form.name}
+                    placeholder="Full name"
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, name: e.target.value }))
+                    }
+                  />
+
+                  <input
+                    className={inputClass}
+                    value={form.username}
+                    placeholder="Username"
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, username: e.target.value }))
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    disabled={loading.profile}
+                    onClick={updateProfile}
+                    className={buttonClass}
+                  >
+                    <Save size={16} />
+                    {loading.profile ? "Saving..." : "Save Profile"}
+                  </button>
+                </div>
+              </article>
+
+              {/* PASSWORD */}
+              <article className="rounded-[28px] bg-white/90 p-4 shadow-[0_12px_35px_rgba(101,85,143,0.12)] backdrop-blur-xl sm:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-purple-500/10 text-purple-600">
+                      <Lock size={20} />
+                    </div>
+
+                    <div>
+                      <h2 className="text-lg font-black tracking-[-0.04em]">
+                        Password
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-400">
+                        Update security access
+                      </p>
+                    </div>
+                  </div>
+
+                  {saved.password && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-600">
+                      <CheckCircle2 size={13} />
+                      Updated
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <input
+                    type="password"
+                    className={inputClass}
+                    value={newPassword}
+                    placeholder="New password"
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    disabled={loading.password || !newPassword.trim()}
+                    onClick={changePassword}
+                    className={buttonClass}
+                  >
+                    <Lock size={16} />
+                    {loading.password ? "Updating..." : "Update Password"}
+                  </button>
+                </div>
+              </article>
+
+              {/* EMAIL */}
+              <article className="rounded-[28px] bg-white/90 p-4 shadow-[0_12px_35px_rgba(101,85,143,0.12)] backdrop-blur-xl sm:p-6">
+                <div className="mb-5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-11 w-11 place-items-center rounded-2xl bg-purple-500/10 text-purple-600">
+                      <Mail size={20} />
+                    </div>
+
+                    <div>
+                      <h2 className="text-lg font-black tracking-[-0.04em]">
+                        Email
+                      </h2>
+                      <p className="text-xs font-semibold text-slate-400">
+                        Change login email
+                      </p>
+                    </div>
+                  </div>
+
+                  {saved.email && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-black text-emerald-600">
+                      <CheckCircle2 size={13} />
+                      Sent
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <input
+                    className={inputClass}
+                    value={newEmail}
+                    placeholder="Email address"
+                    onChange={(e) => setNewEmail(e.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    disabled={loading.email || !newEmail.trim()}
+                    onClick={changeEmail}
+                    className={buttonClass}
+                  >
+                    <Mail size={16} />
+                    {loading.email ? "Sending..." : "Change Email"}
+                  </button>
+                </div>
+              </article>
+            </section>
           </div>
-
-          {/* CARD */}
-          <div className="bg-white/80 backdrop-blur border border-gray-200 rounded-2xl shadow-sm p-6 space-y-10">
-
-            {/* PROFILE */}
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xs uppercase tracking-wider text-gray-500">
-                  Profile
-                </h2>
-
-                {saved.profile && (
-                  <span className="text-xs text-green-600">Saved</span>
-                )}
-              </div>
-
-              <input
-                className={inputClass}
-                value={form.name}
-                placeholder="Full name"
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, name: e.target.value }))
-                }
-              />
-
-              <input
-                className={inputClass}
-                value={form.username}
-                placeholder="Username"
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, username: e.target.value }))
-                }
-              />
-
-              <button
-                disabled={loading.profile}
-                onClick={updateProfile}
-                className={`${buttonClass} bg-black text-white hover:bg-gray-900`}
-              >
-                {loading.profile ? "Saving..." : "Save Profile"}
-              </button>
-            </section>
-
-            <div className="border-t border-gray-100" />
-
-            {/* PASSWORD */}
-            <section className="space-y-3">
-              <div className="flex justify-between">
-                <h2 className="text-xs uppercase tracking-wider text-gray-500">
-                  Password
-                </h2>
-
-                {saved.password && (
-                  <span className="text-xs text-green-600">Updated</span>
-                )}
-              </div>
-
-              <input
-                type="password"
-                className={inputClass}
-                value={newPassword}
-                placeholder="New password"
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-
-              <button
-                disabled={loading.password}
-                onClick={changePassword}
-                className={`${buttonClass} bg-black text-white hover:bg-gray-900`}
-              >
-                {loading.password ? "Updating..." : "Update Password"}
-              </button>
-            </section>
-
-            <div className="border-t border-gray-100" />
-
-            {/* EMAIL */}
-            <section className="space-y-3">
-              <div className="flex justify-between">
-                <h2 className="text-xs uppercase tracking-wider text-gray-500">
-                  Email
-                </h2>
-
-                {saved.email && (
-                  <span className="text-xs text-green-600">Sent</span>
-                )}
-              </div>
-
-              <input
-                className={inputClass}
-                value={newEmail}
-                placeholder="Email address"
-                onChange={(e) => setNewEmail(e.target.value)}
-              />
-
-              <button
-                disabled={loading.email}
-                onClick={changeEmail}
-                className={`${buttonClass} bg-black text-white hover:bg-gray-900`}
-              >
-                {loading.email ? "Sending..." : "Change Email"}
-              </button>
-            </section>
-
-          </div>
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }
