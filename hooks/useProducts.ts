@@ -22,9 +22,7 @@ export function useProducts() {
 
         const res = await fetch("/api/products", {
           signal: controller.signal,
-          next: {
-            revalidate: 300,
-          },
+          cache: "force-cache",
         });
 
         if (!res.ok) {
@@ -34,15 +32,13 @@ export function useProducts() {
         const json: ProductsResponse = await res.json();
 
         const data = Array.isArray(json.data) ? json.data : [];
-
         const formatted = data.map(formatProduct);
 
         setProducts(formatted);
-      } catch (err: any) {
-        if (err?.name === "AbortError") return;
+      } catch (err: unknown) {
+        if (err instanceof DOMException && err.name === "AbortError") return;
 
         console.error("USE_PRODUCTS_ERROR:", err);
-
         setProducts([]);
       } finally {
         setLoading(false);
