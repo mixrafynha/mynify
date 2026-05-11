@@ -13,8 +13,8 @@ export async function GET(req: Request) {
       ? Math.min(Math.max(rawLimit, 1), 50)
       : 12;
 
-    const category = searchParams.get("category") || undefined;
-    const collection = searchParams.get("collection") || undefined;
+    const category = searchParams.get("category")?.trim() || undefined;
+    const collection = searchParams.get("collection")?.trim() || undefined;
 
     const result = await getProducts({
       limit,
