@@ -4,30 +4,33 @@ import { ChevronLeft } from "lucide-react";
 
 type Props = {
   mobileOpen: boolean;
-  setMobileOpen: (v: boolean | ((v: boolean) => boolean)) => void;
-  sidebarWidth?: number; // 👈 chave do upgrade
+  setMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  sidebarWidth?: number;
 };
 
 export default function SidebarMobileToggle({
   mobileOpen,
   setMobileOpen,
-  sidebarWidth = 240, // default SaaS
+  sidebarWidth = 240,
 }: Props) {
   return (
     <button
-      onClick={() => setMobileOpen((v: boolean) => !v)}
-      className={`
-        fixed top-3 z-50 w-10 h-10 rounded-full
-        bg-black border border-white/20
-        flex items-center justify-center text-white shadow-xl
-        transition-all
-      `}
+      onClick={() => setMobileOpen((v) => !v)}
+      aria-label="Toggle sidebar"
+      className="
+        fixed top-3 z-50
+        flex h-9 w-9 items-center justify-center
+        rounded-full border border-white/10
+        bg-black/80 text-white backdrop-blur-md
+        shadow-lg transition-all duration-300
+        active:scale-95
+      "
       style={{
-        left: mobileOpen ? sidebarWidth - 20 : 8,
+        left: mobileOpen ? sidebarWidth - 18 : 10,
       }}
     >
       <ChevronLeft
-        size={20}
+        size={16}
         className={`transition-transform duration-300 ${
           mobileOpen ? "rotate-180" : ""
         }`}
