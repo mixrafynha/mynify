@@ -6,12 +6,6 @@ import { Ratelimit } from "@upstash/ratelimit";
 
 const redis = Redis.fromEnv();
 
-const globalLimiter = new Ratelimit({
-  redis,
-  limiter: Ratelimit.slidingWindow(300, "1 m"),
-  analytics: true,
-});
-
 const strictLimiter = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(20, "1 m"),
@@ -35,12 +29,6 @@ function getIp(req: NextRequest) {
 
 async function checkRateLimit(req: NextRequest, pathname: string) {
   const ip = getIp(req);
-
-  const globalRate = await globalLimiter.limit(`global:${ip}`);
-
-  if (!globalRate.success) {
-    return globalRate;
-  }
 
   const strictRoutes = [
     "/login",
@@ -71,6 +59,9 @@ export async function middleware(req: NextRequest) {
   if (!rate.success) {
     return new NextResponse("Too many requests", {
       status: 429,
+      headers: {
+        "Retry-After": "60",
+      },
     });
   }
 
@@ -145,5 +136,15 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: "/:path*",
+  matcher: [
+    "/login",
+    "/signup",
+    "/dashboard/:path*",
+    "/admin/:path*",
+    "/settings/:path*",
+    "/profile/:path*",
+    "/api/contact/:path*",
+    "/api/checkout/:path*",
+    "/api/select/:path*",
+  ],
 };
