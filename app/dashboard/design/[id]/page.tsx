@@ -1,24 +1,17 @@
 "use client";
 
-import {
-  useState,
-  useRef,
-  useEffect,
-} from "react";
-
-import {
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import Canvas from "@/app/dashboard/design/components/Canvas";
-import Sidebar from "@/app/dashboard/design/components/Sidebar";
 import TopBar from "@/app/dashboard/design/components/TopBar";
+import EditorShell from "@/app/dashboard/design/components/EditorShell";
+import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 
 import { useElements } from "@/features/elements/useElements";
 import { useUpload } from "@/features/upload/useUpload";
 
-type ElementType = {
+export type ElementType = {
   id: string;
   type: "image" | "text" | "shape";
   src?: string;
@@ -36,243 +29,122 @@ type ElementType = {
 
 export default function EditorPage() {
   const router = useRouter();
-
   const searchParams = useSearchParams();
+  const productId = searchParams.get("productId");
 
-  const productId =
-    searchParams.get("productId");
+  const fileRef = useRef<HTMLInputElement>(null);
 
-  const [side, setSide] = useState<
-    "front" | "back"
-  >("front");
+  const [side, setSide] = useState<"front" | "back">("front");
+  const [saving, setSaving] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [zoom, setZoomState] = useState(1);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [frontElements, setFrontElements] = useState<ElementType[]>([]);
+  const [backElements, setBackElements] = useState<ElementType[]>([]);
 
-  // ================= ZOOM LIMITADO =================
-  const MIN_ZOOM = 0.4;
-  const MAX_ZOOM = 2;
+  const elements = side === "back" ? backElements : frontElements;
+  const setElements = side === "back" ? setBackElements : setFrontElements;
 
-  const [zoom, _setZoom] = useState(1);
-
-  const setZoom = (
-    value:
-      | number
-      | ((z: number) => number)
-  ) => {
-    _setZoom((prev) => {
-      const next =
-        typeof value === "function"
-          ? value(prev)
-          : value;
-
-      return Math.min(
-        MAX_ZOOM,
-        Math.max(
-          MIN_ZOOM,
-          Number(next.toFixed(2))
-        )
-      );
-    });
-  };
-
-  const [selectedId, setSelectedId] =
-    useState<string | null>(null);
-
-  const fileRef =
-    useRef<HTMLInputElement>(null);
-
-  const [frontElements, setFrontElements] =
-    useState<ElementType[]>([]);
-
-  const [backElements, setBackElements] =
-    useState<ElementType[]>([]);
-
-  const elements =
-    side === "back"
-      ? backElements
-      : frontElements;
-
-  const setElements =
-    side === "back"
-      ? setBackElements
-      : setFrontElements;
-
-  const {
-    addText,
-    updateSelected,
-    addElement,
-  } = useElements({
+  const { addText } = useElements({
     setElements,
     selectedId,
   });
 
-  const handleUpload = useUpload({
-    setElements,
-  });
+  const handleUpload = useUpload({ setElements });
 
-  const selectedElement =
-    elements.find(
-      (el) => el.id === selectedId
-    );
+  const setZoom = (value: number | ((z: number) => number)) => {
+    setZoomState((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      return Math.min(2, Math.max(0.4, Number(next.toFixed(2))));
+    });
+  };
 
-  // cleanup memory
   useEffect(() => {
     return () => {
-      [
-        ...frontElements,
-        ...backElements,
-      ].forEach((el) => {
-        if (
-          el.type === "image" &&
-          el.src?.startsWith("blob:")
-        ) {
+      [...frontElements, ...backElements].forEach((el) => {
+        if (el.type === "image" && el.src?.startsWith("blob:")) {
           URL.revokeObjectURL(el.src);
         }
       });
     };
   }, [frontElements, backElements]);
 
-  // ================= ZOOM CONTROLS =================
-  const zoomIn = () =>
-    setZoom((z) =>
-      Math.min(1.3, z + 0.1)
-    );
+  const zoomIn = () => setZoom((z) => Math.min(1.35, z + 0.1));
+  const zoomOut = () => setZoom((z) => Math.max(0.75, z - 0.1));
 
-  const zoomOut = () =>
-    setZoom((z) =>
-      Math.max(0.8, z - 0.1)
-    );
-
-  // ================= SAVE DESIGN =================
-  const handleSaveDesign =
-    async () => {
-      try {
-        if (!productId) {
-          alert("Missing product ID");
-          return;
-        }
-
-        setSaving(true);
-
-        const response = await fetch(
-          "/api/user-products/save-design",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              baseProductId:
-                productId,
-
-              designFront:
-                frontElements,
-
-              designBack:
-                backElements,
-
-              markup: 0,
-            }),
-          }
-        );
-
-        const data =
-          await response.json();
-
-        console.log(
-          "SAVE RESPONSE:",
-          data
-        );
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "Failed to save design"
-          );
-        }
-
-        alert(
-          "Design saved successfully!"
-        );
-
-        // ✅ PREVIEW PAGE
-        router.push(
-          `/dashboard/design/preview/${data.product.id}`
-        );
-      } catch (error) {
-        console.error(
-          "SAVE ERROR:",
-          error
-        );
-
-        alert(
-          "Error saving design"
-        );
-      } finally {
-        setSaving(false);
+  const handleSaveDesign = async () => {
+    try {
+      if (!productId) {
+        alert("Missing product ID");
+        return;
       }
-    };
 
-  // ================= PREVIEW =================
-  const handlePreviewDesign =
-    async () => {
-      try {
-        await handleSaveDesign();
-      } catch (error) {
-        console.error(error);
+      setSaving(true);
+
+      const response = await fetch("/api/user-products/save-design", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          baseProductId: productId,
+          designFront: frontElements,
+          designBack: backElements,
+          markup: 0,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to save design");
       }
-    };
+
+      router.push(`/dashboard/design/preview/${data.product.id}`);
+    } catch (error) {
+      console.error("SAVE ERROR:", error);
+      alert("Error saving design");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
-    <div className="h-screen flex flex-col md:flex-row bg-[#efefe9] overflow-hidden">
-      {/* ================= SIDEBAR ================= */}
-      <div className="md:block hidden">
-        <Sidebar
-          addElement={addElement}
-          updateSelected={
-            updateSelected
-          }
-          selectedElement={
-            selectedElement
-          }
-        />
-      </div>
-
-      {/* ================= MOBILE SIDEBAR ================= */}
-      <div className="md:hidden">
-        <Sidebar
-          addElement={addElement}
-          updateSelected={
-            updateSelected
-          }
-          selectedElement={
-            selectedElement
-          }
-        />
-      </div>
-
-      {/* ================= MAIN ================= */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* TOPBAR */}
+  <>
+    <EditorShell
+      sidebar={null}
+      topbar={
         <TopBar
           side={side}
           setSide={setSide}
           zoomIn={zoomIn}
           zoomOut={zoomOut}
-          onSaveDesign={
-            handleSaveDesign
-          }
-          onPreviewDesign={
-            handlePreviewDesign
-          }
+          onSaveDesign={handleSaveDesign}
+          onPreviewDesign={handleSaveDesign}
           saving={saving}
         />
+      }
+      canvas={
+        <main className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#070711] px-0 pb-[100px] md:pb-0">
+          {/* BACKGROUND */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_80%_60%,rgba(14,165,233,0.16),transparent_24%),linear-gradient(180deg,#070711_0%,#0b0b17_100%)]" />
 
-        {/* CANVAS RESPONSIVO */}
-        <div className="flex-1 flex items-center justify-center overflow-auto p-2 sm:p-3 md:p-4">
-          <div className="w-full h-full flex items-center justify-center">
+          {/* GRID */}
+          <div
+            className="
+              absolute inset-0 opacity-[0.03]
+              bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)]
+              bg-[size:40px_40px]
+            "
+          />
+
+          {/* GLOW */}
+          <div className="absolute left-[-120px] top-[10%] h-[320px] w-[320px] rounded-full bg-purple-600/20 blur-[120px]" />
+
+          <div className="absolute right-[-100px] bottom-[5%] h-[260px] w-[260px] rounded-full bg-cyan-500/10 blur-[120px]" />
+
+          {/* CANVAS */}
+          <div className="relative z-10 flex h-full w-full items-center justify-center">
             <Canvas
               side={side}
               elements={elements}
@@ -280,22 +152,31 @@ export default function EditorPage() {
               zoom={zoom}
               setZoom={setZoom}
               selectedId={selectedId}
-              setSelectedId={
-                setSelectedId
-              }
+              setSelectedId={setSelectedId}
             />
           </div>
-        </div>
-      </div>
+        </main>
+      }
+      toolbar={
+        <ToolbarFAB
+          onUploadClick={() => fileRef.current?.click()}
+          onAddText={addText}
+          setElements={setElements}
+          elements={elements}
+          selectedId={selectedId}
+          zoomIn={zoomIn}
+          zoomOut={zoomOut}
+        />
+      }
+    />
 
-      {/* FILE INPUT */}
-      <input
-        type="file"
-        hidden
-        ref={fileRef}
-        accept="image/png,image/jpeg,image/webp"
-        onChange={handleUpload}
-      />
-    </div>
-  );
+    <input
+      type="file"
+      hidden
+      ref={fileRef}
+      accept="image/png,image/jpeg,image/webp"
+      onChange={handleUpload}
+    />
+  </>
+);
 }
