@@ -1,36 +1,45 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { z } from "zod";
+import { firestore } from "@/lib/firebase-admin";
+import { FieldValue } from "firebase-admin/firestore";
+
+const LogSchema = z.object({
+  event: z.string().min(1).max(80),
+  level: z.enum(["info", "warn", "error"]).default("info"),
+  data: z.any().optional(),
+});
 
 export async function POST(req: Request) {
-  const supabase = createSupabaseServer();
+  try {
+    const body = await req.json();
+    const parsed = LogSchema.safeParse(body);
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid log payload" },
+        { status: 400 }
+      );
+    }
 
-  const body = await req.json();
+    await firestore.collection("events").add({
+      event: parsed.data.event,
+      level: parsed.data.level,
+      data: parsed.data.data ?? {},
+      createdAt: FieldValue.serverTimestamp(),
+      userAgent: req.headers.get("user-agent"),
+      ip:
+        req.headers.get("x-forwarded-for")?.split(",")[0] ??
+        req.headers.get("x-real-ip") ??
+        null,
+    });
 
-  const { event, data } = body;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("LOG ERROR:", error);
 
-  if (!event) {
     return NextResponse.json(
-      { error: "Missing event" },
-      { status: 400 }
-    );
-  }
-
-  const { error } = await supabase.from("app_logs").insert({
-    user_id: user?.id ?? null,
-    event,
-    data: data ?? {},
-  });
-
-  if (error) {
-    return NextResponse.json(
-      { error: error.message },
+      { error: "Failed to save log" },
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ success: true });
 }
