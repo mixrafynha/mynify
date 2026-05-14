@@ -24,8 +24,10 @@ import IconsPanel from "./panels/IconsPanel";
 import FontsPanel from "./panels/FontsPanel";
 import ColorsPanel from "./panels/ColorsPanel";
 import EditTextPanel from "./panels/EditTextPanel";
+import AiPanel from "./panels/AiPanel";
 
 type Panel =
+  | "ai"
   | "templates"
   | "stickers"
   | "icons"
@@ -52,33 +54,37 @@ const PANEL_TITLES: Record<
   Exclude<Panel, null>,
   { title: string; subtitle: string }
 > = {
+  ai: {
+    title: "AI",
+    subtitle: "Generate product graphics with transparent background",
+  },
   templates: {
-    title: "Modelos",
-    subtitle: "Comece com layouts prontos",
+    title: "Templates",
+    subtitle: "Start with ready-made layouts",
   },
   stickers: {
-    title: "IA & Stickers",
-    subtitle: "Adicione detalhes rápidos",
+    title: "Stickers",
+    subtitle: "Add quick visual details",
   },
   icons: {
-    title: "Elementos",
-    subtitle: "Ícones e formas para o design",
+    title: "Elements",
+    subtitle: "Icons, symbols and shapes for your design",
   },
   text: {
-    title: "Texto",
-    subtitle: "Escreva, escolha fonte, cor, tamanho e estilo",
+    title: "Text",
+    subtitle: "Add text and customize your design",
   },
   fonts: {
-    title: "Fontes",
-    subtitle: "Escolha a fonte do item selecionado",
+    title: "Fonts",
+    subtitle: "Change the font of the selected item",
   },
   colors: {
-    title: "Marca",
-    subtitle: "Cores rápidas para o item selecionado",
+    title: "Brand",
+    subtitle: "Apply colors to the selected item",
   },
   edit: {
-    title: "Editar texto",
-    subtitle: "Tamanho, rotação, inversão, onda e espaçamento",
+    title: "Edit",
+    subtitle: "Size, rotation, flip, wave and spacing",
   },
 };
 
@@ -92,7 +98,7 @@ export default function DesktopToolbar({
   zoomIn,
   zoomOut,
 }: DesktopToolbarProps) {
-  const [activePanel, setActivePanel] = useState<Panel>("templates");
+  const [activePanel, setActivePanel] = useState<Panel>("ai");
 
   const panelInfo = useMemo(() => {
     if (!activePanel) return null;
@@ -116,79 +122,110 @@ export default function DesktopToolbar({
       <nav className="flex h-full w-[92px] shrink-0 flex-col items-center border-r border-white/10 bg-[#0b0b16] px-2.5 py-3 shadow-[8px_0_30px_rgba(0,0,0,0.24)]">
         <div className="mb-3 h-1.5 w-12 rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500" />
 
-        <div className="flex w-full flex-col items-center gap-2">
+        <NavGroup>
+          <SideItem
+            icon={<Wand2 size={24} />}
+            label="AI"
+            active={activePanel === "ai"}
+            onClick={() => openPanel("ai")}
+            premium
+          />
+
           <SideItem
             icon={<LayoutTemplate size={24} />}
-            label="Modelos"
+            label="Templates"
             active={activePanel === "templates"}
             onClick={() => openPanel("templates")}
           />
 
           <SideItem
-            icon={<Star size={24} />}
-            label="Elementos"
-            active={activePanel === "icons"}
-            onClick={() => openPanel("icons")}
-          />
-
-          <SideItem
             icon={<Type size={24} />}
-            label="Texto"
+            label="Text"
             active={activePanel === "text"}
             onClick={() => openPanel("text")}
           />
 
           <SideItem
+            icon={<Star size={24} />}
+            label="Elements"
+            active={activePanel === "icons"}
+            onClick={() => openPanel("icons")}
+          />
+        </NavGroup>
+
+        <Divider />
+
+        <NavGroup>
+          <SideItem
             icon={<Palette size={24} />}
-            label="Marca"
+            label="Brand"
             active={activePanel === "colors"}
             onClick={() => openPanel("colors")}
-            premium
           />
 
           <SideItem
             icon={<Image size={24} />}
-            label="Importar"
+            label="Upload"
             onClick={onUploadClick}
           />
 
           <SideItem
-            icon={<Wand2 size={24} />}
-            label="IA"
+            icon={<Folder size={24} />}
+            label="Projects"
+          />
+
+          <SideItem
+            icon={<Grid2X2Plus size={24} />}
+            label="Apps"
+          />
+        </NavGroup>
+
+        <Divider />
+
+        <NavGroup>
+          <SideItem
+            icon={<Layers size={24} />}
+            label="Edit"
+            active={activePanel === "edit"}
+            disabled={!selected}
+            onClick={() => openPanel("edit")}
+          />
+
+          <SideItem
+            icon={<Type size={24} />}
+            label="Fonts"
+            active={activePanel === "fonts"}
+            disabled={!selected}
+            onClick={() => openPanel("fonts")}
+          />
+
+          <SideItem
+            icon={<Star size={24} />}
+            label="Stickers"
             active={activePanel === "stickers"}
             onClick={() => openPanel("stickers")}
           />
-
-          <SideItem icon={<Folder size={24} />} label="Projetos" />
-          <SideItem icon={<Grid2X2Plus size={24} />} label="Apps" />
-        </div>
-
-        <div className="my-3 h-px w-12 bg-white/10" />
-
-        <SideItem
-          icon={<Layers size={24} />}
-          label="Editar"
-          active={activePanel === "edit"}
-          disabled={!selected}
-          onClick={() => openPanel("edit")}
-        />
-
-        <SideItem
-          icon={<Type size={24} />}
-          label="Fontes"
-          active={activePanel === "fonts"}
-          disabled={!selected}
-          onClick={() => openPanel("fonts")}
-        />
+        </NavGroup>
 
         <div className="mt-auto flex w-full flex-col items-center gap-2 border-t border-white/10 pt-3">
-          <SideItem icon={<ZoomIn size={23} />} label="Zoom +" onClick={zoomIn} compact />
-          <SideItem icon={<ZoomOut size={23} />} label="Zoom -" onClick={zoomOut} compact />
+          <SideItem
+            icon={<ZoomIn size={23} />}
+            label="Zoom +"
+            onClick={zoomIn}
+            compact
+          />
+
+          <SideItem
+            icon={<ZoomOut size={23} />}
+            label="Zoom -"
+            onClick={zoomOut}
+            compact
+          />
 
           {selected && (
             <SideItem
               icon={<Trash2 size={23} />}
-              label="Apagar"
+              label="Delete"
               danger
               onClick={deleteSelected}
               compact
@@ -205,12 +242,15 @@ export default function DesktopToolbar({
         }}
       >
         {activePanel && panelInfo && (
-          <div className="flex h-full flex-col overflow-hidden" style={{ width: PANEL_WIDTH }}>
+          <div
+            className="flex h-full flex-col overflow-hidden"
+            style={{ width: PANEL_WIDTH }}
+          >
             <div className="relative shrink-0 border-b border-white/10 bg-[#0f1020]/95 px-6 pb-5 pt-5 backdrop-blur">
               <button
                 onClick={() => setActivePanel(null)}
                 type="button"
-                aria-label="Fechar painel"
+                aria-label="Close panel"
                 className="absolute right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white shadow-[0_10px_25px_rgba(0,0,0,0.25)] backdrop-blur transition hover:scale-105 hover:bg-white/15 active:scale-95"
               >
                 <ChevronLeft size={20} />
@@ -220,6 +260,7 @@ export default function DesktopToolbar({
                 <h2 className="text-2xl font-black leading-none tracking-[-0.04em] text-white">
                   {panelInfo.title}
                 </h2>
+
                 <p className="mt-2 text-sm font-medium leading-none text-slate-400">
                   {panelInfo.subtitle}
                 </p>
@@ -227,12 +268,19 @@ export default function DesktopToolbar({
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5 [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,.75)_transparent]">
+              {activePanel === "ai" && (
+                <AiPanel createElement={createElement} />
+              )}
+
               {activePanel === "templates" && (
                 <TemplatesPanel createElement={createElement} />
               )}
 
               {activePanel === "text" && (
-                <TextPanel createElement={createElement} onAddText={onAddText} />
+                <TextPanel
+                  createElement={createElement}
+                  onAddText={onAddText}
+                />
               )}
 
               {activePanel === "stickers" && (
@@ -244,11 +292,17 @@ export default function DesktopToolbar({
               )}
 
               {activePanel === "fonts" && (
-                <FontsPanel selected={selected} updateSelected={updateSelected} />
+                <FontsPanel
+                  selected={selected}
+                  updateSelected={updateSelected}
+                />
               )}
 
               {activePanel === "colors" && (
-                <ColorsPanel selected={selected} updateSelected={updateSelected} />
+                <ColorsPanel
+                  selected={selected}
+                  updateSelected={updateSelected}
+                />
               )}
 
               {activePanel === "edit" && (
@@ -263,6 +317,18 @@ export default function DesktopToolbar({
       </section>
     </aside>
   );
+}
+
+function NavGroup({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex w-full flex-col items-center gap-2">
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="my-3 h-px w-12 bg-white/10" />;
 }
 
 function SideItem({
@@ -305,13 +371,17 @@ function SideItem({
 
       {premium && (
         <span className="absolute right-1.5 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[10px] text-[#070711] shadow-sm">
-          ♛
+          AI
         </span>
       )}
 
       <div
         className={`flex h-9 w-9 items-center justify-center rounded-xl transition ${
-          active ? "text-violet-600" : danger ? "text-red-400" : "group-hover:text-violet-300"
+          active
+            ? "text-violet-600"
+            : danger
+            ? "text-red-400"
+            : "group-hover:text-violet-300"
         }`}
       >
         {icon}

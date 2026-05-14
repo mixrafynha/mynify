@@ -1,50 +1,47 @@
 "use client";
 
+import clsx from "clsx";
+
 export default function ToolButton({
   icon,
   label,
-  onClick,
   active,
-  badge,
   disabled,
+  badge,
+  onClick,
 }: any) {
   return (
     <button
-      onClick={onClick}
+      type="button"
       disabled={disabled}
-      className={`
-        relative flex h-[62px] flex-col items-center justify-center gap-1.5
-        rounded-2xl transition-all duration-200 active:scale-95
-
-        ${
-          active
-            ? "bg-gradient-to-b from-violet-500/30 to-fuchsia-500/20 text-white shadow-[0_10px_30px_rgba(168,85,247,0.30)]"
-            : "text-slate-300 hover:bg-white/[0.05]"
-        }
-
-        ${disabled ? "opacity-30" : ""}
-      `}
+      onClick={onClick}
+      className={clsx(
+        "relative flex h-[58px] w-[72px] shrink-0 flex-col items-center justify-center gap-1 rounded-2xl transition",
+        active && "bg-slate-100",
+        !active && "active:bg-slate-100",
+        disabled && "opacity-35"
+      )}
     >
       {badge && (
-        <span className="absolute right-2 top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-violet-500 px-1 text-[9px] font-black text-white shadow">
+        <span className="absolute right-3 top-1 rounded-full bg-violet-600 px-1.5 py-[1px] text-[9px] font-black text-white">
           {badge}
         </span>
       )}
 
       <div
-        className={`
-          flex items-center justify-center transition-all
-          ${active ? "scale-110 text-violet-300" : "text-slate-300"}
-        `}
+        className={clsx(
+          "flex items-center justify-center",
+          active ? "text-violet-600" : "text-slate-800"
+        )}
       >
         {icon}
       </div>
 
       <span
-        className={`
-          text-[10px] font-medium leading-none
-          ${active ? "text-white" : "text-slate-400"}
-        `}
+        className={clsx(
+          "max-w-[66px] truncate text-[11px] font-semibold",
+          active ? "text-violet-600" : "text-slate-700"
+        )}
       >
         {label}
       </span>
