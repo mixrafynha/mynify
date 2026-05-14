@@ -1,365 +1,208 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import DraggableElement from "@/app/dashboard/design/components/DraggableElement";
+import SafeArea from "@/app/dashboard/design/components/SafeArea";
 
-const PRODUCTS: Record<string, { front: string; back: string }> = {
-  tshirt: { front: "/mockups/tshirt-front.png", back: "/mockups/tshirt-back.png" },
-  hoodie: { front: "/mockups/hoodie-front.png", back: "/mockups/hoodie-back.png" },
-  cap: { front: "/mockups/cap-front.png", back: "/mockups/cap-back.png" },
-  mug: { front: "/mockups/mug-front.png", back: "/mockups/mug-back.png" },
-};
+import { PRODUCTS } from "./canvas/productConfig";
+import { MOCKUP_AREA } from "./canvas/constants";
+import { getPrintBox, getSafeArea, clampElementToSafeArea } from "./canvas/canvasMath";
+import { Side } from "./canvas/types";
+import DraggableElement from "./DraggableElement";
+import CanvasMockup from "./canvas/CanvasMockup";
 
-export const MOCKUP_AREA = { width: 520, height: 640 };
-
-export const DPI = 300;
-export const MM_TO_INCH = 1 / 25.4;
-export const SAFE_PADDING = 10;
-
-export const PRINT_BOX_BY_PRODUCT = {
-  tshirt: { x: 150, y: 180, width: 220, height: 250 },
-  hoodie: { x: 170, y: 210, width: 180, height: 210 },
-  cap: { x: 190, y: 252, width: 140, height: 58 },
-  mug: { x: 145, y: 222, width: 230, height: 108 },
-};
-
-export const GELATO_PRINT_SIZE_MM_BY_PRODUCT = {
-  tshirt: { widthMm: 300, heightMm: 360 },
-  hoodie: { widthMm: 300, heightMm: 325 },
-  cap: { widthMm: 120, heightMm: 55 },
-  mug: { widthMm: 220, heightMm: 90 },
-};
-
-export function getPrintBox(productId: string) {
-  return (
-    PRINT_BOX_BY_PRODUCT[productId as keyof typeof PRINT_BOX_BY_PRODUCT] ||
-    PRINT_BOX_BY_PRODUCT.hoodie
-  );
-}
-
-export function getGelatoPrintSizeMm(productId: string) {
-  return (
-    GELATO_PRINT_SIZE_MM_BY_PRODUCT[
-      productId as keyof typeof GELATO_PRINT_SIZE_MM_BY_PRODUCT
-    ] || GELATO_PRINT_SIZE_MM_BY_PRODUCT.hoodie
-  );
-}
-
-export function getGelatoExportSizePx(productId: string) {
-  const size = getGelatoPrintSizeMm(productId);
-
-  return {
-    width: Math.round(size.widthMm * MM_TO_INCH * DPI),
-    height: Math.round(size.heightMm * MM_TO_INCH * DPI),
-  };
-}
-
-function getElementSize(el: any) {
-  const fontSize = el.meta?.fontSize || 40;
-
-  if (el.type === "text") {
-    const text = el.text || "";
-    return {
-      width: el.width || Math.max(40, text.length * fontSize * 0.62),
-      height: el.height || fontSize * 1.25,
-    };
-  }
-
-  return {
-    width: el.width || 80,
-    height: el.height || 80,
-  };
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function fitElementInsidePrintArea(el: any, printBox: any) {
-  const maxWidth = printBox.width - SAFE_PADDING * 2;
-  const maxHeight = printBox.height - SAFE_PADDING * 2;
-
-  const currentWidth = el.width || 80;
-  const currentHeight = el.height || el.meta?.fontSize || 40;
-
-  const scale = Math.min(1, maxWidth / currentWidth, maxHeight / currentHeight);
-
-  const nextWidth = Math.max(10, Math.floor(currentWidth * scale));
-  const nextHeight = Math.max(10, Math.floor(currentHeight * scale));
-
-  return {
-    ...el,
-    width: el.width ? nextWidth : el.width,
-    height: el.height ? nextHeight : el.height,
-    meta: {
-      ...(el.meta || {}),
-      fontSize: el.meta?.fontSize
-        ? Math.max(10, Math.floor(el.meta.fontSize * scale))
-        : el.meta?.fontSize,
-    },
-  };
-}
-
-function clampElementToPrintArea(el: any, printBox: any) {
-  const fitted = fitElementInsidePrintArea(el, printBox);
-  const { width, height } = getElementSize(fitted);
-
-  const minX = printBox.x + SAFE_PADDING;
-  const minY = printBox.y + SAFE_PADDING;
-  const maxX = printBox.x + printBox.width - width - SAFE_PADDING;
-  const maxY = printBox.y + printBox.height - height - SAFE_PADDING;
-
-  return {
-    ...fitted,
-    x: clamp(fitted.x, minX, Math.max(minX, maxX)),
-    y: clamp(fitted.y, minY, Math.max(minY, maxY)),
-  };
-}
-
-export function isInsidePrintArea(el: any, printBox: any) {
-  const { width, height } = getElementSize(el);
-
-  return (
-    el.x >= printBox.x + SAFE_PADDING &&
-    el.y >= printBox.y + SAFE_PADDING &&
-    el.x + width <= printBox.x + printBox.width - SAFE_PADDING &&
-    el.y + height <= printBox.y + printBox.height - SAFE_PADDING
-  );
-}
-
-export function hasElementsOutsidePrintArea(elements: any[], productId = "hoodie") {
-  const printBox = getPrintBox(productId);
-  return elements.some((el) => !isInsidePrintArea(el, printBox));
-}
-
-export function mapElementToGelatoExport(el: any, productId = "hoodie") {
-  const printBox = getPrintBox(productId);
-  const exportSize = getGelatoExportSizePx(productId);
-
-  const scaleX = exportSize.width / printBox.width;
-  const scaleY = exportSize.height / printBox.height;
-
-  return {
-    ...el,
-    x: Math.round((el.x - printBox.x) * scaleX),
-    y: Math.round((el.y - printBox.y) * scaleY),
-    width: el.width ? Math.round(el.width * scaleX) : undefined,
-    height: el.height ? Math.round(el.height * scaleY) : undefined,
-    meta: {
-      ...(el.meta || {}),
-      fontSize: el.meta?.fontSize
-        ? Math.round(el.meta.fontSize * scaleY)
-        : undefined,
-    },
-  };
-}
-
-export function getGelatoProductionPayload(elements: any[], productId = "hoodie") {
-  return {
-    dpi: DPI,
-    transparentBackground: true,
-    exportSizePx: getGelatoExportSizePx(productId),
-    elements: elements.map((el) => mapElementToGelatoExport(el, productId)),
-  };
-}
+const DESKTOP_ZOOM_BOOST = 1.18;
+const MOBILE_ZOOM_BOOST = 1.35;
 
 export default function Canvas({
   side,
   elements,
   setElements,
-  zoom,
-  setZoom,
+  zoom = 1,
   selectedId,
   setSelectedId,
   setSelectedElement,
 }: any) {
   const params = useParams();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [canvasScale, setCanvasScale] = useState(1);
+
   const mockupId = String(params?.id || "hoodie").toLowerCase();
-
-  const [draggingId, setDraggingId] = useState<string | null>(null);
-
-  const lastPointer = useRef({ offsetX: 0, offsetY: 0 });
-  const lastDistance = useRef<number | null>(null);
+  const currentSide: Side = side === "back" ? "back" : "front";
+  const storageKey = `canvas:${mockupId}:${currentSide}`;
 
   const productMockup = PRODUCTS[mockupId] || PRODUCTS.hoodie;
-  const mockup = side === "front" ? productMockup.front : productMockup.back;
+  const mockup = productMockup[currentSide];
 
-  const printBox = useMemo(() => getPrintBox(mockupId), [mockupId]);
-
-  const safeSetSelectedElement = (el: any) => {
-    if (typeof setSelectedElement === "function") setSelectedElement(el);
-  };
-
-  const updateElement = useCallback(
-    (id: string, patch: any) => {
-      setElements((prev: any[]) =>
-        prev.map((el) => {
-          if (el.id !== id) return el;
-
-          const next = {
-            ...el,
-            ...patch,
-            meta: {
-              ...(el.meta || {}),
-              ...(patch.meta || {}),
-            },
-          };
-
-          return clampElementToPrintArea(next, printBox);
-        })
-      );
-    },
-    [setElements, printBox]
+  const printBox = useMemo(
+    () => getPrintBox(mockupId, currentSide),
+    [mockupId, currentSide]
   );
 
-  const onMove = useCallback(
-    (e: PointerEvent) => {
-      if (!draggingId) return;
-
-      setElements((prev: any[]) =>
-        prev.map((el) => {
-          if (el.id !== draggingId) return el;
-
-          return clampElementToPrintArea(
-            {
-              ...el,
-              x: e.clientX - lastPointer.current.offsetX,
-              y: e.clientY - lastPointer.current.offsetY,
-            },
-            printBox
-          );
-        })
-      );
-    },
-    [draggingId, setElements, printBox]
-  );
+  const safeArea = useMemo(() => getSafeArea(printBox), [printBox]);
 
   useEffect(() => {
-    window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
-  }, [onMove]);
+    try {
+      const saved = sessionStorage.getItem(storageKey);
+      if (saved) setElements(JSON.parse(saved));
+    } catch {}
+  }, [storageKey, setElements]);
 
   useEffect(() => {
-    const up = () => setDraggingId(null);
-    window.addEventListener("pointerup", up);
-    return () => window.removeEventListener("pointerup", up);
-  }, []);
+    try {
+      sessionStorage.setItem(storageKey, JSON.stringify(elements));
+    } catch {}
+  }, [storageKey, elements]);
 
-  const startDrag = (e: any, id: string) => {
-    e.preventDefault();
-    e.stopPropagation();
+  useEffect(() => {
+    const updateScale = () => {
+      const wrapper = wrapperRef.current;
+      if (!wrapper) return;
 
-    const el = elements.find((x: any) => x.id === id);
-    if (!el) return;
+      const rect = wrapper.getBoundingClientRect();
+      const isMobile = window.innerWidth < 768;
 
-    const fixed = clampElementToPrintArea(el, printBox);
+      const scaleX = rect.width / MOCKUP_AREA.width;
+      const scaleY = rect.height / MOCKUP_AREA.height;
+      const fitScale = Math.min(scaleX, scaleY);
 
-    setDraggingId(id);
-    setSelectedId(id);
-    safeSetSelectedElement(fixed);
+      const boost = isMobile ? MOBILE_ZOOM_BOOST : DESKTOP_ZOOM_BOOST;
 
-    lastPointer.current = {
-      offsetX: e.clientX - fixed.x,
-      offsetY: e.clientY - fixed.y,
+      setCanvasScale(Math.max(0.1, Number((fitScale * boost).toFixed(4))));
     };
-  };
 
-  const getDistance = (touches: TouchList) => {
-    const dx = touches[0].clientX - touches[1].clientX;
-    const dy = touches[0].clientY - touches[1].clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  };
+    updateScale();
 
-  const onTouchMove = useCallback(
-    (e: TouchEvent) => {
-      if (e.touches.length !== 2) return;
-      e.preventDefault();
+    const observer = new ResizeObserver(updateScale);
+    if (wrapperRef.current) observer.observe(wrapperRef.current);
 
-      const distance = getDistance(e.touches);
-
-      if (lastDistance.current !== null) {
-        const diff = distance - lastDistance.current;
-
-        setZoom((z: number) => {
-          const next = z + diff * 0.004;
-          return Math.min(2, Math.max(0.4, Number(next.toFixed(2))));
-        });
-      }
-
-      lastDistance.current = distance;
-    },
-    [setZoom]
-  );
-
-  const onTouchEnd = useCallback(() => {
-    lastDistance.current = null;
-  }, []);
-
-  useEffect(() => {
-    window.addEventListener("touchmove", onTouchMove, { passive: false });
-    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("resize", updateScale);
+    window.addEventListener("orientationchange", updateScale);
 
     return () => {
-      window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("touchend", onTouchEnd);
+      observer.disconnect();
+      window.removeEventListener("resize", updateScale);
+      window.removeEventListener("orientationchange", updateScale);
     };
-  }, [onTouchMove, onTouchEnd]);
+  }, []);
 
-  useEffect(() => {
-    setElements((prev: any[]) =>
-      prev.map((el) => clampElementToPrintArea(el, printBox))
-    );
-  }, [mockupId, side, setElements, printBox]);
+  function handleUpdateElement(id: string, patch: any) {
+    setElements((prev: any[]) => {
+      const current = prev.find((item) => item.id === id);
+      if (!current) return prev;
+
+      if (patch.delete) {
+        return prev.filter((item) => item.id !== id);
+      }
+
+      if (patch.duplicate) {
+        const duplicated = clampElementToSafeArea(
+          {
+            ...current,
+            id: crypto.randomUUID(),
+            x: current.x + 20,
+            y: current.y + 20,
+            meta: { ...(current.meta || {}) },
+          },
+          safeArea
+        );
+
+        return [...prev, duplicated];
+      }
+
+      const cleanPatch = { ...patch };
+
+      if (typeof patch.x !== "number") delete cleanPatch.x;
+      if (typeof patch.y !== "number") delete cleanPatch.y;
+
+      return prev.map((item) => {
+        if (item.id !== id) return item;
+
+        const nextElement = {
+          ...item,
+          ...cleanPatch,
+          meta: {
+            ...(item.meta || {}),
+            ...(patch.meta || {}),
+          },
+        };
+
+        return clampElementToSafeArea(nextElement, safeArea);
+      });
+    });
+  }
+
+  const finalScale = zoom * canvasScale;
 
   return (
     <div
+      ref={wrapperRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden bg-transparent"
-      onPointerDown={() => setSelectedId(null)}
+      onPointerDown={() => {
+        setSelectedId(null);
+        setSelectedElement?.(null);
+      }}
     >
       <div
-        className="relative transition-transform duration-150 ease-out"
+        className="relative shrink-0 transition-transform duration-150 ease-out"
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,
-          transform: `scale(${zoom})`,
-          transformOrigin: "center",
+          transform: `translateZ(0) scale(${finalScale})`,
+          transformOrigin: "center center",
           touchAction: "none",
+          willChange: "transform",
         }}
       >
-        <img
-          src={mockup}
-          alt={mockupId}
-          draggable={false}
-          className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
+        <CanvasMockup
+          mockup={mockup}
+          mockupId={mockupId}
+          currentSide={currentSide}
         />
 
         <div
-          className="pointer-events-none absolute z-20 overflow-hidden rounded-[24px] border border-fuchsia-400/70 bg-fuchsia-500/[0.045] shadow-[0_0_35px_rgba(168,85,247,0.25)]"
+          className="absolute z-20 overflow-hidden"
           style={{
-            left: printBox.x,
-            top: printBox.y,
-            width: printBox.width,
-            height: printBox.height,
+            left: safeArea.x,
+            top: safeArea.y,
+            width: safeArea.width,
+            height: safeArea.height,
+            pointerEvents: "none",
+            overflow: "hidden",
+            clipPath: "inset(0px)",
           }}
         >
-          <div className="absolute inset-[10px] rounded-[18px] border border-dashed border-white/25" />
+          {elements.map((el: any) => (
+            <DraggableElement
+              key={el.id}
+              el={{
+                ...el,
+                x: el.x - safeArea.x,
+                y: el.y - safeArea.y,
+              }}
+              safeArea={safeArea}
+              zoom={finalScale}
+              isSelected={selectedId === el.id}
+              setSelectedId={setSelectedId}
+              setSelectedElement={setSelectedElement}
+              updateElement={(patch: any) => {
+                const nextPatch = { ...patch };
 
-          <span className="absolute left-1/2 top-2 -translate-x-1/2 rounded-full bg-[#070711]/90 px-3 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-fuchsia-200">
+                if (typeof patch.x === "number") {
+                  nextPatch.x = patch.x + safeArea.x;
+                }
 
-          </span>
+                if (typeof patch.y === "number") {
+                  nextPatch.y = patch.y + safeArea.y;
+                }
+
+                handleUpdateElement(el.id, nextPatch);
+              }}
+            />
+          ))}
         </div>
 
-        {elements.map((el: any) => (
-          <DraggableElement
-            key={el.id}
-            el={clampElementToPrintArea(el, printBox)}
-            isSelected={selectedId === el.id}
-            isInvalid={false}
-            onPointerDown={(e: any) => startDrag(e, el.id)}
-            updateElement={(patch: any) => updateElement(el.id, patch)}
-          />
-        ))}
+        <SafeArea printBox={printBox} selected />
       </div>
     </div>
   );
