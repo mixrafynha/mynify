@@ -1,6 +1,8 @@
 // app/api/ai-image/route.ts
 import { NextResponse } from "next/server";
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function POST(req: Request) {
   try {
     const { prompt } = await req.json();
@@ -12,7 +14,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const response = await fetch(
+    const createResponse = await fetch(
       "https://cloud.leonardo.ai/api/rest/v1/generations",
       {
         method: "POST",
@@ -32,20 +34,64 @@ export async function POST(req: Request) {
       }
     );
 
-    const data = await response.json();
+    const createData = await createResponse.json();
 
-    if (!response.ok) {
+    if (!createResponse.ok) {
       return NextResponse.json(
-        { error: "Erro Leonardo API", details: data },
-        { status: response.status }
+        { error: "Erro Leonardo API", details: createData },
+        { status: createResponse.status }
       );
     }
 
-    return NextResponse.json({
-      success: true,
-      generationId: data.sdGenerationJob?.generationId,
-      data,
-    });
+    const generationId = createData.sdGenerationJob?.generationId;
+
+    if (!generationId) {
+      return NextResponse.json(
+        { error: "Generation ID não encontrado", details: createData },
+        { status: 500 }
+      );
+    }
+
+    let imageUrl = null;
+
+    for (let i = 0; i < 20; i++) {
+      await sleep(1500);
+
+      const getResponse = await fetch(
+        `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
+        {
+          method: "GET",
+          headers: {
+            accept: "application/json",
+            authorization: `Bearer ${process.env.LEONARDO_API_KEY}`,
+          },
+        }
+      );
+
+      const getData = await getResponse.json();
+
+      if (!getResponse.ok) {
+        return NextResponse.json(
+          { error: "Erro ao buscar imagem", details: getData },
+          { status: getResponse.status }
+        );
+      }
+
+      imageUrl = getData.generations_by_pk?.generated_images?.[0]?.url;
+
+      if (imageUrl) {
+        return NextResponse.json({
+          success: true,
+          imageUrl,
+          generationId,
+        });
+      }
+    }
+
+    return NextResponse.json(
+      { error: "Imagem ainda não ficou pronta", generationId },
+      { status: 504 }
+    );
   } catch (error) {
     console.error(error);
 
