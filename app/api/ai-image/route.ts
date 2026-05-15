@@ -29,6 +29,7 @@ export async function POST(req: Request) {
           "content-type": "application/json",
           authorization: `Bearer ${process.env.LEONARDO_API_KEY}`,
         },
+
         body: JSON.stringify({
           modelId: "b2614463-296c-462a-9586-aafdb8f00e36",
 
@@ -36,12 +37,18 @@ export async function POST(req: Request) {
 
           num_images: 1,
 
-          width: 1024,
-          height: 1024,
+          // BIGGER SIZE
+          width: 1536,
+          height: 1536,
 
-          enhancePrompt: false,
+          enhancePrompt: true,
 
-          transparent_background: transparent,
+          // TRANSPARENT PNG STYLE
+          ...(transparent
+            ? {
+                transparency: "foreground_only",
+              }
+            : {}),
         }),
       }
     );
@@ -80,8 +87,8 @@ export async function POST(req: Request) {
     let imageUrl: string | null = null;
 
     // WAIT FOR IMAGE
-    for (let i = 0; i < 30; i++) {
-      await sleep(1500);
+    for (let i = 0; i < 40; i++) {
+      await sleep(1800);
 
       const getResponse = await fetch(
         `https://cloud.leonardo.ai/api/rest/v1/generations/${generationId}`,
