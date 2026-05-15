@@ -103,13 +103,13 @@ export const GELATO_PRINT_SIZE_MM_BY_PRODUCT: Record<
   Record<Side, { widthMm: number; heightMm: number }>
 > = {
   tshirt: {
-    front: { widthMm: 300, heightMm: 360 },
+    front: { widthMm: 300, heightMm: 400 },
     back: { widthMm: 300, heightMm: 400 },
   },
 
   hoodie: {
-    front: { widthMm: 300, heightMm: 325 },
-    back: { widthMm: 300, heightMm: 360 },
+    front: { widthMm: 340, heightMm: 420 },
+    back: { widthMm: 340, heightMm: 420 },
   },
 
   cap: {
@@ -118,7 +118,7 @@ export const GELATO_PRINT_SIZE_MM_BY_PRODUCT: Record<
   },
 
   mug: {
-    front: { widthMm: 220, heightMm: 90 },
-    back: { widthMm: 220, heightMm: 90 },
+    front: { widthMm: 200, heightMm: 96 },
+    back: { widthMm: 200, heightMm: 96 },
   },
 };
