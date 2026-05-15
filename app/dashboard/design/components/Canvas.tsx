@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import SafeArea from "@/app/dashboard/design/components/SafeArea";
 
-import { PRODUCTS } from "./canvas/productConfig";
+import { PRODUCTS } from "./canvas";
 import { MOCKUP_AREA } from "./canvas/constants";
 import {
   getPrintBox,
