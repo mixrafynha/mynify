@@ -2,22 +2,29 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import ElementRenderer from "./element/ElementRenderer";
+import ElementControls from "./element/ElementControls";
+import ResizeHandles from "./element/ResizeHandles";
+
 export default function DraggableElement({
   el,
   safeArea,
   zoom = 1,
   isSelected,
+  selectedIds = [],
+  setSelectedIds,
   setSelectedId,
   setSelectedElement,
+  updateSelectedElements,
   updateElement,
 }: any) {
   const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLInputElement | null>(null);
+  const lastTapRef = useRef(0);
 
   const rotation = el.meta?.rotation || 0;
   const flipX = el.meta?.flipX ? -1 : 1;
   const flipY = el.meta?.flipY ? -1 : 1;
-  const textShape = el.meta?.textShape || "straight";
 
   const elementWidth = el.width || 220;
   const elementHeight =
@@ -41,34 +48,24 @@ export default function DraggableElement({
 
   const patchElement = (patch: any) => updateElement?.(patch);
 
-  function startDrag(e: React.PointerEvent) {
-    if (editing || el.meta?.lock) return;
+  function selectElement(e?: React.PointerEvent) {
+    const multi = e?.shiftKey || e?.ctrlKey || e?.metaKey;
 
-    e.preventDefault();
-    e.stopPropagation();
+    if (multi) {
+      setSelectedIds?.((prev: string[]) => {
+        const next = prev.includes(el.id)
+          ? prev.filter((id) => id !== el.id)
+          : [...prev, el.id];
 
-    setSelectedId?.(el.id);
-    setSelectedElement?.(el);
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startElX = el.x;
-    const startElY = el.y;
-
-    const onMove = (ev: PointerEvent) => {
-      patchElement({
-        x: startElX + (ev.clientX - startX) / zoom,
-        y: startElY + (ev.clientY - startY) / zoom,
+        setSelectedId?.(next[next.length - 1] || null);
+        return next;
       });
-    };
+    } else {
+      setSelectedIds?.([el.id]);
+      setSelectedId?.(el.id);
+    }
 
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    setSelectedElement?.(el);
   }
 
   const updateText = (value: string) => {
@@ -81,10 +78,87 @@ export default function DraggableElement({
   };
 
   const startEditing = () => {
-    if (!isSelected) return;
+    setSelectedIds?.([el.id]);
+    setSelectedId?.(el.id);
+    setSelectedElement?.(el);
+
     setEditing(true);
-    window.setTimeout(() => ref.current?.focus(), 50);
+
+    window.setTimeout(() => {
+      ref.current?.focus();
+      ref.current?.select();
+    }, 50);
   };
+
+  function startDrag(e: React.PointerEvent<HTMLDivElement>) {
+    if (editing || el.meta?.lock) return;
+
+    if (el.type === "text") {
+      if (e.pointerType === "mouse" && e.detail >= 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        startEditing();
+        return;
+      }
+
+      if (e.pointerType === "touch") {
+        const now = Date.now();
+
+        if (now - lastTapRef.current < 400) {
+          e.preventDefault();
+          e.stopPropagation();
+          startEditing();
+          return;
+        }
+
+        lastTapRef.current = now;
+      }
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+
+    selectElement(e);
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startElX = el.x;
+    const startElY = el.y;
+
+    const dragIds =
+      selectedIds.includes(el.id) && selectedIds.length > 1
+        ? selectedIds
+        : [el.id];
+
+    const onMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+
+      const dx = (ev.clientX - startX) / zoom;
+      const dy = (ev.clientY - startY) / zoom;
+
+      if (dragIds.length > 1) {
+        updateSelectedElements?.(dragIds, dx, dy);
+        return;
+      }
+
+      patchElement({
+        x: startElX + dx,
+        y: startElY + dy,
+      });
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }
 
   const resizeElement = (
     e: React.PointerEvent,
@@ -93,8 +167,7 @@ export default function DraggableElement({
     e.preventDefault();
     e.stopPropagation();
 
-    setSelectedId?.(el.id);
-    setSelectedElement?.(el);
+    selectElement(e);
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -104,6 +177,8 @@ export default function DraggableElement({
     const startElY = el.y;
 
     const onMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+
       const dx = (ev.clientX - startX) / zoom;
       const dy = (ev.clientY - startY) / zoom;
 
@@ -113,12 +188,14 @@ export default function DraggableElement({
       let nextY = startElY;
 
       if (direction.includes("r")) nextWidth = Math.max(24, startWidth + dx);
+
       if (direction.includes("l")) {
         nextWidth = Math.max(24, startWidth - dx);
         nextX = startElX + dx;
       }
 
       if (direction.includes("b")) nextHeight = Math.max(24, startHeight + dy);
+
       if (direction.includes("t")) {
         nextHeight = Math.max(24, startHeight - dy);
         nextY = startElY + dy;
@@ -142,24 +219,30 @@ export default function DraggableElement({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
 
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const rotateElement = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    setSelectedId?.(el.id);
-    setSelectedElement?.(el);
+    selectElement(e);
 
-    const box = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+    const box = (
+      e.currentTarget.parentElement as HTMLElement
+    ).getBoundingClientRect();
+
     const centerX = box.left + box.width / 2;
     const centerY = box.top + box.height / 2;
 
     const onMove = (ev: PointerEvent) => {
+      ev.preventDefault();
+
       const angle =
         Math.atan2(ev.clientY - centerY, ev.clientX - centerX) *
           (180 / Math.PI) +
@@ -176,22 +259,18 @@ export default function DraggableElement({
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
 
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   };
 
   const flipElement = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
-    patchElement({
-      meta: {
-        ...(el.meta || {}),
-        flipX: !el.meta?.flipX,
-      },
-    });
+    patchElement({ meta: { ...(el.meta || {}), flipX: !el.meta?.flipX } });
   };
 
   const duplicateElement = (e: React.PointerEvent) => {
@@ -215,151 +294,29 @@ export default function DraggableElement({
       style={baseStyle}
     >
       <div className="relative h-full w-full overflow-visible">
-        {el.type === "image" && (
-          <div
-            className={`relative h-full w-full overflow-hidden rounded-md ${
-              isSelected ? "ring-2 ring-violet-500" : ""
-            }`}
-          >
-            <img
-              src={el.src}
-              draggable={false}
-              alt=""
-              className="pointer-events-none h-full w-full select-none object-contain"
-            />
-          </div>
-        )}
+        <ElementRenderer
+          el={el}
+          isSelected={isSelected}
+          editing={editing}
+          inputRef={ref}
+          startEditing={startEditing}
+          updateText={updateText}
+          setEditing={setEditing}
+        />
 
-        {el.type === "text" && (
-          <div
-            onDoubleClick={startEditing}
-            onTouchEnd={startEditing}
-            className={`relative h-full w-full overflow-hidden px-1 py-0.5 leading-tight ${
-              isSelected ? "outline outline-2 outline-violet-500" : ""
-            }`}
-            style={{
-              minWidth: 24,
-              fontSize: el.meta?.fontSize || 24,
-              fontFamily: el.meta?.fontFamily || "Inter",
-              color: el.meta?.color || "#000",
-              letterSpacing: `${el.meta?.letterSpacing || 0}px`,
-              lineHeight: 1.05,
-              textAlign: el.meta?.textAlign || "center",
-              fontWeight: el.meta?.fontWeight || 900,
-            }}
-          >
-            {editing ? (
-              <input
-                ref={ref}
-                value={el.content || el.text || ""}
-                autoFocus
-                maxLength={200}
-                onChange={(e) => updateText(e.target.value)}
-                onBlur={() => setEditing(false)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") setEditing(false);
-                }}
-                className="block h-full w-full bg-transparent outline-none"
-                style={{
-                  fontSize: el.meta?.fontSize || 24,
-                  fontFamily: el.meta?.fontFamily || "Inter",
-                  color: el.meta?.color || "#000",
-                }}
-              />
-            ) : (
-              <div
-                className={`h-full w-full overflow-hidden whitespace-pre-wrap break-words font-black ${
-                  textShape === "wave" ? "animate-pulse" : ""
-                }`}
-                style={{
-                  transform:
-                    textShape === "wave"
-                      ? "skewY(-5deg) rotate(-2deg)"
-                      : textShape === "arc"
-                      ? "rotate(-5deg)"
-                      : "none",
-                }}
-              >
-                {el.content || el.text}
-              </div>
-            )}
-          </div>
-        )}
-
-        {isSelected && !editing && (
+        {isSelected && !editing && selectedIds.length <= 1 && (
           <div
             className="pointer-events-none absolute inset-0 z-[90]"
             style={{ overflow: "visible" }}
           >
-            <button
-              type="button"
-              onPointerDown={rotateElement}
-              className="
-                pointer-events-auto absolute -top-11 left-1/2 flex h-9 w-9
-                -translate-x-1/2 items-center justify-center rounded-full
-                border border-violet-400 bg-neutral-950 text-base font-black
-                text-white shadow-[0_0_18px_rgba(168,85,247,0.55)]
-                active:scale-95
-              "
-            >
-              ↻
-            </button>
-
-            <span
-              onPointerDown={(e) => resizeElement(e, "tl")}
-              className="pointer-events-auto absolute -left-3 -top-3 h-5 w-5 cursor-nwse-resize rounded-full border border-white/70 bg-violet-600 shadow-lg active:scale-110"
-            />
-            <span
-              onPointerDown={(e) => resizeElement(e, "tr")}
-              className="pointer-events-auto absolute -right-3 -top-3 h-5 w-5 cursor-nesw-resize rounded-full border border-white/70 bg-violet-600 shadow-lg active:scale-110"
-            />
-            <span
-              onPointerDown={(e) => resizeElement(e, "bl")}
-              className="pointer-events-auto absolute -bottom-3 -left-3 h-5 w-5 cursor-nesw-resize rounded-full border border-white/70 bg-violet-600 shadow-lg active:scale-110"
-            />
-            <span
-              onPointerDown={(e) => resizeElement(e, "br")}
-              className="pointer-events-auto absolute -bottom-3 -right-3 h-5 w-5 cursor-nwse-resize rounded-full border border-white/70 bg-violet-600 shadow-lg active:scale-110"
+            <ElementControls
+              rotateElement={rotateElement}
+              flipElement={flipElement}
+              duplicateElement={duplicateElement}
+              removeElement={removeElement}
             />
 
-            <div
-              className="
-                pointer-events-auto absolute -bottom-14 left-1/2 flex
-                -translate-x-1/2 items-center gap-1 rounded-full
-                border border-violet-500/60 bg-neutral-950/95 px-3 py-2
-                text-[11px] font-bold text-white shadow-[0_0_24px_rgba(0,0,0,0.5)]
-                backdrop-blur-md
-                md:-bottom-14
-              "
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            >
-              <button
-                type="button"
-                className="rounded-full px-2.5 py-1 hover:bg-violet-600 active:scale-95"
-                onPointerDown={flipElement}
-              >
-                Flip
-              </button>
-
-              <button
-                type="button"
-                className="rounded-full px-2.5 py-1 hover:bg-violet-600 active:scale-95"
-                onPointerDown={duplicateElement}
-              >
-                Copy
-              </button>
-
-              <button
-                type="button"
-                className="rounded-full px-2.5 py-1 text-red-300 hover:bg-red-600 hover:text-white active:scale-95"
-                onPointerDown={removeElement}
-              >
-                Delete
-              </button>
-            </div>
+            <ResizeHandles resizeElement={resizeElement} />
           </div>
         )}
       </div>

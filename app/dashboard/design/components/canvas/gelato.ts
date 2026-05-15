@@ -40,21 +40,18 @@ export function mapElementToGelatoExport(
   const safeArea = getSafeArea(printBox);
   const exportSize = getGelatoExportSizePx(productId, side);
 
-  const scaleX = exportSize.width / printBox.width;
-  const scaleY = exportSize.height / printBox.height;
+  const scaleX = exportSize.width / safeArea.width;
+  const scaleY = exportSize.height / safeArea.height;
 
   return {
     ...el,
-    x: Math.round((el.x - printBox.x) * scaleX),
-    y: Math.round((el.y - printBox.y) * scaleY),
+
+    x: Math.round((el.x - safeArea.x) * scaleX),
+    y: Math.round((el.y - safeArea.y) * scaleY),
+
     width: el.width ? Math.round(el.width * scaleX) : undefined,
     height: el.height ? Math.round(el.height * scaleY) : undefined,
-    safeArea: {
-      x: Math.round((safeArea.x - printBox.x) * scaleX),
-      y: Math.round((safeArea.y - printBox.y) * scaleY),
-      width: Math.round(safeArea.width * scaleX),
-      height: Math.round(safeArea.height * scaleY),
-    },
+
     meta: {
       ...(el.meta || {}),
       fontSize: el.meta?.fontSize
@@ -70,6 +67,7 @@ export function getGelatoProductionPayload(
   side: Side = "front"
 ) {
   const printBox = getPrintBox(productId, side);
+  const safeArea = getSafeArea(printBox);
 
   return {
     side,
@@ -77,7 +75,9 @@ export function getGelatoProductionPayload(
     transparentBackground: true,
     exportSizePx: getGelatoExportSizePx(productId, side),
     printBox,
-    safeArea: getSafeArea(printBox),
-    elements: elements.map((el) => mapElementToGelatoExport(el, productId, side)),
+    safeArea,
+    elements: elements.map((el) =>
+      mapElementToGelatoExport(el, productId, side)
+    ),
   };
 }
