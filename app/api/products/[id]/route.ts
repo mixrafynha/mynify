@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServer } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
@@ -13,88 +13,97 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = (params?.id || "").trim();
+    const supabase = await createSupabaseServer();
+    const id = params?.id?.trim();
 
     if (!id) {
-      return NextResponse.json(
-        { error: "Invalid id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
     }
 
-    /* =========================
-       PRODUCT
-    ========================= */
-    const { data: product, error } = await supabase
+    const { data: product, error: productError } = await supabase
       .from("products")
-      .select(
-        "id, slug, title, description, price, currency, image, images, is_active"
-      )
-      .eq("is_active", true)
-      .or(`id.eq.${id},slug.eq.${id}`)
+      .select("*")
+      .eq("id", id)
       .maybeSingle();
 
-    if (error || !product) {
+    if (productError || !product) {
+      console.error("PRODUCT ERROR:", productError);
+
       return NextResponse.json(
         { error: "Product not found" },
         { status: 404 }
       );
     }
 
-    /* =========================
-       VARIANTS
-    ========================= */
-    const { data: rawVariants } = await supabase
-      .from("product_variants")
+    const { data: colorsData, error: colorsError } = await supabase
+      .from("product_colors")
       .select("*")
-      .eq("product_id", product.id);
+      .eq("product_id", product.id)
+      .order("position", { ascending: true });
 
-    const variants = (rawVariants ?? [])
-      .map((v: any) => ({
-        id: v.id,
-        product_id: v.product_id,
-        name: v.name ?? null,
-        color: normalize(v.color),
-        size: normalize(v.size),
-        stock: Number(v.stock ?? 0),
-        price: v.price != null ? Number(v.price) : null,
-        color_hex: v.color_hex || "#ccc",
-        sku: v.sku ?? null,
-      }))
-      .filter((v) => v.price != null); // 👈 REMOVE variantes sem preço
+    if (colorsError) {
+      console.error("COLORS ERROR:", colorsError);
 
-    /* =========================
-       IMAGES
-    ========================= */
+      return NextResponse.json(
+        { error: colorsError.message },
+        { status: 500 }
+      );
+    }
+
+    const colors = (colorsData || []).map((c: any) => ({
+      id: c.id,
+      product_id: c.product_id,
+      color: c.color,
+      color_hex: c.color_hex || "#ccc",
+      mockup_front: c.mockup_front,
+      mockup_back: c.mockup_back,
+      thumbnail: c.thumbnail,
+      position: c.position,
+    }));
+
+    const colorIds = colors.map((c: any) => c.id);
+
+    let variants: any[] = [];
+
+    if (colorIds.length > 0) {
+      const { data: variantsData, error: variantsError } = await supabase
+        .from("product_variants")
+        .select("*")
+        .in("product_color_id", colorIds);
+
+      if (variantsError) {
+        console.error("VARIANTS ERROR:", variantsError);
+
+        return NextResponse.json(
+          { error: variantsError.message },
+          { status: 500 }
+        );
+      }
+
+      variants = (variantsData || []).map((v: any) => {
+        const color = colors.find((c: any) => c.id === v.product_color_id);
+
+        return {
+          id: v.id,
+          product_id: product.id,
+          product_color_id: v.product_color_id,
+          name: v.name ?? null,
+          size: normalize(v.size),
+          stock: Number(v.stock ?? 0),
+          price: v.price != null ? Number(v.price) : null,
+          sku: v.sku ?? null,
+          color: color?.color || null,
+          color_hex: color?.color_hex || "#ccc",
+        };
+      });
+    }
+
     const images = Array.isArray(product.images)
       ? product.images.filter(Boolean)
       : product.image
       ? [product.image]
       : [];
 
-    /* =========================
-       COLORS
-    ========================= */
-    const colorsMap = new Map();
-
-    for (const v of variants) {
-      if (!v.color) continue;
-
-      if (!colorsMap.has(v.color)) {
-        colorsMap.set(v.color, {
-          color: v.color,
-          color_hex: v.color_hex || "#ccc",
-        });
-      }
-    }
-
-    const colors = Array.from(colorsMap.values());
-
-    /* =========================
-       PRICE (CORRIGIDO)
-    ========================= */
-
-    // 🔥 regra: menor preço das variantes (mais correto para ecommerce)
     const variantPrices = variants
       .map((v) => v.price)
       .filter((p): p is number => typeof p === "number");
@@ -102,39 +111,29 @@ export async function GET(
     const price =
       variantPrices.length > 0
         ? Math.min(...variantPrices)
-        : product.price;
+        : Number(product.price);
 
-    /* =========================
-       DEFAULT VARIANT
-    ========================= */
     const defaultVariant =
-      variants.find((v) => v.stock > 0) ||
-      variants[0] ||
-      null;
+      variants.find((v) => v.stock > 0) || variants[0] || null;
 
-    /* =========================
-       RESPONSE
-    ========================= */
-    return NextResponse.json({
-      id: product.id,
-      slug: product.slug,
-      title: product.title,
-      description: product.description,
-      currency: product.currency,
-      is_active: product.is_active,
-
+    const responseProduct = {
+      ...product,
       price,
       images,
-
-      variants,
       colors,
+      variants,
       defaultVariant,
+    };
+
+    return NextResponse.json({
+      product: responseProduct,
+      ...responseProduct,
     });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error("GET PRODUCT ERROR:", err);
 
     return NextResponse.json(
-      { error: "Server error" },
+      { error: err.message || "Server error" },
       { status: 500 }
     );
   }
