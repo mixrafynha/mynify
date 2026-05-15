@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import SafeArea from "@/app/dashboard/design/components/SafeArea";
 import CanvasMockup from "./canvas/CanvasMockup";
+import DraggableElement from "./DraggableElement";
 import {
   PRODUCTS,
   MOCKUP_AREA,
