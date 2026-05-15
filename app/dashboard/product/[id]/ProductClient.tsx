@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
-
-import { supabase } from "@/lib/supabase";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 
 import { ProductBreadcrumb } from "./ProductBreadcrumb";
 import { ProductLeft } from "./ProductLeft";
@@ -17,9 +9,17 @@ import { ProductRight } from "./ProductRight";
 type Variant = {
   id: string;
   size?: string;
-  color?: string;
   stock?: number;
+  price?: number | null;
+  sku?: string | null;
+  color?: string | null;
+  color_hex?: string | null;
+  product_color_id?: string;
 };
+
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+
+const normalizeSize = (size: any) => String(size ?? "").trim().toUpperCase();
 
 export default function ProductClient({
   product,
@@ -34,66 +34,88 @@ export default function ProductClient({
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
-  const userRef = useRef<any>(null);
   const lastSaveRef = useRef(0);
 
-  /* ================= SAFE IMAGES ================= */
-  const safeImages = useMemo(() => {
-    return images?.length ? images : ["/placeholder.png"];
-  }, [images]);
+  const safeImages = useMemo(
+    () => (images?.length ? images : ["/placeholder.png"]),
+    [images]
+  );
 
-  /* ================= FETCH VARIANTS ================= */
   useEffect(() => {
-    if (!id) return;
+    const mapped = Array.isArray(product?.variants)
+      ? product.variants.map((v: Variant) => ({
+          ...v,
+          size: normalizeSize(v.size),
+          stock: Number(v.stock ?? 0),
+          price: v.price != null ? Number(v.price) : null,
+          color: v.color ?? null,
+          color_hex: v.color_hex || "#cccccc",
+        }))
+      : [];
 
-    const loadVariants = async () => {
-      const { data, error } = await supabase
-        .from("product_variants")
-        .select("*")
-        .eq("product_id", id);
+    mapped.sort((a: Variant, b: Variant) => {
+      const aIndex = SIZE_ORDER.indexOf(normalizeSize(a.size));
+      const bIndex = SIZE_ORDER.indexOf(normalizeSize(b.size));
 
-      if (error) return console.error(error);
+      const safeA = aIndex === -1 ? 999 : aIndex;
+      const safeB = bIndex === -1 ? 999 : bIndex;
 
-      const list = data || [];
-      setVariants(list);
+      return safeA - safeB;
+    });
 
-      const initial =
-        list.find((v) => (v.stock ?? 0) > 0) || list[0];
+    setVariants(mapped);
 
-      if (initial) {
-        setSelectedVariant(initial);
-        setSelectedColor(initial.color ?? null);
-      }
-    };
+    const initial =
+      mapped.find((v: Variant) => (v.stock ?? 0) > 0) || mapped[0] || null;
 
-    loadVariants();
-  }, [id]);
+    setSelectedVariant(initial);
+    setSelectedColor(initial?.color ?? null);
+  }, [product]);
 
-  /* ================= SAVE (THROTTLED SAFE) ================= */
+  const colors = useMemo(() => {
+    return Array.from(
+      new Map(
+        variants
+          .filter((v) => v.color)
+          .map((v) => [
+            String(v.color).toLowerCase(),
+            {
+              name: v.color,
+              hex: v.color_hex || "#cccccc",
+              variant: v,
+            },
+          ])
+      ).values()
+    );
+  }, [variants]);
+
+  const availableVariants = useMemo(() => {
+    if (!selectedColor) return variants;
+
+    return variants.filter(
+      (v) =>
+        String(v.color).toLowerCase() === String(selectedColor).toLowerCase()
+    );
+  }, [variants, selectedColor]);
+
   const saveSelection = useCallback(
     async (variant: Variant | null, color: string | null) => {
       try {
         const now = Date.now();
         if (now - lastSaveRef.current < 700) return;
+
         lastSaveRef.current = now;
 
-        if (!userRef.current) {
-          const { data } = await supabase.auth.getUser();
-          userRef.current = data?.user ?? null;
-        }
-
-        const user = userRef.current;
-        if (!user?.id || !variant || !id) return;
-
-        await supabase.from("user_selections").upsert(
-          {
-            user_id: user.id,
+        await fetch("/api/user-selection", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             product_id: id,
-            size: variant.size ?? null,
+            variant_id: variant?.id ?? null,
+            size: variant?.size ?? null,
             color,
-          },
-          { onConflict: "user_id,product_id" }
-        );
+          }),
+        });
       } catch (err) {
         console.error(err);
       }
@@ -101,14 +123,25 @@ export default function ProductClient({
     [id]
   );
 
-  /* ================= HANDLERS ================= */
   const handleColorChange = useCallback(
-    (color: string, variant: Variant) => {
+    (color: string, variant?: Variant) => {
+      const nextVariant =
+        variant ||
+        variants.find(
+          (v) =>
+            String(v.color).toLowerCase() === String(color).toLowerCase() &&
+            (v.stock ?? 0) > 0
+        ) ||
+        variants.find(
+          (v) => String(v.color).toLowerCase() === String(color).toLowerCase()
+        ) ||
+        null;
+
       setSelectedColor(color);
-      setSelectedVariant(variant);
-      saveSelection(variant, color);
+      setSelectedVariant(nextVariant);
+      saveSelection(nextVariant, color);
     },
-    [saveSelection]
+    [variants, saveSelection]
   );
 
   const handleSizeChange = useCallback(
@@ -123,33 +156,26 @@ export default function ProductClient({
     [saveSelection, selectedColor]
   );
 
-  /* ================= UI (FLAT PREMIUM LAYOUT) ================= */
   return (
-    <div className="w-full space-y-6">
-
-      {/* breadcrumb leve */}
+    <div className="w-full space-y-7">
       <div className="px-1 sm:px-0">
         <ProductBreadcrumb title={product?.title} />
       </div>
 
-      {/* layout principal */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start">
-
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-start">
         <ProductLeft
           images={safeImages}
           product={product}
           variants={variants}
+          availableVariants={availableVariants}
+          colors={colors}
           selectedColor={selectedColor}
           selectedVariant={selectedVariant}
           onColorChange={handleColorChange}
           onSizeChange={handleSizeChange}
         />
 
-        <ProductRight
-          product={product}
-          selectedVariant={selectedVariant}
-        />
-
+        <ProductRight product={product} selectedVariant={selectedVariant} />
       </div>
     </div>
   );
