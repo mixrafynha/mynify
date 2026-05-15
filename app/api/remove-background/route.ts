@@ -60,11 +60,14 @@ export async function POST(req: Request) {
       .png()
       .toBuffer();
 
-    return new Response(trimmedBuffer, {
-      headers: {
-        "Content-Type": "image/png",
-      },
-    });
+    return new Response(
+      new Uint8Array(trimmedBuffer),
+      {
+        headers: {
+          "Content-Type": "image/png",
+        },
+      }
+    );
   } catch (err: any) {
     return NextResponse.json(
       {
