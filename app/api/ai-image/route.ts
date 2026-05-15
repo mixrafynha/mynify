@@ -1,5 +1,3 @@
-// app/api/ai-image/route.ts
-
 import { NextResponse } from "next/server";
 
 const sleep = (ms: number) =>
@@ -10,7 +8,6 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     const prompt = body?.prompt;
-    const transparent = body?.transparent ?? true;
 
     if (!prompt || typeof prompt !== "string") {
       return NextResponse.json(
@@ -19,7 +16,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // CREATE GENERATION
     const createResponse = await fetch(
       "https://cloud.leonardo.ai/api/rest/v1/generations",
       {
@@ -29,64 +25,39 @@ export async function POST(req: Request) {
           "content-type": "application/json",
           authorization: `Bearer ${process.env.LEONARDO_API_KEY}`,
         },
-
         body: JSON.stringify({
           modelId: "b2614463-296c-462a-9586-aafdb8f00e36",
-
           prompt,
-
           num_images: 1,
 
-          // BIGGER SIZE
+          // maiorzinho
           width: 1536,
           height: 1536,
 
           enhancePrompt: true,
-
-          // TRANSPARENT PNG STYLE
-          ...(transparent
-            ? {
-                transparency: "foreground_only",
-              }
-            : {}),
         }),
       }
     );
 
     const createData = await createResponse.json();
-
     console.log("CREATE DATA:", createData);
 
     if (!createResponse.ok) {
       return NextResponse.json(
-        {
-          error: "Erro Leonardo API",
-          details: createData,
-        },
-        {
-          status: createResponse.status,
-        }
+        { error: "Erro Leonardo API", details: createData },
+        { status: createResponse.status }
       );
     }
 
-    const generationId =
-      createData?.sdGenerationJob?.generationId;
+    const generationId = createData?.sdGenerationJob?.generationId;
 
     if (!generationId) {
       return NextResponse.json(
-        {
-          error: "Generation ID não encontrado",
-          details: createData,
-        },
-        {
-          status: 500,
-        }
+        { error: "Generation ID não encontrado", details: createData },
+        { status: 500 }
       );
     }
 
-    let imageUrl: string | null = null;
-
-    // WAIT FOR IMAGE
     for (let i = 0; i < 40; i++) {
       await sleep(1800);
 
@@ -102,41 +73,64 @@ export async function POST(req: Request) {
       );
 
       const getData = await getResponse.json();
-
       console.log("GET DATA:", getData);
 
       if (!getResponse.ok) {
         return NextResponse.json(
-          {
-            error: "Erro ao buscar imagem",
-            details: getData,
-          },
-          {
-            status: getResponse.status,
-          }
+          { error: "Erro ao buscar imagem", details: getData },
+          { status: getResponse.status }
         );
       }
 
-      imageUrl =
+      const imageUrl =
         getData?.generations_by_pk?.generated_images?.[0]?.url;
 
       if (imageUrl) {
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+          ? process.env.NEXT_PUBLIC_APP_URL
+          : process.env.VERCEL_URL
+            ? `https://${process.env.VERCEL_URL}`
+            : "http://localhost:3000";
+
+        const removeBgResponse = await fetch(
+          `${baseUrl}/api/remove-background`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ imageUrl }),
+          }
+        );
+
+        if (!removeBgResponse.ok) {
+          const details = await removeBgResponse.text();
+
+          return NextResponse.json(
+            {
+              error: "Imagem gerada, mas falhou ao remover fundo",
+              originalImageUrl: imageUrl,
+              details,
+            },
+            { status: 500 }
+          );
+        }
+
+        const arrayBuffer = await removeBgResponse.arrayBuffer();
+        const base64 = Buffer.from(arrayBuffer).toString("base64");
+
         return NextResponse.json({
           success: true,
-          imageUrl,
+          imageUrl: `data:image/png;base64,${base64}`,
+          originalImageUrl: imageUrl,
           generationId,
         });
       }
     }
 
     return NextResponse.json(
-      {
-        error: "Tempo excedido ao gerar imagem",
-        generationId,
-      },
-      {
-        status: 504,
-      }
+      { error: "Tempo excedido ao gerar imagem", generationId },
+      { status: 504 }
     );
   } catch (error: any) {
     console.error("AI IMAGE ERROR:", error);
@@ -146,9 +140,7 @@ export async function POST(req: Request) {
         error: "Erro interno ao gerar imagem",
         details: error?.message || "Unknown error",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
