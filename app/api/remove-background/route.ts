@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 
 export async function POST(req: Request) {
   try {
@@ -41,9 +42,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const arrayBuffer = await response.arrayBuffer();
+    const inputBuffer = Buffer.from(
+      await response.arrayBuffer()
+    );
 
-    return new Response(arrayBuffer, {
+    // REMOVE EMPTY TRANSPARENT SPACE
+    const trimmedBuffer = await sharp(inputBuffer)
+      .trim({
+        background: {
+          r: 0,
+          g: 0,
+          b: 0,
+          alpha: 0,
+        },
+        threshold: 5,
+      })
+      .png()
+      .toBuffer();
+
+    return new Response(trimmedBuffer, {
       headers: {
         "Content-Type": "image/png",
       },
