@@ -3,17 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import SafeArea from "@/app/dashboard/design/components/SafeArea";
-
-import { PRODUCTS } from "./canvas";
-import { MOCKUP_AREA } from "./canvas/constants";
 import {
+  PRODUCTS,
+  MOCKUP_AREA,
   getPrintBox,
   getSafeArea,
   clampElementToSafeArea,
-} from "./canvas/canvasMath";
-import { Side } from "./canvas/types";
-import DraggableElement from "./DraggableElement";
-import CanvasMockup from "./canvas/CanvasMockup";
+  type Side,
+} from "./canvas";
 
 const DESKTOP_ZOOM_BOOST = 0.68;
 const MOBILE_ZOOM_BOOST = 0.92;
