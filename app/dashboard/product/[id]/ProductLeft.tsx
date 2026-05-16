@@ -10,9 +10,11 @@ type Props = {
   images: string[];
   product: any;
   variants: any[];
+  availableVariants: any[];
+  colors: any[];
   selectedColor: string | null;
   selectedVariant: any;
-  onColorChange: (color: string, variant: any) => void;
+  onColorChange: (color: string, variant?: any) => void;
   onSizeChange: (variant: any) => void;
 };
 
@@ -27,6 +29,7 @@ export function ProductLeft({
   images,
   product,
   variants,
+  availableVariants,
   selectedColor,
   selectedVariant,
   onColorChange,
@@ -41,14 +44,18 @@ export function ProductLeft({
 
     const loadReviews = async () => {
       try {
-        const res = await fetch(`/api/product-reviews?productId=${product.id}`, {
-          cache: "no-store",
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          `/api/product-reviews?productId=${product.id}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          }
+        );
 
         if (!res.ok) return;
 
         const json = await res.json();
+
         setReviews(Array.isArray(json?.reviews) ? json.reviews : []);
       } catch (err: any) {
         if (err?.name !== "AbortError") {
@@ -75,7 +82,7 @@ export function ProductLeft({
         />
 
         <SizeSelector
-          variants={variants}
+          variants={availableVariants}
           selectedVariant={selectedVariant}
           selectedColor={selectedColor}
           onChange={onSizeChange}
