@@ -1,52 +1,25 @@
 @import "tailwindcss";
 
-/* ================= RESET GLOBAL ================= */
 html,
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
   overflow-x: hidden;
-
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
 }
 
-/* ================= BASE TIPOGRAFIA PREMIUM ================= */
 body {
   font-family: var(--font-manrope), system-ui, sans-serif;
   color: #111827;
   line-height: 1.6;
-  letter-spacing: -0.02em;
 }
 
-/* ================= HEADINGS (SAAS STYLE) ================= */
-h1, h2, h3, h4 {
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  font-weight: 600;
-  font-family: var(--font-manrope), system-ui, sans-serif;
-}
-
-/* ================= LINKS ================= */
-a {
-  text-underline-offset: 3px;
-}
-
-/* ================= SELECTION (MODERNO) ================= */
 ::selection {
   background-color: #10b981;
   color: white;
 }
 
-/* ================= SCROLL SMOOTH ================= */
-html {
-  scroll-behavior: smooth;
-}
-
-/* ================= 3D EFFECTS ================= */
 .perspective {
   perspective: 1200px;
 }
