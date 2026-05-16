@@ -21,6 +21,29 @@ const sanitize = (value: string) =>
     .trim()
     .slice(0, 254);
 
+const sendLoginLog = async (data: {
+  userId?: string;
+  email?: string | null;
+  provider: "password" | "google" | "apple";
+}) => {
+  try {
+    await fetch("/api/log", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      keepalive: true,
+      body: JSON.stringify({
+        event: "login",
+        level: "info",
+        data,
+      }),
+    });
+  } catch {
+    // Não bloqueia o login se o log falhar
+  }
+};
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -156,6 +179,12 @@ export default function LoginPage() {
         throw new Error("No session created");
       }
 
+      await sendLoginLog({
+        userId: data.session.user.id,
+        email: data.session.user.email,
+        provider: "password",
+      });
+
       router.replace("/dashboard");
     } catch {
       setError("Invalid email or password");
@@ -172,6 +201,10 @@ export default function LoginPage() {
 
     try {
       if (typeof window === "undefined") return;
+
+      await sendLoginLog({
+        provider: "google",
+      });
 
       await supabase.auth.signInWithOAuth({
         provider: "google",
@@ -191,6 +224,10 @@ export default function LoginPage() {
 
     try {
       if (typeof window === "undefined") return;
+
+      await sendLoginLog({
+        provider: "apple",
+      });
 
       await supabase.auth.signInWithOAuth({
         provider: "apple",
@@ -258,38 +295,40 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="relative flex items-center justify-center overflow-hidden bg-[#03030a] p-6">
+        <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#03030a] px-4 py-6 sm:px-6 md:p-6">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
 
-          <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:p-8">
+          <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <button
               onClick={() => router.push(safeRoute("/"))}
-              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white"
+              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white sm:right-4 sm:top-4"
             >
               <X size={18} />
             </button>
 
-            <div className="mb-6 flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
+            <div className="mb-6 flex items-center gap-3 pr-12">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)] sm:h-11 sm:w-11">
                 M
               </div>
 
-              <span className="text-xl font-black tracking-tight">MYNIFY</span>
+              <span className="text-lg font-black tracking-tight sm:text-xl">
+                MYNIFY
+              </span>
             </div>
 
-            <h2 className="mb-2 text-3xl font-black uppercase">
+            <h2 className="mb-2 text-2xl font-black uppercase sm:text-3xl">
               Welcome back
             </h2>
 
-            <p className="mb-6 text-sm leading-relaxed text-white/50">
+            <p className="mb-5 text-sm leading-relaxed text-white/50 sm:mb-6">
               Sign in to continue building your custom product brand.
             </p>
 
-            <div className="mb-6 space-y-3">
+            <div className="mb-5 space-y-3 sm:mb-6">
               <button
                 disabled={loading}
                 onClick={handleGoogle}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
               >
                 <FcGoogle size={20} />
                 Continue with Google
@@ -298,25 +337,27 @@ export default function LoginPage() {
               <button
                 disabled={loading}
                 onClick={handleApple}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 py-3.5 font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
               >
                 <FaApple size={20} />
                 Continue with Apple
               </button>
             </div>
 
-            <div className="my-6 flex items-center gap-3">
+            <div className="my-5 flex items-center gap-3 sm:my-6">
               <div className="h-px flex-1 bg-white/10" />
               <span className="text-xs font-bold text-white/35">OR</span>
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                inputMode="email"
+                autoComplete="email"
+                className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20 sm:py-4"
               />
 
               <div className="relative">
@@ -325,13 +366,14 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-12 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                  autoComplete="current-password"
+                  className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20 sm:py-4"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-white/45 transition hover:text-purple-300"
+                  className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-white/45 transition hover:bg-white/5 hover:text-purple-300"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
@@ -346,8 +388,8 @@ export default function LoginPage() {
                 </span>
               </div>
 
-              <div className="flex min-h-[65px] justify-center rounded-2xl border border-white/10 bg-white/5 p-2">
-                <div ref={captchaRef} />
+              <div className="flex min-h-[70px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2">
+                <div ref={captchaRef} className="max-w-full scale-[0.92] sm:scale-100" />
               </div>
 
               {error && (
@@ -360,13 +402,13 @@ export default function LoginPage() {
                 type="button"
                 onClick={handleLogin}
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                className="flex min-h-13 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition active:scale-[0.98] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {loading ? "Signing in..." : "Sign in"}
                 <Zap size={18} />
               </button>
 
-              <p className="text-center text-sm text-white/50 md:text-left">
+              <p className="text-center text-sm text-white/50">
                 Don’t have an account?{" "}
                 <span
                   onClick={() => router.push("/signup")}
