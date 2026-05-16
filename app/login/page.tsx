@@ -27,7 +27,7 @@ const sendLoginLog = async (data: {
   provider: "password" | "google" | "apple";
 }) => {
   try {
-    await fetch("/api/log", {
+    await fetch("/api/logs", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -58,6 +58,7 @@ export default function LoginPage() {
 
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+  const manualLoginRef = useRef(false);
 
   useEffect(() => {
     let ignore = false;
@@ -83,6 +84,8 @@ export default function LoginPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       if (ignore) return;
+
+      if (manualLoginRef.current) return;
 
       if (session?.user) {
         safeRedirect();
@@ -147,6 +150,7 @@ export default function LoginPage() {
 
     setLoading(true);
     setError("");
+    manualLoginRef.current = true;
 
     try {
       const safeEmail = sanitize(email.toLowerCase());
@@ -162,6 +166,7 @@ export default function LoginPage() {
       if (!token) {
         setError("Verify captcha");
         setLoading(false);
+        manualLoginRef.current = false;
         return;
       }
 
@@ -187,6 +192,7 @@ export default function LoginPage() {
 
       router.replace("/dashboard");
     } catch {
+      manualLoginRef.current = false;
       setError("Invalid email or password");
       resetCaptcha();
     } finally {
@@ -389,7 +395,10 @@ export default function LoginPage() {
               </div>
 
               <div className="flex min-h-[70px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2">
-                <div ref={captchaRef} className="max-w-full scale-[0.92] sm:scale-100" />
+                <div
+                  ref={captchaRef}
+                  className="max-w-full scale-[0.92] sm:scale-100"
+                />
               </div>
 
               {error && (
