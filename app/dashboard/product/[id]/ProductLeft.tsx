@@ -10,15 +10,9 @@ type Props = {
   images: string[];
   product: any;
   variants: any[];
-  availableVariants: any[];
-  colors: {
-    name: string | null | undefined;
-    hex: string;
-    variant: any;
-  }[];
   selectedColor: string | null;
   selectedVariant: any;
-  onColorChange: (color: string, variant?: any) => void;
+  onColorChange: (color: string, variant: any) => void;
   onSizeChange: (variant: any) => void;
 };
 
@@ -33,8 +27,6 @@ export function ProductLeft({
   images,
   product,
   variants,
-  availableVariants,
-  colors,
   selectedColor,
   selectedVariant,
   onColorChange,
@@ -42,38 +34,39 @@ export function ProductLeft({
 }: Props) {
   const [reviews, setReviews] = useState<Review[]>([]);
 
-  void colors;
-
   useEffect(() => {
+    if (!product?.id) return;
+
+    const controller = new AbortController();
+
     const loadReviews = async () => {
       try {
-        const res = await fetch(
-          `/api/product-reviews?productId=${product?.id}`,
-          {
-            cache: "no-store",
-          }
-        );
+        const res = await fetch(`/api/product-reviews?productId=${product.id}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        if (!res.ok) return;
 
         const json = await res.json();
-
-        setReviews(json?.reviews || []);
-      } catch (err) {
-        console.error(err);
+        setReviews(Array.isArray(json?.reviews) ? json.reviews : []);
+      } catch (err: any) {
+        if (err?.name !== "AbortError") {
+          console.error("LOAD REVIEWS ERROR:", err);
+        }
       }
     };
 
-    if (product?.id) {
-      loadReviews();
-    }
+    loadReviews();
+
+    return () => controller.abort();
   }, [product?.id]);
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-xl overflow-hidden">
-        <ProductGallery images={images} title={product?.title} />
-      </div>
+    <div className="min-w-0 space-y-4">
+      <ProductGallery images={images} title={product?.title} />
 
-      <div className="space-y-4">
+      <div className="space-y-4 border-t border-white/10 pt-4">
         <ColorSelector
           variants={variants}
           selectedColor={selectedColor}
@@ -82,7 +75,7 @@ export function ProductLeft({
         />
 
         <SizeSelector
-          variants={availableVariants}
+          variants={variants}
           selectedVariant={selectedVariant}
           selectedColor={selectedColor}
           onChange={onSizeChange}
@@ -90,30 +83,34 @@ export function ProductLeft({
       </div>
 
       {reviews.length > 0 && (
-        <div className="space-y-3">
-          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+        <div className="border-t border-white/10 pt-4">
+          <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-purple-300">
             Verified customers
           </p>
 
           <div className="space-y-3">
-            {reviews.map((r) => (
-              <div key={r.id} className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold">
-                  {r.name?.[0] ?? "U"}
+            {reviews.map((review) => (
+              <div key={review.id} className="flex items-start gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500 text-xs font-black text-white">
+                  {review.name?.[0]?.toUpperCase() ?? "U"}
                 </div>
 
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">{r.name}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-bold text-white">
+                      {review.name || "Customer"}
+                    </p>
 
-                    {r.verified && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-600">
+                    {review.verified && (
+                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
                         verified
                       </span>
                     )}
                   </div>
 
-                  <p className="text-xs text-gray-500">{r.message}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-white/50">
+                    {review.message}
+                  </p>
                 </div>
               </div>
             ))}
