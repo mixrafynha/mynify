@@ -3,22 +3,16 @@ import ProductClient from "./ProductClient";
 import { ArrowLeft } from "lucide-react";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
-/* ================= HELPERS ================= */
-
 const normalize = (v: any) =>
   String(v ?? "")
     .trim()
     .toLowerCase();
-
-/* ================= SAFE FETCH ================= */
 
 async function getProduct(id: string) {
   try {
     if (!id) return null;
 
     const supabase = await createSupabaseServer();
-
-    /* ================= PRODUCT ================= */
 
     const { data: product, error: productError } = await supabase
       .from("products")
@@ -30,8 +24,6 @@ async function getProduct(id: string) {
       console.error("PRODUCT ERROR:", productError);
       return null;
     }
-
-    /* ================= COLORS ================= */
 
     const { data: colorsData, error: colorsError } = await supabase
       .from("product_colors")
@@ -56,8 +48,6 @@ async function getProduct(id: string) {
     }));
 
     const colorIds = colors.map((color: any) => color.id);
-
-    /* ================= VARIANTS ================= */
 
     let variants: any[] = [];
 
@@ -92,31 +82,21 @@ async function getProduct(id: string) {
       });
     }
 
-    /* ================= IMAGES ================= */
-
     const images = Array.isArray(product.images)
       ? product.images.filter(Boolean)
       : product.image
       ? [product.image]
       : [];
 
-    /* ================= PRICE ================= */
-
     const variantPrices = variants
       .map((variant) => variant.price)
       .filter((price): price is number => typeof price === "number");
 
     const price =
-      variantPrices.length > 0
-        ? Math.min(...variantPrices)
-        : product.price;
-
-    /* ================= DEFAULT VARIANT ================= */
+      variantPrices.length > 0 ? Math.min(...variantPrices) : product.price;
 
     const defaultVariant =
-      variants.find((variant) => variant.stock > 0) ||
-      variants[0] ||
-      null;
+      variants.find((variant) => variant.stock > 0) || variants[0] || null;
 
     return {
       ...product,
@@ -132,15 +112,11 @@ async function getProduct(id: string) {
   }
 }
 
-/* ================= USER FETCH ================= */
-
 async function getUser() {
   const supabase = await createSupabaseServer();
   const { data } = await supabase.auth.getUser();
   return data.user;
 }
-
-/* ================= PAGE ================= */
 
 export default async function ProductPage({
   params,
@@ -151,9 +127,9 @@ export default async function ProductPage({
 
   if (!id) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-red-500">
+      <main className="flex min-h-screen items-center justify-center bg-[#03030a] px-4 text-center text-red-400">
         Invalid product ID
-      </div>
+      </main>
     );
   }
 
@@ -161,81 +137,85 @@ export default async function ProductPage({
 
   if (!product) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 text-gray-500">
+      <main className="flex min-h-screen items-center justify-center bg-[#03030a] px-4 text-center text-white/55">
         Product not found
-      </div>
+      </main>
     );
   }
 
   const isAdmin = user?.user_metadata?.role === "admin";
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-white">
-      <header className="sticky top-0 z-50 border-b border-gray-200/60 bg-white/70 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="text-2xl font-extrabold tracking-tight hover:opacity-80 transition"
-          >
-            MY<span className="text-green-500">NIFY</span>
-          </Link>
+    <main className="min-h-screen overflow-x-hidden bg-[#03030a] text-white">
+      <section className="relative min-h-screen overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_45%_48%,rgba(14,165,233,0.1),transparent_28%)] md:bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.24),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.14),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.15)_0%,#03030a_100%)]" />
 
-          <Link href="/dashboard">
-            <button className="group bg-black text-white p-3 rounded-xl hover:opacity-90 active:scale-[0.98] transition flex items-center justify-center">
+        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#03030a]/92 md:bg-[#03030a]/80 md:backdrop-blur-xl">
+          <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
+            <Link
+              href="/"
+              className="text-3xl font-black tracking-tight text-white transition active:scale-[0.98] md:text-3xl md:hover:opacity-80"
+            >
+              MY
+              <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+                NIFY
+              </span>
+            </Link>
+
+            <Link
+              href="/dashboard/product"
+              className="group absolute right-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.07] text-white transition active:scale-[0.98] sm:right-5 md:static md:h-11 md:w-11 md:hover:border-purple-500/40 md:hover:bg-white/10"
+              aria-label="Back to products"
+            >
               <ArrowLeft
                 size={18}
-                className="transition-transform group-hover:-translate-x-0.5"
+                className="md:transition-transform md:group-hover:-translate-x-0.5"
+                aria-hidden="true"
               />
-            </button>
-          </Link>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-        <div className="rounded-3xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-          <div className="h-1 w-full bg-gradient-to-r from-green-400 via-emerald-500 to-green-400" />
-
-          <div className="p-4 sm:p-6 lg:p-10">
-            <ProductClient product={product} images={product.images} id={id} />
-
-            {isAdmin && (
-              <div className="mt-8 p-4 rounded-2xl border border-gray-200 bg-gray-50">
-                <p className="text-sm font-medium text-gray-700">
-                  Admin tools
-                </p>
-
-                <div className="flex gap-2 mt-3">
-                  <Link href={`/admin/products/${product.id}`}>
-                    <button className="px-4 py-2 rounded-xl bg-black text-white">
-                      Edit product
-                    </button>
-                  </Link>
-
-                  <form
-                    action={async () => {
-                      "use server";
-
-                      await fetch(
-                        `${process.env.NEXT_PUBLIC_SITE_URL}/api/products/${product.id}`,
-                        {
-                          method: "DELETE",
-                        }
-                      );
-                    }}
-                  >
-                    <button
-                      type="submit"
-                      className="px-4 py-2 rounded-xl bg-red-500 text-white"
-                    >
-                      Delete
-                    </button>
-                  </form>
-                </div>
-              </div>
-            )}
+            </Link>
           </div>
+        </header>
+
+        <div className="relative z-10 mx-auto max-w-7xl px-2.5 pb-5 pt-3 sm:px-4 md:px-6 lg:px-8">
+          <ProductClient product={product} images={product.images} id={id} />
+
+          {isAdmin && (
+            <div className="mt-4 rounded-[18px] border border-white/10 bg-white/[0.055] p-4">
+              <p className="text-sm font-bold text-white/70">Admin tools</p>
+
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <Link href={`/admin/products/${product.id}`}>
+                  <button className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-2.5 font-bold text-white transition active:scale-[0.98] sm:w-auto md:hover:scale-[1.02]">
+                    Edit product
+                  </button>
+                </Link>
+
+                <form
+                  action={async () => {
+                    "use server";
+
+                    await fetch(
+                      `${process.env.NEXT_PUBLIC_SITE_URL}/api/products/${product.id}`,
+                      {
+                        method: "DELETE",
+                      }
+                    );
+                  }}
+                >
+                  <button
+                    type="submit"
+                    className="w-full rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2.5 font-bold text-red-200 transition active:scale-[0.98] sm:w-auto md:hover:bg-red-500/25"
+                  >
+                    Delete
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
