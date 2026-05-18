@@ -13,7 +13,7 @@ export default function DashboardLayout({
 
   const hideSidebar =
     pathname.includes("/design") ||
-    /^\/products\/[^/]+$/.test(pathname);
+    pathname.includes("/dashboard/product/");
 
   return (
     <div className="min-h-screen bg-[#f7f7fb]">
@@ -30,4 +30,4 @@ export default function DashboardLayout({
       </main>
     </div>
   );
-}
+} 
