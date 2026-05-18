@@ -127,7 +127,7 @@ export default async function ProductPage({
 
   if (!id) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#03030a] px-4 text-center text-red-400">
+      <main className="flex min-h-screen items-center justify-center bg-[#0b0b18] px-4 text-center text-red-300">
         Invalid product ID
       </main>
     );
@@ -137,7 +137,7 @@ export default async function ProductPage({
 
   if (!product) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#03030a] px-4 text-center text-white/55">
+      <main className="flex min-h-screen items-center justify-center bg-[#0b0b18] px-4 text-center text-white/55">
         Product not found
       </main>
     );
@@ -146,48 +146,48 @@ export default async function ProductPage({
   const isAdmin = user?.user_metadata?.role === "admin";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#03030a] text-white">
+    <main className="min-h-screen overflow-x-hidden bg-[#0b0b18] text-white">
       <section className="relative min-h-screen overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_45%_48%,rgba(14,165,233,0.1),transparent_28%)] md:bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.24),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.14),transparent_24%)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.15)_0%,#03030a_100%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(192,132,252,0.28),transparent_34%),radial-gradient(circle_at_88%_10%,rgba(34,211,238,0.18),transparent_30%),linear-gradient(180deg,#0b0b18_0%,#15152d_55%,#0b0b18_100%)]" />
 
-        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#03030a]/92 md:bg-[#03030a]/80 md:backdrop-blur-xl">
+       <header className="sticky top-0 z-50 border-b border-cyan-400/10 bg-[#070712]/92 backdrop-blur-3xl">
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(34,211,238,0.10)_0%,rgba(168,85,247,0.12)_45%,rgba(217,70,239,0.10)_100%)]" />
+
           <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
             <Link
               href="/"
-              className="text-3xl font-black tracking-tight text-white transition active:scale-[0.98] md:text-3xl md:hover:opacity-80"
+              className="text-3xl font-black tracking-[-0.07em] text-white transition active:scale-[0.98] md:hover:opacity-90"
             >
               MY
-              <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-violet-300 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(168,85,247,0.45)]">
                 NIFY
               </span>
             </Link>
 
             <Link
               href="/dashboard/product"
-              className="group absolute right-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.07] text-white transition active:scale-[0.98] sm:right-5 md:static md:h-11 md:w-11 md:hover:border-purple-500/40 md:hover:bg-white/10"
+              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-cyan-400/20 bg-black/30 text-white shadow-[0_0_25px_rgba(34,211,238,0.14)] transition active:scale-[0.98] hover:border-fuchsia-400/40 hover:bg-white/[0.08] hover:shadow-[0_0_30px_rgba(217,70,239,0.22)] sm:right-5 md:static"
               aria-label="Back to products"
             >
               <ArrowLeft
                 size={18}
-                className="md:transition-transform md:group-hover:-translate-x-0.5"
+                className="transition-transform duration-200 md:group-hover:-translate-x-0.5"
                 aria-hidden="true"
               />
             </Link>
           </div>
-        </header>
+       </header>
 
         <div className="relative z-10 mx-auto max-w-7xl px-2.5 pb-5 pt-3 sm:px-4 md:px-6 lg:px-8">
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (
-            <div className="mt-4 rounded-[18px] border border-white/10 bg-white/[0.055] p-4">
-              <p className="text-sm font-bold text-white/70">Admin tools</p>
+            <div className="mt-4 rounded-[24px] bg-white/[0.06] p-4 backdrop-blur-xl">
+              <p className="text-sm font-bold text-white/75">Admin tools</p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link href={`/admin/products/${product.id}`}>
-                  <button className="w-full rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-2.5 font-bold text-white transition active:scale-[0.98] sm:w-auto md:hover:scale-[1.02]">
+                  <button className="w-full rounded-full bg-white px-4 py-2.5 font-black text-[#121225] transition active:scale-[0.98] sm:w-auto md:hover:scale-[1.02]">
                     Edit product
                   </button>
                 </Link>
@@ -206,7 +206,7 @@ export default async function ProductPage({
                 >
                   <button
                     type="submit"
-                    className="w-full rounded-xl border border-red-400/30 bg-red-500/15 px-4 py-2.5 font-bold text-red-200 transition active:scale-[0.98] sm:w-auto md:hover:bg-red-500/25"
+                    className="w-full rounded-full bg-red-400/15 px-4 py-2.5 font-black text-red-200 transition active:scale-[0.98] sm:w-auto md:hover:bg-red-400/25"
                   >
                     Delete
                   </button>
