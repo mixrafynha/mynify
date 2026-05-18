@@ -1,33 +1,38 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronRight, Home } from "lucide-react";
 
 export function ProductBreadcrumb({ title }: { title: string }) {
-  return (
-    <nav className="flex items-center text-xs sm:text-sm text-gray-400">
+  const safeTitle = title?.trim() || "Product";
 
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="mb-4 flex min-w-0 items-center gap-1 text-xs font-bold text-white/45 sm:text-sm"
+    >
       <Link
         href="/"
-        className="hover:text-gray-700 transition-colors"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 transition-colors duration-200 hover:bg-white/[0.06] hover:text-white"
       >
-        Home
+        <Home size={14} />
+        <span className="hidden sm:inline">Home</span>
       </Link>
 
-      <span className="mx-2 text-gray-300">/</span>
+      <ChevronRight size={14} className="shrink-0 text-white/25" />
 
       <Link
-        href="/catalog"
-        className="hover:text-gray-700 transition-colors"
+        href="/dashboard"
+        className="shrink-0 rounded-full px-2 py-1 transition-colors duration-200 hover:bg-white/[0.06] hover:text-white"
       >
-        Catalog
+        Products
       </Link>
 
-      <span className="mx-2 text-gray-300">/</span>
+      <ChevronRight size={14} className="shrink-0 text-white/25" />
 
-      <span className="text-gray-700 font-medium truncate max-w-[180px] sm:max-w-none">
-        {title}
+      <span className="min-w-0 truncate rounded-full px-2 py-1 font-black text-white/80">
+        {safeTitle}
       </span>
-
     </nav>
   );
 }
