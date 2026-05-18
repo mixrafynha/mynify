@@ -150,9 +150,8 @@ export default async function ProductPage({
       <section className="relative min-h-screen overflow-hidden">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(192,132,252,0.28),transparent_34%),radial-gradient(circle_at_88%_10%,rgba(34,211,238,0.18),transparent_30%),linear-gradient(180deg,#0b0b18_0%,#15152d_55%,#0b0b18_100%)]" />
 
-       <header className="sticky top-0 z-50 border-b border-cyan-400/10 bg-[#070712]/92 backdrop-blur-3xl">
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(34,211,238,0.10)_0%,rgba(168,85,247,0.12)_45%,rgba(217,70,239,0.10)_100%)]" />
-
+        {/* HEADER COM MESMO FUNDO */}
+        <header className="sticky top-0 z-50 border-b border-cyan-400/10 bg-transparent">
           <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
             <Link
               href="/"
@@ -176,14 +175,16 @@ export default async function ProductPage({
               />
             </Link>
           </div>
-       </header>
+        </header>
 
         <div className="relative z-10 mx-auto max-w-7xl px-2.5 pb-5 pt-3 sm:px-4 md:px-6 lg:px-8">
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (
             <div className="mt-4 rounded-[24px] bg-white/[0.06] p-4 backdrop-blur-xl">
-              <p className="text-sm font-bold text-white/75">Admin tools</p>
+              <p className="text-sm font-bold text-white/75">
+                Admin tools
+              </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link href={`/admin/products/${product.id}`}>
