@@ -2,10 +2,46 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 
-const getProvider = (provider: unknown) => {
-  if (provider === "google" || provider === "apple") return provider;
+const getProvider = (provider: unknown): "google" | "apple" | "unknown" => {
+  if (provider === "google") return "google";
+  if (provider === "apple") return "apple";
   return "unknown";
 };
+
+async function sendOAuthLoginLog(req: Request, data: {
+  userId: string;
+  email?: string | null;
+  provider: "google" | "apple" | "unknown";
+}) {
+  try {
+    const h = headers();
+
+    await fetch(new URL("/api/logs", req.url), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: h.get("cookie") ?? "",
+      },
+      body: JSON.stringify({
+        event: "login",
+        level: "info",
+        data: {
+          userId: data.userId,
+          email: data.email,
+          provider: data.provider,
+          method: "oauth",
+          ip:
+            h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+            h.get("x-real-ip") ??
+            null,
+          userAgent: h.get("user-agent"),
+        },
+      }),
+    });
+  } catch {
+    // Não bloqueia login se log falhar
+  }
+}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -32,42 +68,28 @@ export async function GET(req: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
+      console.error("OAuth exchange error:", error.message);
       return NextResponse.redirect(new URL("/login", req.url));
     }
   }
 
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
+    console.error("OAuth get user error:", userError?.message);
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
   const provider = getProvider(user.app_metadata?.provider);
 
-  try {
-    const h = headers();
-
-    await supabase.from("logs").insert({
-      event: "login",
-      level: "info",
-      user_id: user.id,
-      email: user.email,
-      provider,
-      data: {
-        provider,
-        method: "oauth",
-        ip:
-          h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-          h.get("x-real-ip") ??
-          null,
-        userAgent: h.get("user-agent"),
-      },
-    });
-  } catch {
-    // Não bloqueia login se o log falhar
-  }
+  await sendOAuthLoginLog(req, {
+    userId: user.id,
+    email: user.email,
+    provider,
+  });
 
   const { data: profile } = await supabase
     .from("profiles")
