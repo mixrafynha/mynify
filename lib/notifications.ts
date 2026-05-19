@@ -1,4 +1,6 @@
-import { supabaseAdmin } from "./supabase-admin";
+import { createSupabaseAdmin } from "./supabase-admin";
+
+const supabaseAdmin = createSupabaseAdmin();
 
 type CreateNotificationInput = {
   userId: string;
