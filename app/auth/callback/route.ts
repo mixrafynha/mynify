@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+
+const getProvider = (provider: unknown) => {
+  if (provider === "google" || provider === "apple") return provider;
+  return "unknown";
+};
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -23,9 +28,6 @@ export async function GET(req: Request) {
     }
   );
 
-  /* =========================
-     1. OAuth exchange
-  ========================= */
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
@@ -34,9 +36,6 @@ export async function GET(req: Request) {
     }
   }
 
-  /* =========================
-     2. Get user
-  ========================= */
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -45,9 +44,31 @@ export async function GET(req: Request) {
     return NextResponse.redirect(new URL("/login", req.url));
   }
 
-  /* =========================
-     3. CREATE PROFILE (NO ROLE OVERRIDE)
-  ========================= */
+  const provider = getProvider(user.app_metadata?.provider);
+
+  try {
+    const h = headers();
+
+    await supabase.from("logs").insert({
+      event: "login",
+      level: "info",
+      user_id: user.id,
+      email: user.email,
+      provider,
+      data: {
+        provider,
+        method: "oauth",
+        ip:
+          h.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+          h.get("x-real-ip") ??
+          null,
+        userAgent: h.get("user-agent"),
+      },
+    });
+  } catch {
+    // Não bloqueia login se o log falhar
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
     .upsert(
@@ -63,9 +84,6 @@ export async function GET(req: Request) {
 
   const role = profile?.role ?? "user";
 
-  /* =========================
-     4. REDIRECT
-  ========================= */
   if (role === "admin") {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
