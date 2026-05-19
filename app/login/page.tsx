@@ -80,6 +80,7 @@ export default function LoginPage() {
     if (checking) return;
 
     let tries = 0;
+
     const interval = window.setInterval(() => {
       tries += 1;
 
@@ -211,17 +212,17 @@ export default function LoginPage() {
 
       <div className="grid min-h-[100dvh] md:grid-cols-2">
         <section className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.28),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.18),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.20),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.12),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
           <img
-            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=70&w=1200&auto=format&fit=crop"
-            className="absolute inset-0 h-full w-full object-cover opacity-25"
+            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=75&w=1200&auto=format&fit=crop"
+            className="absolute inset-0 h-full w-full object-cover opacity-45"
             alt=""
             loading="lazy"
             decoding="async"
           />
 
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.9)_50%,rgba(3,3,10,0.55)_100%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.72)_48%,rgba(3,3,10,0.35)_100%)]" />
 
           <div className="relative z-10 flex w-full flex-col justify-center p-12">
             <div className="max-w-md">
