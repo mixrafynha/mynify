@@ -1,37 +1,34 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Script from "next/script";
-import { Eye, EyeOff, Gamepad2, Sparkles, X, Zap } from "lucide-react";
+import { Eye, EyeOff, X, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
-const safeRoute = (path: string) => {
-  if (typeof path !== "string") return "/";
-  if (path.startsWith("javascript:")) return "/";
-  if (path.startsWith("data:")) return "/";
-  return path;
-};
-
-const sanitize = (value: string) =>
+const sanitizeEmail = (value: string) =>
   value
+    .toLowerCase()
     .replace(/[^\w@.\-+]/gi, "")
     .trim()
     .slice(0, 254);
 
+const safeOrigin = () => {
+  if (typeof window === "undefined") return "";
+  return window.location.origin;
+};
+
 const sendLoginLog = async (data: {
   userId?: string;
   email?: string | null;
-  provider: "password" | "google" | "apple";
+  provider: "password" | "google" | "apple" | "unknown";
 }) => {
   try {
     await fetch("/api/logs", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       keepalive: true,
       body: JSON.stringify({
         event: "login",
@@ -40,7 +37,7 @@ const sendLoginLog = async (data: {
       }),
     });
   } catch {
-    // Não bloqueia o login se o log falhar
+    // Não bloqueia login se log falhar
   }
 };
 
@@ -52,67 +49,51 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<false | "password" | "google" | "apple">(false);
   const [error, setError] = useState("");
   const [checking, setChecking] = useState(true);
 
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const manualLoginRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let ignore = false;
-    let redirected = false;
-
-    const safeRedirect = () => {
-      if (redirected) return;
-      redirected = true;
-      router.replace("/dashboard");
-    };
+    mountedRef.current = true;
 
     supabase.auth.getSession().then(({ data }) => {
-      if (ignore) return;
+      if (!mountedRef.current) return;
 
-      if (data?.session?.user) {
-        safeRedirect();
-      } else {
-        setChecking(false);
+      if (data.session?.user) {
+        router.replace("/dashboard");
+        return;
       }
-    });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (ignore) return;
-
-      if (manualLoginRef.current) return;
-
-      if (session?.user) {
-        safeRedirect();
-      }
+      setChecking(false);
     });
 
     return () => {
-      ignore = true;
-      subscription.unsubscribe();
+      mountedRef.current = false;
     };
   }, [router]);
 
   useEffect(() => {
     if (checking) return;
 
-    const interval = setInterval(() => {
+    let tries = 0;
+    const interval = window.setInterval(() => {
+      tries += 1;
+
       const turnstile = (window as any).turnstile;
-
-      if (!turnstile) return;
-      if (!captchaRef.current) return;
-      if (widgetIdRef.current) return;
-
       const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
       if (!sitekey) {
         setError("Missing captcha site key");
         clearInterval(interval);
+        return;
+      }
+
+      if (!turnstile || !captchaRef.current || widgetIdRef.current) {
+        if (tries > 50) clearInterval(interval);
         return;
       }
 
@@ -148,25 +129,19 @@ export default function LoginPage() {
   const handleLogin = useCallback(async () => {
     if (loading) return;
 
-    setLoading(true);
+    setLoading("password");
     setError("");
-    manualLoginRef.current = true;
 
     try {
-      const safeEmail = sanitize(email.toLowerCase());
+      const safeEmail = sanitizeEmail(email);
 
-      if (!safeEmail || !password) {
-        throw new Error("invalid");
-      }
-
-      if (safeEmail.length < 5) {
+      if (!safeEmail || safeEmail.length < 5 || !password) {
         throw new Error("invalid");
       }
 
       if (!token) {
         setError("Verify captcha");
         setLoading(false);
-        manualLoginRef.current = false;
         return;
       }
 
@@ -178,11 +153,7 @@ export default function LoginPage() {
         },
       });
 
-      if (error) throw error;
-
-      if (!data.session) {
-        throw new Error("No session created");
-      }
+      if (error || !data.session) throw error || new Error("No session");
 
       await sendLoginLog({
         userId: data.session.user.id,
@@ -192,7 +163,6 @@ export default function LoginPage() {
 
       router.replace("/dashboard");
     } catch {
-      manualLoginRef.current = false;
       setError("Invalid email or password");
       resetCaptcha();
     } finally {
@@ -200,90 +170,66 @@ export default function LoginPage() {
     }
   }, [email, password, token, loading, router, resetCaptcha]);
 
-  const handleGoogle = useCallback(async () => {
-    if (loading) return;
+  const handleOAuth = useCallback(
+    async (provider: "google" | "apple") => {
+      if (loading) return;
 
-    setLoading(true);
+      setLoading(provider);
+      setError("");
 
-    try {
-      if (typeof window === "undefined") return;
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${safeOrigin()}/auth/callback`,
+            queryParams: {
+              prompt: "select_account",
+            },
+          },
+        });
 
-      await sendLoginLog({
-        provider: "google",
-      });
+        if (error) throw error;
+      } catch {
+        setError("Unable to continue with provider");
+        setLoading(false);
+      }
+    },
+    [loading]
+  );
 
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-    } catch {
-      setLoading(false);
-    }
-  }, [loading]);
-
-  const handleApple = useCallback(async () => {
-    if (loading) return;
-
-    setLoading(true);
-
-    try {
-      if (typeof window === "undefined") return;
-
-      await sendLoginLog({
-        provider: "apple",
-      });
-
-      await supabase.auth.signInWithOAuth({
-        provider: "apple",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-    } catch {
-      setLoading(false);
-    }
-  }, [loading]);
-
-  if (checking) return null;
+  if (checking) {
+    return <main className="min-h-[100dvh] bg-[#03030a]" />;
+  }
 
   return (
     <main className="min-h-[100dvh] overflow-hidden bg-[#03030a] text-white">
       <Script
         id="turnstile-script-login"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        strategy="afterInteractive"
+        strategy="lazyOnload"
       />
 
       <div className="grid min-h-[100dvh] md:grid-cols-2">
-        <div className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+        <section className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.28),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.18),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
           <img
-            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
-            className="absolute inset-0 h-full w-full object-cover opacity-35"
-            alt="background"
+            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=70&w=1200&auto=format&fit=crop"
+            className="absolute inset-0 h-full w-full object-cover opacity-25"
+            alt=""
+            loading="lazy"
+            decoding="async"
           />
 
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.85)_45%,rgba(3,3,10,0.45)_100%)]" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.25),transparent_45%)]" />
+          <div className="absolute inset-0 bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.9)_50%,rgba(3,3,10,0.55)_100%)]" />
 
           <div className="relative z-10 flex w-full flex-col justify-center p-12">
             <div className="max-w-md">
               <div className="mb-8 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white">
                   M
                 </div>
-
-                <span className="text-xl font-black tracking-tight">
-                  MYNIFY
-                </span>
-              </div>
-
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
-                <Gamepad2 size={15} className="text-purple-400" />
-                Welcome back creator
+                <span className="text-xl font-black tracking-tight">MYNIFY</span>
               </div>
 
               <h1 className="mb-5 text-5xl font-black uppercase leading-[0.9] tracking-tight lg:text-7xl">
@@ -294,32 +240,30 @@ export default function LoginPage() {
               </h1>
 
               <p className="text-lg leading-relaxed text-white/65">
-                Log in to manage your store, orders, and grow your brand
-                worldwide.
+                Log in to manage your store, orders, and grow your brand worldwide.
               </p>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#03030a] px-4 py-6 sm:px-6 md:p-6">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
+        <section className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-[#03030a] px-4 py-6 sm:px-6 md:p-6">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.16),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.10),transparent_28%)]" />
 
-          <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:rounded-3xl sm:p-8">
+          <div className="relative w-full max-w-md rounded-[1.4rem] border border-white/10 bg-white/[0.035] p-5 shadow-xl backdrop-blur-md sm:rounded-3xl sm:p-8">
             <button
-              onClick={() => router.push(safeRoute("/"))}
-              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white sm:right-4 sm:top-4"
+              type="button"
+              onClick={() => router.push("/")}
+              aria-label="Close login"
+              className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:bg-white/10 hover:text-white sm:right-4 sm:top-4"
             >
               <X size={18} />
             </button>
 
             <div className="mb-6 flex items-center gap-3 pr-12">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)] sm:h-11 sm:w-11">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white sm:h-11 sm:w-11">
                 M
               </div>
-
-              <span className="text-lg font-black tracking-tight sm:text-xl">
-                MYNIFY
-              </span>
+              <span className="text-lg font-black tracking-tight sm:text-xl">MYNIFY</span>
             </div>
 
             <h2 className="mb-2 text-2xl font-black uppercase sm:text-3xl">
@@ -332,21 +276,23 @@ export default function LoginPage() {
 
             <div className="mb-5 space-y-3 sm:mb-6">
               <button
-                disabled={loading}
-                onClick={handleGoogle}
-                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+                type="button"
+                disabled={!!loading}
+                onClick={() => handleOAuth("google")}
+                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
               >
                 <FcGoogle size={20} />
-                Continue with Google
+                {loading === "google" ? "Continuing..." : "Continue with Google"}
               </button>
 
               <button
-                disabled={loading}
-                onClick={handleApple}
-                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:border-purple-500/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
+                type="button"
+                disabled={!!loading}
+                onClick={() => handleOAuth("apple")}
+                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50 sm:text-base"
               >
                 <FaApple size={20} />
-                Continue with Apple
+                {loading === "apple" ? "Continuing..." : "Continue with Apple"}
               </button>
             </div>
 
@@ -363,7 +309,8 @@ export default function LoginPage() {
                 placeholder="Email"
                 inputMode="email"
                 autoComplete="email"
-                className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20 sm:py-4"
+                maxLength={254}
+                className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
               />
 
               <div className="relative">
@@ -373,12 +320,14 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
                   autoComplete="current-password"
-                  className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20 sm:py-4"
+                  maxLength={128}
+                  className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
                 />
 
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                   className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-white/45 transition hover:bg-white/5 hover:text-purple-300"
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -386,19 +335,17 @@ export default function LoginPage() {
               </div>
 
               <div className="flex justify-end">
-                <span
+                <button
+                  type="button"
                   onClick={() => router.push("/login/forgot-password")}
-                  className="cursor-pointer text-sm font-semibold text-fuchsia-400 transition hover:text-purple-300"
+                  className="text-sm font-semibold text-fuchsia-400 transition hover:text-purple-300"
                 >
                   Forgot password?
-                </span>
+                </button>
               </div>
 
               <div className="flex min-h-[70px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2">
-                <div
-                  ref={captchaRef}
-                  className="max-w-full scale-[0.92] sm:scale-100"
-                />
+                <div ref={captchaRef} className="max-w-full scale-[0.92] sm:scale-100" />
               </div>
 
               {error && (
@@ -410,28 +357,26 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleLogin}
-                disabled={loading}
-                className="flex min-h-13 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition active:scale-[0.98] hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                disabled={!!loading}
+                className="flex min-h-13 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-4 font-bold text-white shadow-lg transition active:scale-[0.98] hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
-                {loading ? "Signing in..." : "Sign in"}
+                {loading === "password" ? "Signing in..." : "Sign in"}
                 <Zap size={18} />
               </button>
 
               <p className="text-center text-sm text-white/50">
                 Don’t have an account?{" "}
-                <span
+                <button
+                  type="button"
                   onClick={() => router.push("/signup")}
-                  className="cursor-pointer font-bold text-fuchsia-400 transition hover:text-purple-300"
+                  className="font-bold text-fuchsia-400 transition hover:text-purple-300"
                 >
                   Sign up
-                </span>
+                </button>
               </p>
             </div>
-
-            <div className="pointer-events-none absolute -bottom-10 -right-10 h-32 w-32 rounded-full bg-purple-600/20 blur-[60px]" />
-            <div className="pointer-events-none absolute -left-10 top-20 h-24 w-24 rounded-full bg-sky-500/10 blur-[50px]" />
           </div>
-        </div>
+        </section>
       </div>
     </main>
   );
