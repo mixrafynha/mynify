@@ -8,42 +8,33 @@ export default function SidebarHeader({
   expanded,
 }: SidebarHeaderProps) {
   return (
-    <div className="flex items-center justify-center px-4 pb-7 pt-6">
+    <div className="relative flex items-center justify-center px-4 py-7">
       {expanded ? (
-        <div className="flex w-full items-center gap-3">
-          <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
-            <Image
-              src="/Logo.png"
-              alt="Mynify"
-              width={46}
-              height={46}
-              priority
-              quality={100}
-              className="object-contain"
-            />
-          </div>
+        <div className="group relative flex items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 scale-125 bg-purple-500/10 blur-3xl opacity-60 transition duration-300 group-hover:opacity-100" />
 
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-[28px] font-black uppercase leading-none tracking-[-0.07em] text-white">
-              MY
-              <span className="bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
-                NIFY
-              </span>
-            </h1>
-          </div>
+          <h1 className="relative select-none text-[34px] font-black uppercase leading-none tracking-[-0.09em] text-white transition-all duration-300">
+            MY
+            <span className="bg-gradient-to-r from-violet-300 via-fuchsia-400 to-cyan-300 bg-clip-text text-transparent">
+              NIFY
+            </span>
+          </h1>
 
-          <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(74,222,128,0.95)]" />
+          <div className="absolute -bottom-3 left-1/2 h-px w-14 -translate-x-1/2 bg-gradient-to-r from-transparent via-fuchsia-400/40 to-transparent" />
         </div>
       ) : (
-        <div className="flex h-12 w-12 items-center justify-center">
+        <div className="group relative flex h-12 w-12 items-center justify-center">
+          <div className="pointer-events-none absolute inset-0 rounded-full bg-purple-500/10 blur-xl opacity-70 transition duration-300 group-hover:opacity-100" />
+
           <Image
-            src="/Logo.png"
+            src="/sidelogo.ico"
             alt="Mynify"
-            width={36}
-            height={36}
+            width={48}
+            height={48}
             priority
-            quality={100}
-            className="object-contain"
+            unoptimized
+            draggable={false}
+            className="relative object-contain transition-transform duration-300 group-hover:scale-105"
           />
         </div>
       )}
