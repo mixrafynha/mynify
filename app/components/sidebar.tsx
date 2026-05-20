@@ -116,7 +116,6 @@ export default function Sidebar() {
         <SidebarMobileToggle
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
-          sidebarWidth={SIDEBAR_WIDTH.collapsed}
         />
       )}
 
