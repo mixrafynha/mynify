@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Home,
   Package,
@@ -22,6 +22,11 @@ import { useIsMobile } from "@/hooks/useIsMobile";
 
 const STORAGE_KEY = "user-sidebar-collapsed";
 
+const SIDEBAR_WIDTH = {
+  expanded: 270,
+  collapsed: 80,
+};
+
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -35,6 +40,13 @@ export default function Sidebar() {
   const isAdminRoute = pathname?.startsWith("/admin");
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
 
+  const effectiveCollapsed = isMobile ? true : collapsed;
+  const expanded = !effectiveCollapsed;
+
+  const sidebarWidth = effectiveCollapsed
+    ? SIDEBAR_WIDTH.collapsed
+    : SIDEBAR_WIDTH.expanded;
+
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -45,15 +57,13 @@ export default function Sidebar() {
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--user-sidebar-width",
-      isMobile ? "0px" : collapsed ? "80px" : "270px"
+      isMobile ? "0px" : `${sidebarWidth}px`
     );
-  }, [collapsed, isMobile]);
+  }, [isMobile, sidebarWidth]);
 
   useEffect(() => {
     if (!isMobile) setMobileOpen(false);
   }, [isMobile]);
-
-  const expanded = isMobile ? mobileOpen : !collapsed;
 
   const menu = useMemo(
     () => [
@@ -77,7 +87,9 @@ export default function Sidebar() {
 
       document.documentElement.style.setProperty(
         "--user-sidebar-width",
-        next ? "80px" : "270px"
+        next
+          ? `${SIDEBAR_WIDTH.collapsed}px`
+          : `${SIDEBAR_WIDTH.expanded}px`
       );
 
       return next;
@@ -104,6 +116,7 @@ export default function Sidebar() {
         <SidebarMobileToggle
           mobileOpen={mobileOpen}
           setMobileOpen={setMobileOpen}
+          sidebarWidth={SIDEBAR_WIDTH.collapsed}
         />
       )}
 
@@ -112,11 +125,14 @@ export default function Sidebar() {
           type="button"
           aria-label="Close sidebar"
           onClick={closeMobile}
-          className="fixed inset-0 z-40 bg-black/55"
+          className="fixed inset-0 z-40 bg-black/55 backdrop-blur-[2px]"
         />
       )}
 
       <aside
+        style={{
+          width: sidebarWidth,
+        }}
         className={`
           fixed left-0 top-0 z-50 flex h-dvh flex-col
           border-r border-white/10 bg-black text-white
@@ -124,11 +140,9 @@ export default function Sidebar() {
           ${
             isMobile
               ? mobileOpen
-                ? "w-[min(82vw,270px)] translate-x-0"
-                : "w-[min(82vw,270px)] -translate-x-full"
-              : collapsed
-                ? "w-[80px] translate-x-0"
-                : "w-[270px] translate-x-0"
+                ? "translate-x-0"
+                : "-translate-x-full"
+              : "translate-x-0"
           }
         `}
       >
