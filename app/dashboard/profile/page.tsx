@@ -6,9 +6,7 @@ import {
   Globe,
   ImageIcon,
   Loader2,
-  MapPin,
   Save,
-  ShieldCheck,
   User,
   UserCircle,
 } from "lucide-react";
@@ -113,10 +111,11 @@ export default function ProfilePage() {
 
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
+
     if (!profile || saving) return;
 
     if (hasInvalidUrls) {
-      alert("Verifica os URLs. Usa apenas links válidos com http ou https.");
+      alert("Please enter valid URLs using http or https.");
       return;
     }
 
@@ -140,12 +139,12 @@ export default function ProfilePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(data.error || "Erro ao guardar perfil");
+        alert(data.error || "Could not save profile");
         return;
       }
 
       setProfile(data);
-      alert("Perfil atualizado!");
+      alert("Profile updated!");
     } finally {
       setSaving(false);
     }
@@ -158,7 +157,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-3 text-white/55">
             <Loader2 className="animate-spin text-purple-300" size={20} />
             <span className="text-sm font-black uppercase tracking-[0.22em]">
-              A carregar perfil
+              Loading profile
             </span>
           </div>
         </div>
@@ -169,7 +168,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <main className="min-h-screen bg-[#03030a] p-6 text-white">
-        <p className="text-white/60">Perfil não encontrado.</p>
+        <p className="text-white/60">Profile not found.</p>
       </main>
     );
   }
@@ -195,7 +194,7 @@ export default function ProfilePage() {
             <div className="mx-auto flex max-w-[1440px] items-end justify-between gap-5">
               <div className="min-w-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.34em] text-purple-300">
-                  Premium profile
+                  PROFILE
                 </p>
 
                 <h1 className="mt-3 max-w-5xl truncate text-4xl font-black tracking-[-0.075em] text-white sm:text-6xl lg:text-8xl">
@@ -203,8 +202,7 @@ export default function ProfilePage() {
                 </h1>
 
                 <p className="mt-4 max-w-2xl text-sm font-semibold leading-6 text-white/45">
-                  Personaliza a tua presença pública com um visual mais limpo,
-                  seguro e profissional.
+                  Customize your public profile with a premium clean look.
                 </p>
               </div>
 
@@ -218,7 +216,7 @@ export default function ProfilePage() {
                 ) : (
                   <Save size={17} />
                 )}
-                {saving ? "A guardar..." : "Guardar"}
+                {saving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
@@ -243,7 +241,7 @@ export default function ProfilePage() {
                 <div className="min-w-0 pb-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <h2 className="truncate text-3xl font-black tracking-[-0.055em] sm:text-5xl">
-                      {profile.name || "Sem nome"}
+                      {profile.name || "No name"}
                     </h2>
 
                     {profile.is_verified && (
@@ -267,20 +265,26 @@ export default function ProfilePage() {
                 ) : (
                   <Save size={17} />
                 )}
-                {saving ? "A guardar..." : "Guardar alterações"}
+                {saving ? "Saving..." : "Save changes"}
               </button>
             </div>
 
             <div className="grid gap-12 py-10 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_440px]">
               <div className="space-y-12">
                 <section>
-                  <SectionTitle icon={<User size={18} />} title="Public information" />
+                  <SectionTitle
+                    icon={<User size={18} />}
+                    title="Public Information"
+                  />
 
                   <div className="grid gap-7 md:grid-cols-2">
-                    <Field label="Name" count={`${profile.name?.length || 0}/${LIMITS.name}`}>
+                    <Field
+                      label="Name"
+                      count={`${profile.name?.length || 0}/${LIMITS.name}`}
+                    >
                       <input
                         className="profile-input"
-                        placeholder="O teu nome"
+                        placeholder="Your name"
                         maxLength={LIMITS.name}
                         value={profile.name || ""}
                         onChange={(e) =>
@@ -294,7 +298,9 @@ export default function ProfilePage() {
 
                     <Field
                       label="Username"
-                      count={`${profile.username?.length || 0}/${LIMITS.username}`}
+                      count={`${
+                        profile.username?.length || 0
+                      }/${LIMITS.username}`}
                     >
                       <input
                         className="profile-input"
@@ -312,10 +318,13 @@ export default function ProfilePage() {
                   </div>
 
                   <div className="mt-8">
-                    <Field label="Bio" count={`${profile.bio?.length || 0}/${LIMITS.bio}`}>
+                    <Field
+                      label="Bio"
+                      count={`${profile.bio?.length || 0}/${LIMITS.bio}`}
+                    >
                       <textarea
                         className="profile-input min-h-36 resize-none leading-7"
-                        placeholder="Escreve uma pequena bio..."
+                        placeholder="Write a short bio..."
                         maxLength={LIMITS.bio}
                         value={profile.bio || ""}
                         onChange={(e) =>
@@ -330,15 +339,20 @@ export default function ProfilePage() {
                 </section>
 
                 <section className="border-t border-white/10 pt-10">
-                  <SectionTitle icon={<Globe size={18} />} title="Links & location" />
+                  <SectionTitle
+                    icon={<Globe size={18} />}
+                    title="Links & Location"
+                  />
 
                   <div className="grid gap-7 md:grid-cols-2">
                     <Field label="Website">
                       <input
                         className={`profile-input ${
-                          !isValidUrl(profile.website) ? "profile-input-error" : ""
+                          !isValidUrl(profile.website)
+                            ? "profile-input-error"
+                            : ""
                         }`}
-                        placeholder="https://teusite.com"
+                        placeholder="https://yourwebsite.com"
                         maxLength={LIMITS.url}
                         value={profile.website || ""}
                         onChange={(e) =>
@@ -352,17 +366,22 @@ export default function ProfilePage() {
 
                     <Field
                       label="Location"
-                      count={`${profile.location?.length || 0}/${LIMITS.location}`}
+                      count={`${
+                        profile.location?.length || 0
+                      }/${LIMITS.location}`}
                     >
                       <input
                         className="profile-input"
-                        placeholder="Portugal"
+                        placeholder="Location"
                         maxLength={LIMITS.location}
                         value={profile.location || ""}
                         onChange={(e) =>
                           setProfile({
                             ...profile,
-                            location: cleanText(e.target.value, LIMITS.location),
+                            location: cleanText(
+                              e.target.value,
+                              LIMITS.location
+                            ),
                           })
                         }
                       />
@@ -413,93 +432,29 @@ export default function ProfilePage() {
                     </Field>
                   </div>
                 </section>
-
-                <section className="border-t border-white/10 pt-8">
-                  <div className="flex items-center gap-3 text-xs font-bold text-white/35">
-                    <ShieldCheck size={16} className="text-purple-300" />
-                    Inputs limitados, URLs validados e caracteres perigosos removidos.
-                  </div>
-                </section>
               </div>
 
-              <aside className="space-y-9 lg:sticky lg:top-8 lg:self-start">
-                <section className="border-b border-white/10 pb-9">
-                  <p className="text-[10px] font-black uppercase tracking-[0.28em] text-purple-300">
-                    Live preview
-                  </p>
-
-                  <div className="mt-6">
-                    <div className="relative h-36 overflow-hidden rounded-[2rem] border border-white/10 bg-[#070711] bg-cover bg-center shadow-[0_25px_80px_rgba(0,0,0,0.35)]"
-                      style={{
-                        backgroundImage: profile.cover_url
-                          ? `url(${profile.cover_url})`
-                          : "radial-gradient(circle at 20% 0%, rgba(168,85,247,0.34), transparent 40%), radial-gradient(circle at 85% 30%, rgba(217,70,239,0.18), transparent 35%)",
-                      }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-t from-[#03030a] to-transparent" />
-                    </div>
-
-                    <div className="-mt-10 px-4">
-                      <div className="flex items-end gap-3">
-                        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-3xl border border-white/15 bg-[#070711] shadow-2xl">
-                          {profile.avatar_url ? (
-                            <img
-                              src={profile.avatar_url}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <UserCircle size={44} className="text-white/25" />
-                          )}
-                        </div>
-
-                        <div className="min-w-0 pb-1">
-                          <p className="truncate text-xl font-black tracking-[-0.04em] text-white">
-                            {profile.name || "Sem nome"}
-                          </p>
-                          <p className="truncate text-sm font-bold text-white/40">
-                            @{profile.username || "username"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <p className="mt-6 text-sm font-medium leading-7 text-white/62">
-                        {profile.bio || "A tua bio vai aparecer aqui."}
-                      </p>
-
-                      <div className="mt-6 space-y-3 text-sm font-bold text-white/45">
-                        {profile.location && (
-                          <p className="flex items-center gap-2">
-                            <MapPin size={15} className="text-purple-300" />
-                            {profile.location}
-                          </p>
-                        )}
-
-                        {profile.website && (
-                          <p className="flex items-center gap-2 truncate">
-                            <Globe size={15} className="text-purple-300" />
-                            {profile.website}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
+              <aside className="lg:sticky lg:top-8 lg:self-start">
                 <section>
                   <p className="text-[10px] font-black uppercase tracking-[0.28em] text-purple-300">
-                    Account
+                    ACCOUNT
                   </p>
 
                   <div className="mt-5 divide-y divide-white/10 border-y border-white/10">
                     <InfoRow label="Role" value={profile.role || "user"} />
-                    <InfoRow label="Plan" value={profile.account_type || "free"} />
+
+                    <InfoRow
+                      label="Plan"
+                      value={profile.account_type || "free"}
+                    />
+
                     <InfoRow
                       label="Articles"
                       value={`${profile.articles_count ?? 0}/${
                         profile.free_articles_limit ?? 10
                       }`}
                     />
+
                     <InfoRow label="Available" value={`${articlesLeft}`} />
                   </div>
                 </section>
