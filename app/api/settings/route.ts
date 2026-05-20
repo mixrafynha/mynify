@@ -1,12 +1,17 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { createClient } from "@supabase/supabase-js";
 
 type SettingsBody = {
   name?: string;
   username?: string;
   type?: "email" | "password";
   newEmail?: string;
+  currentPassword?: string;
   newPassword?: string;
+  confirmPassword?: string;
 };
+
+const EMAIL_COOLDOWN_DAYS = 30;
 
 const cleanText = (value: unknown, max = 80) =>
   typeof value === "string"
@@ -21,6 +26,22 @@ const cleanEmail = (value: unknown) =>
 const isEmail = (email: string) =>
   /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
+const isStrongPassword = (password: string) =>
+  password.length >= 12 &&
+  /[A-Z]/.test(password) &&
+  /[a-z]/.test(password) &&
+  /[0-9]/.test(password) &&
+  /[^A-Za-z0-9]/.test(password);
+
+function canChangeEmail(lastDate: string | null) {
+  if (!lastDate) return true;
+
+  const last = new Date(lastDate).getTime();
+  const cooldown = EMAIL_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+
+  return Date.now() - last >= cooldown;
+}
+
 async function getAuthUser() {
   const supabase = createSupabaseServer();
 
@@ -32,7 +53,6 @@ async function getAuthUser() {
   return { supabase, user, error };
 }
 
-/* ================= GET ================= */
 export async function GET() {
   try {
     const { supabase, user, error: userError } = await getAuthUser();
@@ -43,7 +63,7 @@ export async function GET() {
 
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("id, name, username, role, email")
+      .select("id, name, username, role, email_change_requested_at")
       .eq("id", user.id)
       .maybeSingle();
 
@@ -52,8 +72,9 @@ export async function GET() {
     }
 
     return Response.json({
-      email: user.email ?? profile?.email ?? "",
+      email: user.email ?? "",
       role: profile?.role ?? "user",
+      email_change_requested_at: profile?.email_change_requested_at ?? null,
       profile: {
         name: profile?.name ?? "",
         username: profile?.username ?? "",
@@ -68,7 +89,6 @@ export async function GET() {
   }
 }
 
-/* ================= PUT PROFILE ================= */
 export async function PUT(req: Request) {
   try {
     const { supabase, user, error: userError } = await getAuthUser();
@@ -82,7 +102,7 @@ export async function PUT(req: Request) {
     const name = cleanText(body.name, 80);
     const username = cleanText(body.username, 40)
       .toLowerCase()
-      .replace(/\s+/g, "_");
+      .replace(/[^a-z0-9_.-]/g, "");
 
     if (!name && !username) {
       return Response.json({ error: "Nothing to update" }, { status: 400 });
@@ -99,7 +119,6 @@ export async function PUT(req: Request) {
       .upsert(
         {
           id: user.id,
-          email: user.email ?? "",
           name,
           username,
           role: existing?.role ?? "user",
@@ -126,12 +145,11 @@ export async function PUT(req: Request) {
   }
 }
 
-/* ================= PATCH EMAIL / PASSWORD ================= */
 export async function PATCH(req: Request) {
   try {
     const { supabase, user, error: userError } = await getAuthUser();
 
-    if (userError || !user) {
+    if (userError || !user || !user.email) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -142,6 +160,30 @@ export async function PATCH(req: Request) {
 
       if (!newEmail || !isEmail(newEmail)) {
         return Response.json({ error: "Invalid email" }, { status: 400 });
+      }
+
+      if (newEmail === user.email.toLowerCase()) {
+        return Response.json(
+          { error: "New email is the same as current email" },
+          { status: 400 }
+        );
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("email_change_requested_at")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        return Response.json({ error: profileError.message }, { status: 500 });
+      }
+
+      if (!canChangeEmail(profile?.email_change_requested_at ?? null)) {
+        return Response.json(
+          { error: "Só podes pedir alteração de email uma vez por mês." },
+          { status: 429 }
+        );
       }
 
       const { data, error } = await supabase.auth.updateUser({
@@ -155,32 +197,70 @@ export async function PATCH(req: Request) {
         );
       }
 
-      await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: user.id,
-            email: newEmail,
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "id" }
-        );
+      await supabase.from("profiles").upsert(
+        {
+          id: user.id,
+          email_change_requested_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
 
       return Response.json({
         success: true,
-        email: newEmail,
+        message: "Email de confirmação enviado.",
         data,
       });
     }
 
     if (body.type === "password") {
+      const currentPassword =
+        typeof body.currentPassword === "string" ? body.currentPassword : "";
       const newPassword =
         typeof body.newPassword === "string" ? body.newPassword : "";
+      const confirmPassword =
+        typeof body.confirmPassword === "string" ? body.confirmPassword : "";
 
-      if (newPassword.length < 6) {
+      if (!currentPassword || !newPassword || !confirmPassword) {
         return Response.json(
-          { error: "Password must be at least 6 characters" },
+          { error: "Preenche todos os campos." },
           { status: 400 }
+        );
+      }
+
+      if (newPassword !== confirmPassword) {
+        return Response.json(
+          { error: "As novas passwords não coincidem." },
+          { status: 400 }
+        );
+      }
+
+      if (!isStrongPassword(newPassword)) {
+        return Response.json(
+          {
+            error:
+              "A password deve ter 12 caracteres, maiúscula, minúscula, número e símbolo.",
+          },
+          { status: 400 }
+        );
+      }
+
+      const verifyClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+
+      const { error: verifyError } = await verifyClient.auth.signInWithPassword(
+        {
+          email: user.email,
+          password: currentPassword,
+        }
+      );
+
+      if (verifyError) {
+        return Response.json(
+          { error: "Password atual incorreta." },
+          { status: 403 }
         );
       }
 
