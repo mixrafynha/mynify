@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import Sidebar from "@/app/components/sidebar";
+import ApiLoadingProvider from "@/app/components/api-loading-provider";
 
 export default function DashboardLayout({
   children,
@@ -26,8 +27,8 @@ export default function DashboardLayout({
           ${hideSidebar ? "" : "md:ml-[var(--user-sidebar-width,270px)]"}
         `}
       >
-        {children}
+        <ApiLoadingProvider>{children}</ApiLoadingProvider>
       </main>
     </div>
   );
-} 
+}
