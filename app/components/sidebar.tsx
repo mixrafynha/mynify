@@ -8,6 +8,7 @@ import {
   Truck,
   Settings,
   ChevronLeft,
+  User,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -59,6 +60,7 @@ export default function Sidebar() {
       { name: "Dashboard", icon: Home, path: "/dashboard" },
       { name: "Products", icon: Tag, path: "/dashboard/product" },
       { name: "Orders", icon: Truck, path: "/dashboard/orders" },
+      { name: "Profile", icon: User, path: "/dashboard/profile" },
       { name: "Settings", icon: Settings, path: "/dashboard/settings" },
       { name: "Contact", icon: Package, path: "/dashboard/Contact" },
     ],
