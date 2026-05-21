@@ -55,48 +55,48 @@ type Product = {
 const FEATURES: readonly Feature[] = Object.freeze([
   {
     icon: Zap,
-    title: "Fast creation",
-    desc: "Customize your products in seconds with our editor.",
+    title: "AI product creation",
+    desc: "Turn your ideas into product visuals in seconds.",
   },
   {
     icon: ShieldCheck,
-    title: "Premium quality",
-    desc: "High-quality products made to last.",
+    title: "Build your brand",
+    desc: "Create products for your own online business.",
   },
   {
     icon: Truck,
-    title: "Worldwide shipping",
-    desc: "We deliver wherever you are, fast and secure.",
+    title: "Sell without inventory",
+    desc: "Launch products without handling stock or shipping.",
   },
   {
     icon: Headphones,
-    title: "Made for gamers",
-    desc: "Exclusive designs for people who live the game.",
+    title: "Start selling fast",
+    desc: "Create, customize and publish products in minutes.",
   },
 ]);
 
 const PRODUCTS: readonly Product[] = Object.freeze([
   {
-    name: "Custom Gamer Hoodie",
+    name: "Streetwear Hoodie",
     price: "€49.99",
-    tag: "BEST SELLER",
+    tag: "POPULAR",
     image:
       "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=900&auto=format&fit=crop",
   },
   {
-    name: "Premium Gamer T-Shirt",
+    name: "Minimal T-Shirt",
     price: "€24.99",
     image:
       "https://images.unsplash.com/photo-1626160200951-fc4b4f8d4de9?q=80&w=900&auto=format&fit=crop",
   },
   {
-    name: "Custom Gaming Poster",
+    name: "Wall Poster",
     price: "€15.99",
     image:
       "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop",
   },
   {
-    name: "Custom Gamer Mug",
+    name: "Coffee Mug",
     price: "€14.99",
     image:
       "https://images.unsplash.com/photo-1614940403522-a8c829e7eb82?q=80&w=900&auto=format&fit=crop",
@@ -104,9 +104,9 @@ const PRODUCTS: readonly Product[] = Object.freeze([
 ]);
 
 const CUSTOM_FEATURES = Object.freeze([
-  "Upload your own designs",
-  "Customize colors and styles",
-  "Preview before buying",
+  "Generate designs with AI",
+  "Customize products instantly",
+  "Preview, publish and start selling",
 ]);
 
 const FeatureCard = memo(function FeatureCard({ item }: { item: Feature }) {
@@ -194,11 +194,11 @@ export default function HomePage() {
           <div className="z-10 order-1 text-center lg:text-left">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
               <Zap size={14} className="text-purple-400" aria-hidden="true" />
-              AI-powered creator platform
+              Create products with AI
             </div>
 
             <h1 className="mb-6 text-[44px] font-black uppercase leading-[0.84] tracking-[-0.04em] sm:text-6xl md:text-7xl lg:text-[105px]">
-              <span className="block text-white">Create your</span>
+              <span className="block text-white">Create a</span>
               <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
                 brand
               </span>
@@ -206,8 +206,8 @@ export default function HomePage() {
             </h1>
 
             <p className="mx-auto mb-8 max-w-xl text-base font-medium leading-relaxed text-white/60 sm:text-lg md:text-xl lg:mx-0">
-              Generate designs, customize products, launch your online store and
-              sell worldwide without inventory.
+              Generate products with AI, launch your store and start selling —
+              no inventory or design skills needed.
             </p>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
@@ -215,7 +215,7 @@ export default function HomePage() {
                 href={safeHref(LOGIN_HREF)}
                 className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-8 py-4 text-base font-black text-white shadow-lg md:shadow-[0_0_35px_rgba(168,85,247,0.55)] transition duration-300 hover:scale-105"
               >
-                Generate my brand
+                Start free
                 <Zap size={18} aria-hidden="true" />
               </Link>
 
@@ -223,7 +223,7 @@ export default function HomePage() {
                 href={safeHref(LOGIN_HREF)}
                 className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-base font-bold text-white/90 md:backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
               >
-                Explore products
+                See how it works
                 <ShoppingBag size={18} aria-hidden="true" />
               </Link>
             </div>
@@ -231,19 +231,19 @@ export default function HomePage() {
             <div className="mt-10 flex flex-wrap items-center justify-center gap-8 lg:justify-start">
               <div>
                 <div className="text-2xl font-black tracking-tight text-white">
-                  10K+
+                  10 free
                 </div>
                 <div className="text-sm font-medium text-white/40">
-                  creators
+                  AI generations
                 </div>
               </div>
 
               <div>
                 <div className="text-2xl font-black tracking-tight text-white">
-                  AI
+                  No stock
                 </div>
                 <div className="text-sm font-medium text-white/40">
-                  generated designs
+                  inventory needed
                 </div>
               </div>
 
@@ -295,7 +295,7 @@ export default function HomePage() {
           <div className="mb-8 flex items-center gap-4">
             <div className="h-[2px] w-10 bg-purple-500 sm:w-12" />
             <h2 className="text-xl font-black uppercase italic tracking-tight sm:text-2xl md:text-3xl">
-              Popular products
+              What you can create
             </h2>
           </div>
 
@@ -332,19 +332,19 @@ export default function HomePage() {
 
               <div className="relative p-8 md:p-12 lg:p-16">
                 <div className="mb-4 text-xs font-black uppercase tracking-[0.35em] text-purple-400">
-                  Customize
+                  Create
                 </div>
 
                 <h2 className="mb-6 text-4xl font-black uppercase leading-[0.92] tracking-tight md:text-6xl">
-                  Create your
+                  Turn ideas into
                   <span className="block bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
-                    gamer style
+                    products
                   </span>
                 </h2>
 
                 <p className="mb-8 max-w-xl text-lg leading-relaxed text-white/55">
-                  Let creators customize products with names, tags, colors and
-                  unique AI-powered visuals.
+                  Create products with AI, customize them and launch your brand
+                  in minutes.
                 </p>
 
                 <div className="space-y-4">
@@ -366,7 +366,7 @@ export default function HomePage() {
                     href={safeHref(LOGIN_HREF)}
                     className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-105"
                   >
-                    Start customizing
+                    Start creating
                     <Zap size={18} aria-hidden="true" />
                   </Link>
                 </div>
@@ -384,15 +384,15 @@ export default function HomePage() {
 
         <div className="relative mx-auto max-w-5xl px-4 text-center md:px-8 lg:px-12">
           <h2 className="mb-6 text-4xl font-black uppercase leading-tight tracking-tight md:text-6xl">
-            Turn ideas into{" "}
+            Launch your{" "}
             <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
-              real products
+              AI brand
             </span>
           </h2>
 
           <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-            Start your gamer brand, sell custom products, and grow without
-            inventory.
+            Create products, launch your store and start selling — no inventory
+            required.
           </p>
 
           <div className="flex flex-wrap justify-center gap-4">
@@ -400,7 +400,7 @@ export default function HomePage() {
               href={safeHref(LOGIN_HREF)}
               className="inline-block rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-10 py-4 text-lg font-bold text-white shadow-lg md:shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
             >
-              🚀 Start now
+              🚀 Start free
             </Link>
 
             <Link
