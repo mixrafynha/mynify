@@ -8,7 +8,7 @@ const LOADING_API_ROUTES = [
   "/api/profiles",
    "/api/contact",
    "/api/dashboard",
-   "/api/product",
+   "/api/products",
   // adiciona só as que quiseres
 ];
 const EXCLUDED_LOADING_ROUTES = [
