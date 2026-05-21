@@ -15,41 +15,48 @@ import {
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
   const clean = href.trim().toLowerCase();
-  if (clean.startsWith("javascript:") || clean.startsWith("data:")) return "/";
+
+  if (
+    clean.startsWith("javascript:") ||
+    clean.startsWith("data:")
+  ) {
+    return "/";
+  }
+
   return href.trim() || "/";
 };
 
 const safeText = (val: unknown) => {
   if (typeof val !== "string") return "";
-  return val.replace(/<script.*?>.*?<\/script>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  return val
+    .replace(/<script.*?>.*?<\/script>/gi, "")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 };
 
 const STEPS = Object.freeze([
   {
-    step: "01",
-    title: "Create in the editor",
+    title: "AI Editor",
     desc: "Generate or upload a design and place it on your product.",
     image: "/how/01-editor.webp",
     icon: Sparkles,
   },
   {
-    step: "02",
-    title: "Save as a product",
-    desc: "Choose the product type and save your design as a real item.",
+    title: "Save product",
+    desc: "Choose a product type and save your design instantly.",
     image: "/how/02-save-product.webp",
     icon: Store,
   },
   {
-    step: "03",
     title: "Preview & edit",
-    desc: "Check the final mockup and adjust it before publishing.",
+    desc: "Check the final mockup and adjust before publishing.",
     image: "/how/03-preview.webp",
     icon: PackageCheck,
   },
   {
-    step: "04",
-    title: "Manage products",
-    desc: "Publish, track and manage everything from your dashboard.",
+    title: "My products",
+    desc: "Manage and publish products from your dashboard.",
     image: "/how/04-my-products.webp",
     icon: Rocket,
   },
@@ -67,6 +74,7 @@ const BENEFITS = Object.freeze([
 export default function HowItWorksPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
+      {/* HERO */}
       <section className="relative overflow-hidden px-4 py-14 text-center md:px-8 lg:px-12 lg:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.28),transparent_34%),linear-gradient(180deg,#03030a_0%,#050511_60%,#03030a_100%)]" />
 
@@ -85,7 +93,8 @@ export default function HowItWorksPage() {
           </h1>
 
           <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-lg md:text-xl">
-            Create a product with AI, preview the final mockup and publish it from your dashboard.
+            Create a product with AI, preview the final mockup and publish it
+            from your dashboard.
           </p>
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
@@ -108,47 +117,49 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
+      {/* BIG IMAGES */}
       <section className="relative bg-[#03030a] px-4 py-10 md:px-8 lg:px-12 lg:py-16">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.14),transparent_28%)]" />
 
         <div className="relative mx-auto max-w-7xl">
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
             {STEPS.map((item, index) => {
               const Icon = item.icon;
 
               return (
                 <div
-                  key={item.step}
-                  className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_0_24px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40 sm:p-5"
+                  key={item.title}
+                  className="group overflow-hidden rounded-[26px] border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_20px_rgba(168,85,247,0.06)] transition duration-300 hover:border-purple-500/40 sm:p-4"
                 >
-                  <div className="relative mb-5 aspect-[4/5] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                  {/* IMAGE BIGGER / NO STEP */}
+                  <div className="relative mb-4 flex h-[220px] items-center justify-center overflow-hidden rounded-[22px] bg-black/20 sm:h-[290px] lg:h-[340px]">
                     <Image
                       src={item.image}
                       alt={safeText(item.title)}
                       fill
                       priority={index === 0}
-                      sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 25vw"
-                      className="object-cover transition duration-500 group-hover:scale-105"
+                      quality={82}
+                      sizes="(max-width:768px) 50vw, (max-width:1280px) 50vw, 25vw"
+                      className="object-contain transition duration-300 group-hover:scale-[1.02]"
                     />
                   </div>
 
-                  <div className="mb-4 flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500 text-base font-black text-white shadow-[0_0_22px_rgba(168,85,247,0.4)]">
-                      {safeText(item.step)}
+                  {/* TEXT */}
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-purple-500/25 bg-purple-500/10 text-purple-300">
+                      <Icon size={18} />
                     </div>
 
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-purple-500/25 bg-purple-500/10 text-purple-300">
-                      <Icon size={21} />
+                    <div>
+                      <h3 className="text-sm font-black uppercase text-white sm:text-lg">
+                        {safeText(item.title)}
+                      </h3>
+
+                      <p className="mt-1 text-xs leading-relaxed text-white/58 sm:text-sm">
+                        {safeText(item.desc)}
+                      </p>
                     </div>
                   </div>
-
-                  <h3 className="mb-2 text-xl font-black uppercase text-white">
-                    {safeText(item.title)}
-                  </h3>
-
-                  <p className="text-sm leading-relaxed text-white/58">
-                    {safeText(item.desc)}
-                  </p>
                 </div>
               );
             })}
@@ -160,6 +171,7 @@ export default function HowItWorksPage() {
         </div>
       </section>
 
+      {/* BENEFITS */}
       <section className="relative bg-[#03030a] px-4 py-12 md:px-8 lg:px-12">
         <div className="mx-auto grid max-w-7xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {BENEFITS.map((benefit) => (
@@ -167,8 +179,14 @@ export default function HowItWorksPage() {
               key={benefit}
               className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5"
             >
-              <CheckCircle2 className="shrink-0 text-purple-400" size={22} />
-              <span className="font-bold text-white/80">{safeText(benefit)}</span>
+              <CheckCircle2
+                className="shrink-0 text-purple-400"
+                size={22}
+              />
+
+              <span className="font-bold text-white/80">
+                {safeText(benefit)}
+              </span>
             </div>
           ))}
         </div>
