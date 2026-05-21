@@ -2,371 +2,196 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  ArrowUpRight,
-  Gamepad2,
-  ShoppingBag,
-  Sparkles,
-  Star,
-  Zap,
-} from "lucide-react";
-
-/* ================= SECURITY HELPERS ================= */
+import { ArrowRight, CheckCircle2, Sparkles, Zap } from "lucide-react";
 
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
   const clean = href.trim().toLowerCase();
-
-  if (clean.startsWith("javascript:")) return "/";
-  if (clean.startsWith("data:")) return "/";
-
-  return href;
+  if (clean.startsWith("javascript:") || clean.startsWith("data:")) return "/";
+  return href.trim() || "/";
 };
 
 const safeText = (val: unknown) => {
   if (typeof val !== "string") return "";
-
-  return val
-    .replace(/<script.*?>.*?<\/script>/gi, "")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return val.replace(/<script.*?>.*?<\/script>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 };
 
-const safeImg = (url: string, w = 1200) => {
-  if (typeof url !== "string") return "";
-  const clean = url.trim();
-
-  if (!clean.startsWith("https://images.unsplash.com/")) return "";
-
-  return `${clean}?auto=format&fit=crop&w=${w}&q=80`;
+const products = {
+  tshirts: [
+    { name: "Cyber Wolf", price: "€24.99", image: "/catalog/cyber-wolf-shirt.webp" },
+    { name: "Samurai Mask", price: "€24.99", image: "/catalog/samurai-shirt.webp" },
+    { name: "Red Sun Temple", price: "€24.99", image: "/catalog/red-sun-shirt.webp" },
+    { name: "XO Drip", price: "€24.99", image: "/catalog/xo-shirt.webp" },
+  ],
+  hoodies: [
+    { name: "Purple Dragon", price: "€49.99", image: "/catalog/purple-dragon-hoodie.webp" },
+    { name: "Create Your Legacy", price: "€49.99", image: "/catalog/legacy-hoodie.webp" },
+    { name: "Rise Warrior", price: "€49.99", image: "/catalog/rise-hoodie.webp" },
+    { name: "Angel Baby", price: "€44.99", image: "/catalog/angel-sweatshirt.webp" },
+  ],
+  accessories: [
+    { name: "Astronaut Tote Bag", price: "€19.99", image: "/catalog/astronaut-tote.webp" },
+    { name: "Level Up Mug", price: "€14.99", image: "/catalog/level-up-mug.webp" },
+    { name: "X Smile Cap", price: "€19.99", image: "/catalog/x-smile-cap.webp" },
+    { name: "Skull Reaper Case", price: "€15.99", image: "/catalog/skull-phone.webp" },
+  ],
 };
 
-/* ================= DATA ================= */
+function ProductCard({
+  product,
+}: {
+  product: { name: string; price: string; image: string };
+}) {
+  return (
+    <Link
+      href={safeHref("/login")}
+      className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40"
+    >
+      <div className="relative mb-4 h-[210px] overflow-hidden rounded-xl bg-black/40 sm:h-[260px]">
+        <Image
+          src={product.image}
+          alt={safeText(product.name)}
+          fill
+          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
+          className="object-cover transition duration-500 group-hover:scale-105"
+        />
+      </div>
 
-const hero1Images = Object.freeze([
-  "https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf",
-  "https://images.unsplash.com/photo-1523381210434-271e8be1f52b",
-  "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c",
-]);
-
-const hero2Images = Object.freeze([
-  "https://images.unsplash.com/photo-1490481651871-ab68de25d43d",
-  "https://images.unsplash.com/photo-1512436991641-6745cdb1723f",
-  "https://images.unsplash.com/photo-1520975916090-3105956dac38",
-]);
-
-const popularProducts = Object.freeze([
-  {
-    id: 1,
-    name: "Minimal Hoodie",
-    price: "€34.99",
-    image: "https://images.unsplash.com/photo-1544441893-675973e31985",
-  },
-  {
-    id: 2,
-    name: "Classic T-Shirt",
-    price: "€19.99",
-    image: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab",
-  },
-  {
-    id: 3,
-    name: "Street Cap",
-    price: "€14.99",
-    image: "https://images.unsplash.com/photo-1514996937319-344454492b37",
-  },
-  {
-    id: 4,
-    name: "Coffee Mug",
-    price: "€9.99",
-    image: "https://images.unsplash.com/photo-1511920170033-f8396924c348",
-  },
-]);
-
-const newProducts = Object.freeze([
-  {
-    id: 5,
-    name: "White Sneakers",
-    price: "€49.99",
-    image: "https://images.unsplash.com/photo-1549298916-b41d501d3772",
-  },
-  {
-    id: 6,
-    name: "Backpack",
-    price: "€39.99",
-    image: "https://images.unsplash.com/photo-1503341733017-1901578f9f1e",
-  },
-  {
-    id: 7,
-    name: "Smart Watch",
-    price: "€79.99",
-    image: "https://images.unsplash.com/photo-1516574187841-cb9cc2ca948b",
-  },
-  {
-    id: 8,
-    name: "Sunglasses",
-    price: "€24.99",
-    image: "https://images.unsplash.com/photo-1511499767150-a48a237f0083",
-  },
-]);
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?auto=format&fit=crop&w=900&q=80";
-
-export default function Home() {
-  const [hero1Index, setHero1Index] = useState(0);
-  const [hero2Index, setHero2Index] = useState(0);
-
-  const hero1Length = useMemo(() => hero1Images.length, []);
-  const hero2Length = useMemo(() => hero2Images.length, []);
-
-  const handleImageError = useCallback(
-    (e: React.SyntheticEvent<HTMLImageElement>) => {
-      const target = e.currentTarget;
-
-      try {
-        if (target.src !== FALLBACK_IMAGE) {
-          target.src = FALLBACK_IMAGE;
-        }
-      } catch {}
-    },
-    []
+      <h3 className="text-sm font-black text-white sm:text-base">
+        {safeText(product.name)}
+      </h3>
+      <p className="mt-1 text-sm font-bold text-white/70">
+        {safeText(product.price)}
+      </p>
+    </Link>
   );
+}
 
-  useEffect(() => {
-    if (!hero1Length || !hero2Length) return;
+function ProductSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: { name: string; price: string; image: string }[];
+}) {
+  return (
+    <section className="relative mx-auto max-w-7xl px-4 py-8 md:px-8 lg:px-12">
+      <div className="mb-5 flex items-center justify-between gap-4">
+        <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">
+          {title}
+        </h2>
 
-    const interval = setInterval(() => {
-      setHero1Index((prev) => (prev + 1) % hero1Length);
-      setHero2Index((prev) => (prev + 1) % hero2Length);
-    }, 3000);
+        <Link
+          href={safeHref("/login")}
+          className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white/80 transition hover:border-purple-500/40 sm:inline-flex"
+        >
+          Create yours <ArrowRight size={16} />
+        </Link>
+      </div>
 
-    return () => clearInterval(interval);
-  }, [hero1Length, hero2Length]);
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {items.map((p) => (
+          <ProductCard key={p.name} product={p} />
+        ))}
+      </div>
+    </section>
+  );
+}
 
+export default function HowItWorksPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
-      {/* HERO 1 */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)] lg:bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.9)_34%,rgba(3,3,10,0.35)_72%,#03030a_100%)]" />
+      {/* HERO */}
+     <section className="relative overflow-hidden px-4 py-12 md:px-8 lg:px-12 lg:py-16">
+  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.26),transparent_32%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 pb-14 pt-16 md:px-8 lg:min-h-[680px] lg:grid-cols-2 lg:px-12 lg:pt-24">
-          <div className="z-10 text-center lg:text-left">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
-              <Gamepad2 size={15} className="text-purple-400" />
-              Custom products for creators
-            </div>
+  <div className="relative mx-auto max-w-5xl text-center">
+    <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/35 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/80">
+      <Sparkles size={14} className="text-purple-400" />
+      AI-powered products
+    </div>
 
-            <h1 className="mb-6 text-[48px] font-black uppercase leading-[0.88] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-              <span className="block">Create your</span>
-              <span className="block">own brand</span>
-              <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-                products.
+    <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.9] tracking-[-0.04em] text-white sm:text-6xl md:text-7xl">
+      Create products.
+      <span className="block bg-gradient-to-r from-purple-400 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
+        Sell your brand.
+      </span>
+    </h1>
+
+    <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-lg md:text-xl">
+      Generate designs with AI, place them on products and start selling without inventory.
+    </p>
+
+    <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+      <Link
+        href={safeHref("/login")}
+        className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 font-bold text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-[1.02]"
+      >
+        Start designing
+        <Zap size={18} />
+      </Link>
+
+      <Link
+        href={safeHref("/how-mynify-works")}
+        className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-8 font-bold text-white/85 transition hover:border-purple-500/40 hover:bg-white/[0.08]"
+      >
+        How it works
+        <ArrowRight size={18} />
+      </Link>
+    </div>
+
+    <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-semibold text-white/55">
+      <span>10 free AI generations</span>
+      <span className="hidden h-1 w-1 rounded-full bg-white/20 sm:block" />
+      <span>No inventory</span>
+      <span className="hidden h-1 w-1 rounded-full bg-white/20 sm:block" />
+      <span>Global shipping</span>
+    </div>
+  </div>
+</section>
+
+      <ProductSection title="T-Shirts" items={products.tshirts} />
+      <ProductSection title="Hoodies & Sweatshirts" items={products.hoodies} />
+      <ProductSection title="Accessories" items={products.accessories} />
+
+      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 lg:px-12">
+        <div className="rounded-3xl border border-purple-500/20 bg-purple-500/10 p-8 md:flex md:items-center md:justify-between">
+          <div className="mb-6 md:mb-0">
+            <h2 className="text-3xl font-black md:text-4xl">
+              Ready to create{" "}
+              <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
+                your own products?
               </span>
-            </h1>
-
-            <p className="mx-auto mb-8 max-w-xl text-base leading-relaxed text-white/65 sm:text-lg md:text-xl lg:mx-0">
-              Build a modern store with custom products, powerful design, and a
-              gamer-inspired brand experience.
+            </h2>
+            <p className="mt-3 text-white/60">
+              Start with 10 free AI generations and publish your first product.
             </p>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
-              <Link
-                href={safeHref("/catalog")}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-7 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
-              >
-                Shop now
-                <ShoppingBag size={18} />
-              </Link>
-
-              <Link
-                href={safeHref("/login")}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-7 py-4 font-bold text-white/90 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
-              >
-                Start designing
-                <Zap size={18} />
-              </Link>
-            </div>
           </div>
 
-          <div className="relative z-0 mx-auto h-[320px] w-full max-w-[560px] sm:h-[400px] lg:h-[540px] lg:max-w-none">
-            <div className="absolute inset-0 rounded-full bg-purple-600/20 blur-[80px]" />
-
-            <div className="relative h-full overflow-hidden rounded-[36px] border border-purple-500/20 shadow-[0_0_60px_rgba(168,85,247,0.18)]">
-              {hero1Images.map((img, index) => (
-                <Image
-                  key={img}
-                  src={safeImg(img, 1200)}
-                  alt="Custom brand products"
-                  fill
-                  priority={index === 0}
-                  quality={90}
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  onError={handleImageError}
-                  className={`absolute inset-0 object-cover opacity-75 transition-opacity duration-1000 ${
-                    index === hero1Index ? "opacity-75" : "opacity-0"
-                  }`}
-                />
-              ))}
-
-              <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/25 to-purple-600/20" />
-            </div>
-          </div>
+          <Link
+            href={safeHref("/login")}
+            className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)]"
+          >
+            Start designing now <ArrowRight size={18} />
+          </Link>
         </div>
       </section>
 
-      {/* POPULAR PRODUCTS */}
-      <section className="relative bg-[#03030a] py-16 sm:py-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_28%)]" />
-
-        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
-          <div className="mb-8 flex items-center gap-4">
-            <div className="h-[2px] w-10 bg-purple-500 sm:w-12" />
-            <h2 className="text-xl font-black uppercase italic tracking-tight sm:text-2xl md:text-3xl">
-              Popular products
-            </h2>
+      <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-16 sm:grid-cols-2 md:grid-cols-4 md:px-8 lg:px-12">
+        {[
+          "10 free AI generations",
+          "No inventory needed",
+          "Global shipping",
+          "Secure payments",
+        ].map((benefit) => (
+          <div
+            key={benefit}
+            className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5"
+          >
+            <CheckCircle2 className="text-purple-400" size={22} />
+            <span className="font-bold text-white/80">{safeText(benefit)}</span>
           </div>
-
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {popularProducts.map((product) => (
-              <Link
-                key={product.id}
-                href={safeHref("/catalog")}
-                className="group relative min-h-[240px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45"
-              >
-                <Image
-                  src={safeImg(product.image, 700)}
-                  alt={safeText(product.name)}
-                  fill
-                  quality={80}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  onError={handleImageError}
-                  className="object-cover opacity-55 transition duration-500 group-hover:scale-110"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-transparent" />
-
-                <div className="relative z-10 flex min-h-[240px] flex-col justify-end p-6">
-                  <h3 className="mb-5 max-w-[190px] font-bold text-white">
-                    {safeText(product.name)}
-                  </h3>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-lg font-black text-fuchsia-400">
-                      {safeText(product.price)}
-                    </p>
-
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-purple-300 transition group-hover:bg-purple-500/20">
-                      <ArrowUpRight size={18} />
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HERO 2 */}
-      <section className="relative overflow-hidden bg-[#05050d] py-24">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_45%,rgba(14,165,233,0.18),transparent_25%),radial-gradient(circle_at_15%_30%,rgba(168,85,247,0.22),transparent_28%)]" />
-
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 md:px-8 lg:grid-cols-2 lg:px-12">
-          <div className="relative h-[360px] overflow-hidden rounded-[36px] border border-purple-500/20 shadow-[0_0_60px_rgba(168,85,247,0.18)] md:h-[420px]">
-            {hero2Images.map((img, index) => (
-              <Image
-                key={img}
-                src={safeImg(img, 1200)}
-                alt="New product trends"
-                fill
-                quality={90}
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                onError={handleImageError}
-                className={`absolute inset-0 object-cover opacity-75 transition-opacity duration-1000 ${
-                  index === hero2Index ? "opacity-75" : "opacity-0"
-                }`}
-              />
-            ))}
-
-            <div className="absolute inset-0 bg-gradient-to-tr from-black via-black/35 to-purple-600/20" />
-          </div>
-
-          <div>
-            <div className="mb-4 text-sm font-black uppercase tracking-widest text-purple-400">
-              New trends
-            </div>
-
-            <h2 className="mb-6 text-4xl font-black uppercase leading-tight md:text-6xl">
-              Discover designs that stand out
-            </h2>
-
-            <p className="mb-8 text-lg leading-relaxed text-white/60">
-              Stay ahead with the latest products, modern designs, and unique
-              pieces made for your audience.
-            </p>
-
-            <Link
-              href={safeHref("/catalog")}
-              className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-7 py-4 font-bold text-white/90 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
-            >
-              Explore products
-              <Sparkles size={18} />
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* NEW PRODUCTS */}
-      <section className="relative bg-[#03030a] py-16 sm:py-20">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.14),transparent_38%)]" />
-
-        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
-          <div className="mb-8 flex items-center gap-4">
-            <div className="h-[2px] w-10 bg-purple-500 sm:w-12" />
-            <h2 className="text-xl font-black uppercase italic tracking-tight sm:text-2xl md:text-3xl">
-              New products
-            </h2>
-          </div>
-
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {newProducts.map((product) => (
-              <Link
-                key={product.id}
-                href={safeHref("/catalog")}
-                className="group relative min-h-[240px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45"
-              >
-                <Image
-                  src={safeImg(product.image, 700)}
-                  alt={safeText(product.name)}
-                  fill
-                  quality={80}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  onError={handleImageError}
-                  className="object-cover opacity-55 transition duration-500 group-hover:scale-110"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-transparent" />
-
-                <div className="relative z-10 flex min-h-[240px] flex-col justify-end p-6">
-                  <h3 className="mb-5 max-w-[190px] font-bold text-white">
-                    {safeText(product.name)}
-                  </h3>
-
-                  <div className="flex items-center justify-between">
-                    <p className="text-lg font-black text-fuchsia-400">
-                      {safeText(product.price)}
-                    </p>
-
-                    <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-purple-300 transition group-hover:bg-purple-500/20">
-                      <Star size={18} />
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+        ))}
       </section>
     </main>
   );
