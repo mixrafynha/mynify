@@ -1,13 +1,22 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Sparkles, Zap } from "lucide-react";
+import Image from "next/image";
+import {
+  ArrowRight,
+  CheckCircle2,
+  PackageCheck,
+  Rocket,
+  Sparkles,
+  Store,
+  Zap,
+} from "lucide-react";
 
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
   const clean = href.trim().toLowerCase();
-  if (clean.startsWith("javascript:") || clean.startsWith("data:")) return "/";
+  if (clean.startsWith("javascript:")) return "/";
+  if (clean.startsWith("data:")) return "/";
   return href.trim() || "/";
 };
 
@@ -16,182 +25,308 @@ const safeText = (val: unknown) => {
   return val.replace(/<script.*?>.*?<\/script>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 };
 
-const products = {
-  tshirts: [
-    { name: "Cyber Wolf", price: "€24.99", image: "/catalog/cyber-wolf-shirt.webp" },
-    { name: "Samurai Mask", price: "€24.99", image: "/catalog/samurai-shirt.webp" },
-    { name: "Red Sun Temple", price: "€24.99", image: "/catalog/red-sun-shirt.webp" },
-    { name: "XO Drip", price: "€24.99", image: "/catalog/xo-shirt.webp" },
-  ],
-  hoodies: [
-    { name: "Purple Dragon", price: "€49.99", image: "/catalog/purple-dragon-hoodie.webp" },
-    { name: "Create Your Legacy", price: "€49.99", image: "/catalog/legacy-hoodie.webp" },
-    { name: "Rise Warrior", price: "€49.99", image: "/catalog/rise-hoodie.webp" },
-    { name: "Angel Baby", price: "€44.99", image: "/catalog/angel-sweatshirt.webp" },
-  ],
-  accessories: [
-    { name: "Astronaut Tote Bag", price: "€19.99", image: "/catalog/astronaut-tote.webp" },
-    { name: "Level Up Mug", price: "€14.99", image: "/catalog/level-up-mug.webp" },
-    { name: "X Smile Cap", price: "€19.99", image: "/catalog/x-smile-cap.webp" },
-    { name: "Skull Reaper Case", price: "€15.99", image: "/catalog/skull-phone.webp" },
-  ],
-};
+const STEPS = Object.freeze([
+  {
+    icon: Sparkles,
+    step: "01",
+    title: "Describe your idea",
+    desc: "Tell Mynify what you want to create and turn your idea into a product concept.",
+  },
+  {
+    icon: Store,
+    step: "02",
+    title: "AI creates the design",
+    desc: "Generate product visuals with AI and customize them before publishing.",
+  },
+  {
+    icon: PackageCheck,
+    step: "03",
+    title: "Publish your product",
+    desc: "Launch your product page and start selling without handling inventory.",
+  },
+  {
+    icon: Rocket,
+    step: "04",
+    title: "Grow your brand",
+    desc: "Focus on marketing while Mynify helps you create, sell and scale.",
+  },
+]);
 
-function ProductCard({
-  product,
-}: {
-  product: { name: string; price: string; image: string };
-}) {
-  return (
-    <Link
-      href={safeHref("/login")}
-      className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40"
-    >
-      <div className="relative mb-4 h-[210px] overflow-hidden rounded-xl bg-black/40 sm:h-[260px]">
-        <Image
-          src={product.image}
-          alt={safeText(product.name)}
-          fill
-          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw"
-          className="object-cover transition duration-500 group-hover:scale-105"
-        />
-      </div>
-
-      <h3 className="text-sm font-black text-white sm:text-base">
-        {safeText(product.name)}
-      </h3>
-      <p className="mt-1 text-sm font-bold text-white/70">
-        {safeText(product.price)}
-      </p>
-    </Link>
-  );
-}
-
-function ProductSection({
-  title,
-  items,
-}: {
-  title: string;
-  items: { name: string; price: string; image: string }[];
-}) {
-  return (
-    <section className="relative mx-auto max-w-7xl px-4 py-8 md:px-8 lg:px-12">
-      <div className="mb-5 flex items-center justify-between gap-4">
-        <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">
-          {title}
-        </h2>
-
-        <Link
-          href={safeHref("/login")}
-          className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white/80 transition hover:border-purple-500/40 sm:inline-flex"
-        >
-          Create yours <ArrowRight size={16} />
-        </Link>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {items.map((p) => (
-          <ProductCard key={p.name} product={p} />
-        ))}
-      </div>
-    </section>
-  );
-}
+const BENEFITS = Object.freeze([
+  "10 free AI generations",
+  "No inventory needed",
+  "Global shipping",
+  "AI product creation",
+  "Easy customization",
+  "Free to start",
+]);
 
 export default function HowItWorksPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
       {/* HERO */}
-     <section className="relative overflow-hidden px-4 py-12 md:px-8 lg:px-12 lg:py-16">
-  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.26),transparent_32%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)]" />
 
-  <div className="relative mx-auto max-w-5xl text-center">
-    <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/35 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/80">
-      <Sparkles size={14} className="text-purple-400" />
-      AI-powered products
-    </div>
-
-    <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.9] tracking-[-0.04em] text-white sm:text-6xl md:text-7xl">
-      Create products.
-      <span className="block bg-gradient-to-r from-purple-400 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
-        Sell your brand.
-      </span>
-    </h1>
-
-    <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-lg md:text-xl">
-      Generate designs with AI, place them on products and start selling without inventory.
-    </p>
-
-    <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-      <Link
-        href={safeHref("/login")}
-        className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 font-bold text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-[1.02]"
-      >
-        Start designing
-        <Zap size={18} />
-      </Link>
-
-      <Link
-        href={safeHref("/how-it-works")}
-        className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-8 font-bold text-white/85 transition hover:border-purple-500/40 hover:bg-white/[0.08]"
-      >
-        How it works
-        <ArrowRight size={18} />
-      </Link>
-    </div>
-
-    <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-semibold text-white/55">
-      <span>10 free AI generations</span>
-      <span className="hidden h-1 w-1 rounded-full bg-white/20 sm:block" />
-      <span>No inventory</span>
-      <span className="hidden h-1 w-1 rounded-full bg-white/20 sm:block" />
-      <span>Global shipping</span>
-    </div>
-  </div>
-</section>
-
-      <ProductSection title="T-Shirts" items={products.tshirts} />
-      <ProductSection title="Hoodies & Sweatshirts" items={products.hoodies} />
-      <ProductSection title="Accessories" items={products.accessories} />
-
-      <section className="mx-auto max-w-7xl px-4 py-12 md:px-8 lg:px-12">
-        <div className="rounded-3xl border border-purple-500/20 bg-purple-500/10 p-8 md:flex md:items-center md:justify-between">
-          <div className="mb-6 md:mb-0">
-            <h2 className="text-3xl font-black md:text-4xl">
-              Ready to create{" "}
-              <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
-                your own products?
-              </span>
-            </h2>
-            <p className="mt-3 text-white/60">
-              Start with 10 free AI generations and publish your first product.
-            </p>
+        <div className="relative mx-auto max-w-7xl px-4 pb-16 pt-16 text-center md:px-8 lg:px-12 lg:pb-20 lg:pt-28">
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.22em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
+            <Sparkles size={15} className="text-purple-400" />
+            Create products with AI
           </div>
 
-          <Link
-            href={safeHref("/login")}
-            className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)]"
-          >
-            Start designing now <ArrowRight size={18} />
-          </Link>
+          <h1 className="mx-auto mb-6 max-w-5xl text-4xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
+            How{" "}
+            <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+              MYNIFY
+            </span>{" "}
+            works
+          </h1>
+
+          <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-white/65 sm:text-lg md:text-xl">
+            Turn an idea into a product with AI, launch your store and start selling — no inventory or design skills needed.
+          </p>
+
+          <div className="flex flex-col justify-center gap-3 sm:flex-row">
+            <Link
+              href={safeHref("/login")}
+              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
+            >
+              Start free
+              <Zap size={18} />
+            </Link>
+
+            <Link
+              href={safeHref("/contact")}
+              className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 font-bold text-white/90 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
+            >
+              Contact us
+              <ArrowRight size={18} />
+            </Link>
+          </div>
+
+          <p className="mt-5 text-sm text-white/40">
+            No credit card required • 10 free AI generations
+          </p>
         </div>
       </section>
 
-      <section className="mx-auto grid max-w-7xl gap-4 px-4 pb-16 sm:grid-cols-2 md:grid-cols-4 md:px-8 lg:px-12">
-        {[
-          "10 free AI generations",
-          "No inventory needed",
-          "Global shipping",
-          "Secure payments",
-        ].map((benefit) => (
-          <div
-            key={benefit}
-            className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5"
-          >
-            <CheckCircle2 className="text-purple-400" size={22} />
-            <span className="font-bold text-white/80">{safeText(benefit)}</span>
+      {/* STEPS */}
+      <section className="relative bg-[#03030a] py-14 sm:py-20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_28%)]" />
+
+        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
+          <div className="mb-10 flex items-center gap-4">
+            <div className="h-[2px] w-10 bg-purple-500 sm:w-12" />
+            <h2 className="text-xl font-black uppercase italic tracking-tight sm:text-2xl md:text-3xl">
+              The process
+            </h2>
           </div>
-        ))}
+
+          <div className="grid gap-5 md:grid-cols-2">
+            {STEPS.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <div
+                  key={item.step}
+                  className="group relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45 hover:bg-purple-500/10 sm:p-8"
+                >
+                  <div className="absolute right-5 top-4 text-5xl font-black text-white/[0.04] sm:text-6xl">
+                    {safeText(item.step)}
+                  </div>
+
+                  <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl border border-purple-500/30 bg-purple-500/10 text-purple-300 shadow-[0_0_24px_rgba(168,85,247,0.22)]">
+                    <Icon size={28} />
+                  </div>
+
+                  <p className="mb-2 text-sm font-black uppercase tracking-widest text-fuchsia-400">
+                    Step {safeText(item.step)}
+                  </p>
+
+                  <h3 className="mb-3 text-2xl font-black text-white">
+                    {safeText(item.title)}
+                  </h3>
+
+                  <p className="leading-relaxed text-white/60">
+                    {safeText(item.desc)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* VISUAL DEMO */}
+      <section className="relative overflow-hidden bg-[#05050d] py-16 sm:py-20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_80%_45%,rgba(14,165,233,0.18),transparent_25%),radial-gradient(circle_at_15%_30%,rgba(168,85,247,0.22),transparent_28%)]" />
+
+        <div className="relative mx-auto max-w-6xl px-4 text-center md:px-8 lg:px-12">
+          <div className="mb-4 text-sm font-black uppercase tracking-widest text-purple-400">
+            Live example
+          </div>
+
+          <h2 className="mb-4 text-3xl font-black uppercase md:text-5xl">
+            From prompt to product
+          </h2>
+
+          <p className="mx-auto mb-10 max-w-2xl text-white/60">
+            Write what you want to create, generate the design with AI, then publish it as a real product.
+          </p>
+
+          <div className="grid gap-5 md:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 text-left shadow-[0_0_30px_rgba(168,85,247,0.08)] sm:p-6">
+              <div className="mb-4 inline-flex rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-purple-300">
+                Step 01
+              </div>
+
+              <h3 className="mb-3 text-2xl font-black text-white">
+                Describe your idea
+              </h3>
+
+              <p className="mb-5 text-white/60">
+                Start with a simple product prompt.
+              </p>
+
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <p className="mb-2 text-xs font-black uppercase tracking-widest text-purple-400">
+                  Example prompt
+                </p>
+
+                <p className="text-white/85">
+                  “Streetwear hoodie with a cyber dragon design”
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-purple-500/20 bg-purple-500/5 p-5 text-left shadow-[0_0_30px_rgba(168,85,247,0.08)] sm:p-6">
+              <div className="mb-4 inline-flex rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-purple-300">
+                Step 02
+              </div>
+
+              <h3 className="mb-3 text-2xl font-black text-white">
+                AI creates the design
+              </h3>
+
+              <p className="mb-5 text-white/60">
+                Generate a visual you can use on products.
+              </p>
+
+              <div className="relative h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                <Image
+                  src="/demo-design.png"
+                  alt="AI generated product design"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-fuchsia-500/20 bg-fuchsia-500/5 p-5 text-left shadow-[0_0_30px_rgba(168,85,247,0.08)] sm:p-6">
+              <div className="mb-4 inline-flex rounded-full border border-fuchsia-500/30 bg-fuchsia-500/10 px-3 py-1 text-xs font-black uppercase tracking-widest text-fuchsia-300">
+                Step 03
+              </div>
+
+              <h3 className="mb-3 text-2xl font-black text-white">
+                Launch & sell
+              </h3>
+
+              <p className="mb-5 text-white/60">
+                Turn the design into a product ready to publish.
+              </p>
+
+              <div className="relative h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-black/30">
+                <Image
+                  src="/demo-product.png"
+                  alt="Final product preview"
+                  fill
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <Link
+              href={safeHref("/login")}
+              className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-105"
+            >
+              Try it free
+              <Zap size={18} />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* BENEFITS */}
+      <section className="relative bg-[#03030a] py-16 sm:py-20">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.14),transparent_38%)]" />
+
+        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
+          <div className="mb-10 text-center">
+            <div className="mb-4 text-sm font-black uppercase tracking-widest text-purple-400">
+              Why MYNIFY?
+            </div>
+
+            <h2 className="text-4xl font-black uppercase leading-tight md:text-6xl">
+              Built to help you sell
+            </h2>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {BENEFITS.map((benefit) => (
+              <div
+                key={benefit}
+                className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-white/75 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition hover:border-purple-500/40 hover:bg-purple-500/10 sm:p-6"
+              >
+                <CheckCircle2 className="shrink-0 text-purple-400" size={24} />
+                <span className="font-semibold">{safeText(benefit)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="relative overflow-hidden bg-[#03030a] py-20 text-center sm:py-28">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.35),transparent_45%)]" />
+
+        <div className="relative mx-auto max-w-5xl px-4 md:px-8 lg:px-12">
+          <h2 className="mb-6 text-4xl font-black uppercase leading-tight tracking-tight md:text-6xl">
+            Ready to{" "}
+            <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
+              start?
+            </span>
+          </h2>
+
+          <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
+            Create your first AI product and start building your brand today.
+          </p>
+
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link
+              href={safeHref("/login")}
+              className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-10 py-4 text-lg font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
+            >
+              Start free
+              <Rocket size={20} />
+            </Link>
+
+            <Link
+              href={safeHref("/contact")}
+              className="rounded-2xl border border-white/15 px-10 py-4 text-lg text-white transition hover:border-purple-500/40 hover:bg-white/10"
+            >
+              Contact us
+            </Link>
+          </div>
+
+          <p className="mt-6 text-sm text-white/35">
+            No credit card required • Free to start
+          </p>
+        </div>
       </section>
     </main>
   );
