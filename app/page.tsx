@@ -80,26 +80,22 @@ const PRODUCTS: readonly Product[] = Object.freeze([
     name: "Streetwear Hoodie",
     price: "€49.99",
     tag: "POPULAR",
-    image:
-      "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=900&auto=format&fit=crop",
+    image: "/create/streetwear-hoodie.webp",
   },
   {
-    name: "Minimal T-Shirt",
-    price: "€24.99",
-    image:
-      "https://images.unsplash.com/photo-1626160200951-fc4b4f8d4de9?q=80&w=900&auto=format&fit=crop",
-  },
-  {
-    name: "Wall Poster",
-    price: "€15.99",
-    image:
-      "https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&auto=format&fit=crop",
+    name: "Classic Cap",
+    price: "€19.99",
+    image: "/create/classic-cap.webp",
   },
   {
     name: "Coffee Mug",
     price: "€14.99",
-    image:
-      "https://images.unsplash.com/photo-1614940403522-a8c829e7eb82?q=80&w=900&auto=format&fit=crop",
+    image: "/create/coffee-mug.webp",
+  },
+  {
+    name: "Minimal T-Shirt",
+    price: "€24.99",
+    image: "/create/minimal-tshirt.webp",
   },
 ]);
 
@@ -144,10 +140,10 @@ const ProductCard = memo(function ProductCard({
   return (
     <Link
       href={safeHref(LOGIN_HREF)}
-      className="group relative min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45"
+      className="group relative min-h-[310px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45 sm:min-h-[420px]"
     >
       {product.tag && (
-        <div className="absolute left-4 top-4 z-20 rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1 text-xs font-black">
+        <div className="absolute left-4 top-4 z-20 rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1 text-[10px] font-black sm:text-xs">
           {safeText(product.tag)}
         </div>
       )}
@@ -156,23 +152,23 @@ const ProductCard = memo(function ProductCard({
         src={product.image}
         alt={safeText(product.name)}
         fill
-        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-        className="object-cover opacity-55 transition duration-300 md:duration-500 md:group-hover:scale-110"
+        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 25vw"
+        className="object-cover transition duration-500 group-hover:scale-105"
       />
 
-      <div className="absolute inset-0 bg-gradient-to-r from-black via-black/55 to-transparent" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
 
-      <div className="relative z-10 flex min-h-[220px] flex-col justify-end p-6">
-        <h3 className="mb-5 max-w-[190px] font-bold text-white">
+      <div className="relative z-10 flex min-h-[310px] flex-col justify-end p-4 sm:min-h-[420px] sm:p-6">
+        <h3 className="mb-3 text-sm font-black text-white sm:text-xl">
           {safeText(product.name)}
         </h3>
 
         <div className="flex items-center justify-between">
-          <p className="text-lg font-black text-fuchsia-400">
+          <p className="text-base font-black text-fuchsia-400 sm:text-xl">
             {safeText(product.price)}
           </p>
 
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-purple-300 transition group-hover:bg-purple-500/20">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-purple-300 transition group-hover:bg-purple-500/20 sm:h-11 sm:w-11">
             <ArrowUpRight size={18} aria-hidden="true" />
           </span>
         </div>
@@ -220,7 +216,7 @@ export default function HomePage() {
               </Link>
 
               <Link
-                href={safeHref(LOGIN_HREF)}
+                href={safeHref("/how-it-works")}
                 className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-base font-bold text-white/90 md:backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
               >
                 See how it works
@@ -287,7 +283,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* POPULAR PRODUCTS */}
+      {/* WHAT YOU CAN CREATE */}
       <section className="relative bg-[#03030a] py-16 sm:py-20">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_28%)]" />
 
@@ -299,7 +295,7 @@ export default function HomePage() {
             </h2>
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 sm:gap-5 lg:grid-cols-4">
             {PRODUCTS.map((product) => (
               <ProductCard key={product.name} product={product} />
             ))}
@@ -404,7 +400,7 @@ export default function HomePage() {
             </Link>
 
             <Link
-              href={safeHref(LOGIN_HREF)}
+              href={safeHref("/how-it-works")}
               className="rounded-2xl border border-white/15 px-10 py-4 text-lg text-white transition hover:border-purple-500/40 hover:bg-white/10"
             >
               See how it works
