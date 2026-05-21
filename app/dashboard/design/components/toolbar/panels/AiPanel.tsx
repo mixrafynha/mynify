@@ -1,76 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  UploadCloud,
-  PenTool,
-  Folder,
-  Grid2X2,
   Wand2,
-  MoreHorizontal,
-  ChevronRight,
   Sparkles,
+  Shuffle,
+  Plus,
+  Loader2,
+  ImagePlus,
 } from "lucide-react";
-
-import { AI_STYLES, QUICK_PROMPTS } from "../data";
-
-const tabs = ["Images", "Illustrations", "Videos", "3D"];
 
 const previewImages = [
   {
-    title: "Rose with bee",
+    title: "Vintage Tiger",
+    prompt: "vintage tiger t-shirt graphic",
+    src: "https://images.unsplash.com/photo-1615963244664-5b845b2025ee?q=80&w=900&auto=format&fit=crop",
+  },
+  {
+    title: "Rose & Bee",
+    prompt: "rose with bee product graphic",
     src: "https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=900&auto=format&fit=crop",
   },
   {
-    title: "Soft flower",
-    src: "https://images.unsplash.com/photo-1508610048659-a06b669e3321?q=80&w=900&auto=format&fit=crop",
+    title: "Dog Logo",
+    prompt: "cute dog mascot logo",
+    src: "https://images.unsplash.com/photo-1552053831-71594a27632d?q=80&w=900&auto=format&fit=crop",
+  },
+  {
+    title: "Skull Flowers",
+    prompt: "skull with flowers tattoo graphic",
+    src: "https://images.unsplash.com/photo-1606122017369-d782bbb78f32?q=80&w=900&auto=format&fit=crop",
   },
 ];
 
-const blockedWords = [
-  "nude",
-  "naked",
-  "porn",
-  "sex",
-  "sexual",
-  "minor",
-  "child",
-  "kid",
-  "blood",
-  "gore",
-  "kill",
-  "weapon",
-  "gun",
-  "drugs",
-  "cocaine",
-  "hate",
-  "nazi",
-  "terrorist",
-];
-
-function isPromptAllowed(prompt: string) {
-  const clean = prompt.toLowerCase();
-  return !blockedWords.some((word) => clean.includes(word));
+function randomItem() {
+  return previewImages[Math.floor(Math.random() * previewImages.length)];
 }
 
-export default function AiPanel({ createElement }: any) {
-  const [activeTab, setActiveTab] = useState("Images");
-  const [prompt, setPrompt] = useState("rose with bee");
-  const [loading, setLoading] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState(previewImages);
+function safePrompt(value: string) {
+  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").slice(0, 160);
+}
 
-  const generateImage = async () => {
-    if (!prompt.trim()) return;
-
-    if (!isPromptAllowed(prompt)) {
-      alert("This prompt is not allowed.");
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      const finalPrompt = `
+function buildFinalPrompt(prompt: string) {
+  return `
 ${prompt}
 
 Clean isolated product graphic.
@@ -85,15 +57,35 @@ Centered design.
 High quality PNG style.
 Perfect for printing on t-shirts, hoodies and products.
 `.trim();
+}
+
+export default function AiPanel({ createElement }: any) {
+  const first = useMemo(() => randomItem(), []);
+
+  const [prompt, setPrompt] = useState(first.prompt);
+  const [loading, setLoading] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState(previewImages);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [lastAddedSrc, setLastAddedSrc] = useState<string | null>(null);
+
+  const generateImage = async () => {
+    const cleanPrompt = safePrompt(prompt.trim());
+    if (!cleanPrompt || loading) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      setNotice("Generating image...");
+
+      const finalPrompt = buildFinalPrompt(cleanPrompt);
 
       const response = await fetch("/api/ai-image", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           prompt: finalPrompt,
-          originalPrompt: prompt,
+          originalPrompt: cleanPrompt,
           transparent: true,
         }),
       });
@@ -101,186 +93,186 @@ Perfect for printing on t-shirts, hoodies and products.
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "Failed to generate image");
-        return;
+        throw new Error(data?.error || "Failed to generate image");
       }
 
-      const imageUrl = data.imageUrl;
-
-      if (!imageUrl) {
-        alert("No image returned");
-        return;
+      if (!data?.imageUrl) {
+        throw new Error("No image returned");
       }
 
-      const newImage = {
-        title: prompt,
-        src: imageUrl,
-      };
-
-      setGeneratedImages((prev) => [newImage, ...prev]);
-
-      createElement?.({
-        type: "image",
-        src: imageUrl,
-        meta: {
-          prompt,
+      setGeneratedImages((prev) => [
+        {
+          title: cleanPrompt,
+          prompt: cleanPrompt,
+          src: data.imageUrl,
           finalPrompt,
-          source: "leonardo-ai",
           generationId: data.generationId,
-          transparent: true,
         },
-      });
-    } catch (error) {
-      console.log(error);
-      alert("Failed to generate image");
+        ...prev,
+      ]);
+
+      setNotice("Image ready. Click it to add it to the canvas.");
+    } catch (err) {
+      console.error(err);
+      setNotice("");
+      setError(err instanceof Error ? err.message : "Failed to generate image");
     } finally {
       setLoading(false);
     }
   };
 
-  const addImageToCanvas = (src: string, title: string) => {
+  const addImageToCanvas = (item: any) => {
     createElement?.({
       type: "image",
-      src,
+      src: item.src,
       meta: {
-        prompt: title,
-        source: "ai-preview",
+        prompt: item.prompt || item.title,
+        finalPrompt: item.finalPrompt,
+        source: item.generationId ? "leonardo-ai" : "ai-preview",
+        generationId: item.generationId,
         transparent: true,
       },
     });
+
+    setLastAddedSrc(item.src);
+    setNotice("Image added to canvas.");
+  };
+
+  const randomPrompt = () => {
+    const item = randomItem();
+    setPrompt(item.prompt);
+    setError("");
+    setNotice("Prompt ready. Click Generate.");
   };
 
   return (
-    <div className="-mx-4 -mb-4">
-      <div className="border-b border-slate-200 bg-white">
-        <div className="flex items-center gap-7 overflow-x-auto px-4">
-          {tabs.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`relative h-12 shrink-0 text-sm font-semibold ${
-                activeTab === tab ? "text-slate-950" : "text-slate-500"
-              }`}
-            >
-              {tab}
+    <div className="-mx-4 -mb-4 flex min-h-full flex-col bg-transparent text-white">
+      <div className="space-y-4 px-4 pt-4">
+        <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl">
+          <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-violet-500/20 blur-3xl" />
+          <div className="absolute -bottom-20 -left-14 h-40 w-40 rounded-full bg-fuchsia-500/10 blur-3xl" />
 
-              {activeTab === tab && (
-                <span className="absolute bottom-0 left-0 h-[3px] w-full rounded-full bg-violet-600" />
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_15px_35px_rgba(168,85,247,0.35)]">
+              <Wand2 size={21} />
+            </div>
 
-      <div className="space-y-3 px-4 pt-3">
-        <div className="relative flex gap-3 overflow-x-auto pb-1">
-          {generatedImages.map((item, index) => (
-            <button
-              key={`${item.src}-${index}`}
-              onClick={() => addImageToCanvas(item.src, item.title)}
-              className="relative h-[278px] w-[278px] shrink-0 overflow-hidden rounded-xl bg-slate-100 active:scale-[0.98]"
-            >
-              <img
-                src={item.src}
-                alt={item.title}
-                className="h-full w-full object-cover"
-              />
+            <div>
+              <p className="text-base font-black tracking-[-0.03em]">
+                AI Image Studio
+              </p>
+              <p className="text-xs font-medium text-slate-400">
+                Generate product-ready artwork.
+              </p>
+            </div>
+          </div>
 
-              <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-md">
-                <MoreHorizontal size={18} />
-              </span>
-            </button>
-          ))}
-
-          <button className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-800 shadow-lg">
-            <ChevronRight size={20} />
-          </button>
-        </div>
-
-        <p className="text-[12px] leading-relaxed text-slate-600">
-          Generate clean transparent graphics for products. Unsafe prompts are blocked.
-        </p>
-
-        <div className="rounded-2xl border border-slate-300 bg-white p-3">
           <textarea
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(safePrompt(e.target.value));
+              setError("");
+              setNotice("");
+            }}
             rows={2}
-            placeholder="Describe the image you want..."
-            className="w-full resize-none bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400"
+            maxLength={160}
+            placeholder="Describe your artwork..."
+            className="relative mt-4 w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-medium leading-relaxed text-white outline-none backdrop-blur-md placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
           />
 
-          <div className="mt-2 flex items-center justify-between">
+          <div className="relative mt-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-slate-400">
+              Try: tiger, rose, dog logo
+            </p>
+
+            <p className="text-[10px] font-black text-slate-500">
+              {prompt.length}/160
+            </p>
+          </div>
+
+          {error && (
+            <div className="relative mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
+              {error}
+            </div>
+          )}
+
+          {notice && (
+            <div className="relative mt-3 rounded-2xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-xs font-bold text-violet-200">
+              {notice}
+            </div>
+          )}
+
+          <div className="relative mt-4 grid grid-cols-[0.8fr_1.2fr] gap-2">
             <button
-              onClick={() => setPrompt("")}
-              className="text-sm font-bold text-slate-700"
+              onClick={randomPrompt}
+              type="button"
+              disabled={loading}
+              className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black transition hover:bg-white/[0.1] active:scale-95 disabled:opacity-40"
             >
-              Clear
+              <Shuffle size={16} />
+              Random
             </button>
 
             <button
               onClick={generateImage}
               disabled={loading || !prompt.trim()}
-              className="flex h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 text-sm font-black text-white shadow-lg shadow-violet-600/20 active:scale-95 disabled:opacity-40"
+              type="button"
+              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 text-sm font-black text-white shadow-[0_20px_45px_rgba(168,85,247,0.32)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Sparkles size={16} />
-              {loading ? "Generating..." : "Generate"}
+              {loading ? (
+                <Loader2 className="animate-spin" size={17} />
+              ) : (
+                <Sparkles size={17} />
+              )}
+              {loading ? "Creating..." : "Generate"}
             </button>
           </div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {AI_STYLES.map((style) => (
-            <button
-              key={style}
-              onClick={() => setPrompt(`${prompt} ${style}`)}
-              className="h-9 shrink-0 rounded-full bg-slate-100 px-4 text-xs font-bold text-slate-700"
-            >
-              {style}
-            </button>
-          ))}
+        <div>
+          <p className="text-sm font-black tracking-[-0.03em]">Examples</p>
+          <p className="text-xs text-slate-500">
+            Click an image to add it to the canvas.
+          </p>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-2">
-          {QUICK_PROMPTS.map((item) => (
-            <button
-              key={item}
-              onClick={() => setPrompt(item)}
-              className="h-9 shrink-0 rounded-full bg-violet-50 px-4 text-xs font-bold text-violet-700"
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-      </div>
+        <div className="grid grid-cols-2 gap-3 pb-4">
+          {generatedImages.map((item: any, index) => {
+            const added = lastAddedSrc === item.src;
 
-      <div className="mt-1 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-1 pt-2">
-        <BottomTool icon={<UploadCloud size={20} />} label="Import" />
-        <BottomTool icon={<PenTool size={20} />} label="Tools" />
-        <BottomTool icon={<Folder size={20} />} label="Projects" />
-        <BottomTool icon={<Grid2X2 size={20} />} label="Apps" />
-        <BottomTool active icon={<Wand2 size={20} />} label="Magic media" />
+            return (
+              <button
+                key={`${item.src}-${index}`}
+                onClick={() => addImageToCanvas(item)}
+                type="button"
+                className="group relative h-[170px] overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.04] shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-lg transition hover:-translate-y-0.5 hover:border-violet-400/40 active:scale-[0.98]"
+              >
+                <img
+                  src={item.src}
+                  alt={item.title}
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                />
+
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 to-transparent" />
+
+                <div className="absolute inset-x-0 bottom-0 p-3 text-left">
+                  <p className="line-clamp-1 text-xs font-black text-white">
+                    {item.title}
+                  </p>
+
+                  <p className="mt-1 text-[10px] font-bold text-white/75">
+                    {added ? "Added" : "Click to add"}
+                  </p>
+                </div>
+
+                <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur-md">
+                  {added ? <Plus size={17} /> : <ImagePlus size={17} />}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
-  );
-}
-
-function BottomTool({ icon, label, active }: any) {
-  return (
-    <button
-      className={`flex flex-col items-center justify-center gap-1 rounded-2xl py-1.5 text-[10px] font-bold ${
-        active ? "text-violet-600" : "text-slate-500"
-      }`}
-    >
-      <div
-        className={`flex h-8 w-8 items-center justify-center rounded-xl ${
-          active ? "bg-violet-50" : ""
-        }`}
-      >
-        {icon}
-      </div>
-
-      <span className="max-w-[64px] truncate">{label}</span>
-    </button>
   );
 }
