@@ -47,7 +47,6 @@ type Feature = {
 
 type Product = {
   name: string;
-  price: string;
   image: string;
   tag?: string;
 };
@@ -55,64 +54,57 @@ type Product = {
 const FEATURES: readonly Feature[] = Object.freeze([
   {
     icon: Zap,
-    title: "AI product creation",
-    desc: "Turn your ideas into product visuals in seconds.",
+    title: "Create fast",
+    desc: "Turn your idea into a custom product in minutes.",
   },
   {
     icon: ShieldCheck,
-    title: "Build your brand",
-    desc: "Create products for your own online business.",
+    title: "Customize your way",
+    desc: "Use AI, upload your design or create something from scratch.",
   },
   {
     icon: Truck,
     title: "Sell without inventory",
-    desc: "Launch products without handling stock or shipping.",
+    desc: "Launch products without handling stock, packing or shipping.",
   },
   {
     icon: Headphones,
-    title: "Start selling fast",
-    desc: "Create, customize and publish products in minutes.",
+    title: "Sell or buy",
+    desc: "Sell your products online or order your own custom design.",
   },
 ]);
 
 const PRODUCTS: readonly Product[] = Object.freeze([
   {
     name: "Streetwear Hoodie",
-    price: "€49.99",
     tag: "POPULAR",
     image: "/create/streetwear-hoodie.webp",
   },
   {
     name: "Classic Cap",
-    price: "€19.99",
     image: "/create/classic-cap.webp",
   },
   {
     name: "Coffee Mug",
-    price: "€14.99",
     image: "/create/coffee-mug.webp",
   },
   {
     name: "Minimal T-Shirt",
-    price: "€24.99",
     image: "/create/minimal-tshirt.webp",
   },
 ]);
 
 const CUSTOM_FEATURES = Object.freeze([
-  "Generate designs with AI",
+  "Create or upload your own design",
   "Customize products instantly",
-  "Preview, publish and start selling",
+  "Sell online or order for yourself",
 ]);
 
 const FeatureCard = memo(function FeatureCard({ item }: { item: Feature }) {
   const Icon = item.icon;
 
   return (
-    <Link
-      href={safeHref(LOGIN_HREF)}
-      className="flex items-center gap-4 border-b border-white/10 p-5 transition hover:bg-purple-500/10 sm:p-6 lg:border-b-0 lg:border-r lg:p-7 lg:last:border-r-0"
-    >
+    <div className="flex items-center gap-4 border-b border-white/10 p-5 sm:p-6 lg:border-b-0 lg:border-r lg:p-7 lg:last:border-r-0">
       <Icon
         className="shrink-0 text-purple-400 md:drop-shadow-[0_0_16px_rgba(168,85,247,0.85)]"
         size={38}
@@ -128,7 +120,7 @@ const FeatureCard = memo(function FeatureCard({ item }: { item: Feature }) {
           {safeText(item.desc)}
         </p>
       </div>
-    </Link>
+    </div>
   );
 });
 
@@ -139,7 +131,7 @@ const ProductCard = memo(function ProductCard({
 }) {
   return (
     <Link
-      href={safeHref(LOGIN_HREF)}
+      href={safeHref(CREATE_HREF)}
       className="group relative min-h-[310px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45 sm:min-h-[420px]"
     >
       {product.tag && (
@@ -164,8 +156,8 @@ const ProductCard = memo(function ProductCard({
         </h3>
 
         <div className="flex items-center justify-between">
-          <p className="text-base font-black text-fuchsia-400 sm:text-xl">
-            {safeText(product.price)}
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-fuchsia-300 sm:text-sm">
+            Create yours
           </p>
 
           <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-purple-300 transition group-hover:bg-purple-500/20 sm:h-11 sm:w-11">
@@ -190,47 +182,39 @@ export default function HomePage() {
           <div className="z-10 order-1 text-center lg:text-left">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
               <Zap size={14} className="text-purple-400" aria-hidden="true" />
-              Create products with AI
+              Custom products made simple
             </div>
 
             <h1 className="mb-6 text-[44px] font-black uppercase leading-[0.84] tracking-[-0.04em] sm:text-6xl md:text-7xl lg:text-[105px]">
-              <span className="block text-white">Create a</span>
+              <span className="block text-white">Create</span>
               <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-                brand
+                custom
               </span>
-              <span className="block text-white">with AI</span>
+              <span className="block text-white">products</span>
             </h1>
 
             <p className="mx-auto mb-8 max-w-xl text-base font-medium leading-relaxed text-white/60 sm:text-lg md:text-xl lg:mx-0">
-              Generate products with AI, launch your store and start selling —
-              no inventory or design skills needed.
+              Design your own products, sell your brand online, or order your
+              custom design for yourself — no inventory needed.
             </p>
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-center lg:justify-start">
+            <div className="flex justify-center lg:justify-start">
               <Link
-                href={safeHref(LOGIN_HREF)}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-8 py-4 text-base font-black text-white shadow-lg md:shadow-[0_0_35px_rgba(168,85,247,0.55)] transition duration-300 hover:scale-105"
+                href={safeHref(CREATE_HREF)}
+                className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-8 py-4 text-base font-black text-white shadow-lg transition duration-300 hover:scale-105 md:shadow-[0_0_35px_rgba(168,85,247,0.55)]"
               >
-                Start free
+                Create your product
                 <Zap size={18} aria-hidden="true" />
-              </Link>
-
-              <Link
-                href={safeHref("/how-it-works")}
-                className="inline-flex items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-base font-bold text-white/90 md:backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
-              >
-                See how it works
-                <ShoppingBag size={18} aria-hidden="true" />
               </Link>
             </div>
 
             <div className="mt-10 flex flex-wrap items-center justify-center gap-8 lg:justify-start">
               <div>
                 <div className="text-2xl font-black tracking-tight text-white">
-                  10 free
+                  Free
                 </div>
                 <div className="text-sm font-medium text-white/40">
-                  AI generations
+                  to start
                 </div>
               </div>
 
@@ -245,10 +229,10 @@ export default function HomePage() {
 
               <div>
                 <div className="text-2xl font-black tracking-tight text-white">
-                  Global
+                  Sell
                 </div>
                 <div className="text-sm font-medium text-white/40">
-                  shipping
+                  on Mynify or Shopify
                 </div>
               </div>
             </div>
@@ -258,12 +242,12 @@ export default function HomePage() {
             <div className="absolute inset-0 rounded-full bg-purple-600/20 blur-[35px] md:blur-[80px]" />
 
             <Link
-              href={safeHref(LOGIN_HREF)}
+              href={safeHref(CREATE_HREF)}
               className="absolute inset-0 overflow-visible lg:left-auto lg:right-[-120px] lg:w-[900px]"
             >
               <Image
                 src="/hero2.png"
-                alt="Mynify AI ecommerce platform"
+                alt="Create custom products with Mynify"
                 fill
                 priority
                 quality={85}
@@ -275,7 +259,7 @@ export default function HomePage() {
         </div>
 
         <div className="relative mx-auto max-w-7xl px-4 pb-12 md:px-8 lg:px-12">
-          <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-xl md:shadow-[0_0_50px_rgba(168,85,247,0.12)] md:backdrop-blur-xl sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-xl sm:grid-cols-2 md:shadow-[0_0_50px_rgba(168,85,247,0.12)] md:backdrop-blur-xl lg:grid-cols-4">
             {FEATURES.map((item) => (
               <FeatureCard key={item.title} item={item} />
             ))}
@@ -308,11 +292,11 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_50%,rgba(14,165,233,0.14),transparent_24%)]" />
 
         <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
-          <div className="relative overflow-hidden rounded-[30px] bg-[#070711]/90 shadow-xl md:shadow-[0_0_80px_rgba(168,85,247,0.08)] md:backdrop-blur-2xl">
-            <div className="grid items-center lg:grid-cols-[1.1fr_1fr]">
+          <div className="relative overflow-hidden">
+            <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr]">
               <Link
                 href={safeHref(CREATE_HREF)}
-                className="relative h-[300px] overflow-hidden md:h-[420px]"
+                className="relative h-[300px] overflow-hidden rounded-[30px] md:h-[420px]"
               >
                 <Image
                   src="/1.png"
@@ -326,21 +310,21 @@ export default function HomePage() {
                 <div className="absolute -bottom-20 left-0 h-52 w-52 rounded-full bg-purple-600/25 blur-[45px] md:blur-[100px]" />
               </Link>
 
-              <div className="relative p-8 md:p-12 lg:p-16">
+              <div className="relative p-0 lg:p-8">
                 <div className="mb-4 text-xs font-black uppercase tracking-[0.35em] text-purple-400">
-                  Create
+                  Customize
                 </div>
 
                 <h2 className="mb-6 text-4xl font-black uppercase leading-[0.92] tracking-tight md:text-6xl">
                   Turn ideas into
                   <span className="block bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
-                    products
+                    real products
                   </span>
                 </h2>
 
                 <p className="mb-8 max-w-xl text-lg leading-relaxed text-white/55">
-                  Create products with AI, customize them and launch your brand
-                  in minutes.
+                  Create products for your brand, sell online, or order your own
+                  custom design.
                 </p>
 
                 <div className="space-y-4">
@@ -356,18 +340,6 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
-
-                <div className="mt-10">
-                  <Link
-                    href={safeHref(LOGIN_HREF)}
-                    className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-105"
-                  >
-                    Start creating
-                    <Zap size={18} aria-hidden="true" />
-                  </Link>
-                </div>
-
-                <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-cyan-500/10 blur-[40px] md:blur-[90px]" />
               </div>
             </div>
           </div>
@@ -380,35 +352,26 @@ export default function HomePage() {
 
         <div className="relative mx-auto max-w-5xl px-4 text-center md:px-8 lg:px-12">
           <h2 className="mb-6 text-4xl font-black uppercase leading-tight tracking-tight md:text-6xl">
-            Launch your{" "}
-            <span className="bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
-              AI brand
+            Create your
+            <span className="block bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent">
+              first product
             </span>
           </h2>
 
           <p className="mx-auto mb-10 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-            Create products, launch your store and start selling — no inventory
-            required.
+            Design it, customize it, sell it online or order it for yourself —
+            no inventory required.
           </p>
 
-          <div className="flex flex-wrap justify-center gap-4">
-            <Link
-              href={safeHref(LOGIN_HREF)}
-              className="inline-block rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-10 py-4 text-lg font-bold text-white shadow-lg md:shadow-[0_0_35px_rgba(168,85,247,0.55)] transition hover:scale-105"
-            >
-              🚀 Start free
-            </Link>
-
-            <Link
-              href={safeHref("/how-it-works")}
-              className="rounded-2xl border border-white/15 px-10 py-4 text-lg text-white transition hover:border-purple-500/40 hover:bg-white/10"
-            >
-              See how it works
-            </Link>
-          </div>
+          <Link
+            href={safeHref(CREATE_HREF)}
+            className="inline-block rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-10 py-4 text-lg font-bold text-white shadow-lg transition hover:scale-105 md:shadow-[0_0_35px_rgba(168,85,247,0.55)]"
+          >
+            Create your product
+          </Link>
 
           <p className="mt-6 text-sm text-white/35">
-            No credit card required • Free to start
+            Free to start • No credit card required
           </p>
         </div>
       </section>
