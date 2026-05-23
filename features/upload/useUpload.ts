@@ -1,70 +1,91 @@
 "use client";
 
 import { useCallback } from "react";
-import { ElementType } from "../../types/editor.types";
 
-const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
-// limites reais de print (Gelato-safe)
-const MAX_WIDTH = 4000;
-const MAX_HEIGHT = 4000;
+const ALLOWED_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+];
 
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+type CanvasElement = {
+  type: "image";
+  src: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  meta: Record<string, unknown>;
+};
 
-function validateImage(file: File): Promise<boolean> {
-  return new Promise((resolve) => {
-    const img = new Image();
-
-    img.onload = () => {
-      const ok =
-        img.width <= MAX_WIDTH &&
-        img.height <= MAX_HEIGHT;
-
-      URL.revokeObjectURL(img.src);
-      resolve(ok);
-    };
-
-    img.onerror = () => resolve(false);
-
-    img.src = URL.createObjectURL(file);
-  });
-}
-
-export function useUpload(setElements: any) {
+export function useUpload(
+  addElement?: (el: CanvasElement) => void
+) {
   return useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
+    (file: File) => {
       if (!file) return;
 
-      // 1. tipo
-      if (!ALLOWED_TYPES.includes(file.type)) return;
+      const isValidType =
+        ALLOWED_TYPES.includes(file.type) ||
+        /\.(png|jpg|jpeg|webp)$/i.test(file.name);
 
-      // 2. tamanho
-      if (file.size > MAX_FILE_SIZE) return;
+      if (!isValidType) {
+        alert("Apenas PNG, JPG ou WEBP.");
+        return;
+      }
 
-      // 3. dimensões reais (IMPORTANTE para impressão)
-      const isValid = await validateImage(file);
-      if (!isValid) return;
+      if (file.size > MAX_FILE_SIZE) {
+        alert("A imagem deve ter no máximo 2MB.");
+        return;
+      }
+
+      if (!addElement) return;
 
       const url = URL.createObjectURL(file);
 
-      setElements((prev: ElementType[]) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
+      const img = new window.Image();
+
+      img.onload = () => {
+        const MAX_SIZE = 360;
+
+        const ratio = img.width / img.height;
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          width = MAX_SIZE;
+          height = MAX_SIZE / ratio;
+        } else {
+          height = MAX_SIZE;
+          width = MAX_SIZE * ratio;
+        }
+
+        addElement({
           type: "image",
           src: url,
-          x: 120,
-          y: 120,
 
-          // padrão seguro para print
-          width: 140,
-          height: 140,
-        },
-      ]);
+          // centraliza melhor
+          x: 180,
+          y: 180,
 
-      e.target.value = "";
+          width,
+          height,
+
+          meta: {
+            fileName: file.name,
+            mimeType: file.type,
+            size: file.size,
+            naturalWidth: img.width,
+            naturalHeight: img.height,
+          },
+        });
+      };
+
+      img.src = url;
     },
-    [setElements]
+    [addElement]
   );
 }
