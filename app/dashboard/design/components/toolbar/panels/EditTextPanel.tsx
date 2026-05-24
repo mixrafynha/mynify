@@ -1,6 +1,22 @@
 "use client";
 
-import { RotateCcw, FlipHorizontal, FlipVertical } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  RotateCcw,
+  FlipHorizontal,
+  FlipVertical,
+  ChevronDown,
+  Type,
+  Bold,
+  Italic,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  CaseSensitive,
+  Sparkles,
+  Search,
+} from "lucide-react";
+
 import { FONTS, COLORS } from "../data";
 
 type EditTextPanelProps = {
@@ -12,227 +28,326 @@ export default function EditTextPanel({
   selected,
   updateSelectedTextMeta,
 }: EditTextPanelProps) {
-  const fontSize = selected?.meta?.fontSize || 40;
-  const rotation = selected?.meta?.rotation || 0;
-  const letterSpacing = selected?.meta?.letterSpacing || 0;
-  const textShape = selected?.meta?.textShape || "straight";
-  const fontFamily = selected?.meta?.fontFamily;
-  const color = selected?.meta?.color;
+  const [openFonts, setOpenFonts] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const meta = selected?.meta ?? {};
+
+  const fontSize = meta.fontSize ?? 40;
+  const rotation = meta.rotation ?? 0;
+  const letterSpacing = meta.letterSpacing ?? 0;
+  const fontFamily = meta.fontFamily ?? "Poppins";
+  const color = meta.color ?? "#ffffff";
+  const opacity = meta.opacity ?? 1;
+
+  const filteredFonts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return FONTS;
+
+    return FONTS.filter((font) =>
+      font.toLowerCase().includes(q)
+    );
+  }, [search]);
+
+  const patch = (data: any) => {
+    if (!selected) return;
+
+    updateSelectedTextMeta({
+      ...(selected.meta ?? {}),
+      ...data,
+    });
+  };
 
   return (
-    <div className="space-y-5 pb-24 md:pb-7">
+    <div className="space-y-4 pb-28 text-white md:pb-6">
       {!selected && (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs font-semibold text-slate-500 md:border-white/10 md:bg-white/[0.05] md:text-slate-400">
-          Selecione um texto para editar.
+        <div className="rounded-[26px] border border-white/10 bg-white/[0.04] p-4 text-sm font-semibold text-slate-400">
+          Select text to edit
         </div>
       )}
 
-      <PanelCard title="Fonte">
-        <div className="grid grid-cols-1 gap-3">
-          {FONTS.map((font) => {
-            const active = fontFamily === font;
-
-            return (
-              <button
-                key={font}
-                type="button"
-                disabled={!selected}
-                style={{ fontFamily: font }}
-                onClick={() => updateSelectedTextMeta({ fontFamily: font })}
-                className={`flex min-h-[54px] w-full items-center rounded-2xl border px-4 text-left text-base font-black transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35 ${
-                  active
-                    ? "border-violet-500 bg-violet-600 text-white"
-                    : "border-slate-200 bg-white text-slate-950 hover:border-violet-300 hover:bg-violet-50 md:border-white/10 md:bg-white/[0.06] md:text-white md:hover:bg-violet-500/15"
-                }`}
-              >
-                <span className="truncate text-inherit">{font}</span>
-              </button>
-            );
-          })}
-        </div>
-      </PanelCard>
-
-      <PanelCard title="Tamanho">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-500 md:text-slate-400">
-            Texto
-          </span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 md:bg-white/10 md:text-white">
-            {fontSize}px
+      <Card title="Preview">
+        <div className="flex min-h-[96px] items-center justify-center rounded-[24px] border border-white/10 bg-[#0d1322] p-4">
+          <span
+            className="break-words text-center font-black"
+            style={{
+              fontFamily: `"${fontFamily}", sans-serif`,
+              fontSize: Math.min(fontSize, 44),
+              color,
+              opacity,
+              letterSpacing,
+              fontWeight: meta.fontWeight ?? 800,
+              fontStyle: meta.fontStyle ?? "normal",
+              textTransform: meta.textTransform ?? "none",
+              textAlign: meta.textAlign ?? "center",
+            }}
+          >
+            {selected?.text ?? "Preview"}
           </span>
         </div>
+      </Card>
 
+      <Card title="Font">
+        <button
+          type="button"
+          onClick={() => setOpenFonts((v) => !v)}
+          className="flex h-14 w-full items-center justify-between rounded-[22px] border border-white/10 bg-[#0d1322] px-4"
+        >
+          <div className="flex min-w-0 items-center gap-3">
+            <Type size={17} />
+
+            <span
+              className="truncate font-bold"
+              style={{
+                fontFamily: `"${fontFamily}", sans-serif`,
+              }}
+            >
+              {fontFamily}
+            </span>
+          </div>
+
+          <ChevronDown
+            size={18}
+            className={`transition ${openFonts ? "rotate-180" : ""}`}
+          />
+        </button>
+
+        {openFonts && (
+          <div className="mt-3 rounded-[22px] border border-white/10 bg-[#0d1322] p-3">
+            <div className="mb-3 flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3">
+              <Search size={16} className="text-slate-500" />
+
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search font..."
+                className="h-full flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-500"
+              />
+            </div>
+
+            <div className="max-h-[38dvh] space-y-2 overflow-y-auto pr-1 md:max-h-[260px]">
+              {filteredFonts.map((font) => {
+                const active = fontFamily === font;
+
+                return (
+                  <button
+                    key={font}
+                    type="button"
+                    onClick={() => patch({ fontFamily: font })}
+                    className={`flex min-h-[56px] w-full items-center justify-between rounded-[18px] px-4 text-left transition active:scale-[0.98] ${
+                      active
+                        ? "bg-cyan-500 text-[#06111d]"
+                        : "bg-white/[0.05] text-white hover:bg-white/[0.08]"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div
+                        className="truncate text-lg font-black"
+                        style={{
+                          fontFamily: `"${font}", sans-serif`,
+                        }}
+                      >
+                        {selected?.text ?? "Dream Big"}
+                      </div>
+
+                      <div className="truncate text-[11px] font-bold opacity-70">
+                        {font}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </Card>
+
+      <Card title="Quick Style">
+        <div className="grid grid-cols-4 gap-2">
+          <SmallButton
+            active={(meta.fontWeight ?? 800) >= 800}
+            onClick={() =>
+              patch({
+                fontWeight: (meta.fontWeight ?? 800) >= 800 ? 500 : 900,
+              })
+            }
+          >
+            <Bold size={16} />
+          </SmallButton>
+
+          <SmallButton
+            active={meta.fontStyle === "italic"}
+            onClick={() =>
+              patch({
+                fontStyle:
+                  meta.fontStyle === "italic" ? "normal" : "italic",
+              })
+            }
+          >
+            <Italic size={16} />
+          </SmallButton>
+
+          <SmallButton
+            active={meta.textTransform === "uppercase"}
+            onClick={() =>
+              patch({
+                textTransform:
+                  meta.textTransform === "uppercase" ? "none" : "uppercase",
+              })
+            }
+          >
+            <CaseSensitive size={16} />
+          </SmallButton>
+
+          <SmallButton
+            active={!!meta.shadow}
+            onClick={() => patch({ shadow: !meta.shadow })}
+          >
+            <Sparkles size={16} />
+          </SmallButton>
+        </div>
+      </Card>
+
+      <SliderCard title="Size" value={`${fontSize}px`}>
         <input
           type="range"
           min={12}
-          max={120}
+          max={160}
           value={fontSize}
-          disabled={!selected}
           onChange={(e) =>
-            updateSelectedTextMeta({
+            patch({
               fontSize: Number(e.target.value),
             })
           }
-          className="mt-4 w-full accent-violet-600 disabled:opacity-35"
+          className="w-full accent-cyan-400"
         />
-      </PanelCard>
+      </SliderCard>
 
-      <PanelCard title="Cor">
-        <div className="grid grid-cols-7 gap-3 md:grid-cols-6">
-          {COLORS.map((c) => {
-            const active =
-              String(color).toLowerCase() === String(c).toLowerCase();
+      <SliderCard title="Spacing" value={`${letterSpacing}px`}>
+        <input
+          type="range"
+          min={-3}
+          max={20}
+          value={letterSpacing}
+          onChange={(e) =>
+            patch({
+              letterSpacing: Number(e.target.value),
+            })
+          }
+          className="w-full accent-cyan-400"
+        />
+      </SliderCard>
 
-            return (
-              <button
-                key={c}
-                type="button"
-                disabled={!selected}
-                onClick={() => updateSelectedTextMeta({ color: c })}
-                style={{ backgroundColor: c }}
-                className={`h-9 w-9 rounded-full border shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${
-                  active
-                    ? "border-violet-500 ring-4 ring-violet-500/25"
-                    : "border-slate-200 hover:scale-110 hover:ring-4 hover:ring-violet-500/15 md:border-white/20"
-                }`}
-              />
-            );
-          })}
-        </div>
-      </PanelCard>
+      <SliderCard title="Opacity" value={`${Math.round(opacity * 100)}%`}>
+        <input
+          type="range"
+          min={0.1}
+          max={1}
+          step={0.01}
+          value={opacity}
+          onChange={(e) =>
+            patch({
+              opacity: Number(e.target.value),
+            })
+          }
+          className="w-full accent-cyan-400"
+        />
+      </SliderCard>
 
-      <PanelCard title="Forma">
-        <div className="grid grid-cols-3 gap-2.5">
-          <OptionButton
-            label="Reto"
-            active={textShape === "straight"}
-            disabled={!selected}
-            onClick={() => updateSelectedTextMeta({ textShape: "straight" })}
-          />
-          <OptionButton
-            label="Onda"
-            active={textShape === "wave"}
-            disabled={!selected}
-            onClick={() => updateSelectedTextMeta({ textShape: "wave" })}
-          />
-          <OptionButton
-            label="Arco"
-            active={textShape === "arc"}
-            disabled={!selected}
-            onClick={() => updateSelectedTextMeta({ textShape: "arc" })}
-          />
-        </div>
-      </PanelCard>
-
-      <PanelCard title="Rodar">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-500 md:text-slate-400">
-            Rotação
-          </span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 md:bg-white/10 md:text-white">
-            {rotation}°
-          </span>
-        </div>
-
+      <SliderCard title="Rotate" value={`${rotation}°`}>
         <input
           type="range"
           min={-180}
           max={180}
           value={rotation}
-          disabled={!selected}
           onChange={(e) =>
-            updateSelectedTextMeta({
+            patch({
               rotation: Number(e.target.value),
             })
           }
-          className="mt-4 w-full accent-violet-600 disabled:opacity-35"
+          className="w-full accent-cyan-400"
         />
 
-        <div className="mt-3 grid grid-cols-3 gap-2.5">
-          <IconButton
-            label="-15°"
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <ActionButton
             icon={<RotateCcw size={16} />}
-            disabled={!selected}
-            onClick={() =>
-              updateSelectedTextMeta({
-                rotation: Math.max(-180, rotation - 15),
-              })
-            }
+            label="-15°"
+            onClick={() => patch({ rotation: Math.max(-180, rotation - 15) })}
           />
-          <IconButton
-            label="Reset"
-            disabled={!selected}
-            onClick={() => updateSelectedTextMeta({ rotation: 0 })}
-          />
-          <IconButton
+
+          <ActionButton label="Reset" onClick={() => patch({ rotation: 0 })} />
+
+          <ActionButton
             label="+15°"
-            disabled={!selected}
-            onClick={() =>
-              updateSelectedTextMeta({
-                rotation: Math.min(180, rotation + 15),
-              })
-            }
+            onClick={() => patch({ rotation: Math.min(180, rotation + 15) })}
           />
         </div>
-      </PanelCard>
+      </SliderCard>
 
-      <PanelCard title="Inverter">
-        <div className="grid grid-cols-2 gap-2.5">
-          <IconButton
-            label="Horizontal"
+      <Card title="Align">
+        <div className="grid grid-cols-3 gap-2">
+          <SmallButton
+            active={meta.textAlign === "left"}
+            onClick={() => patch({ textAlign: "left" })}
+          >
+            <AlignLeft size={16} />
+          </SmallButton>
+
+          <SmallButton
+            active={!meta.textAlign || meta.textAlign === "center"}
+            onClick={() => patch({ textAlign: "center" })}
+          >
+            <AlignCenter size={16} />
+          </SmallButton>
+
+          <SmallButton
+            active={meta.textAlign === "right"}
+            onClick={() => patch({ textAlign: "right" })}
+          >
+            <AlignRight size={16} />
+          </SmallButton>
+        </div>
+      </Card>
+
+      <Card title="Flip">
+        <div className="grid grid-cols-2 gap-2">
+          <ActionButton
             icon={<FlipHorizontal size={16} />}
-            disabled={!selected}
-            active={!!selected?.meta?.flipX}
-            onClick={() =>
-              updateSelectedTextMeta({
-                flipX: !selected?.meta?.flipX,
-              })
-            }
+            label="Horizontal"
+            active={!!meta.flipX}
+            onClick={() => patch({ flipX: !meta.flipX })}
           />
 
-          <IconButton
-            label="Vertical"
+          <ActionButton
             icon={<FlipVertical size={16} />}
-            disabled={!selected}
-            active={!!selected?.meta?.flipY}
-            onClick={() =>
-              updateSelectedTextMeta({
-                flipY: !selected?.meta?.flipY,
-              })
-            }
+            label="Vertical"
+            active={!!meta.flipY}
+            onClick={() => patch({ flipY: !meta.flipY })}
           />
         </div>
-      </PanelCard>
+      </Card>
 
-      <PanelCard title="Espaçamento">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-slate-500 md:text-slate-400">
-            Letras
-          </span>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700 md:bg-white/10 md:text-white">
-            {letterSpacing}px
-          </span>
+      <Card title="Color">
+        <div className="grid grid-cols-7 gap-2">
+          {COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => patch({ color: c })}
+              style={{ backgroundColor: c }}
+              className={`h-9 w-9 rounded-full border border-white/20 transition active:scale-95 ${
+                color === c ? "ring-4 ring-cyan-400/40" : ""
+              }`}
+            />
+          ))}
         </div>
-
-        <input
-          type="range"
-          min={-3}
-          max={12}
-          value={letterSpacing}
-          disabled={!selected}
-          onChange={(e) =>
-            updateSelectedTextMeta({
-              letterSpacing: Number(e.target.value),
-            })
-          }
-          className="mt-4 w-full accent-violet-600 disabled:opacity-35"
-        />
-      </PanelCard>
+      </Card>
     </div>
   );
 }
 
-function PanelCard({
+function Card({
   title,
   children,
 }: {
@@ -240,68 +355,87 @@ function PanelCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm md:border-white/10 md:bg-white/[0.05]">
-      <h3 className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500 md:text-slate-400">
+    <div className="rounded-[28px] border border-white/10 bg-[#08111f] p-4">
+      <h3 className="mb-3 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
         {title}
       </h3>
+
       {children}
     </div>
   );
 }
 
-function OptionButton({
-  label,
+function SliderCard({
+  title,
+  value,
+  children,
+}: {
+  title: string;
+  value: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card title={title}>
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs text-slate-400">{title}</span>
+
+        <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">
+          {value}
+        </span>
+      </div>
+
+      {children}
+    </Card>
+  );
+}
+
+function SmallButton({
+  children,
   active,
-  disabled,
   onClick,
 }: {
-  label: string;
+  children: React.ReactNode;
   active?: boolean;
-  disabled?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled={disabled}
       onClick={onClick}
-      className={`h-12 rounded-2xl border px-2 text-xs font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`flex h-12 items-center justify-center rounded-[18px] border transition active:scale-[0.97] ${
         active
-          ? "border-violet-500 bg-violet-600 text-white"
-          : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50 md:border-white/10 md:bg-white/[0.06] md:text-slate-300 md:hover:bg-violet-500/15"
+          ? "border-cyan-400 bg-cyan-500 text-[#06111d]"
+          : "border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.09]"
       }`}
     >
-      {label}
+      {children}
     </button>
   );
 }
 
-function IconButton({
-  label,
+function ActionButton({
   icon,
+  label,
   active,
-  disabled,
   onClick,
 }: {
-  label: string;
   icon?: React.ReactNode;
+  label: string;
   active?: boolean;
-  disabled?: boolean;
   onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      disabled={disabled}
       onClick={onClick}
-      className={`flex h-12 items-center justify-center gap-2 rounded-2xl border px-2 text-xs font-black transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${
+      className={`flex h-12 items-center justify-center gap-2 rounded-[18px] border px-2 text-xs font-bold transition active:scale-[0.97] ${
         active
-          ? "border-violet-500 bg-violet-600 text-white"
-          : "border-slate-200 bg-white text-slate-700 hover:border-violet-300 hover:bg-violet-50 md:border-white/10 md:bg-white/[0.06] md:text-slate-300 md:hover:bg-violet-500/15"
+          ? "border-cyan-400 bg-cyan-500 text-[#06111d]"
+          : "border-white/10 bg-white/[0.06] text-white hover:bg-white/[0.09]"
       }`}
     >
       {icon}
-      {label}
+      <span className="truncate">{label}</span>
     </button>
   );
 }

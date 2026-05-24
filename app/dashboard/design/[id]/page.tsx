@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import Canvas from "@/app/dashboard/design/components/Canvas";
@@ -24,6 +24,7 @@ export type ElementType = {
     fontSize?: number;
     fontFamily?: string;
     color?: string;
+    [key: string]: any;
   };
 };
 
@@ -48,9 +49,17 @@ export default function EditorPage() {
     [productId]
   );
 
+  const previewStorageKey = useMemo(
+    () => `mynify-editor-preview:${productId || "draft"}`,
+    [productId]
+  );
+
   const [side, setSide] = useState<Side>("front");
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedElement, setSelectedElement] = useState<ElementType | null>(
+    null
+  );
   const [zoom, setZoomState] = useState(1);
   const [mockupColor, setMockupColor] = useState("#ffffff");
 
@@ -63,30 +72,114 @@ export default function EditorPage() {
   const elements = side === "back" ? backElements : frontElements;
   const setElements = side === "back" ? setBackElements : setFrontElements;
 
-  const { addText } = useElements({
+  const { addText, addElement, updateSelected } = useElements({
     setElements,
     selectedId,
   });
 
-  const handleUpload = useUpload({ setElements });
+  const uploadImage = useUpload(addElement);
 
-  const setZoom = (value: number | ((z: number) => number)) => {
+  const handleUploadChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+
+      if (!file) return;
+
+      uploadImage(file);
+    },
+    [uploadImage]
+  );
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedId) return;
+
+    setElements((prev) => prev.filter((el) => el.id !== selectedId));
+    setSelectedId(null);
+    setSelectedElement(null);
+  }, [selectedId, setElements]);
+
+  const setZoom = useCallback((value: number | ((z: number) => number)) => {
     setZoomState((prev) => {
       const next = typeof value === "function" ? value(prev) : value;
       return Math.min(2, Math.max(0.4, Number(next.toFixed(2))));
     });
-  };
+  }, []);
+
+  const saveDraftToSession = useCallback(() => {
+    try {
+      sessionStorage.setItem(
+        editorStorageKey,
+        JSON.stringify({
+          side,
+          zoom,
+          mockupColor,
+          frontElements,
+          backElements,
+          updatedAt: Date.now(),
+        })
+      );
+    } catch (error) {
+      console.warn("Could not save editor draft:", error);
+    }
+  }, [
+    editorStorageKey,
+    side,
+    zoom,
+    mockupColor,
+    frontElements,
+    backElements,
+  ]);
+
+  const savePreviewData = useCallback(() => {
+    if (!productId) return;
+
+    const data = {
+      productId,
+      side,
+      mockupColor,
+      designFront: frontElements,
+      designBack: backElements,
+      elements,
+      generateMockupAI: true,
+      updatedAt: Date.now(),
+    };
+
+    try {
+      sessionStorage.setItem(previewStorageKey, JSON.stringify(data));
+      localStorage.setItem(previewStorageKey, JSON.stringify(data));
+    } catch (error) {
+      console.warn("Could not save preview data:", error);
+    }
+  }, [
+    productId,
+    side,
+    mockupColor,
+    frontElements,
+    backElements,
+    elements,
+    previewStorageKey,
+  ]);
 
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(editorStorageKey);
 
       if (!saved) {
+        setHistory([{ frontElements: [], backElements: [] }]);
         hasLoadedDraft.current = true;
         return;
       }
 
       const parsed = JSON.parse(saved);
+
+      const loadedFront = Array.isArray(parsed.frontElements)
+        ? parsed.frontElements
+        : [];
+
+      const loadedBack = Array.isArray(parsed.backElements)
+        ? parsed.backElements
+        : [];
 
       if (parsed.side === "front" || parsed.side === "back") {
         setSide(parsed.side);
@@ -100,15 +193,12 @@ export default function EditorPage() {
         setMockupColor(parsed.mockupColor);
       }
 
-      if (Array.isArray(parsed.frontElements)) {
-        setFrontElements(parsed.frontElements);
-      }
-
-      if (Array.isArray(parsed.backElements)) {
-        setBackElements(parsed.backElements);
-      }
+      setFrontElements(loadedFront);
+      setBackElements(loadedBack);
+      setHistory([{ frontElements: loadedFront, backElements: loadedBack }]);
     } catch {
       sessionStorage.removeItem(editorStorageKey);
+      setHistory([{ frontElements: [], backElements: [] }]);
     } finally {
       hasLoadedDraft.current = true;
     }
@@ -118,25 +208,11 @@ export default function EditorPage() {
     if (!hasLoadedDraft.current) return;
 
     const timeout = window.setTimeout(() => {
-      try {
-        sessionStorage.setItem(
-          editorStorageKey,
-          JSON.stringify({
-            side,
-            zoom,
-            mockupColor,
-            frontElements,
-            backElements,
-            updatedAt: Date.now(),
-          })
-        );
-      } catch (error) {
-        console.warn("Could not save editor draft:", error);
-      }
-    }, 250);
+      saveDraftToSession();
+    }, 200);
 
     return () => window.clearTimeout(timeout);
-  }, [editorStorageKey, side, zoom, mockupColor, frontElements, backElements]);
+  }, [saveDraftToSession]);
 
   useEffect(() => {
     if (!hasLoadedDraft.current) return;
@@ -148,11 +224,8 @@ export default function EditorPage() {
 
     const timeout = window.setTimeout(() => {
       setHistory((prev) => {
+        const current = { frontElements, backElements };
         const last = prev[prev.length - 1];
-        const current = {
-          frontElements,
-          backElements,
-        };
 
         if (JSON.stringify(last) === JSON.stringify(current)) {
           return prev;
@@ -162,7 +235,7 @@ export default function EditorPage() {
       });
 
       setFuture([]);
-    }, 300);
+    }, 250);
 
     return () => window.clearTimeout(timeout);
   }, [frontElements, backElements]);
@@ -177,7 +250,7 @@ export default function EditorPage() {
     };
   }, [frontElements, backElements]);
 
-  const onUndo = () => {
+  const onUndo = useCallback(() => {
     setHistory((prev) => {
       if (prev.length <= 1) return prev;
 
@@ -190,12 +263,13 @@ export default function EditorPage() {
       setFrontElements(previous.frontElements);
       setBackElements(previous.backElements);
       setSelectedId(null);
+      setSelectedElement(null);
 
       return prev.slice(0, -1);
     });
-  };
+  }, []);
 
-  const onRedo = () => {
+  const onRedo = useCallback(() => {
     setFuture((prev) => {
       if (prev.length === 0) return prev;
 
@@ -207,22 +281,30 @@ export default function EditorPage() {
       setFrontElements(next.frontElements);
       setBackElements(next.backElements);
       setSelectedId(null);
+      setSelectedElement(null);
 
       return prev.slice(1);
     });
-  };
+  }, []);
 
-  const zoomIn = () => setZoom((z) => Math.min(1.35, z + 0.1));
-  const zoomOut = () => setZoom((z) => Math.max(0.75, z - 0.1));
+  const zoomIn = useCallback(() => {
+    setZoom((z) => Math.min(1.35, z + 0.1));
+  }, [setZoom]);
 
-  const handleSaveDesign = async () => {
+  const zoomOut = useCallback(() => {
+    setZoom((z) => Math.max(0.75, z - 0.1));
+  }, [setZoom]);
+
+  const handleSaveDesign = useCallback(async () => {
+    if (!productId || saving) {
+      if (!productId) alert("Missing product ID");
+      return;
+    }
+
     try {
-      if (!productId) {
-        alert("Missing product ID");
-        return;
-      }
-
       setSaving(true);
+      saveDraftToSession();
+      savePreviewData();
 
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
@@ -235,6 +317,7 @@ export default function EditorPage() {
           designBack: backElements,
           mockupColor,
           markup: 0,
+          generateMockupAI: true,
         }),
       });
 
@@ -253,7 +336,69 @@ export default function EditorPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [
+    productId,
+    saving,
+    saveDraftToSession,
+    savePreviewData,
+    frontElements,
+    backElements,
+    mockupColor,
+    editorStorageKey,
+    router,
+  ]);
+
+  const handlePreviewDesign = useCallback(async () => {
+    if (!productId || saving) {
+      if (!productId) alert("Missing product ID");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      saveDraftToSession();
+      savePreviewData();
+
+      const response = await fetch("/api/user-products/save-design", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          baseProductId: productId,
+          designFront: frontElements,
+          designBack: backElements,
+          mockupColor,
+          markup: 0,
+          generateMockupAI: true,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to save design");
+      }
+
+      router.push(
+        `/dashboard/design/preview/${data.product.id}?generateMockupAI=1`
+      );
+    } catch (error) {
+      console.error("PREVIEW ERROR:", error);
+      alert("Error opening preview");
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    productId,
+    saving,
+    saveDraftToSession,
+    savePreviewData,
+    frontElements,
+    backElements,
+    mockupColor,
+    router,
+  ]);
 
   return (
     <>
@@ -261,6 +406,7 @@ export default function EditorPage() {
         sidebar={null}
         topbar={
           <TopBar
+            productId={productId || undefined}
             side={side}
             setSide={setSide}
             zoomIn={zoomIn}
@@ -268,24 +414,20 @@ export default function EditorPage() {
             onUndo={history.length > 1 ? onUndo : undefined}
             onRedo={future.length > 0 ? onRedo : undefined}
             onSaveDesign={handleSaveDesign}
-            onPreviewDesign={handleSaveDesign}
+            onPreviewDesign={handlePreviewDesign}
             saving={saving}
+            elements={elements}
+            mockupColor={mockupColor}
           />
         }
         canvas={
-          <main className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#070711] px-0 pb-[100px] md:pb-0">
+          <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#070711] px-0 pb-[100px] md:pb-0">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_80%_60%,rgba(14,165,233,0.16),transparent_24%),linear-gradient(180deg,#070711_0%,#0b0b17_100%)]" />
 
-            <div
-              className="
-                absolute inset-0 opacity-[0.03]
-                bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)]
-                bg-[size:40px_40px]
-              "
-            />
+            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.08)_1px,transparent_1px)] bg-[size:40px_40px] opacity-[0.03]" />
 
             <div className="absolute left-[-120px] top-[10%] h-[320px] w-[320px] rounded-full bg-purple-600/20 blur-[120px]" />
-            <div className="absolute right-[-100px] bottom-[5%] h-[260px] w-[260px] rounded-full bg-cyan-500/10 blur-[120px]" />
+            <div className="absolute bottom-[5%] right-[-100px] h-[260px] w-[260px] rounded-full bg-cyan-500/10 blur-[120px]" />
 
             <div className="relative z-10 flex h-full w-full items-center justify-center">
               <Canvas
@@ -296,15 +438,22 @@ export default function EditorPage() {
                 setZoom={setZoom}
                 selectedId={selectedId}
                 setSelectedId={setSelectedId}
+                selectedElement={selectedElement}
+                setSelectedElement={setSelectedElement}
                 mockupColor={mockupColor}
                 setMockupColor={setMockupColor}
               />
             </div>
-          </main>
+          </div>
         }
         toolbar={
           <ToolbarFAB
-            onUploadClick={() => fileRef.current?.click()}
+            onUpload={uploadImage}
+            onUploadClick={() => {
+              if (!fileRef.current) return;
+              fileRef.current.value = "";
+              fileRef.current.click();
+            }}
             onAddText={addText}
             setElements={setElements}
             elements={elements}
@@ -316,11 +465,11 @@ export default function EditorPage() {
       />
 
       <input
+        ref={fileRef}
         type="file"
         hidden
-        ref={fileRef}
-        accept="image/png,image/jpeg,image/webp"
-        onChange={handleUpload}
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+        onChange={handleUploadChange}
       />
     </>
   );

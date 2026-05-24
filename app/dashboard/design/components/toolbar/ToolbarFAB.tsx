@@ -13,12 +13,15 @@ type ElementItem = {
   type: "image" | "text" | "shape";
   x: number;
   y: number;
+  width?: number;
+  height?: number;
   text?: string;
   src?: string;
   meta?: Record<string, any>;
 };
 
 type Props = {
+  onUpload: (file: File) => void;
   onUploadClick: () => void;
   onAddText: () => void;
   setElements: React.Dispatch<React.SetStateAction<ElementItem[]>>;
@@ -29,6 +32,7 @@ type Props = {
 };
 
 export default function ToolbarFAB({
+  onUpload,
   onUploadClick,
   onAddText,
   setElements,
@@ -40,7 +44,7 @@ export default function ToolbarFAB({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
 
-  const selected = elements.find((el) => el.id === selectedId);
+  const selected = elements.find((el) => el.id === selectedId) ?? null;
 
   const createElement = (data: Partial<ElementItem>) => {
     setElements((prev) => [
@@ -88,7 +92,7 @@ export default function ToolbarFAB({
     <>
       <DesktopToolbar
         selected={selected}
-        onUploadClick={onUploadClick}
+        onUpload={onUpload}
         onAddText={onAddText}
         createElement={createElement}
         updateSelected={updateSelected}
@@ -112,6 +116,7 @@ export default function ToolbarFAB({
         panel={panel}
         setOpen={setOpen}
         selected={selected}
+        onUpload={onUpload}
         onUploadClick={onUploadClick}
         onAddText={onAddText}
         createElement={createElement}

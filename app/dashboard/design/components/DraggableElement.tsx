@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import ElementRenderer from "./element/ElementRenderer";
 import ElementControls from "./element/ElementControls";
@@ -21,6 +21,30 @@ export default function DraggableElement({
   const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLInputElement | null>(null);
   const lastTapRef = useRef(0);
+
+  useEffect(() => {
+    if (!editing) return;
+
+    const handleOutsideClick = (e: PointerEvent) => {
+      const target = e.target as Node;
+
+      // se clicou dentro do input continua a editar
+      if (ref.current?.contains(target)) return;
+
+      // qualquer clique fora fecha edição
+      setEditing(false);
+    };
+
+    window.addEventListener("pointerdown", handleOutsideClick, true);
+
+    return () => {
+      window.removeEventListener(
+        "pointerdown",
+        handleOutsideClick,
+        true
+      );
+    };
+  }, [editing]);
 
   const rotation = el.meta?.rotation || 0;
   const flipX = el.meta?.flipX ? -1 : 1;
@@ -90,142 +114,173 @@ export default function DraggableElement({
     }, 50);
   };
 
-  function startDrag(e: React.PointerEvent<HTMLDivElement>) {
-    if (editing || el.meta?.lock) return;
+ function startDrag(e: React.PointerEvent<HTMLDivElement>) {
+  if (editing || el.meta?.lock) return;
 
-    if (el.type === "text") {
-      if (e.pointerType === "mouse" && e.detail >= 2) {
-        e.preventDefault();
-        e.stopPropagation();
+  e.preventDefault();
+  e.stopPropagation();
+
+  selectElement(e);
+
+  if (el.type === "text") {
+    if (e.pointerType === "touch") {
+      const now = Date.now();
+
+      if (now - lastTapRef.current < 400) {
         startEditing();
         return;
       }
 
-      if (e.pointerType === "touch") {
-        const now = Date.now();
-
-        if (now - lastTapRef.current < 400) {
-          e.preventDefault();
-          e.stopPropagation();
-          startEditing();
-          return;
-        }
-
-        lastTapRef.current = now;
-      }
+      lastTapRef.current = now;
     }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-
-    selectElement(e);
-
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startElX = el.x;
-    const startElY = el.y;
-
-    const dragIds =
-      selectedIds.includes(el.id) && selectedIds.length > 1
-        ? selectedIds
-        : [el.id];
-
-    const onMove = (ev: PointerEvent) => {
-      ev.preventDefault();
-
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
-
-      if (dragIds.length > 1) {
-        updateSelectedElements?.(dragIds, dx, dy);
-        return;
-      }
-
-      patchElement({
-        x: startElX + dx,
-        y: startElY + dy,
-      });
-    };
-
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
   }
 
-  const resizeElement = (
-    e: React.PointerEvent,
-    direction: "br" | "tr" | "bl" | "tl"
-  ) => {
-    e.preventDefault();
-    e.stopPropagation();
+  e.currentTarget.setPointerCapture?.(e.pointerId);
 
-    selectElement(e);
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startElX = el.x;
+  const startElY = el.y;
 
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = elementWidth;
-    const startHeight = elementHeight;
-    const startElX = el.x;
-    const startElY = el.y;
+  let moved = false;
 
-    const onMove = (ev: PointerEvent) => {
-      ev.preventDefault();
+  const dragIds =
+    selectedIds.includes(el.id) && selectedIds.length > 1
+      ? selectedIds
+      : [el.id];
 
-      const dx = (ev.clientX - startX) / zoom;
-      const dy = (ev.clientY - startY) / zoom;
+  const onMove = (ev: PointerEvent) => {
+    ev.preventDefault();
 
-      let nextWidth = startWidth;
-      let nextHeight = startHeight;
-      let nextX = startElX;
-      let nextY = startElY;
+    const dx = (ev.clientX - startX) / zoom;
+    const dy = (ev.clientY - startY) / zoom;
 
-      if (direction.includes("r")) nextWidth = Math.max(24, startWidth + dx);
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      moved = true;
+    }
 
-      if (direction.includes("l")) {
-        nextWidth = Math.max(24, startWidth - dx);
-        nextX = startElX + dx;
-      }
+    if (dragIds.length > 1) {
+      updateSelectedElements?.(dragIds, dx, dy);
+      return;
+    }
 
-      if (direction.includes("b")) nextHeight = Math.max(24, startHeight + dy);
-
-      if (direction.includes("t")) {
-        nextHeight = Math.max(24, startHeight - dy);
-        nextY = startElY + dy;
-      }
-
-      patchElement({
-        x: nextX,
-        y: nextY,
-        width: nextWidth,
-        height: nextHeight,
-        meta: {
-          ...(el.meta || {}),
-          fontSize:
-            el.type === "text"
-              ? Math.max(10, Math.round(nextHeight * 0.85))
-              : el.meta?.fontSize,
-        },
-      });
-    };
-
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    };
-
-    window.addEventListener("pointermove", onMove, { passive: false });
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    patchElement({
+      x: startElX + dx,
+      y: startElY + dy,
+    });
   };
+
+  const onUp = (ev: PointerEvent) => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+
+    if (
+      el.type === "text" &&
+      ev.pointerType === "mouse" &&
+      !moved
+    ) {
+      startEditing();
+    }
+  };
+
+  window.addEventListener("pointermove", onMove, {
+    passive: false,
+  });
+
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+}
+
+ const resizeElement = (
+  e: React.PointerEvent,
+  direction: "br" | "tr" | "bl" | "tl"
+) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  selectElement(e);
+
+  const startX = e.clientX;
+  const startY = e.clientY;
+  const startWidth = elementWidth;
+  const startHeight = elementHeight;
+  const startElX = el.x;
+  const startElY = el.y;
+
+  const onMove = (ev: PointerEvent) => {
+    ev.preventDefault();
+
+    const dx = (ev.clientX - startX) / zoom;
+    const dy = (ev.clientY - startY) / zoom;
+
+    const factor = 1.35;
+
+    let nextWidth = startWidth;
+    let nextHeight = startHeight;
+    let nextX = startElX;
+    let nextY = startElY;
+
+    // WIDTH
+    if (direction.includes("r")) {
+      nextWidth = Math.max(24, startWidth + dx * factor);
+    }
+
+    if (direction.includes("l")) {
+      nextWidth = Math.max(24, startWidth - dx * factor);
+      nextX = startElX + dx;
+    }
+
+    // HEIGHT
+    if (direction.includes("b")) {
+      nextHeight = Math.max(24, startHeight + dy * factor);
+    }
+
+    if (direction.includes("t")) {
+      nextHeight = Math.max(24, startHeight - dy * factor);
+      nextY = startElY + dy;
+    }
+
+    // IMAGE SCALE ONLY
+    const widthRatio = nextWidth / startWidth;
+    const heightRatio = nextHeight / startHeight;
+
+    patchElement({
+      x: nextX,
+      y: nextY,
+      width: nextWidth,
+      height: nextHeight,
+      meta: {
+        ...(el.meta || {}),
+
+        // IMAGEM escala
+        scale:
+          el.type === "image"
+            ? Math.max(widthRatio, heightRatio)
+            : el.meta?.scale,
+
+        // TEXTO NÃO muda no resize (IMPORTANTE)
+        fontSize: el.meta?.fontSize,
+        fontFamily: el.meta?.fontFamily,
+        fontWeight: el.meta?.fontWeight,
+        fontStyle: el.meta?.fontStyle,
+      },
+    });
+  };
+
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove, {
+    passive: false,
+  });
+
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+};
 
   const rotateElement = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -262,7 +317,10 @@ export default function DraggableElement({
       window.removeEventListener("pointercancel", onUp);
     };
 
-    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointermove", onMove, {
+      passive: false,
+    });
+
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onUp);
   };
@@ -270,7 +328,13 @@ export default function DraggableElement({
   const flipElement = (e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    patchElement({ meta: { ...(el.meta || {}), flipX: !el.meta?.flipX } });
+
+    patchElement({
+      meta: {
+        ...(el.meta || {}),
+        flipX: !el.meta?.flipX,
+      },
+    });
   };
 
   const duplicateElement = (e: React.PointerEvent) => {
@@ -304,21 +368,25 @@ export default function DraggableElement({
           setEditing={setEditing}
         />
 
-        {isSelected && !editing && selectedIds.length <= 1 && (
-          <div
-            className="pointer-events-none absolute inset-0 z-[90]"
-            style={{ overflow: "visible" }}
-          >
-            <ElementControls
-              rotateElement={rotateElement}
-              flipElement={flipElement}
-              duplicateElement={duplicateElement}
-              removeElement={removeElement}
-            />
+        {isSelected &&
+          !editing &&
+          selectedIds.length <= 1 && (
+            <div
+              className="pointer-events-none absolute inset-0 z-[90]"
+              style={{ overflow: "visible" }}
+            >
+              <ElementControls
+                rotateElement={rotateElement}
+                flipElement={flipElement}
+                duplicateElement={duplicateElement}
+                removeElement={removeElement}
+              />
 
-            <ResizeHandles resizeElement={resizeElement} />
-          </div>
-        )}
+              <ResizeHandles
+                resizeElement={resizeElement}
+              />
+            </div>
+          )}
       </div>
     </div>
   );

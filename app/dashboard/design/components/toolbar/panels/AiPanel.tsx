@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Wand2,
   Sparkles,
@@ -13,265 +13,460 @@ import {
 const previewImages = [
   {
     title: "Vintage Tiger",
-    prompt: "vintage tiger t-shirt graphic",
-    src: "https://images.unsplash.com/photo-1615963244664-5b845b2025ee?q=80&w=900&auto=format&fit=crop",
+    prompt:
+      "premium vintage tiger t-shirt design",
+    src: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=900&auto=format&fit=crop",
   },
+
   {
-    title: "Rose & Bee",
-    prompt: "rose with bee product graphic",
+    title: "Skull Rose",
+    prompt:
+      "premium skull rose tattoo graphic",
+    src: "https://images.unsplash.com/photo-1515405295579-ba7b45403062?q=80&w=900&auto=format&fit=crop",
+  },
+
+  {
+    title: "Street Dragon",
+    prompt:
+      "streetwear dragon print design",
+    src: "https://images.unsplash.com/photo-1575936123452-b67c3203c357?q=80&w=900&auto=format&fit=crop",
+  },
+
+  {
+    title: "Luxury Snake",
+    prompt:
+      "luxury snake logo graphic",
+    src: "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=900&auto=format&fit=crop",
+  },
+
+  {
+    title: "Cyber Wolf",
+    prompt:
+      "cyber wolf mascot logo",
+    src: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?q=80&w=900&auto=format&fit=crop",
+  },
+
+  {
+    title: "Butterfly Ink",
+    prompt:
+      "butterfly tattoo t-shirt graphic",
     src: "https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=900&auto=format&fit=crop",
-  },
-  {
-    title: "Dog Logo",
-    prompt: "cute dog mascot logo",
-    src: "https://images.unsplash.com/photo-1552053831-71594a27632d?q=80&w=900&auto=format&fit=crop",
-  },
-  {
-    title: "Skull Flowers",
-    prompt: "skull with flowers tattoo graphic",
-    src: "https://images.unsplash.com/photo-1606122017369-d782bbb78f32?q=80&w=900&auto=format&fit=crop",
   },
 ];
 
 function randomItem() {
-  return previewImages[Math.floor(Math.random() * previewImages.length)];
+  return previewImages[
+    Math.floor(Math.random() * previewImages.length)
+  ];
 }
 
 function safePrompt(value: string) {
-  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").slice(0, 160);
+  return value
+    .replace(/[<>]/g, "")
+    .replace(/\s+/g, " ")
+    .slice(0, 180);
 }
 
 function buildFinalPrompt(prompt: string) {
   return `
 ${prompt}
 
-Clean isolated product graphic.
+Premium apparel graphic.
 Transparent background.
+Centered composition.
 No mockup.
 No shirt.
 No hoodie.
 No person.
-No background.
 No shadows.
-Centered design.
-High quality PNG style.
-Perfect for printing on t-shirts, hoodies and products.
+Clean PNG.
+Ultra detailed.
+Print ready.
 `.trim();
 }
 
-export default function AiPanel({ createElement }: any) {
-  const first = useMemo(() => randomItem(), []);
+export default function AiPanel({
+  createElement,
+}: {
+  createElement?: (data: any) => void;
+}) {
+  const [prompt, setPrompt] =
+    useState("");
 
-  const [prompt, setPrompt] = useState(first.prompt);
-  const [loading, setLoading] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState(previewImages);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [lastAddedSrc, setLastAddedSrc] = useState<string | null>(null);
+  const [loading, setLoading] =
+    useState(false);
 
-  const generateImage = async () => {
-    const cleanPrompt = safePrompt(prompt.trim());
-    if (!cleanPrompt || loading) return;
+  const [notice, setNotice] =
+    useState("");
 
-    try {
-      setLoading(true);
+  const [error, setError] =
+    useState("");
+
+  const [lastAddedSrc, setLastAddedSrc] =
+    useState<string | null>(null);
+
+  const [generatedImages, setGeneratedImages] =
+    useState(previewImages);
+
+  const randomPrompt =
+    useCallback(() => {
+      const item = randomItem();
+
+      setPrompt(item.prompt);
+
       setError("");
-      setNotice("Generating image...");
 
-      const finalPrompt = buildFinalPrompt(cleanPrompt);
+      setNotice(
+        "Prompt ready. Click Create Design."
+      );
+    }, []);
 
-      const response = await fetch("/api/ai-image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: finalPrompt,
-          originalPrompt: cleanPrompt,
-          transparent: true,
-        }),
-      });
+  const addImageToCanvas =
+    useCallback(
+      (item: any) => {
+        createElement?.({
+          type: "image",
+          src: item.src,
 
-      const data = await response.json();
+          width: 320,
+          height: 320,
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to generate image");
-      }
+          meta: {
+            prompt:
+              item.prompt ||
+              item.title,
 
-      if (!data?.imageUrl) {
-        throw new Error("No image returned");
-      }
+            transparent: true,
 
-      setGeneratedImages((prev) => [
-        {
-          title: cleanPrompt,
-          prompt: cleanPrompt,
-          src: data.imageUrl,
-          finalPrompt,
-          generationId: data.generationId,
-        },
-        ...prev,
-      ]);
+            source:
+              item.generationId
+                ? "ai-generated"
+                : "preview",
+          },
+        });
 
-      setNotice("Image ready. Click it to add it to the canvas.");
-    } catch (err) {
-      console.error(err);
-      setNotice("");
-      setError(err instanceof Error ? err.message : "Failed to generate image");
-    } finally {
-      setLoading(false);
-    }
-  };
+        setLastAddedSrc(item.src);
 
-  const addImageToCanvas = (item: any) => {
-    createElement?.({
-      type: "image",
-      src: item.src,
-      meta: {
-        prompt: item.prompt || item.title,
-        finalPrompt: item.finalPrompt,
-        source: item.generationId ? "leonardo-ai" : "ai-preview",
-        generationId: item.generationId,
-        transparent: true,
+        setNotice(
+          "Added to canvas."
+        );
       },
-    });
+      [createElement]
+    );
 
-    setLastAddedSrc(item.src);
-    setNotice("Image added to canvas.");
-  };
+  const generateImage =
+    useCallback(async () => {
+      const cleanPrompt =
+        safePrompt(prompt.trim());
 
-  const randomPrompt = () => {
-    const item = randomItem();
-    setPrompt(item.prompt);
-    setError("");
-    setNotice("Prompt ready. Click Generate.");
-  };
+      if (
+        !cleanPrompt ||
+        loading
+      )
+        return;
 
-  return (
-    <div className="-mx-4 -mb-4 flex min-h-full flex-col bg-transparent text-white">
-      <div className="space-y-4 px-4 pt-4">
-        <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05] p-4 shadow-[0_18px_50px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-          <div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-violet-500/20 blur-3xl" />
-          <div className="absolute -bottom-20 -left-14 h-40 w-40 rounded-full bg-fuchsia-500/10 blur-3xl" />
+      try {
+        setLoading(true);
+        setError("");
 
-          <div className="relative flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 text-white shadow-[0_15px_35px_rgba(168,85,247,0.35)]">
-              <Wand2 size={21} />
-            </div>
+        setNotice(
+          "Creating premium transparent design..."
+        );
 
-            <div>
-              <p className="text-base font-black tracking-[-0.03em]">
-                AI Image Studio
-              </p>
-              <p className="text-xs font-medium text-slate-400">
-                Generate product-ready artwork.
-              </p>
-            </div>
-          </div>
+        const finalPrompt =
+          buildFinalPrompt(
+            cleanPrompt
+          );
 
-          <textarea
-            value={prompt}
-            onChange={(e) => {
-              setPrompt(safePrompt(e.target.value));
-              setError("");
-              setNotice("");
-            }}
-            rows={2}
-            maxLength={160}
-            placeholder="Describe your artwork..."
-            className="relative mt-4 w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-medium leading-relaxed text-white outline-none backdrop-blur-md placeholder:text-slate-400 focus:border-violet-400 focus:ring-2 focus:ring-violet-500/20"
-          />
+        const response =
+          await fetch(
+            "/api/ai-image",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+              body: JSON.stringify({
+                prompt:
+                  finalPrompt,
+                originalPrompt:
+                  cleanPrompt,
+                transparent: true,
+              }),
+            }
+          );
 
-          <div className="relative mt-2 flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-slate-400">
-              Try: tiger, rose, dog logo
-            </p>
+        const data =
+          await response.json();
 
-            <p className="text-[10px] font-black text-slate-500">
-              {prompt.length}/160
-            </p>
-          </div>
+        if (!response.ok) {
+          throw new Error(
+            data?.error ||
+              "Failed to generate image"
+          );
+        }
 
-          {error && (
-            <div className="relative mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
-              {error}
-            </div>
-          )}
+        if (!data?.imageUrl) {
+          throw new Error(
+            "No image returned"
+          );
+        }
 
-          {notice && (
-            <div className="relative mt-3 rounded-2xl border border-violet-500/20 bg-violet-500/10 px-4 py-3 text-xs font-bold text-violet-200">
-              {notice}
-            </div>
-          )}
+        setGeneratedImages(
+          (prev) => [
+            {
+              title:
+                cleanPrompt,
+              prompt:
+                cleanPrompt,
+              src: data.imageUrl,
+              generationId:
+                data.generationId,
+            },
+            ...prev,
+          ]
+        );
 
-          <div className="relative mt-4 grid grid-cols-[0.8fr_1.2fr] gap-2">
+        setNotice(
+          "Design ready. Click to add."
+        );
+      } catch (err) {
+        console.error(err);
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to generate image"
+        );
+
+        setNotice("");
+      } finally {
+        setLoading(false);
+      }
+    }, [loading, prompt]);
+
+  const imageCards =
+    useMemo(() => {
+      return generatedImages.map(
+        (item, index) => {
+          const added =
+            lastAddedSrc ===
+            item.src;
+
+          return (
             <button
-              onClick={randomPrompt}
+              key={`${item.src}-${index}`}
               type="button"
-              disabled={loading}
-              className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black transition hover:bg-white/[0.1] active:scale-95 disabled:opacity-40"
+              onClick={() =>
+                addImageToCanvas(
+                  item
+                )
+              }
+              className="
+                group overflow-hidden
+                rounded-[26px]
+                border border-white/10
+                bg-[#0c1220]
+                transition-all duration-300
+                hover:border-cyan-400/30
+                hover:-translate-y-1
+                active:scale-[0.98]
+              "
             >
-              <Shuffle size={16} />
-              Random
-            </button>
-
-            <button
-              onClick={generateImage}
-              disabled={loading || !prompt.trim()}
-              type="button"
-              className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-500 via-fuchsia-500 to-pink-500 text-sm font-black text-white shadow-[0_20px_45px_rgba(168,85,247,0.32)] transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {loading ? (
-                <Loader2 className="animate-spin" size={17} />
-              ) : (
-                <Sparkles size={17} />
-              )}
-              {loading ? "Creating..." : "Generate"}
-            </button>
-          </div>
-        </div>
-
-        <div>
-          <p className="text-sm font-black tracking-[-0.03em]">Examples</p>
-          <p className="text-xs text-slate-500">
-            Click an image to add it to the canvas.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 pb-4">
-          {generatedImages.map((item: any, index) => {
-            const added = lastAddedSrc === item.src;
-
-            return (
-              <button
-                key={`${item.src}-${index}`}
-                onClick={() => addImageToCanvas(item)}
-                type="button"
-                className="group relative h-[170px] overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.04] shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-lg transition hover:-translate-y-0.5 hover:border-violet-400/40 active:scale-[0.98]"
-              >
+              <div className="relative aspect-square overflow-hidden bg-[#0d1528]">
                 <img
                   src={item.src}
                   alt={item.title}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                  loading="lazy"
+                  decoding="async"
+                  className="
+                    h-full w-full
+                    object-cover
+                    transition-transform duration-500
+                    group-hover:scale-105
+                  "
                 />
 
-                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/25 to-transparent" />
-
-                <div className="absolute inset-x-0 bottom-0 p-3 text-left">
-                  <p className="line-clamp-1 text-xs font-black text-white">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-4 text-left">
+                  <p className="line-clamp-1 text-sm font-black text-white">
                     {item.title}
                   </p>
 
-                  <p className="mt-1 text-[10px] font-bold text-white/75">
-                    {added ? "Added" : "Click to add"}
+                  <p className="text-[11px] text-white/70">
+                    {added
+                      ? "Added"
+                      : "Click to add"}
                   </p>
                 </div>
 
-                <span className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur-md">
-                  {added ? <Plus size={17} /> : <ImagePlus size={17} />}
-                </span>
-              </button>
-            );
-          })}
+                <div className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30 backdrop-blur-md">
+                  {added ? (
+                    <Plus
+                      size={18}
+                      className="text-cyan-300"
+                    />
+                  ) : (
+                    <ImagePlus
+                      size={18}
+                      className="text-white"
+                    />
+                  )}
+                </div>
+              </div>
+            </button>
+          );
+        }
+      );
+    }, [
+      generatedImages,
+      lastAddedSrc,
+      addImageToCanvas,
+    ]);
+
+  return (
+    <div className="space-y-4 pb-6 text-white">
+      <div className="rounded-[30px] border border-white/10 bg-[#0a1120] p-5">
+        <div className="flex items-center gap-3">
+          <div
+            className="
+              flex h-12 w-12
+              items-center justify-center
+              rounded-[18px]
+              bg-gradient-to-br
+              from-cyan-500
+              via-violet-500
+              to-fuchsia-500
+            "
+          >
+            <Wand2 size={21} />
+          </div>
+
+          <div>
+            <h2 className="text-base font-black">
+              AI Design Studio
+            </h2>
+
+            <p className="text-xs text-slate-400">
+              Premium transparent PNG creator
+            </p>
+          </div>
         </div>
+
+        <textarea
+          value={prompt}
+          onChange={(e) => {
+            setPrompt(
+              safePrompt(
+                e.target.value
+              )
+            );
+
+            setNotice("");
+            setError("");
+          }}
+          rows={3}
+          maxLength={180}
+          placeholder="Describe your premium design..."
+          className="
+            mt-5 w-full resize-none
+            rounded-[24px]
+            border border-white/10
+            bg-[#11192d]
+            px-4 py-4
+            text-sm font-medium text-white
+            outline-none
+            transition
+            placeholder:text-slate-500
+            focus:border-cyan-400/40
+          "
+        />
+
+        {notice && (
+          <div className="mt-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-xs font-bold text-cyan-200">
+            {notice}
+          </div>
+        )}
+
+        {error && (
+          <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
+            {error}
+          </div>
+        )}
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={
+              randomPrompt
+            }
+            disabled={loading}
+            className="
+              flex h-12
+              items-center justify-center
+              gap-2 rounded-2xl
+              border border-white/10
+              bg-white/[0.04]
+              font-black
+              transition
+              hover:bg-white/[0.08]
+            "
+          >
+            <Shuffle size={17} />
+            Random
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              generateImage
+            }
+            disabled={
+              loading ||
+              !prompt.trim()
+            }
+            className="
+              flex h-12
+              items-center justify-center
+              gap-2 rounded-2xl
+              bg-gradient-to-r
+              from-cyan-500
+              via-violet-500
+              to-fuchsia-500
+              font-black text-white
+              transition
+              active:scale-[0.98]
+              disabled:opacity-40
+            "
+          >
+            {loading ? (
+              <Loader2
+                size={17}
+                className="animate-spin"
+              />
+            ) : (
+              <Sparkles size={17} />
+            )}
+
+            {loading
+              ? "Creating..."
+              : "Create Design"}
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-sm font-black">
+          Premium Designs
+        </p>
+
+        <p className="text-xs text-slate-500">
+          Click a design to add it
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        {imageCards}
       </div>
     </div>
   );

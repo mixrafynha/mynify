@@ -1,4 +1,8 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { ArrowLeft, Zap } from "lucide-react";
+import PreviewGallery from "./PreviewGallery";
 
 export default async function PreviewPage({
   params,
@@ -9,169 +13,111 @@ export default async function PreviewPage({
 
   const { data: product } = await supabase
     .from("user_products")
-    .select("*")
+    .select(`
+      *,
+      base_product:products (
+        id,
+        title,
+        image,
+        images,
+        category
+      )
+    `)
     .eq("id", params.id)
     .single();
 
   if (!product) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <main className="flex min-h-screen items-center justify-center bg-[#03030a] text-white">
         Product not found
-      </div>
+      </main>
     );
   }
 
-  // ================= MOCKUP =================
-  const category = (
-    product.category ||
-    product.title ||
-    ""
-  ).toLowerCase();
+  const needsAi =
+    !product.ai_mockup_url &&
+    (!product.ai_mockup_images || product.ai_mockup_images.length === 0) &&
+    product.design_image_url;
 
-  let mockup = "/mockups/hoodie-front.png";
-
-  if (
-    category.includes("shirt") ||
-    category.includes("tshirt") ||
-    category.includes("t-shirt")
-  ) {
-    mockup = "/mockups/tshirt-front.png";
+  if (needsAi) {
+    redirect(
+      `/api/products/${product.id}/generate-ai-mockup?redirect=/dashboard/design/preview/${product.id}`
+    );
   }
 
-  const elements = product.design_front || [];
+  const baseImages = [
+    product.base_product?.image,
+    ...(product.base_product?.images || []),
+  ]
+    .filter(Boolean)
+    .filter(
+      (img: string, index: number, arr: string[]) => arr.indexOf(img) === index
+    );
+
+  const category =
+    product.category || product.base_product?.category || "Product";
+
+  const fallbackMockup = category.toLowerCase().includes("shirt")
+    ? "/mockups/tshirt-front.png"
+    : "/mockups/hoodie-front.png";
+
+  const previewImages = (
+    product.ai_mockup_images?.length > 0
+      ? product.ai_mockup_images
+      : product.ai_mockup_url
+        ? [product.ai_mockup_url, ...baseImages]
+        : baseImages.length > 0
+          ? baseImages
+          : [fallbackMockup]
+  )
+    .filter(Boolean)
+    .filter(
+      (img: string, index: number, arr: string[]) => arr.indexOf(img) === index
+    );
+
+  const isAi =
+    product.ai_mockup_images?.length > 0 || Boolean(product.ai_mockup_url);
 
   return (
-    <div className="min-h-screen bg-[#f6f6f4] flex items-center justify-center p-6">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-3xl">
+    <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
+      <section className="relative min-h-screen py-5 sm:py-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_20%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_20%_35%,rgba(14,165,233,0.22),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
-        {/* HEADER */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold tracking-tight">
-            {product.title}
-          </h1>
+        <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <Link
+              href={`/dashboard/design?productId=${product.baseProductId || product.base_product_id || product.base_product?.id || product.id}`}
+              className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/80 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
+            >
+              <ArrowLeft size={17} />
+              Back to editor
+            </Link>
 
-          <p className="text-sm text-gray-500 mt-1">
-            Custom product preview
-          </p>
-        </div>
-
-        {/* MOCKUP AREA */}
-        <div className="flex items-center justify-center">
-          <div className="relative w-[420px] h-[520px]">
-
-            {/* MOCKUP */}
-            <img
-              src={mockup}
-              alt={product.title}
-              className="absolute inset-0 z-10 w-full h-full object-contain"
-            />
-
-            {/* DESIGN ELEMENTS */}
-            {elements.map((el: any) => {
-              const color =
-                el.meta?.color ||
-                el.color ||
-                "#000000";
-
-              const fontFamily =
-                el.meta?.fontFamily ||
-                el.fontFamily ||
-                "Arial";
-
-              const fontSize =
-                el.meta?.fontSize ||
-                el.fontSize ||
-                20;
-
-              return (
-                <div
-                  key={el.id}
-                  className="absolute z-20"
-                  style={{
-                    left: `${el.x}px`,
-                    top: `${el.y}px`,
-                    width: el.width || "auto",
-                    height: el.height || "auto",
-
-                    color,
-                    fontFamily,
-                    fontSize,
-
-                    fontWeight:
-                      el.meta?.fontWeight ||
-                      el.fontWeight ||
-                      "normal",
-
-                    transform: el.rotation
-                      ? `rotate(${el.rotation}deg)`
-                      : undefined,
-                  }}
-                >
-                  {/* TEXT */}
-                  {el.type === "text" && (
-                    <span>
-                      {el.text ||
-                        el.content ||
-                        "Text"}
-                    </span>
-                  )}
-
-                  {/* IMAGE */}
-                  {el.type === "image" && el.src && (
-                    <img
-                      src={el.src}
-                      alt=""
-                      className="w-full h-full object-contain"
-                      draggable={false}
-                    />
-                  )}
-
-                  {/* SHAPE */}
-                  {el.type === "shape" && (
-                    <div
-                      className="rounded-md"
-                      style={{
-                        width: el.width || 100,
-                        height: el.height || 100,
-                        background:
-                          color || "#000",
-                      }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* INFO */}
-        <div className="mt-8 border-t pt-6 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">
-              Final price
-            </p>
-
-            <p className="text-2xl font-bold">
-              $
-              {Number(
-                product.final_price ||
-                  product.price ||
-                  0
-              ).toFixed(2)}
-            </p>
+            <div className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
+              {isAi ? "AI preview ready" : "Generating AI preview..."}
+            </div>
           </div>
 
-          <div className="flex gap-2">
-            <span className="px-3 py-1 rounded-full bg-black text-white text-xs">
-              Custom design
-            </span>
+          <div className="mb-5">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85">
+              <Zap size={14} className="text-purple-400" />
+              Product preview
+            </div>
 
-            <span className="px-3 py-1 rounded-full bg-gray-100 text-xs">
-              {product.category || "Product"}
-            </span>
+            <h1 className="max-w-4xl text-[34px] font-black uppercase leading-[0.9] tracking-[-0.04em] sm:text-5xl md:text-6xl">
+              {product.title}
+            </h1>
           </div>
+
+          <PreviewGallery
+            images={previewImages.slice(0, 7)}
+            title={product.title}
+            category={category}
+            price={Number(product.final_price || product.price || 0)}
+            isAi={isAi}
+          />
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

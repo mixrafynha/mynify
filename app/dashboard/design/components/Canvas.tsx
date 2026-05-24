@@ -3,19 +3,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import SafeArea from "@/app/dashboard/design/components/SafeArea";
-import CanvasMockup from "./canvas/CanvasMockup";
-import DraggableElement from "./DraggableElement";
+
+import { PRODUCTS } from "./canvas/productConfig";
+import { MOCKUP_AREA } from "./canvas/constants";
 import {
-  PRODUCTS,
-  MOCKUP_AREA,
   getPrintBox,
   getSafeArea,
   clampElementToSafeArea,
-  type Side,
-} from "./canvas";
+} from "./canvas/canvasMath";
+import { Side } from "./canvas/types";
+import DraggableElement from "./DraggableElement";
+import CanvasMockup from "./canvas/CanvasMockup";
 
 const DESKTOP_ZOOM_BOOST = 0.68;
 const MOBILE_ZOOM_BOOST = 0.92;
+
+function getElementSize(el: any) {
+  return {
+    width: el?.width || 220,
+    height:
+      el?.height || (el?.type === "text" ? el?.meta?.fontSize || 40 : 140),
+  };
+}
+
+function centerElementInSafeArea(el: any, safeArea: any) {
+  const { width, height } = getElementSize(el);
+
+  const yOffset = Number(el?.meta?.insertedYOffset ?? 20);
+
+  return clampElementToSafeArea(
+    {
+      ...el,
+      width,
+      height,
+      x: safeArea.x + safeArea.width / 2 - width / 2,
+      y: safeArea.y + safeArea.height / 2 - height / 2 + yOffset,
+      meta: {
+        ...(el?.meta || {}),
+        __centered: true,
+        insertedYOffset: yOffset,
+      },
+    },
+    safeArea
+  );
+}
 
 export default function Canvas({
   side,
@@ -35,6 +66,8 @@ export default function Canvas({
 
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const groupDragStartRef = useRef<any[] | null>(null);
+  const initializedRef = useRef(false);
+  const knownIdsRef = useRef<Set<string>>(new Set());
 
   const [canvasScale, setCanvasScale] = useState(1);
   const [showColors, setShowColors] = useState(false);
@@ -61,6 +94,12 @@ export default function Canvas({
 
   const safeArea = useMemo(() => getSafeArea(printBox), [printBox]);
 
+  function clearSelection() {
+    setSelectedIds([]);
+    setSelectedId(null);
+    setSelectedElement?.(null);
+  }
+
   useEffect(() => {
     async function loadColors() {
       try {
@@ -74,7 +113,6 @@ export default function Canvas({
         });
 
         const json = await res.json();
-
         setAvailableColors(json.colors || []);
       } catch {
         setAvailableColors([]);
@@ -109,9 +147,36 @@ export default function Canvas({
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(storageKey);
-      if (saved) setElements(JSON.parse(saved));
-    } catch {}
+
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setElements(parsed);
+        knownIdsRef.current = new Set(parsed.map((el: any) => el.id));
+      } else {
+        knownIdsRef.current = new Set(elements.map((el: any) => el.id));
+      }
+
+      initializedRef.current = true;
+    } catch {
+      initializedRef.current = true;
+    }
   }, [storageKey, setElements]);
+
+  useEffect(() => {
+    if (!initializedRef.current) return;
+
+    const hasNew = elements.some((el: any) => !knownIdsRef.current.has(el.id));
+    if (!hasNew) return;
+
+    setElements((prev: any[]) =>
+      prev.map((el) => {
+        if (knownIdsRef.current.has(el.id)) return el;
+
+        knownIdsRef.current.add(el.id);
+        return centerElementInSafeArea(el, safeArea);
+      })
+    );
+  }, [elements, safeArea, setElements]);
 
   useEffect(() => {
     try {
@@ -173,12 +238,10 @@ export default function Canvas({
       }
 
       if (patch.duplicate) {
-        const duplicated = clampElementToSafeArea(
+        const duplicated = centerElementInSafeArea(
           {
             ...current,
             id: crypto.randomUUID(),
-            x: current.x + 20,
-            y: current.y + 20,
             meta: { ...(current.meta || {}) },
           },
           safeArea
@@ -254,17 +317,16 @@ export default function Canvas({
       className="relative flex h-full w-full items-center justify-center overflow-hidden bg-transparent"
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
-
-        setSelectedIds([]);
-        setSelectedId(null);
-        setSelectedElement?.(null);
+        clearSelection();
       }}
     >
-      <div className="absolute right-4 top-4 z-50">
+      <div
+        className="absolute right-4 top-4 z-50"
+        onPointerDown={(e) => e.stopPropagation()}
+      >
         <div className="relative flex justify-center">
           <button
             type="button"
-            onPointerDown={(e) => e.stopPropagation()}
             onClick={() => setShowColors((v) => !v)}
             className="
               flex h-8 w-8 items-center justify-center
@@ -283,10 +345,8 @@ export default function Canvas({
             <div
               className="
                 absolute top-10 left-1/2 -translate-x-1/2
-                flex flex-col items-center gap-1.5
-                rounded-full border border-zinc-200
-                bg-white/95 px-1.5 py-2
-                shadow-xl backdrop-blur
+                flex flex-col items-center gap-2
+                p-0 m-0
               "
             >
               {availableColors.map((color) => {
@@ -326,6 +386,10 @@ export default function Canvas({
 
       <div
         className="relative shrink-0 transition-transform duration-150 ease-out"
+        onPointerDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          clearSelection();
+        }}
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,
@@ -352,9 +416,7 @@ export default function Canvas({
             const startX = (e.clientX - rect.left) / finalScale;
             const startY = (e.clientY - rect.top) / finalScale;
 
-            setSelectedIds([]);
-            setSelectedId(null);
-            setSelectedElement?.(null);
+            clearSelection();
 
             setSelectionBox({
               x: startX,
@@ -430,6 +492,7 @@ export default function Canvas({
             height: safeArea.height,
             pointerEvents: "auto",
             clipPath: "inset(0px)",
+            touchAction: "none",
           }}
         >
           {elements.map((el: any) => (
@@ -438,7 +501,7 @@ export default function Canvas({
               el={{
                 ...el,
                 x: el.x - safeArea.x,
-                y: el.y - safeArea.y,
+                y: el.y - safeArea.y + 40,
               }}
               safeArea={safeArea}
               zoom={finalScale}

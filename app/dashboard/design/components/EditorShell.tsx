@@ -1,11 +1,20 @@
 "use client";
 
+import type { ReactNode } from "react";
+
+type EditorShellProps = {
+  sidebar?: ReactNode;
+  topbar?: ReactNode;
+  canvas?: ReactNode;
+  toolbar?: ReactNode;
+};
+
 export default function EditorShell({
   sidebar,
   topbar,
   canvas,
   toolbar,
-}: any) {
+}: EditorShellProps) {
   return (
     <div className="h-[100dvh] w-full overflow-hidden bg-[#070711] text-white">
       <div className="hidden h-full w-full flex-col overflow-hidden md:flex">
@@ -26,14 +35,10 @@ export default function EditorShell({
         <div className="shrink-0">{topbar}</div>
 
         <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[#070711]">
-          <div className="absolute inset-0 flex items-center justify-center">
-            {canvas}
-          </div>
+          {canvas}
         </section>
 
-        <div className="shrink-0">
-          {toolbar}
-        </div>
+        <div className="shrink-0">{toolbar}</div>
       </div>
     </div>
   );
