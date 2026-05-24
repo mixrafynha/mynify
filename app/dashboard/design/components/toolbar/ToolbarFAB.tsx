@@ -44,11 +44,12 @@ export default function ToolbarFAB({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
 
-  const selected = elements.find((el) => el.id === selectedId) ?? null;
+  const selected =
+    elements.find((el) => el.id === selectedId) ?? null;
 
-  const createElement = (data: unknown) => {
-    const elementData = data as Partial<ElementItem>;
-
+  const createElement = (
+    data: Partial<ElementItem>
+  ) => {
     setElements((prev) => [
       ...prev,
       {
@@ -57,17 +58,17 @@ export default function ToolbarFAB({
         x: 120,
         y: 120,
         meta: {},
-        ...elementData,
+        ...data,
       } as ElementItem,
     ]);
 
     setOpen(false);
   };
 
-  const updateSelected = (patch: unknown) => {
+  const updateSelected = (
+    patch: Partial<ElementItem>
+  ) => {
     if (!selectedId) return;
-
-    const elementPatch = patch as Partial<ElementItem>;
 
     setElements((prev) =>
       prev.map((el) =>
@@ -75,10 +76,10 @@ export default function ToolbarFAB({
           ? el
           : {
               ...el,
-              ...elementPatch,
+              ...patch,
               meta: {
                 ...(el.meta ?? {}),
-                ...(elementPatch.meta ?? {}),
+                ...(patch.meta ?? {}),
               },
             }
       )
@@ -88,7 +89,10 @@ export default function ToolbarFAB({
   const deleteSelected = () => {
     if (!selectedId) return;
 
-    setElements((prev) => prev.filter((el) => el.id !== selectedId));
+    setElements((prev) =>
+      prev.filter((el) => el.id !== selectedId)
+    );
+
     setOpen(false);
   };
 
@@ -109,8 +113,10 @@ export default function ToolbarFAB({
         open={open}
         panel={panel}
         setOpen={setOpen}
-        setPanel={setPanel}
+        setPanel={(value) => setPanel(value as Panel)}
         selected={selected}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
       />
 
       <MobileSheet
@@ -119,6 +125,7 @@ export default function ToolbarFAB({
         setOpen={setOpen}
         selected={selected}
         onUpload={onUpload}
+        onUploadClick={onUploadClick}
         onAddText={onAddText}
         createElement={createElement}
         updateSelected={updateSelected}
