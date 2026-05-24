@@ -50,8 +50,6 @@ type DesktopToolbarProps = {
   createElement?: (element: unknown) => void;
   updateSelected?: (update: Record<string, unknown>) => void;
   deleteSelected?: () => void;
-  zoomIn?: () => void;
-  zoomOut?: () => void;
 };
 
 const PANEL_WIDTH = 420;
@@ -105,8 +103,6 @@ export default function DesktopToolbar({
   createElement,
   updateSelected,
   deleteSelected,
-  zoomIn,
-  zoomOut,
 }: DesktopToolbarProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textInsertLockedRef = useRef(false);
@@ -258,38 +254,6 @@ export default function DesktopToolbar({
             </NavGroup>
 
             <div className="relative mt-auto flex w-full flex-col items-center gap-2 border-t border-white/10 pt-3">
-              {(zoomIn || zoomOut) && (
-                <div className="flex w-full flex-col items-center gap-2 px-2 pb-2">
-                  <button
-                    type="button"
-                    onClick={zoomIn}
-                    className="
-                      flex h-[52px] w-full items-center justify-center rounded-[20px]
-                      border border-white/10 bg-white/[0.06]
-                      text-white transition-all duration-200
-                      hover:bg-white/[0.12]
-                      active:scale-[0.96]
-                    "
-                  >
-                    +
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={zoomOut}
-                    className="
-                      flex h-[52px] w-full items-center justify-center rounded-[20px]
-                      border border-white/10 bg-white/[0.06]
-                      text-white transition-all duration-200
-                      hover:bg-white/[0.12]
-                      active:scale-[0.96]
-                    "
-                  >
-                    −
-                  </button>
-                </div>
-              )}
-
               {canEditSelected && (
                 <SideItem icon={<Trash2 size={21} />} label="Delete" danger onClick={deleteSelected} compact />
               )}
