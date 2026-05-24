@@ -38,8 +38,6 @@ export default function ToolbarFAB({
   setElements,
   elements = [],
   selectedId,
-  zoomIn,
-  zoomOut,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
@@ -101,8 +99,6 @@ export default function ToolbarFAB({
         createElement={createElement}
         updateSelected={updateSelected}
         deleteSelected={deleteSelected}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
       />
 
       <MobileToolbar
@@ -111,8 +107,6 @@ export default function ToolbarFAB({
         setOpen={setOpen}
         setPanel={(value) => setPanel(value as Panel)}
         selected={selected}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
       />
 
       <MobileSheet
