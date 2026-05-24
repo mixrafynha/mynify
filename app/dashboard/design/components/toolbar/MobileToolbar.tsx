@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef } from "react";
+import { memo, useCallback, useRef, type ReactNode, type PointerEvent } from "react";
 import {
   Image,
   Type,
@@ -15,7 +15,15 @@ import {
 
 import ToolButton from "./ToolButton";
 
-const tools = [
+type ToolItem = {
+  id: string;
+  label: string;
+  icon: ReactNode;
+  badge?: string;
+  requiresSelection: boolean;
+};
+
+const tools: ToolItem[] = [
   {
     id: "ai",
     label: "AI",
@@ -71,7 +79,7 @@ const tools = [
     icon: <Palette size={21} />,
     requiresSelection: true,
   },
-] as const;
+];
 
 type MobileToolbarProps = {
   open: boolean;
@@ -89,6 +97,7 @@ function MobileToolbar({
   selected,
 }: MobileToolbarProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
   const dragRef = useRef({
     dragging: false,
     moved: false,
@@ -99,13 +108,14 @@ function MobileToolbar({
   const openPanel = useCallback(
     (nextPanel: string) => {
       if (dragRef.current.moved) return;
+
       setOpen(true);
       setPanel(nextPanel);
     },
     [setOpen, setPanel]
   );
 
-  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
@@ -119,7 +129,7 @@ function MobileToolbar({
     scroller.setPointerCapture?.(event.pointerId);
   }, []);
 
-  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+  const handlePointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const scroller = scrollerRef.current;
     const drag = dragRef.current;
 
@@ -134,7 +144,7 @@ function MobileToolbar({
     scroller.scrollLeft = drag.scrollLeft - deltaX;
   }, []);
 
-  const stopDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+  const stopDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
     const scroller = scrollerRef.current;
 
     dragRef.current.dragging = false;
