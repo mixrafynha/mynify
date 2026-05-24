@@ -44,12 +44,11 @@ export default function ToolbarFAB({
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
 
-  const selected =
-    elements.find((el) => el.id === selectedId) ?? null;
+  const selected = elements.find((el) => el.id === selectedId) ?? null;
 
-  const createElement = (
-    data: Partial<ElementItem>
-  ) => {
+  const createElement = (data: unknown) => {
+    const elementData = data as Partial<ElementItem>;
+
     setElements((prev) => [
       ...prev,
       {
@@ -58,17 +57,17 @@ export default function ToolbarFAB({
         x: 120,
         y: 120,
         meta: {},
-        ...data,
+        ...elementData,
       } as ElementItem,
     ]);
 
     setOpen(false);
   };
 
-  const updateSelected = (
-    patch: Partial<ElementItem>
-  ) => {
+  const updateSelected = (patch: unknown) => {
     if (!selectedId) return;
+
+    const elementPatch = patch as Partial<ElementItem>;
 
     setElements((prev) =>
       prev.map((el) =>
@@ -76,10 +75,10 @@ export default function ToolbarFAB({
           ? el
           : {
               ...el,
-              ...patch,
+              ...elementPatch,
               meta: {
                 ...(el.meta ?? {}),
-                ...(patch.meta ?? {}),
+                ...(elementPatch.meta ?? {}),
               },
             }
       )
@@ -89,10 +88,7 @@ export default function ToolbarFAB({
   const deleteSelected = () => {
     if (!selectedId) return;
 
-    setElements((prev) =>
-      prev.filter((el) => el.id !== selectedId)
-    );
-
+    setElements((prev) => prev.filter((el) => el.id !== selectedId));
     setOpen(false);
   };
 
