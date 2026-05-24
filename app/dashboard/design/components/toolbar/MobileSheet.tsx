@@ -47,6 +47,14 @@ function MobileSheet({
 
   const close = useCallback(() => setOpen(false), [setOpen]);
 
+  const createAiElement = useCallback(
+    (element: any) => {
+      createElement?.(element);
+      setOpen(false);
+    },
+    [createElement, setOpen],
+  );
+
   const onPointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
@@ -121,7 +129,7 @@ function MobileSheet({
     }
 
     if (panel === "ai") {
-      return <AiPanel setOpen={setOpen} createElement={createElement} />;
+      return <AiPanel createElement={createAiElement} />;
     }
 
     return <EmptyState />;
@@ -131,9 +139,9 @@ function MobileSheet({
     onUpload,
     onAddText,
     createElement,
+    createAiElement,
     updateSelected,
     deleteSelected,
-    setOpen,
   ]);
 
   if (!open) return null;
