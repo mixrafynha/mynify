@@ -1,6 +1,13 @@
 "use client";
 
-import { memo, useCallback, useRef, type ReactNode, type PointerEvent } from "react";
+import {
+  memo,
+  useCallback,
+  useRef,
+  type ReactNode,
+  type PointerEvent,
+} from "react";
+
 import {
   Image,
   Type,
@@ -115,50 +122,59 @@ function MobileToolbar({
     [setOpen, setPanel]
   );
 
-  const handlePointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
 
-    dragRef.current = {
-      dragging: true,
-      moved: false,
-      startX: event.clientX,
-      scrollLeft: scroller.scrollLeft,
-    };
+      dragRef.current = {
+        dragging: true,
+        moved: false,
+        startX: event.clientX,
+        scrollLeft: scroller.scrollLeft,
+      };
 
-    scroller.setPointerCapture?.(event.pointerId);
-  }, []);
+      scroller.setPointerCapture?.(event.pointerId);
+    },
+    []
+  );
 
-  const handlePointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const scroller = scrollerRef.current;
-    const drag = dragRef.current;
+  const handlePointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
+      const drag = dragRef.current;
 
-    if (!scroller || !drag.dragging) return;
+      if (!scroller || !drag.dragging) return;
 
-    const deltaX = event.clientX - drag.startX;
+      const deltaX = event.clientX - drag.startX;
 
-    if (Math.abs(deltaX) > 4) {
-      drag.moved = true;
-    }
+      if (Math.abs(deltaX) > 4) {
+        drag.moved = true;
+      }
 
-    scroller.scrollLeft = drag.scrollLeft - deltaX;
-  }, []);
+      scroller.scrollLeft = drag.scrollLeft - deltaX;
+    },
+    []
+  );
 
-  const stopDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
-    const scroller = scrollerRef.current;
+  const stopDrag = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const scroller = scrollerRef.current;
 
-    dragRef.current.dragging = false;
+      dragRef.current.dragging = false;
 
-    try {
-      scroller?.releasePointerCapture?.(event.pointerId);
-    } catch {
-      // Ignore browsers that already released the pointer.
-    }
+      try {
+        scroller?.releasePointerCapture?.(event.pointerId);
+      } catch {
+        // ignore
+      }
 
-    window.setTimeout(() => {
-      dragRef.current.moved = false;
-    }, 80);
-  }, []);
+      window.setTimeout(() => {
+        dragRef.current.moved = false;
+      }, 80);
+    },
+    []
+  );
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 md:hidden">
@@ -172,6 +188,7 @@ function MobileToolbar({
           "
         >
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.16),transparent_52%),linear-gradient(180deg,rgba(255,255,255,0.06),transparent)]" />
+
           <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/80 to-transparent" />
 
           <div
@@ -196,7 +213,8 @@ function MobileToolbar({
               "
             >
               {tools.map((tool) => {
-                const disabled = tool.requiresSelection && !selected;
+                const disabled =
+                  tool.requiresSelection && !selected;
 
                 return (
                   <ToolButton
