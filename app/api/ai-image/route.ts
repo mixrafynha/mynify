@@ -1,15 +1,85 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+
+export const runtime = "nodejs";
 
 const sleep = (ms: number) =>
   new Promise((resolve) => setTimeout(resolve, ms));
 
-export async function POST(req: Request) {
-  try {
-    const body = await req.json();
+async function getSupabase() {
+  const cookieStore = await cookies();
 
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {}
+        },
+      },
+    }
+  );
+}
+
+export async function POST(req: Request) {
+  let supabase: Awaited<ReturnType<typeof getSupabase>> | null = null;
+  let creditConsumed = false;
+
+  async function refundCredit() {
+    if (!supabase || !creditConsumed) return;
+
+    await supabase.rpc("refund_ai_credit");
+    creditConsumed = false;
+  }
+
+  try {
+    supabase = await getSupabase();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Precisas criar conta para gerar designs." },
+        { status: 401 }
+      );
+    }
+
+    const { data: consumed, error: creditError } =
+      await supabase.rpc("consume_ai_credit");
+
+    if (creditError) {
+      return NextResponse.json(
+        { error: "Erro ao verificar créditos", details: creditError.message },
+        { status: 500 }
+      );
+    }
+
+    if (!consumed) {
+      return NextResponse.json(
+        { error: "Sem créditos disponíveis. Compra mais créditos para continuar." },
+        { status: 402 }
+      );
+    }
+
+    creditConsumed = true;
+
+    const body = await req.json();
     const prompt = body?.prompt;
 
     if (!prompt || typeof prompt !== "string") {
+      await refundCredit();
+
       return NextResponse.json(
         { error: "Prompt obrigatório" },
         { status: 400 }
@@ -29,11 +99,8 @@ export async function POST(req: Request) {
           modelId: "b2614463-296c-462a-9586-aafdb8f00e36",
           prompt,
           num_images: 1,
-
-          // maiorzinho
           width: 1536,
           height: 1536,
-
           enhancePrompt: true,
         }),
       }
@@ -43,6 +110,8 @@ export async function POST(req: Request) {
     console.log("CREATE DATA:", createData);
 
     if (!createResponse.ok) {
+      await refundCredit();
+
       return NextResponse.json(
         { error: "Erro Leonardo API", details: createData },
         { status: createResponse.status }
@@ -52,6 +121,8 @@ export async function POST(req: Request) {
     const generationId = createData?.sdGenerationJob?.generationId;
 
     if (!generationId) {
+      await refundCredit();
+
       return NextResponse.json(
         { error: "Generation ID não encontrado", details: createData },
         { status: 500 }
@@ -76,6 +147,8 @@ export async function POST(req: Request) {
       console.log("GET DATA:", getData);
 
       if (!getResponse.ok) {
+        await refundCredit();
+
         return NextResponse.json(
           { error: "Erro ao buscar imagem", details: getData },
           { status: getResponse.status }
@@ -104,6 +177,8 @@ export async function POST(req: Request) {
         );
 
         if (!removeBgResponse.ok) {
+          await refundCredit();
+
           const details = await removeBgResponse.text();
 
           return NextResponse.json(
@@ -128,11 +203,15 @@ export async function POST(req: Request) {
       }
     }
 
+    await refundCredit();
+
     return NextResponse.json(
       { error: "Tempo excedido ao gerar imagem", generationId },
       { status: 504 }
     );
   } catch (error: any) {
+    await refundCredit();
+
     console.error("AI IMAGE ERROR:", error);
 
     return NextResponse.json(
