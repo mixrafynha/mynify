@@ -85,7 +85,6 @@ export default function AiPanel({
 
   const randomPrompt = useCallback(() => {
     const item = randomItem();
-
     setPrompt(item.prompt);
     setError("");
     setNotice("Prompt ready. Click Create Design.");
@@ -177,11 +176,7 @@ export default function AiPanel({
       setNotice("✅ Design ready. Click to add.");
     } catch (err) {
       console.error(err);
-
-      setError(
-        err instanceof Error ? err.message : "Failed to generate image"
-      );
-
+      setError(err instanceof Error ? err.message : "Failed to generate image");
       setNotice("");
     } finally {
       setLoading(false);
@@ -212,7 +207,6 @@ export default function AiPanel({
               <p className="line-clamp-1 text-sm font-black text-white">
                 {item.title}
               </p>
-
               <p className="text-[11px] text-white/70">
                 {added ? "Added" : "Click to add"}
               </p>
@@ -312,9 +306,7 @@ export default function AiPanel({
 
       <div>
         <p className="text-sm font-black">Premium Designs</p>
-        <p className="text-xs text-slate-500">
-          Click a design to add it
-        </p>
+        <p className="text-xs text-slate-500">Click a design to add it</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3">{imageCards}</div>
