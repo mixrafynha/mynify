@@ -8,63 +8,49 @@ import {
   Plus,
   Loader2,
   ImagePlus,
+  X,
+  Lock,
 } from "lucide-react";
 
 const previewImages = [
   {
     title: "Vintage Tiger",
-    prompt:
-      "premium vintage tiger t-shirt design",
+    prompt: "premium vintage tiger t-shirt design",
     src: "https://images.unsplash.com/photo-1579783902614-a3fb3927b6a5?q=80&w=900&auto=format&fit=crop",
   },
-
   {
     title: "Skull Rose",
-    prompt:
-      "premium skull rose tattoo graphic",
+    prompt: "premium skull rose tattoo graphic",
     src: "https://images.unsplash.com/photo-1515405295579-ba7b45403062?q=80&w=900&auto=format&fit=crop",
   },
-
   {
     title: "Street Dragon",
-    prompt:
-      "streetwear dragon print design",
+    prompt: "streetwear dragon print design",
     src: "https://images.unsplash.com/photo-1575936123452-b67c3203c357?q=80&w=900&auto=format&fit=crop",
   },
-
   {
     title: "Luxury Snake",
-    prompt:
-      "luxury snake logo graphic",
+    prompt: "luxury snake logo graphic",
     src: "https://images.unsplash.com/photo-1534447677768-be436bb09401?q=80&w=900&auto=format&fit=crop",
   },
-
   {
     title: "Cyber Wolf",
-    prompt:
-      "cyber wolf mascot logo",
+    prompt: "cyber wolf mascot logo",
     src: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?q=80&w=900&auto=format&fit=crop",
   },
-
   {
     title: "Butterfly Ink",
-    prompt:
-      "butterfly tattoo t-shirt graphic",
+    prompt: "butterfly tattoo t-shirt graphic",
     src: "https://images.unsplash.com/photo-1490750967868-88aa4486c946?q=80&w=900&auto=format&fit=crop",
   },
 ];
 
 function randomItem() {
-  return previewImages[
-    Math.floor(Math.random() * previewImages.length)
-  ];
+  return previewImages[Math.floor(Math.random() * previewImages.length)];
 }
 
 function safePrompt(value: string) {
-  return value
-    .replace(/[<>]/g, "")
-    .replace(/\s+/g, " ")
-    .slice(0, 180);
+  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").slice(0, 180);
 }
 
 function buildFinalPrompt(prompt: string) {
@@ -90,242 +76,238 @@ export default function AiPanel({
 }: {
   createElement?: (data: any) => void;
 }) {
-  const [prompt, setPrompt] =
-    useState("");
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [lastAddedSrc, setLastAddedSrc] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState(previewImages);
 
-  const [loading, setLoading] =
-    useState(false);
+  const getCurrentRedirect = () => {
+    if (typeof window === "undefined") return "/dashboard/design";
+    return window.location.pathname + window.location.search;
+  };
 
-  const [notice, setNotice] =
-    useState("");
+  const goToAuth = (type: "signup" | "login") => {
+    const redirect = encodeURIComponent(getCurrentRedirect());
+    window.location.href = `/${type}?redirect=${redirect}`;
+  };
 
-  const [error, setError] =
-    useState("");
+  const randomPrompt = useCallback(() => {
+    const item = randomItem();
 
-  const [lastAddedSrc, setLastAddedSrc] =
-    useState<string | null>(null);
+    setPrompt(item.prompt);
+    setError("");
+    setNotice("Prompt ready. Click Create Design.");
+  }, []);
 
-  const [generatedImages, setGeneratedImages] =
-    useState(previewImages);
+  const addImageToCanvas = useCallback(
+    (item: any) => {
+      createElement?.({
+        type: "image",
+        src: item.src,
+        width: 320,
+        height: 320,
+        meta: {
+          prompt: item.prompt || item.title,
+          transparent: true,
+          source: item.generationId ? "ai-generated" : "preview",
+        },
+      });
 
-  const randomPrompt =
-    useCallback(() => {
-      const item = randomItem();
+      setLastAddedSrc(item.src);
+      setNotice("Added to canvas.");
+    },
+    [createElement]
+  );
 
-      setPrompt(item.prompt);
+  const generateImage = useCallback(async () => {
+    const cleanPrompt = safePrompt(prompt.trim());
 
+    if (!cleanPrompt || loading) return;
+
+    try {
+      setLoading(true);
       setError("");
+      setNotice("Checking AI credits...");
 
-      setNotice(
-        "Prompt ready. Click Create Design."
-      );
-    }, []);
+      const finalPrompt = buildFinalPrompt(cleanPrompt);
 
-  const addImageToCanvas =
-    useCallback(
-      (item: any) => {
-        createElement?.({
-          type: "image",
-          src: item.src,
+      const response = await fetch("/api/ai-image", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt: finalPrompt,
+          originalPrompt: cleanPrompt,
+          transparent: true,
+        }),
+      });
 
-          width: 320,
-          height: 320,
+      const data = await response.json();
 
-          meta: {
-            prompt:
-              item.prompt ||
-              item.title,
-
-            transparent: true,
-
-            source:
-              item.generationId
-                ? "ai-generated"
-                : "preview",
-          },
-        });
-
-        setLastAddedSrc(item.src);
-
-        setNotice(
-          "Added to canvas."
-        );
-      },
-      [createElement]
-    );
-
-  const generateImage =
-    useCallback(async () => {
-      const cleanPrompt =
-        safePrompt(prompt.trim());
-
-      if (
-        !cleanPrompt ||
-        loading
-      )
-        return;
-
-      try {
-        setLoading(true);
-        setError("");
-
-        setNotice(
-          "Creating premium transparent design..."
-        );
-
-        const finalPrompt =
-          buildFinalPrompt(
-            cleanPrompt
-          );
-
-        const response =
-          await fetch(
-            "/api/ai-image",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-              body: JSON.stringify({
-                prompt:
-                  finalPrompt,
-                originalPrompt:
-                  cleanPrompt,
-                transparent: true,
-              }),
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data?.error ||
-              "Failed to generate image"
-          );
-        }
-
-        if (!data?.imageUrl) {
-          throw new Error(
-            "No image returned"
-          );
-        }
-
-        setGeneratedImages(
-          (prev) => [
-            {
-              title:
-                cleanPrompt,
-              prompt:
-                cleanPrompt,
-              src: data.imageUrl,
-              generationId:
-                data.generationId,
-            },
-            ...prev,
-          ]
-        );
-
-        setNotice(
-          "Design ready. Click to add."
-        );
-      } catch (err) {
-        console.error(err);
-
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to generate image"
-        );
-
+      if (response.status === 401) {
         setNotice("");
-      } finally {
-        setLoading(false);
+        setError("");
+        setShowAuthPopup(true);
+        return;
       }
-    }, [loading, prompt]);
 
-  const imageCards =
-    useMemo(() => {
-      return generatedImages.map(
-        (item, index) => {
-          const added =
-            lastAddedSrc ===
-            item.src;
+      if (response.status === 402) {
+        setNotice("");
+        setError("⚡ You have 0 AI credits left. Buy more credits to continue.");
+        return;
+      }
 
-          return (
-            <button
-              key={`${item.src}-${index}`}
-              type="button"
-              onClick={() =>
-                addImageToCanvas(
-                  item
-                )
-              }
-              className="
-                group overflow-hidden
-                rounded-[26px]
-                border border-white/10
-                bg-[#0c1220]
-                transition-all duration-300
-                hover:border-cyan-400/30
-                hover:-translate-y-1
-                active:scale-[0.98]
-              "
-            >
-              <div className="relative aspect-square overflow-hidden bg-[#0d1528]">
-                <img
-                  src={item.src}
-                  alt={item.title}
-                  loading="lazy"
-                  decoding="async"
-                  className="
-                    h-full w-full
-                    object-cover
-                    transition-transform duration-500
-                    group-hover:scale-105
-                  "
-                />
+      if (response.status === 429) {
+        setNotice("");
+        setError("⏳ Too many generations. Try again in 1 minute.");
+        return;
+      }
 
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-4 text-left">
-                  <p className="line-clamp-1 text-sm font-black text-white">
-                    {item.title}
-                  </p>
+      if (!response.ok) {
+        throw new Error(data?.error || "Failed to generate image");
+      }
 
-                  <p className="text-[11px] text-white/70">
-                    {added
-                      ? "Added"
-                      : "Click to add"}
-                  </p>
-                </div>
+      if (!data?.imageUrl) {
+        throw new Error("No image returned");
+      }
 
-                <div className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30 backdrop-blur-md">
-                  {added ? (
-                    <Plus
-                      size={18}
-                      className="text-cyan-300"
-                    />
-                  ) : (
-                    <ImagePlus
-                      size={18}
-                      className="text-white"
-                    />
-                  )}
-                </div>
-              </div>
-            </button>
-          );
-        }
+      setGeneratedImages((prev) => [
+        {
+          title: cleanPrompt,
+          prompt: cleanPrompt,
+          src: data.imageUrl,
+          generationId: data.generationId,
+        },
+        ...prev,
+      ]);
+
+      setNotice("✅ Design ready. Click to add.");
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err instanceof Error ? err.message : "Failed to generate image"
       );
-    }, [
-      generatedImages,
-      lastAddedSrc,
-      addImageToCanvas,
-    ]);
+
+      setNotice("");
+    } finally {
+      setLoading(false);
+    }
+  }, [loading, prompt]);
+
+  const imageCards = useMemo(() => {
+    return generatedImages.map((item, index) => {
+      const added = lastAddedSrc === item.src;
+
+      return (
+        <button
+          key={`${item.src}-${index}`}
+          type="button"
+          onClick={() => addImageToCanvas(item)}
+          className="
+            group overflow-hidden
+            rounded-[26px]
+            border border-white/10
+            bg-[#0c1220]
+            transition-all duration-300
+            hover:border-cyan-400/30
+            hover:-translate-y-1
+            active:scale-[0.98]
+          "
+        >
+          <div className="relative aspect-square overflow-hidden bg-[#0d1528]">
+            <img
+              src={item.src}
+              alt={item.title}
+              loading="lazy"
+              decoding="async"
+              className="
+                h-full w-full
+                object-cover
+                transition-transform duration-500
+                group-hover:scale-105
+              "
+            />
+
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-4 text-left">
+              <p className="line-clamp-1 text-sm font-black text-white">
+                {item.title}
+              </p>
+
+              <p className="text-[11px] text-white/70">
+                {added ? "Added" : "Click to add"}
+              </p>
+            </div>
+
+            <div className="absolute right-3 top-3 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30 backdrop-blur-md">
+              {added ? (
+                <Plus size={18} className="text-cyan-300" />
+              ) : (
+                <ImagePlus size={18} className="text-white" />
+              )}
+            </div>
+          </div>
+        </button>
+      );
+    });
+  }, [generatedImages, lastAddedSrc, addImageToCanvas]);
 
   return (
     <div className="space-y-4 pb-6 text-white">
+      {showAuthPopup && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4 backdrop-blur-xl">
+          <div className="relative w-full max-w-md overflow-hidden rounded-[32px] border border-white/10 bg-[#07111f] p-6 shadow-[0_0_80px_rgba(34,211,238,0.18)]">
+            <button
+              type="button"
+              onClick={() => setShowAuthPopup(false)}
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-violet-500 to-fuchsia-500">
+              <Lock size={24} />
+            </div>
+
+            <h3 className="text-2xl font-black text-white">
+              Create a free account
+            </h3>
+
+            <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-300">
+              Sign up to unlock AI generation and get{" "}
+              <span className="text-cyan-300">3 free AI credits</span>. After
+              signup, you’ll return to this exact design page.
+            </p>
+
+            <div className="mt-5 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-fuchsia-500/10 px-4 py-3 text-xs font-black text-cyan-100">
+              ✨ 3 free AI credits included
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => goToAuth("signup")}
+                className="flex h-12 items-center justify-center rounded-2xl bg-gradient-to-r from-cyan-500 via-violet-500 to-fuchsia-500 font-black text-white transition active:scale-[0.98]"
+              >
+                Create account
+              </button>
+
+              <button
+                type="button"
+                onClick={() => goToAuth("login")}
+                className="flex h-12 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] font-black text-white transition hover:bg-white/[0.08] active:scale-[0.98]"
+              >
+                Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-[30px] border border-white/10 bg-[#0a1120] p-5">
         <div className="flex items-center gap-3">
           <div
@@ -343,9 +325,7 @@ export default function AiPanel({
           </div>
 
           <div>
-            <h2 className="text-base font-black">
-              AI Design Studio
-            </h2>
+            <h2 className="text-base font-black">AI Design Studio</h2>
 
             <p className="text-xs text-slate-400">
               Premium transparent PNG creator
@@ -356,12 +336,7 @@ export default function AiPanel({
         <textarea
           value={prompt}
           onChange={(e) => {
-            setPrompt(
-              safePrompt(
-                e.target.value
-              )
-            );
-
+            setPrompt(safePrompt(e.target.value));
             setNotice("");
             setError("");
           }}
@@ -383,13 +358,38 @@ export default function AiPanel({
         />
 
         {notice && (
-          <div className="mt-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-xs font-bold text-cyan-200">
+          <div
+            className="
+              mt-3 rounded-[22px]
+              border border-cyan-400/20
+              bg-gradient-to-r
+              from-cyan-500/10
+              via-violet-500/10
+              to-fuchsia-500/10
+              px-4 py-4
+              text-xs font-black text-cyan-100
+              shadow-[0_0_30px_rgba(34,211,238,0.10)]
+              backdrop-blur-xl
+            "
+          >
             {notice}
           </div>
         )}
 
         {error && (
-          <div className="mt-3 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
+          <div
+            className="
+              mt-3 rounded-[22px]
+              border border-red-500/20
+              bg-gradient-to-r
+              from-red-500/10
+              to-orange-500/10
+              px-4 py-4
+              text-xs font-black text-red-200
+              shadow-[0_0_30px_rgba(239,68,68,0.10)]
+              backdrop-blur-xl
+            "
+          >
             {error}
           </div>
         )}
@@ -397,9 +397,7 @@ export default function AiPanel({
         <div className="mt-4 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={
-              randomPrompt
-            }
+            onClick={randomPrompt}
             disabled={loading}
             className="
               flex h-12
@@ -418,13 +416,8 @@ export default function AiPanel({
 
           <button
             type="button"
-            onClick={
-              generateImage
-            }
-            disabled={
-              loading ||
-              !prompt.trim()
-            }
+            onClick={generateImage}
+            disabled={loading || !prompt.trim()}
             className="
               flex h-12
               items-center justify-center
@@ -440,34 +433,25 @@ export default function AiPanel({
             "
           >
             {loading ? (
-              <Loader2
-                size={17}
-                className="animate-spin"
-              />
+              <Loader2 size={17} className="animate-spin" />
             ) : (
               <Sparkles size={17} />
             )}
 
-            {loading
-              ? "Creating..."
-              : "Create Design"}
+            {loading ? "Creating..." : "Create Design"}
           </button>
         </div>
       </div>
 
       <div>
-        <p className="text-sm font-black">
-          Premium Designs
-        </p>
+        <p className="text-sm font-black">Premium Designs</p>
 
         <p className="text-xs text-slate-500">
           Click a design to add it
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        {imageCards}
-      </div>
+      <div className="grid grid-cols-2 gap-3">{imageCards}</div>
     </div>
   );
 }
