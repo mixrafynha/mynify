@@ -12,6 +12,12 @@ const strictLimiter = new Ratelimit({
   analytics: true,
 });
 
+const aiLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, "1 m"),
+  analytics: true,
+});
+
 const adminLimiter = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(60, "1 m"),
@@ -29,6 +35,10 @@ function getIp(req: NextRequest) {
 
 async function checkRateLimit(req: NextRequest, pathname: string) {
   const ip = getIp(req);
+
+  if (pathname.startsWith("/api/ai-image")) {
+    return aiLimiter.limit(`ai:${ip}`);
+  }
 
   const strictRoutes = [
     "/login",
@@ -56,11 +66,6 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // ✅ liberar SOMENTE /dashboard/design
-  if (pathname === "/dashboard/design") {
-    return NextResponse.next();
-  }
-
   const rate = await checkRateLimit(req, pathname);
 
   if (!rate.success) {
@@ -70,6 +75,14 @@ export async function middleware(req: NextRequest) {
         "Retry-After": "60",
       },
     });
+  }
+
+  // ✅ liberar /dashboard/design e produtos dentro dele
+  if (
+    pathname === "/dashboard/design" ||
+    pathname.startsWith("/dashboard/design/")
+  ) {
+    return NextResponse.next();
   }
 
   let res = NextResponse.next({
@@ -164,5 +177,6 @@ export const config = {
     "/api/contact/:path*",
     "/api/checkout/:path*",
     "/api/select/:path*",
+    "/api/ai-image/:path*",
   ],
 };
