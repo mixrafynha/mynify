@@ -18,38 +18,104 @@ const safeText = (val: unknown) => {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 };
-
 const products = {
   tshirts: [
-    { name: "Cyber Wolf", price: "€24.99", image: "/catalog/cyber-wolf-shirt.webp" },
-    { name: "Samurai Mask", price: "€24.99", image: "/catalog/samurai-shirt.webp" },
-    { name: "Red Sun Temple", price: "€24.99", image: "/catalog/red-sun-shirt.webp" },
-    { name: "XO Drip", price: "€24.99", image: "/catalog/xo-shirt.webp" },
+    {
+      name: "Cyber Wolf",
+      price: "€24.99",
+      image: "/catalog/cyber-wolf-shirt.webp",
+      category: "tshirt",
+    },
+    {
+      name: "Samurai Mask",
+      price: "€24.99",
+      image: "/catalog/samurai-shirt.webp",
+      category: "tshirt",
+    },
+    {
+      name: "Red Sun Temple",
+      price: "€24.99",
+      image: "/catalog/red-sun-shirt.webp",
+      category: "tshirt",
+    },
+    {
+      name: "XO Drip",
+      price: "€24.99",
+      image: "/catalog/xo-shirt.webp",
+      category: "tshirt",
+    },
   ],
+
   hoodies: [
-    { name: "Purple Dragon", price: "€49.99", image: "/catalog/purple-dragon-hoodie.webp" },
-    { name: "Create Your Legacy", price: "€49.99", image: "/catalog/legacy-hoodie.webp" },
-    { name: "Rise Warrior", price: "€49.99", image: "/catalog/rise-hoodie.webp" },
-    { name: "Angel Baby", price: "€44.99", image: "/catalog/angel-sweatshirt.webp" },
+    {
+      name: "Purple Dragon",
+      price: "€49.99",
+      image: "/catalog/purple-dragon-hoodie.webp",
+      category: "hoodie",
+    },
+    {
+      name: "Create Your Legacy",
+      price: "€49.99",
+      image: "/catalog/legacy-hoodie.webp",
+      category: "hoodie",
+    },
+    {
+      name: "Rise Warrior",
+      price: "€49.99",
+      image: "/catalog/rise-hoodie.webp",
+      category: "hoodie",
+    },
+    {
+      name: "Angel Baby",
+      price: "€44.99",
+      image: "/catalog/angel-sweatshirt.webp",
+      category: "hoodie",
+    },
   ],
+
   accessories: [
-    { name: "Astronaut Tote Bag", price: "€19.99", image: "/catalog/astronaut-tote.webp" },
-    { name: "Level Up Mug", price: "€14.99", image: "/catalog/level-up-mug.webp" },
-    { name: "X Smile Cap", price: "€19.99", image: "/catalog/x-smile-cap.webp" },
-    { name: "Skull Reaper Case", price: "€15.99", image: "/catalog/skull-phone.webp" },
+    {
+      name: "Astronaut Tote Bag",
+      price: "€19.99",
+      image: "/catalog/astronaut-tote.webp",
+      category: "tote",
+    },
+    {
+      name: "Level Up Mug",
+      price: "€14.99",
+      image: "/catalog/level-up-mug.webp",
+      category: "mug",
+    },
+    {
+      name: "X Smile Cap",
+      price: "€19.99",
+      image: "/catalog/x-smile-cap.webp",
+      category: "cap",
+    },
+    {
+      name: "Skull Reaper Case",
+      price: "€15.99",
+      image: "/catalog/skull-phone.webp",
+      category: "phonecase",
+    },
   ],
 };
 
 function ProductCard({
   product,
-  category,
 }: {
-  product: { name: string; price: string; image: string };
-  category: string;
+  product: {
+    name: string;
+    price: string;
+    image: string;
+    category: string;
+  };
 }) {
   return (
     <Link
-      href={safeHref(`/dashboard/design/${category}`)}
+      href={safeHref(
+        `/dashboard/design/${product.category}`
+      )}
       className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40"
     >
       <div className="relative mb-4 h-[210px] overflow-hidden rounded-xl bg-black/40 sm:h-[260px]">
