@@ -18,104 +18,45 @@ const safeText = (val: unknown) => {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 };
-const products = {
+
+type Product = {
+  name: string;
+  price: string;
+  image: string;
+  category: string;
+};
+
+const products: {
+  tshirts: Product[];
+  hoodies: Product[];
+  accessories: Product[];
+} = {
   tshirts: [
-    {
-      name: "Cyber Wolf",
-      price: "€24.99",
-      image: "/catalog/cyber-wolf-shirt.webp",
-      category: "tshirt",
-    },
-    {
-      name: "Samurai Mask",
-      price: "€24.99",
-      image: "/catalog/samurai-shirt.webp",
-      category: "tshirt",
-    },
-    {
-      name: "Red Sun Temple",
-      price: "€24.99",
-      image: "/catalog/red-sun-shirt.webp",
-      category: "tshirt",
-    },
-    {
-      name: "XO Drip",
-      price: "€24.99",
-      image: "/catalog/xo-shirt.webp",
-      category: "tshirt",
-    },
+    { name: "Cyber Wolf", price: "€24.99", image: "/catalog/cyber-wolf-shirt.webp", category: "tshirt" },
+    { name: "Samurai Mask", price: "€24.99", image: "/catalog/samurai-shirt.webp", category: "tshirt" },
+    { name: "Red Sun Temple", price: "€24.99", image: "/catalog/red-sun-shirt.webp", category: "tshirt" },
+    { name: "XO Drip", price: "€24.99", image: "/catalog/xo-shirt.webp", category: "tshirt" },
   ],
 
   hoodies: [
-    {
-      name: "Purple Dragon",
-      price: "€49.99",
-      image: "/catalog/purple-dragon-hoodie.webp",
-      category: "hoodie",
-    },
-    {
-      name: "Create Your Legacy",
-      price: "€49.99",
-      image: "/catalog/legacy-hoodie.webp",
-      category: "hoodie",
-    },
-    {
-      name: "Rise Warrior",
-      price: "€49.99",
-      image: "/catalog/rise-hoodie.webp",
-      category: "hoodie",
-    },
-    {
-      name: "Angel Baby",
-      price: "€44.99",
-      image: "/catalog/angel-sweatshirt.webp",
-      category: "hoodie",
-    },
+    { name: "Purple Dragon", price: "€49.99", image: "/catalog/purple-dragon-hoodie.webp", category: "hoodie" },
+    { name: "Create Your Legacy", price: "€49.99", image: "/catalog/legacy-hoodie.webp", category: "hoodie" },
+    { name: "Rise Warrior", price: "€49.99", image: "/catalog/rise-hoodie.webp", category: "hoodie" },
+    { name: "Angel Baby", price: "€44.99", image: "/catalog/angel-sweatshirt.webp", category: "hoodie" },
   ],
 
   accessories: [
-    {
-      name: "Astronaut Tote Bag",
-      price: "€19.99",
-      image: "/catalog/astronaut-tote.webp",
-      category: "tote",
-    },
-    {
-      name: "Level Up Mug",
-      price: "€14.99",
-      image: "/catalog/level-up-mug.webp",
-      category: "mug",
-    },
-    {
-      name: "X Smile Cap",
-      price: "€19.99",
-      image: "/catalog/x-smile-cap.webp",
-      category: "cap",
-    },
-    {
-      name: "Skull Reaper Case",
-      price: "€15.99",
-      image: "/catalog/skull-phone.webp",
-      category: "phonecase",
-    },
+    { name: "Astronaut Tote Bag", price: "€19.99", image: "/catalog/astronaut-tote.webp", category: "tote" },
+    { name: "Level Up Mug", price: "€14.99", image: "/catalog/level-up-mug.webp", category: "mug" },
+    { name: "X Smile Cap", price: "€19.99", image: "/catalog/x-smile-cap.webp", category: "cap" },
+    { name: "Skull Reaper Case", price: "€15.99", image: "/catalog/skull-phone.webp", category: "phonecase" },
   ],
 };
 
-function ProductCard({
-  product,
-}: {
-  product: {
-    name: string;
-    price: string;
-    image: string;
-    category: string;
-  };
-}) {
+function ProductCard({ product }: { product: Product }) {
   return (
     <Link
-      href={safeHref(
-        `/dashboard/design/${product.category}`
-      )}
+      href={safeHref(`/dashboard/design/${product.category}`)}
       className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40"
     >
       <div className="relative mb-4 h-[210px] overflow-hidden rounded-xl bg-black/40 sm:h-[260px]">
@@ -149,7 +90,7 @@ function ProductSection({
   category,
 }: {
   title: string;
-  items: { name: string; price: string; image: string }[];
+  items: Product[];
   category: string;
 }) {
   return (
@@ -169,7 +110,7 @@ function ProductSection({
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {items.map((p) => (
-          <ProductCard key={p.name} product={p} category={category} />
+          <ProductCard key={p.name} product={p} />
         ))}
       </div>
     </section>
@@ -266,7 +207,9 @@ export default function HowItWorksPage() {
             className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] p-5"
           >
             <CheckCircle2 className="text-purple-400" size={22} />
-            <span className="font-bold text-white/80">{safeText(benefit)}</span>
+            <span className="font-bold text-white/80">
+              {safeText(benefit)}
+            </span>
           </div>
         ))}
       </section>
