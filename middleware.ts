@@ -38,7 +38,9 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
     "/api/select",
   ];
 
-  const isStrict = strictRoutes.some((route) => pathname.startsWith(route));
+  const isStrict = strictRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
 
   if (isStrict) {
     return strictLimiter.limit(`strict:${ip}:${pathname}`);
@@ -53,6 +55,11 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // ✅ liberar SOMENTE /dashboard/design
+  if (pathname === "/dashboard/design") {
+    return NextResponse.next();
+  }
 
   const rate = await checkRateLimit(req, pathname);
 
@@ -99,7 +106,12 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
+  const protectedRoutes = [
+    "/dashboard",
+    "/admin",
+    "/settings",
+    "/profile",
+  ];
 
   const isProtected = protectedRoutes.some((route) =>
     pathname.startsWith(route)
@@ -113,12 +125,16 @@ export async function middleware(req: NextRequest) {
   }
 
   if (pathname === "/login" && user) {
-    return NextResponse.redirect(new URL("/dashboard", req.url));
+    return NextResponse.redirect(
+      new URL("/dashboard", req.url)
+    );
   }
 
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(
+        new URL("/login", req.url)
+      );
     }
 
     const { data: profile } = await supabase
@@ -128,7 +144,9 @@ export async function middleware(req: NextRequest) {
       .maybeSingle();
 
     if (profile?.role !== "admin") {
-      return NextResponse.redirect(new URL("/dashboard", req.url));
+      return NextResponse.redirect(
+        new URL("/dashboard", req.url)
+      );
     }
   }
 
