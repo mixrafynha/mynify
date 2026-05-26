@@ -108,7 +108,7 @@ export default function ToolbarFAB({
         open={open}
         panel={panel}
         setOpen={setOpen}
-        setPanel={setPanel}
+        setPanel={(value: string) => setPanel(value as Panel)}
         selected={selected}
         zoomIn={zoomIn}
         zoomOut={zoomOut}
