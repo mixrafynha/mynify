@@ -118,7 +118,6 @@ export default function ToolbarFAB({
         setOpen={setOpen}
         selected={selected}
         onUpload={onUpload}
-        onUploadClick={onUploadClick}
         onAddText={onAddText}
         createElement={createElement}
         updateSelected={updateSelected}
