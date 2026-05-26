@@ -46,7 +46,12 @@ export default function ToolbarFAB({
 
   const selected = elements.find((el) => el.id === selectedId) ?? null;
 
-  const createElement = (data: Partial<ElementItem>) => {
+  const createElement = (data: unknown) => {
+    const item =
+      data && typeof data === "object"
+        ? (data as Partial<ElementItem>)
+        : {};
+
     setElements((prev) => [
       ...prev,
       {
@@ -55,7 +60,7 @@ export default function ToolbarFAB({
         x: 120,
         y: 120,
         meta: {},
-        ...data,
+        ...item,
       } as ElementItem,
     ]);
 
