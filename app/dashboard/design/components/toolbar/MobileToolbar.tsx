@@ -189,15 +189,19 @@ function MobileToolbar({
                 const disabled = tool.requiresSelection && !selected;
 
                 return (
-                  <ToolButton
-                    key={tool.id}
-                    active={open && panel === tool.id}
-                    icon={tool.icon}
-                    label={tool.label}
-                    badge={tool.badge}
-                    disabled={disabled}
-                    onClick={() => openPanel(tool.id)}
-                  />
+                              <ToolButton
+                  key={tool.id}
+                  active={open && panel === tool.id}
+                  icon={tool.icon}
+                  label={tool.label}
+                  badge={
+                    "badge" in tool
+                      ? tool.badge
+                      : undefined
+                  }
+                  disabled={disabled}
+                  onClick={() => openPanel(tool.id)}
+                />
                 );
               })}
             </div>
