@@ -5,24 +5,17 @@ import Script from "next/script";
 import { Eye, EyeOff, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
-import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import { supabase } from "./supabase";
 
 const sanitizeEmail = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^\w@.\-+]/gi, "")
-    .trim()
-    .slice(0, 254);
+  value.toLowerCase().replace(/[^\w@.\-+]/gi, "").trim().slice(0, 254);
 
-const safeOrigin = () => {
-  if (typeof window === "undefined") return "";
-  return window.location.origin;
-};
+const safeOrigin = () =>
+  typeof window === "undefined" ? "" : window.location.origin;
 
-type AuthMode = "login" | "signup";
-
-type AuthFormProps = {
-  mode?: AuthMode;
+type Props = {
+  mode?: "login" | "signup";
   popup?: boolean;
   onSuccess?: () => void;
 };
@@ -31,8 +24,10 @@ export default function AuthForm({
   mode = "signup",
   popup = false,
   onSuccess,
-}: AuthFormProps) {
-  const [authMode, setAuthMode] = useState<AuthMode>(mode);
+}: Props) {
+  const router = useRouter();
+
+  const [authMode, setAuthMode] = useState(mode);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -45,10 +40,14 @@ export default function AuthForm({
   const widgetIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    setAuthMode(mode);
+  }, [mode]);
+
+  useEffect(() => {
     let tries = 0;
 
     const interval = window.setInterval(() => {
-      tries += 1;
+      tries++;
 
       const turnstile = (window as any).turnstile;
       const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
@@ -60,7 +59,7 @@ export default function AuthForm({
       }
 
       if (!turnstile || !captchaRef.current || widgetIdRef.current) {
-        if (tries > 50) clearInterval(interval);
+        if (tries > 30) clearInterval(interval);
         return;
       }
 
@@ -78,7 +77,7 @@ export default function AuthForm({
       });
 
       clearInterval(interval);
-    }, 200);
+    }, 180);
 
     return () => clearInterval(interval);
   }, []);
@@ -92,6 +91,15 @@ export default function AuthForm({
 
     setToken("");
   }, []);
+
+  const finish = useCallback(() => {
+    if (popup) {
+      onSuccess?.();
+      return;
+    }
+
+    router.replace("/dashboard");
+  }, [popup, onSuccess, router]);
 
   const handlePasswordAuth = useCallback(async () => {
     if (loading) return;
@@ -116,40 +124,28 @@ export default function AuthForm({
         const { data, error } = await supabase.auth.signInWithPassword({
           email: safeEmail,
           password,
-          options: {
-            captchaToken: token,
-          },
+          options: { captchaToken: token },
         });
 
         if (error || !data.session) throw error || new Error("No session");
       } else {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email: safeEmail,
           password,
-          options: {
-            captchaToken: token,
-          },
+          options: { captchaToken: token },
         });
 
         if (error) throw error;
-
-        if (!data.user) {
-          throw new Error("Unable to create account");
-        }
       }
 
-      onSuccess?.();
+      finish();
     } catch {
-      setError(
-        authMode === "login"
-          ? "Invalid email or password"
-          : "Unable to create account"
-      );
+      setError(authMode === "login" ? "Invalid email or password" : "Unable to create account");
       resetCaptcha();
     } finally {
       setLoading(false);
     }
-  }, [authMode, email, password, token, loading, onSuccess, resetCaptcha]);
+  }, [authMode, email, password, token, loading, finish, resetCaptcha]);
 
   const handleOAuth = useCallback(
     async (provider: "google" | "apple") => {
@@ -159,13 +155,17 @@ export default function AuthForm({
       setError("");
 
       try {
+        const redirectTo = popup
+          ? `${safeOrigin()}/auth/callback?next=${encodeURIComponent(
+              window.location.pathname + window.location.search
+            )}`
+          : `${safeOrigin()}/auth/callback`;
+
         const { error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: `${safeOrigin()}/auth/callback`,
-            queryParams: {
-              prompt: "select_account",
-            },
+            redirectTo,
+            queryParams: { prompt: "select_account" },
           },
         });
 
@@ -175,29 +175,29 @@ export default function AuthForm({
         setLoading(false);
       }
     },
-    [loading]
+    [loading, popup]
   );
 
   return (
-    <div>
+    <div className="w-full">
       <Script
-        id={`turnstile-script-${popup ? "popup" : authMode}`}
+        id="turnstile-script-auth-form"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        strategy="lazyOnload"
+        strategy="afterInteractive"
       />
 
       {authMode === "signup" && (
-        <div className="mb-5 rounded-2xl border border-cyan-400/20 bg-gradient-to-r from-cyan-500/10 via-violet-500/10 to-fuchsia-500/10 px-4 py-4 text-xs font-black text-cyan-100 shadow-[0_0_30px_rgba(34,211,238,0.10)]">
+        <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black text-cyan-100">
           ✨ Create your account and get 3 free AI credits
         </div>
       )}
 
-      <div className="mb-5 space-y-3">
+      <div className="space-y-2.5">
         <button
           type="button"
           disabled={!!loading}
           onClick={() => handleOAuth("google")}
-          className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-11 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/85 disabled:opacity-50"
         >
           <FcGoogle size={20} />
           {loading === "google" ? "Continuing..." : "Continue with Google"}
@@ -207,20 +207,20 @@ export default function AuthForm({
           type="button"
           disabled={!!loading}
           onClick={() => handleOAuth("apple")}
-          className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-sm font-semibold text-white/85 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex h-11 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/85 disabled:opacity-50"
         >
           <FaApple size={20} />
           {loading === "apple" ? "Continuing..." : "Continue with Apple"}
         </button>
       </div>
 
-      <div className="my-5 flex items-center gap-3">
+      <div className="my-4 flex items-center gap-3">
         <div className="h-px flex-1 bg-white/10" />
-        <span className="text-xs font-bold text-white/35">OR</span>
+        <span className="text-[10px] font-black text-white/35">OR</span>
         <div className="h-px flex-1 bg-white/10" />
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -228,7 +228,7 @@ export default function AuthForm({
           inputMode="email"
           autoComplete="email"
           maxLength={254}
-          className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+          className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none placeholder:text-white/35"
         />
 
         <div className="relative">
@@ -239,25 +239,24 @@ export default function AuthForm({
             placeholder="Password"
             autoComplete={authMode === "login" ? "current-password" : "new-password"}
             maxLength={128}
-            className="min-h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-base text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-12 text-sm text-white outline-none placeholder:text-white/35"
           />
 
           <button
             type="button"
             onClick={() => setShowPassword((p) => !p)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            className="absolute right-4 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-white/45 transition hover:bg-white/5 hover:text-purple-300"
+            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-white/45"
           >
-            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
           </button>
         </div>
 
-        <div className="flex min-h-[70px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-2">
-          <div ref={captchaRef} className="max-w-full scale-[0.92] sm:scale-100" />
+        <div className="flex min-h-[62px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-1.5">
+          <div ref={captchaRef} className="max-w-full scale-[0.82] sm:scale-95" />
         </div>
 
         {error && (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-300">
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
             {error}
           </div>
         )}
@@ -266,33 +265,32 @@ export default function AuthForm({
           type="button"
           onClick={handlePasswordAuth}
           disabled={!!loading}
-          className="flex min-h-13 w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-4 font-bold text-white shadow-lg transition hover:scale-[1.01] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white disabled:opacity-50"
         >
           {loading === "password"
             ? authMode === "login"
               ? "Signing in..."
-              : "Creating account..."
+              : "Creating..."
             : authMode === "login"
               ? "Sign in"
               : "Create account"}
 
-          <Zap size={18} />
+          <Zap size={17} />
         </button>
 
-        <p className="text-center text-sm text-white/50">
-          {authMode === "login" ? "Don’t have an account?" : "Already have an account?"}{" "}
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
-              setError("");
-              resetCaptcha();
-            }}
-            className="font-bold text-fuchsia-400 transition hover:text-purple-300"
-          >
-            {authMode === "login" ? "Sign up" : "Login"}
-          </button>
-        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
+            setError("");
+            resetCaptcha();
+          }}
+          className="w-full text-center text-sm font-bold text-fuchsia-300"
+        >
+          {authMode === "login"
+            ? "Don’t have an account? Sign up"
+            : "Already have account? Login"}
+        </button>
       </div>
     </div>
   );
