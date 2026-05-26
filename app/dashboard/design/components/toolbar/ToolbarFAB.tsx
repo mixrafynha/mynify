@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import DesktopToolbar from "./DesktopToolbar";
 import MobileToolbar from "./MobileToolbar";
@@ -24,7 +24,9 @@ type Props = {
   onUpload: (file: File) => void;
   onUploadClick: () => void;
   onAddText: () => void;
-  setElements: React.Dispatch<React.SetStateAction<ElementItem[]>>;
+  setElements: React.Dispatch<
+    React.SetStateAction<ElementItem[]>
+  >;
   elements?: ElementItem[];
   selectedId: string | null;
   zoomIn: () => void;
@@ -38,58 +40,111 @@ export default function ToolbarFAB({
   setElements,
   elements = [],
   selectedId,
-  zoomIn,
-  zoomOut,
 }: Props) {
-  const [open, setOpen] = useState(false);
-  const [panel, setPanel] = useState<Panel>("templates");
+  const [open, setOpen] =
+    useState(false);
 
-  const selected = elements.find((el) => el.id === selectedId) ?? null;
+  const [panel, setPanel] =
+    useState<Panel>("templates");
 
-  const createElement = (data: unknown) => {
-    const item =
-      data && typeof data === "object"
-        ? (data as Partial<ElementItem>)
-        : {};
+  const selected = useMemo(
+    () =>
+      elements.find(
+        (el) => el.id === selectedId
+      ) ?? null,
+    [elements, selectedId]
+  );
 
-    setElements((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        type: "text",
-        x: 120,
-        y: 120,
-        meta: {},
-        ...item,
-      } as ElementItem,
-    ]);
+ const createElement = (
+  data: unknown
+) => {
+  const item =
+    data &&
+    typeof data === "object"
+      ? (data as Partial<ElementItem>)
+      : {};
 
-    setOpen(false);
+  const element: ElementItem = {
+    id: crypto.randomUUID(),
+
+    type:
+      item.type ?? "text",
+
+    // centro aproximado do canvas
+    // canvas depois ajusta safe area
+    x:
+      typeof item.x === "number"
+        ? item.x
+        : 220,
+
+    y:
+      typeof item.y === "number"
+        ? item.y
+        : 260,
+
+    width: item.width,
+    height: item.height,
+
+    text:
+      item.text ?? "",
+
+    src: item.src,
+
+    meta: {
+      insertedYOffset: 0,
+      ...(item.meta || {}),
+    },
   };
 
-  const updateSelected = (patch: Partial<ElementItem>) => {
+  setElements((prev) => [
+    ...prev,
+    {
+      ...element,
+      ...item,
+    },
+  ]);
+
+  setOpen(false);
+};
+
+  const updateSelected = (
+    patch: Partial<ElementItem>
+  ) => {
     if (!selectedId) return;
 
     setElements((prev) =>
-      prev.map((el) =>
-        el.id !== selectedId
-          ? el
-          : {
-              ...el,
-              ...patch,
-              meta: {
-                ...(el.meta ?? {}),
-                ...(patch.meta ?? {}),
-              },
-            }
-      )
+      prev.map((el) => {
+        if (
+          el.id !== selectedId
+        ) {
+          return el;
+        }
+
+        return {
+          ...el,
+          ...patch,
+
+          meta: {
+            ...(el.meta ??
+              {}),
+            ...(patch.meta ??
+              {}),
+          },
+        };
+      })
     );
   };
 
   const deleteSelected = () => {
     if (!selectedId) return;
 
-    setElements((prev) => prev.filter((el) => el.id !== selectedId));
+    setElements((prev) =>
+      prev.filter(
+        (el) =>
+          el.id !== selectedId
+      )
+    );
+
     setOpen(false);
   };
 
@@ -99,16 +154,28 @@ export default function ToolbarFAB({
         selected={selected}
         onUpload={onUpload}
         onAddText={onAddText}
-        createElement={createElement}
-        updateSelected={updateSelected}
-        deleteSelected={deleteSelected}
+        createElement={
+          createElement
+        }
+        updateSelected={
+          updateSelected
+        }
+        deleteSelected={
+          deleteSelected
+        }
       />
 
       <MobileToolbar
         open={open}
         panel={panel}
         setOpen={setOpen}
-        setPanel={(value: string) => setPanel(value as Panel)}
+        setPanel={(
+          value: string
+        ) =>
+          setPanel(
+            value as Panel
+          )
+        }
         selected={selected}
       />
 
@@ -119,9 +186,15 @@ export default function ToolbarFAB({
         selected={selected}
         onUpload={onUpload}
         onAddText={onAddText}
-        createElement={createElement}
-        updateSelected={updateSelected}
-        deleteSelected={deleteSelected}
+        createElement={
+          createElement
+        }
+        updateSelected={
+          updateSelected
+        }
+        deleteSelected={
+          deleteSelected
+        }
       />
     </>
   );
