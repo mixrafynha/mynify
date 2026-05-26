@@ -46,12 +46,7 @@ export default function ToolbarFAB({
 
   const selected = elements.find((el) => el.id === selectedId) ?? null;
 
-  const createElement = (data: unknown) => {
-    const item =
-      data && typeof data === "object"
-        ? (data as Partial<ElementItem>)
-        : {};
-
+  const createElement = (data: Partial<ElementItem>) => {
     setElements((prev) => [
       ...prev,
       {
@@ -60,7 +55,7 @@ export default function ToolbarFAB({
         x: 120,
         y: 120,
         meta: {},
-        ...item,
+        ...data,
       } as ElementItem,
     ]);
 
@@ -102,8 +97,6 @@ export default function ToolbarFAB({
         createElement={createElement}
         updateSelected={updateSelected}
         deleteSelected={deleteSelected}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
       />
 
       <MobileToolbar
