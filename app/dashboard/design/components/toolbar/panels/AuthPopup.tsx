@@ -1,7 +1,12 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
-import { X, Lock, Sparkles, Gift } from "lucide-react";
+import { useState } from "react";
+import {
+  X,
+  Lock,
+  Sparkles,
+  Gift,
+} from "lucide-react";
 import AuthForm from "./AuthForm";
 
 type Props = {
@@ -10,70 +15,65 @@ type Props = {
   onSuccess?: () => void;
 };
 
-function AuthPopup({ open, onClose, onSuccess }: Props) {
-  const [step, setStep] = useState<"offer" | "auth">("offer");
-  const [mode, setMode] = useState<"signup" | "login">("signup");
+export default function AuthPopup({
+  open,
+  onClose,
+  onSuccess,
+}: Props) {
+  const [step, setStep] = useState<
+    "offer" | "auth"
+  >("offer");
 
-  const closePopup = useCallback(() => {
-    setStep("offer");
-    setMode("signup");
-    onClose();
-  }, [onClose]);
-
-  const goSignup = useCallback(() => {
-    setMode("signup");
-    setStep("auth");
-  }, []);
-
-  const goLogin = useCallback(() => {
-    setMode("login");
-    setStep("auth");
-  }, []);
-
-  const handleSuccess = useCallback(() => {
-    onSuccess?.();
-    closePopup();
-  }, [onSuccess, closePopup]);
+  const [mode, setMode] =
+    useState<
+      "signup" | "login"
+    >("signup");
 
   if (!open) return null;
 
+  function closePopup() {
+    setStep("offer");
+    setMode("signup");
+    onClose();
+  }
+
   return (
     <div
-      role="dialog"
-      aria-modal="true"
       className="
-        fixed inset-0 z-[9999]
-        flex items-end justify-center
-        bg-black/70 px-3 pb-3
-        backdrop-blur-md
-        sm:items-center sm:px-4 sm:pb-0
+        fixed inset-0
+        z-[9999]
+        flex items-center
+        justify-center
+        bg-black/75
+        px-4
+        backdrop-blur-xl
       "
-      onClick={closePopup}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
         className="
-          relative w-full max-w-md overflow-hidden
-          rounded-[28px] border border-white/10
-          bg-[#07111f] p-5
-          shadow-2xl
-          sm:rounded-[34px] sm:p-6
-          max-h-[92svh] overflow-y-auto
-          will-change-transform
+          relative w-full
+          max-w-md overflow-hidden
+          rounded-[34px]
+          border border-white/10
+          bg-[#07111f]
+          p-6
+          shadow-[0_0_90px_rgba(34,211,238,0.18)]
         "
       >
         <button
           type="button"
           onClick={closePopup}
-          aria-label="Close popup"
           className="
-            absolute right-3 top-3 z-10
-            flex h-11 w-11 items-center justify-center
-            rounded-full border border-white/10
-            bg-white/[0.05] text-white/70
-            transition-colors
-            hover:bg-white/[0.1] hover:text-white
-            active:scale-95
+            absolute right-4 top-4
+            flex h-10 w-10
+            items-center justify-center
+            rounded-full
+            border border-white/10
+            bg-white/[0.04]
+            text-white/70
+            transition
+            hover:bg-white/[0.08]
+            hover:text-white
           "
         >
           <X size={18} />
@@ -83,23 +83,35 @@ function AuthPopup({ open, onClose, onSuccess }: Props) {
           <>
             <div
               className="
-                mb-4 flex h-14 w-14 items-center justify-center
-                rounded-2xl bg-gradient-to-br
-                from-cyan-500 via-violet-500 to-fuchsia-500
-                sm:h-16 sm:w-16 sm:rounded-3xl
+                mb-5 flex
+                h-16 w-16
+                items-center justify-center
+                rounded-3xl
+                bg-gradient-to-br
+                from-cyan-500
+                via-violet-500
+                to-fuchsia-500
+                shadow-[0_0_40px_rgba(34,211,238,0.25)]
               "
             >
-              <Gift size={26} className="text-white" />
+              <Gift
+                size={28}
+                className="text-white"
+              />
             </div>
 
             <div
               className="
-                mb-3 inline-flex items-center gap-2
-                rounded-full border border-cyan-400/20
-                bg-cyan-400/10 px-3 py-1.5
-                text-[10px] font-black uppercase
-                tracking-[0.16em] text-cyan-200
-                sm:text-[11px]
+                mb-3 inline-flex
+                items-center gap-2
+                rounded-full
+                border border-cyan-400/20
+                bg-cyan-400/10
+                px-3 py-1.5
+                text-[11px]
+                font-black uppercase
+                tracking-[0.18em]
+                text-cyan-200
               "
             >
               <Sparkles size={13} />
@@ -108,16 +120,22 @@ function AuthPopup({ open, onClose, onSuccess }: Props) {
 
             <h3
               className="
-                pr-10 text-[26px] font-black leading-[1.05]
-                text-white sm:text-3xl
+                text-3xl
+                font-black
+                leading-tight
+                text-white
               "
             >
-              Create your account and get{" "}
+              Create your account
+              and get{" "}
               <span
                 className="
-                  bg-gradient-to-r from-cyan-300
-                  via-violet-300 to-fuchsia-300
-                  bg-clip-text text-transparent
+                  bg-gradient-to-r
+                  from-cyan-300
+                  via-violet-300
+                  to-fuchsia-300
+                  bg-clip-text
+                  text-transparent
                 "
               >
                 3 AI credits
@@ -126,33 +144,60 @@ function AuthPopup({ open, onClose, onSuccess }: Props) {
 
             <p
               className="
-                mt-4 text-sm font-semibold leading-relaxed
+                mt-4 text-sm
+                font-semibold
+                leading-relaxed
                 text-slate-300
               "
             >
-              Sign up for free to unlock AI generation and create premium
-              transparent designs directly inside this editor.
+              Sign up for free to
+              unlock AI generation
+              and create premium
+              transparent designs
+              directly inside this
+              editor.
             </p>
 
             <div
               className="
-                mt-5 rounded-2xl border border-cyan-400/20
-                bg-white/[0.04] px-4 py-4
-                text-sm font-black text-cyan-100
+                mt-5 rounded-2xl
+                border border-cyan-400/20
+                bg-gradient-to-r
+                from-cyan-500/10
+                via-violet-500/10
+                to-fuchsia-500/10
+                px-4 py-4
+                text-sm font-black
+                text-cyan-100
               "
             >
-              ✨ Includes 3 free AI generations
+              ✨ Includes 3 free AI
+              generations
             </div>
 
             <button
               type="button"
-              onClick={goSignup}
+              onClick={() => {
+                setMode(
+                  "signup"
+                );
+                setStep(
+                  "auth"
+                );
+              }}
               className="
-                mt-6 flex min-h-12 w-full items-center justify-center
-                rounded-2xl bg-gradient-to-r
-                from-cyan-500 via-violet-500 to-fuchsia-500
-                px-5 py-3.5 font-black text-white
-                transition-transform active:scale-[0.98]
+                mt-6 flex h-13
+                w-full items-center
+                justify-center
+                rounded-2xl
+                bg-gradient-to-r
+                from-cyan-500
+                via-violet-500
+                to-fuchsia-500
+                px-5 py-4
+                font-black text-white
+                transition
+                active:scale-[0.98]
               "
             >
               Claim 3 free AI credits
@@ -160,49 +205,90 @@ function AuthPopup({ open, onClose, onSuccess }: Props) {
 
             <button
               type="button"
-              onClick={goLogin}
+              onClick={() => {
+                setMode(
+                  "login"
+                );
+                setStep(
+                  "auth"
+                );
+              }}
               className="
-                mt-4 min-h-11 w-full text-center
-                text-sm font-bold text-white/60
-                transition-colors hover:text-cyan-300
+                mt-4 w-full
+                text-center
+                text-sm font-bold
+                text-white/60
+                transition
+                hover:text-cyan-300
               "
             >
-              Already have an account? Login
+              Already have an
+              account? Login
             </button>
           </>
         ) : (
           <>
             <div
               className="
-                mb-5 flex h-13 w-13 items-center justify-center
-                rounded-2xl bg-gradient-to-br
-                from-cyan-500 via-violet-500 to-fuchsia-500
+                mb-5 flex
+                h-14 w-14
+                items-center
+                justify-center
+                rounded-2xl
+                bg-gradient-to-br
+                from-cyan-500
+                via-violet-500
+                to-fuchsia-500
               "
             >
-              <Lock size={23} className="text-white" />
+              <Lock size={24} />
             </div>
 
-            <h3 className="pr-10 text-2xl font-black text-white">
-              {mode === "signup" ? "Create free account" : "Login"}
+            <h3 className="text-2xl font-black text-white">
+              {mode ===
+              "signup"
+                ? "Create free account"
+                : "Login"}
             </h3>
 
-            <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-300">
-              {mode === "signup"
+            <p
+              className="
+                mt-3 text-sm
+                font-semibold
+                text-slate-300
+              "
+            >
+              {mode ===
+              "signup"
                 ? "Get 3 free AI credits and continue generating premium designs."
                 : "Login to continue generating designs."}
             </p>
 
             <div className="mt-6">
-              <AuthForm mode={mode} popup onSuccess={handleSuccess} />
+              <AuthForm
+                mode={mode}
+                popup
+                onSuccess={() => {
+                  onSuccess?.();
+                  closePopup();
+                }}
+              />
             </div>
 
             <button
               type="button"
-              onClick={() => setStep("offer")}
+              onClick={() =>
+                setStep(
+                  "offer"
+                )
+              }
               className="
-                mt-4 min-h-10 w-full text-center
-                text-xs font-bold text-white/40
-                transition-colors hover:text-white/70
+                mt-4 w-full
+                text-center
+                text-xs font-bold
+                text-white/40
+                transition
+                hover:text-white/70
               "
             >
               Back
@@ -213,5 +299,3 @@ function AuthPopup({ open, onClose, onSuccess }: Props) {
     </div>
   );
 }
-
-export default memo(AuthPopup);
