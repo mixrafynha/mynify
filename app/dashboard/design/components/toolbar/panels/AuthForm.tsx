@@ -6,7 +6,7 @@ import { Eye, EyeOff, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/app/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 const sanitizeEmail = (value: string) =>
   value.toLowerCase().replace(/[^\w@.\-+]/gi, "").trim().slice(0, 254);
