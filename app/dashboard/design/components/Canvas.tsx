@@ -27,7 +27,11 @@ function getElementSize(el: any) {
 }
 
 function centerElementInSafeArea(el: any, safeArea: any) {
-  const { width, height } = getElementSize(el);
+  const raw = getElementSize(el);
+
+  const width = Math.min(raw.width, safeArea.width * 0.85);
+  const height = Math.min(raw.height, safeArea.height * 0.85);
+
   const yOffset = Number(el?.meta?.insertedYOffset ?? 20);
 
   return clampElementToSafeArea(
@@ -228,26 +232,51 @@ export default function Canvas({
   }, [storageKey, setElements]);
 
   useEffect(() => {
-    if (!initializedRef.current) return;
+  if (!initializedRef.current) return;
 
-    const hasNew = elements.some((el: any) => !knownIdsRef.current.has(el.id));
-    if (!hasNew) return;
+  const hasNew = elements.some(
+    (el: any) => !knownIdsRef.current.has(el.id)
+  );
 
-    setElements((prev: any[]) =>
-      prev.map((el) => {
-        if (knownIdsRef.current.has(el.id)) return el;
+  if (!hasNew) return;
 
-        knownIdsRef.current.add(el.id);
-        return centerElementInSafeArea(el, safeArea);
-      })
+  setElements((prev: any[]) =>
+    prev.map((el) => {
+      if (knownIdsRef.current.has(el.id)) {
+        return el;
+      }
+
+      knownIdsRef.current.add(el.id);
+
+      return centerElementInSafeArea(
+        {
+          ...el,
+
+          // ignora posição antiga
+          x: undefined,
+          y: undefined,
+
+          meta: {
+            ...(el.meta || {}),
+
+            // sem offset estranho
+            insertedYOffset: 0,
+          },
+        },
+        safeArea
+      );
+    })
+  );
+}, [elements, safeArea, setElements]);
+
+useEffect(() => {
+  try {
+    sessionStorage.setItem(
+      storageKey,
+      JSON.stringify(elements)
     );
-  }, [elements, safeArea, setElements]);
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(storageKey, JSON.stringify(elements));
-    } catch {}
-  }, [storageKey, elements]);
+  } catch {}
+}, [storageKey, elements]);
 
   useEffect(() => {
     const updateScale = () => {
