@@ -110,8 +110,6 @@ export default function ToolbarFAB({
         setOpen={setOpen}
         setPanel={(value: string) => setPanel(value as Panel)}
         selected={selected}
-        zoomIn={zoomIn}
-        zoomOut={zoomOut}
       />
 
       <MobileSheet
