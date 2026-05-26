@@ -15,8 +15,8 @@ import { Side } from "./canvas/types";
 import DraggableElement from "./DraggableElement";
 import CanvasMockup from "./canvas/CanvasMockup";
 
-const DESKTOP_ZOOM_BOOST = 0.68;
-const MOBILE_ZOOM_BOOST = 0.92;
+const DESKTOP_ZOOM_BOOST = 0.78;
+const MOBILE_ZOOM_BOOST = 0.99;
 
 function getElementSize(el: any) {
   return {
@@ -28,7 +28,6 @@ function getElementSize(el: any) {
 
 function centerElementInSafeArea(el: any, safeArea: any) {
   const { width, height } = getElementSize(el);
-
   const yOffset = Number(el?.meta?.insertedYOffset ?? 20);
 
   return clampElementToSafeArea(
@@ -69,7 +68,17 @@ export default function Canvas({
   const initializedRef = useRef(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
 
+  const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(
+    new Map()
+  );
+
+  const pinchRef = useRef<{
+    distance: number;
+    userZoom: number;
+  } | null>(null);
+
   const [canvasScale, setCanvasScale] = useState(1);
+  const [userZoom, setUserZoom] = useState(1);
   const [showColors, setShowColors] = useState(false);
   const [selectionBox, setSelectionBox] = useState<any>(null);
   const [availableColors, setAvailableColors] = useState<
@@ -98,6 +107,62 @@ export default function Canvas({
     setSelectedIds([]);
     setSelectedId(null);
     setSelectedElement?.(null);
+  }
+
+  function isMobileTouch(e: React.PointerEvent) {
+    return e.pointerType === "touch" && window.innerWidth < 768;
+  }
+
+  function handleMobilePinchDown(e: React.PointerEvent) {
+    if (!isMobileTouch(e)) return;
+
+    activePointersRef.current.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+
+    if (activePointersRef.current.size === 2) {
+      const points = Array.from(activePointersRef.current.values());
+      const dx = points[0].clientX - points[1].clientX;
+      const dy = points[0].clientY - points[1].clientY;
+
+      pinchRef.current = {
+        distance: Math.hypot(dx, dy),
+        userZoom,
+      };
+    }
+  }
+
+  function handleMobilePinchMove(e: React.PointerEvent) {
+    if (!isMobileTouch(e)) return;
+    if (!activePointersRef.current.has(e.pointerId)) return;
+
+    activePointersRef.current.set(e.pointerId, {
+      clientX: e.clientX,
+      clientY: e.clientY,
+    });
+
+    if (activePointersRef.current.size === 2 && pinchRef.current) {
+      e.preventDefault();
+
+      const points = Array.from(activePointersRef.current.values());
+      const dx = points[0].clientX - points[1].clientX;
+      const dy = points[0].clientY - points[1].clientY;
+
+      const distance = Math.hypot(dx, dy);
+      const nextZoom =
+        pinchRef.current.userZoom * (distance / pinchRef.current.distance);
+
+      setUserZoom(Math.max(0.7, Math.min(3.2, nextZoom)));
+    }
+  }
+
+  function handleMobilePinchEnd(e: React.PointerEvent) {
+    activePointersRef.current.delete(e.pointerId);
+
+    if (activePointersRef.current.size < 2) {
+      pinchRef.current = null;
+    }
   }
 
   useEffect(() => {
@@ -200,7 +265,7 @@ export default function Canvas({
       const nextScale = fitScale * boost;
 
       setCanvasScale(
-        Math.max(0.5, Math.min(1.45, Number(nextScale.toFixed(4))))
+        Math.max(0, Math.min(2.45, Number(nextScale.toFixed(4))))
       );
     };
 
@@ -225,9 +290,7 @@ export default function Canvas({
       if (!current) return prev;
 
       if (patch.delete) {
-        setSelectedIds((prevIds) =>
-          prevIds.filter((selected) => selected !== id)
-        );
+        setSelectedIds((prevIds) => prevIds.filter((selected) => selected !== id));
 
         if (selectedId === id) {
           setSelectedId(null);
@@ -272,6 +335,8 @@ export default function Canvas({
     });
   }
 
+  const finalScale = zoom * canvasScale * userZoom;
+
   function updateSelectedElements(ids: string[], dx: number, dy: number) {
     setElements((prev: any[]) => {
       if (!groupDragStartRef.current) {
@@ -296,8 +361,8 @@ export default function Canvas({
         return clampElementToSafeArea(
           {
             ...item,
-            x: start.x + dx,
-            y: start.y + dy,
+            x: start.x + dx / finalScale,
+            y: start.y + dy / finalScale,
           },
           safeArea
         );
@@ -309,12 +374,14 @@ export default function Canvas({
     groupDragStartRef.current = null;
   }
 
-  const finalScale = zoom * canvasScale;
-
   return (
     <div
       ref={wrapperRef}
       className="relative flex h-full w-full items-center justify-center overflow-hidden bg-transparent"
+      onPointerDownCapture={handleMobilePinchDown}
+      onPointerMoveCapture={handleMobilePinchMove}
+      onPointerUpCapture={handleMobilePinchEnd}
+      onPointerCancelCapture={handleMobilePinchEnd}
       onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
         clearSelection();
@@ -413,8 +480,8 @@ export default function Canvas({
 
             const rect = e.currentTarget.getBoundingClientRect();
 
-            const startX = (e.clientX - rect.left) / finalScale;
-            const startY = (e.clientY - rect.top) / finalScale;
+            const startX = e.clientX - rect.left;
+            const startY = e.clientY - rect.top;
 
             clearSelection();
 
@@ -426,8 +493,8 @@ export default function Canvas({
             });
 
             const onMove = (ev: PointerEvent) => {
-              const currentX = (ev.clientX - rect.left) / finalScale;
-              const currentY = (ev.clientY - rect.top) / finalScale;
+              const currentX = ev.clientX - rect.left;
+              const currentY = ev.clientY - rect.top;
 
               setSelectionBox({
                 x: Math.min(startX, currentX),
@@ -438,8 +505,8 @@ export default function Canvas({
             };
 
             const onUp = (ev: PointerEvent) => {
-              const endX = (ev.clientX - rect.left) / finalScale;
-              const endY = (ev.clientY - rect.top) / finalScale;
+              const endX = ev.clientX - rect.left;
+              const endY = ev.clientY - rect.top;
 
               const box = {
                 x: Math.min(startX, endX),
@@ -501,7 +568,7 @@ export default function Canvas({
               el={{
                 ...el,
                 x: el.x - safeArea.x,
-                y: el.y - safeArea.y + 40,
+                y: el.y - safeArea.y,
               }}
               safeArea={safeArea}
               zoom={finalScale}

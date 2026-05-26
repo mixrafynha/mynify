@@ -20,7 +20,6 @@ type MobileSheetProps = {
   setOpen: (value: boolean) => void;
   selected?: any;
   onUpload?: (file: File) => void;
-  onUploadClick?: () => void;
   onAddText?: () => void;
   createElement?: (element: any) => void;
   updateSelected?: (patch: any) => void;
@@ -33,7 +32,6 @@ function MobileSheet({
   setOpen,
   selected,
   onUpload,
-  onUploadClick,
   onAddText,
   createElement,
   updateSelected,

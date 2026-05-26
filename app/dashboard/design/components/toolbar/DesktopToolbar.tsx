@@ -229,29 +229,29 @@ export default function DesktopToolbar({
           <div className="relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden px-2 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="relative mb-4 h-1.5 w-12 shrink-0 self-center rounded-full bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 shadow-[0_0_28px_rgba(217,70,239,0.55)]" />
 
-            <NavGroup>
-              <SideItem icon={<Wand2 size={22} />} label="AI" active={activePanel === "ai"} onClick={() => openPanel("ai")} premium />
-              <SideItem icon={<LayoutTemplate size={22} />} label="Templates" active={activePanel === "templates"} onClick={() => openPanel("templates")} />
-              <SideItem icon={<Type size={23} />} label="Text" active={activePanel === "text"} onClick={() => openPanel("text")} />
-              <SideItem icon={<Shapes size={23} />} label="Elements" active={activePanel === "icons"} onClick={() => openPanel("icons")} />
-            </NavGroup>
+          <NavGroup>
+            <SideItem icon={<Wand2 size={22} />} label="AI" active={activePanel === "ai"} onClick={() => openPanel("ai")} premium />
+            <SideItem icon={<LayoutTemplate size={22} />} label="Templates" active={activePanel === "templates"} onClick={() => openPanel("templates")} />
+            <SideItem icon={<Type size={23} />} label="Text" active={activePanel === "text"} onClick={() => openPanel("text")} />
+            <SideItem icon={<Shapes size={23} />} label="Elements" active={activePanel === "icons"} onClick={() => openPanel("icons")} />
+          </NavGroup>
 
-            <Divider />
+          <Divider />
 
-            <NavGroup>
-              <SideItem icon={<Palette size={22} />} label="Brand" active={activePanel === "colors"} disabled={!canEditSelected} onClick={() => openPanel("colors")} />
-              <SideItem icon={<Image size={22} />} label="Upload" onClick={openUploadPicker} />
-              <SideItem icon={<Folder size={22} />} label="Projects" disabled />
-              <SideItem icon={<Grid2X2Plus size={22} />} label="Apps" disabled />
-            </NavGroup>
+          <NavGroup>
+            <SideItem icon={<Palette size={22} />} label="Brand" active={activePanel === "colors"} disabled={!canEditSelected} onClick={() => openPanel("colors")} />
+            <SideItem icon={<Image size={22} />} label="Upload" onClick={openUploadPicker} />
+            <SideItem icon={<Folder size={22} />} label="Projects" disabled />
+            <SideItem icon={<Grid2X2Plus size={22} />} label="Apps" disabled />
+          </NavGroup>
 
-            <Divider />
+          <Divider />
 
-            <NavGroup>
-              <SideItem icon={<SlidersHorizontal size={22} />} label="Edit" active={activePanel === "edit"} disabled={!canEditSelected} onClick={() => openPanel("edit")} />
-              <SideItem icon={<Type size={22} />} label="Fonts" active={activePanel === "fonts"} disabled={!canEditSelected} onClick={() => openPanel("fonts")} />
-              <SideItem icon={<Sparkles size={22} />} label="Stickers" active={activePanel === "stickers"} onClick={() => openPanel("stickers")} />
-            </NavGroup>
+          <NavGroup>
+            <SideItem icon={<SlidersHorizontal size={22} />} label="Edit" active={activePanel === "edit"} disabled={!canEditSelected} onClick={() => openPanel("edit")} />
+            <SideItem icon={<Type size={22} />} label="Fonts" active={activePanel === "fonts"} disabled={!canEditSelected} onClick={() => openPanel("fonts")} />
+            <SideItem icon={<Sparkles size={22} />} label="Stickers" active={activePanel === "stickers"} onClick={() => openPanel("stickers")} />
+          </NavGroup>
 
             <div className="relative mt-auto flex w-full flex-col items-center gap-2 border-t border-white/10 pt-3">
               {canEditSelected && (

@@ -38,15 +38,15 @@ export default function ToolbarFAB({
   setElements,
   elements = [],
   selectedId,
+  zoomIn,
+  zoomOut,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
 
   const selected = elements.find((el) => el.id === selectedId) ?? null;
 
-  const createElement = (data: unknown) => {
-    const elementData = data as Partial<ElementItem>;
-
+  const createElement = (data: Partial<ElementItem>) => {
     setElements((prev) => [
       ...prev,
       {
@@ -55,17 +55,15 @@ export default function ToolbarFAB({
         x: 120,
         y: 120,
         meta: {},
-        ...elementData,
+        ...data,
       } as ElementItem,
     ]);
 
     setOpen(false);
   };
 
-  const updateSelected = (patch: unknown) => {
+  const updateSelected = (patch: Partial<ElementItem>) => {
     if (!selectedId) return;
-
-    const elementPatch = patch as Partial<ElementItem>;
 
     setElements((prev) =>
       prev.map((el) =>
@@ -73,10 +71,10 @@ export default function ToolbarFAB({
           ? el
           : {
               ...el,
-              ...elementPatch,
+              ...patch,
               meta: {
                 ...(el.meta ?? {}),
-                ...(elementPatch.meta ?? {}),
+                ...(patch.meta ?? {}),
               },
             }
       )
@@ -99,14 +97,18 @@ export default function ToolbarFAB({
         createElement={createElement}
         updateSelected={updateSelected}
         deleteSelected={deleteSelected}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
       />
 
       <MobileToolbar
         open={open}
         panel={panel}
         setOpen={setOpen}
-        setPanel={(value) => setPanel(value as Panel)}
+        setPanel={setPanel}
         selected={selected}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
       />
 
       <MobileSheet
