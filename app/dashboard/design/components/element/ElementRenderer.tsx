@@ -23,9 +23,27 @@ const FONT_MAP: Record<string, string> = {
 };
 
 function resolveFontFamily(font?: string) {
-  if (!font) return "var(--font-poppins), Arial, sans-serif";
+  if (!font) {
+    return "var(--font-poppins), Arial, sans-serif";
+  }
 
   return `${FONT_MAP[font] || `"${font}"`}, Arial, sans-serif`;
+}
+
+function sanitizeTextInput(value: string) {
+  return value
+    .normalize("NFKC")
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/[<>]/g, "")
+    .replace(/javascript:/gi, "")
+    .replace(/data:/gi, "")
+    .replace(/\s{3,}/g, "  ")
+    .slice(0, 100);
+}
+
+function safeText(value: unknown) {
+  if (typeof value !== "string") return "";
+  return sanitizeTextInput(value);
 }
 
 export default function ElementRenderer({
@@ -78,6 +96,8 @@ export default function ElementRenderer({
   }
 
   if (el.type === "text") {
+    const content = safeText(el.content || el.text);
+
     const textStyle: React.CSSProperties = {
       fontFamily,
       fontSize: el.meta?.fontSize || el.fontSize || 24,
@@ -115,18 +135,43 @@ export default function ElementRenderer({
         {editing ? (
           <input
             ref={inputRef}
-            value={el.content || el.text || ""}
+            value={content}
             autoFocus
             maxLength={200}
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
+            autoComplete="off"
+            inputMode="text"
+            enterKeyHint="done"
             onPointerDown={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            onChange={(e) => updateText(e.target.value)}
+            onPaste={(e) => {
+              e.preventDefault();
+
+              const text =
+                e.clipboardData.getData("text");
+
+              updateText(
+                sanitizeTextInput(text)
+              );
+            }}
+            onChange={(e) => {
+              updateText(
+                sanitizeTextInput(e.target.value)
+              );
+            }}
             onBlur={() => setEditing(false)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") setEditing(false);
-              if (e.key === "Escape") setEditing(false);
+              if (e.key === "Enter") {
+                setEditing(false);
+              }
+
+              if (e.key === "Escape") {
+                setEditing(false);
+              }
             }}
             className="block h-full w-full bg-transparent outline-none"
             style={textStyle}
@@ -146,7 +191,7 @@ export default function ElementRenderer({
                     : "none",
             }}
           >
-            {el.content || el.text}
+            {content}
           </div>
         )}
       </div>
