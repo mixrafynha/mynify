@@ -18,12 +18,16 @@ type Props = {
   mode?: "login" | "signup";
   popup?: boolean;
   onSuccess?: () => void;
+
+  // produto do editor
+  productType?: "tshirt" | "mug" | "bag" | "hoodie" | "cap";
 };
 
 export default function AuthForm({
   mode = "signup",
   popup = false,
   onSuccess,
+  productType = "tshirt",
 }: Props) {
   const router = useRouter();
 
@@ -33,7 +37,10 @@ export default function AuthForm({
   const [password, setPassword] = useState("");
 
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState<false | "password" | "google" | "apple">(false);
+  const [loading, setLoading] = useState<
+    false | "password" | "google" | "apple"
+  >(false);
+
   const [error, setError] = useState("");
 
   const captchaRef = useRef<HTMLDivElement | null>(null);
@@ -43,6 +50,29 @@ export default function AuthForm({
     setAuthMode(mode);
   }, [mode]);
 
+  // ---------------------------------
+  // REDIRECT AUTOMÁTICO APÓS LOGIN
+  // ---------------------------------
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session?.user) return;
+
+      if (popup) {
+        onSuccess?.();
+        return;
+      }
+
+      router.replace(`/editor?type=${productType}`);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [popup, onSuccess, router, productType]);
+
+  // ---------------------------------
+  // CAPTCHA
+  // ---------------------------------
   useEffect(() => {
     let tries = 0;
 
@@ -65,11 +95,16 @@ export default function AuthForm({
 
       widgetIdRef.current = turnstile.render(captchaRef.current, {
         sitekey,
+
         callback: (value: string) => {
           setToken(value);
           setError("");
         },
-        "expired-callback": () => setToken(""),
+
+        "expired-callback": () => {
+          setToken("");
+        },
+
         "error-callback": () => {
           setToken("");
           setError("Captcha error");
@@ -92,15 +127,9 @@ export default function AuthForm({
     setToken("");
   }, []);
 
-  const finish = useCallback(() => {
-    if (popup) {
-      onSuccess?.();
-      return;
-    }
-
-    router.replace("/dashboard");
-  }, [popup, onSuccess, router]);
-
+  // ---------------------------------
+  // LOGIN EMAIL + SENHA
+  // ---------------------------------
   const handlePasswordAuth = useCallback(async () => {
     if (loading) return;
 
@@ -121,32 +150,60 @@ export default function AuthForm({
       }
 
       if (authMode === "login") {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: safeEmail,
-          password,
-          options: { captchaToken: token },
-        });
+        const { data, error } =
+          await supabase.auth.signInWithPassword({
+            email: safeEmail,
+            password,
+            options: {
+              captchaToken: token,
+            },
+          });
 
-        if (error || !data.session) throw error || new Error("No session");
+        if (error || !data.session) {
+          throw error || new Error("No session");
+        }
+
+        // redirect imediato
+        router.replace(`/editor?type=${productType}`);
       } else {
-        const { error } = await supabase.auth.signUp({
-          email: safeEmail,
-          password,
-          options: { captchaToken: token },
-        });
+        const { error } =
+          await supabase.auth.signUp({
+            email: safeEmail,
+            password,
+            options: {
+              captchaToken: token,
+            },
+          });
 
         if (error) throw error;
-      }
 
-      finish();
+        router.replace(`/editor?type=${productType}`);
+      }
     } catch {
-      setError(authMode === "login" ? "Invalid email or password" : "Unable to create account");
+      setError(
+        authMode === "login"
+          ? "Invalid email or password"
+          : "Unable to create account"
+      );
+
       resetCaptcha();
     } finally {
       setLoading(false);
     }
-  }, [authMode, email, password, token, loading, finish, resetCaptcha]);
+  }, [
+    authMode,
+    email,
+    password,
+    token,
+    loading,
+    router,
+    productType,
+    resetCaptcha,
+  ]);
 
+  // ---------------------------------
+  // GOOGLE / APPLE
+  // ---------------------------------
   const handleOAuth = useCallback(
     async (provider: "google" | "apple") => {
       if (loading) return;
@@ -155,19 +212,24 @@ export default function AuthForm({
       setError("");
 
       try {
-        const redirectTo = popup
-          ? `${safeOrigin()}/auth/callback?next=${encodeURIComponent(
-              window.location.pathname + window.location.search
-            )}`
-          : `${safeOrigin()}/auth/callback`;
+        const redirectTo =
+          `${safeOrigin()}/auth/callback?next=` +
+          encodeURIComponent(
+            `/editor?type=${productType}`
+          );
 
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider,
-          options: {
-            redirectTo,
-            queryParams: { prompt: "select_account" },
-          },
-        });
+        const { error } =
+          await supabase.auth.signInWithOAuth({
+            provider,
+
+            options: {
+              redirectTo,
+
+              queryParams: {
+                prompt: "select_account",
+              },
+            },
+          });
 
         if (error) throw error;
       } catch {
@@ -175,7 +237,7 @@ export default function AuthForm({
         setLoading(false);
       }
     },
-    [loading, popup]
+    [loading, productType]
   );
 
   return (
@@ -188,7 +250,7 @@ export default function AuthForm({
 
       {authMode === "signup" && (
         <div className="mb-4 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-xs font-black text-cyan-100">
-          ✨ Create your account and get 3 free AI credits
+          ✨ Create account and get 3 free AI credits
         </div>
       )}
 
@@ -200,7 +262,10 @@ export default function AuthForm({
           className="flex h-11 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/85 disabled:opacity-50"
         >
           <FcGoogle size={20} />
-          {loading === "google" ? "Continuing..." : "Continue with Google"}
+
+          {loading === "google"
+            ? "Continuing..."
+            : "Continue with Google"}
         </button>
 
         <button
@@ -210,13 +275,18 @@ export default function AuthForm({
           className="flex h-11 w-full items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/5 text-sm font-bold text-white/85 disabled:opacity-50"
         >
           <FaApple size={20} />
-          {loading === "apple" ? "Continuing..." : "Continue with Apple"}
+
+          {loading === "apple"
+            ? "Continuing..."
+            : "Continue with Apple"}
         </button>
       </div>
 
       <div className="my-4 flex items-center gap-3">
         <div className="h-px flex-1 bg-white/10" />
-        <span className="text-[10px] font-black text-white/35">OR</span>
+        <span className="text-[10px] font-black text-white/35">
+          OR
+        </span>
         <div className="h-px flex-1 bg-white/10" />
       </div>
 
@@ -225,34 +295,37 @@ export default function AuthForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
-          inputMode="email"
-          autoComplete="email"
-          maxLength={254}
-          className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white outline-none placeholder:text-white/35"
+          className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm text-white"
         />
 
         <div className="relative">
           <input
             type={showPassword ? "text" : "password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
             placeholder="Password"
-            autoComplete={authMode === "login" ? "current-password" : "new-password"}
-            maxLength={128}
-            className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-12 text-sm text-white outline-none placeholder:text-white/35"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-white/5 px-4 pr-12 text-sm text-white"
           />
 
           <button
             type="button"
-            onClick={() => setShowPassword((p) => !p)}
-            className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-xl text-white/45"
+            onClick={() =>
+              setShowPassword((p) => !p)
+            }
+            className="absolute right-3 top-1/2 -translate-y-1/2"
           >
-            {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+            {showPassword ? (
+              <EyeOff size={17} />
+            ) : (
+              <Eye size={17} />
+            )}
           </button>
         </div>
 
-        <div className="flex min-h-[62px] w-full items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-1.5">
-          <div ref={captchaRef} className="max-w-full scale-[0.82] sm:scale-95" />
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
+          <div ref={captchaRef} />
         </div>
 
         {error && (
@@ -265,31 +338,17 @@ export default function AuthForm({
           type="button"
           onClick={handlePasswordAuth}
           disabled={!!loading}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white disabled:opacity-50"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white"
         >
           {loading === "password"
             ? authMode === "login"
               ? "Signing in..."
               : "Creating..."
             : authMode === "login"
-              ? "Sign in"
-              : "Create account"}
+            ? "Sign in"
+            : "Create account"}
 
           <Zap size={17} />
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
-            setError("");
-            resetCaptcha();
-          }}
-          className="w-full text-center text-sm font-bold text-fuchsia-300"
-        >
-          {authMode === "login"
-            ? "Don’t have an account? Sign up"
-            : "Already have account? Login"}
         </button>
       </div>
     </div>
