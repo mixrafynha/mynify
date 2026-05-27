@@ -8,7 +8,7 @@ const LOADING_API_ROUTES = [
   "/api/profiles",
   "/api/settings",
   "/api/orders",
-  "/api/contact",
+  "/api/Contact",
   "/api/dashboard",
   "/api/admin/",
 ];
