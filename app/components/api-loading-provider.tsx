@@ -4,20 +4,39 @@ import { useEffect, useState } from "react";
 import Loading from "@/app/loading";
 
 const LOADING_API_ROUTES = [
-  "/api/products/by-type",
+  "/api/products",
   "/api/profiles",
-   "/api/contact",
-   "/api/dashboard",
-   "/api/products",
-  // adiciona só as que quiseres
-];
-const EXCLUDED_LOADING_ROUTES = [
-  "/api/ai-image",
-  
+  "/api/settings",
+  "/api/orders",
+  "/api/contact",
+  "/api/dashboard",
+  "/api/admin/",
 ];
 
+const EXCLUDED_LOADING_ROUTES = [
+  "/api/ai-image",
+];
+
+function getPathname(url: string) {
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch {
+    return url;
+  }
+}
+
 function shouldShowLoading(url: string) {
-  return LOADING_API_ROUTES.some((route) => url.includes(route));
+  const pathname = getPathname(url);
+
+  const isExcluded = EXCLUDED_LOADING_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  if (isExcluded) return false;
+
+  return LOADING_API_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
 }
 
 export default function ApiLoadingProvider({
