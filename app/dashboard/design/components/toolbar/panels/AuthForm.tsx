@@ -14,9 +14,19 @@ const sanitizeEmail = (value: string) =>
     .trim()
     .slice(0, 254);
 
-const safeOrigin = () => {
-  if (typeof window === "undefined") return "";
-  return window.location.origin;
+const safeOrigin = () =>
+  typeof window === "undefined" ? "" : window.location.origin;
+
+const safeNextPath = () => {
+  if (typeof window === "undefined") return "/dashboard";
+
+  const path = window.location.pathname + window.location.search;
+
+  if (!path.startsWith("/")) return "/dashboard";
+  if (path.startsWith("//")) return "/dashboard";
+  if (path.includes("://")) return "/dashboard";
+
+  return path;
 };
 
 type AuthMode = "login" | "signup";
@@ -38,11 +48,17 @@ export default function AuthForm({
   const [password, setPassword] = useState("");
 
   const [token, setToken] = useState("");
-  const [loading, setLoading] = useState<false | "password" | "google" | "apple">(false);
+  const [loading, setLoading] = useState<
+    false | "password" | "google" | "apple"
+  >(false);
   const [error, setError] = useState("");
 
   const captchaRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setAuthMode(mode);
+  }, [mode]);
 
   useEffect(() => {
     let tries = 0;
@@ -93,6 +109,15 @@ export default function AuthForm({
     setToken("");
   }, []);
 
+  const finishPasswordLogin = useCallback(() => {
+    if (popup) {
+      onSuccess?.();
+      return;
+    }
+
+    window.location.href = "/dashboard";
+  }, [popup, onSuccess]);
+
   const handlePasswordAuth = useCallback(async () => {
     if (loading) return;
 
@@ -121,7 +146,9 @@ export default function AuthForm({
           },
         });
 
-        if (error || !data.session) throw error || new Error("No session");
+        if (error || !data.session) {
+          throw error || new Error("No session");
+        }
       } else {
         const { data, error } = await supabase.auth.signUp({
           email: safeEmail,
@@ -131,14 +158,12 @@ export default function AuthForm({
           },
         });
 
-        if (error) throw error;
-
-        if (!data.user) {
-          throw new Error("Unable to create account");
+        if (error || !data.user) {
+          throw error || new Error("Unable to create account");
         }
       }
 
-      onSuccess?.();
+      finishPasswordLogin();
     } catch {
       setError(
         authMode === "login"
@@ -149,7 +174,15 @@ export default function AuthForm({
     } finally {
       setLoading(false);
     }
-  }, [authMode, email, password, token, loading, onSuccess, resetCaptcha]);
+  }, [
+    authMode,
+    email,
+    password,
+    token,
+    loading,
+    finishPasswordLogin,
+    resetCaptcha,
+  ]);
 
   const handleOAuth = useCallback(
     async (provider: "google" | "apple") => {
@@ -159,10 +192,16 @@ export default function AuthForm({
       setError("");
 
       try {
+        const next = popup ? safeNextPath() : "/dashboard";
+
+        const redirectTo = `${safeOrigin()}/auth/callback?next=${encodeURIComponent(
+          next
+        )}`;
+
         const { error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: `${safeOrigin()}/auth/callback`,
+            redirectTo,
             queryParams: {
               prompt: "select_account",
             },
@@ -175,13 +214,13 @@ export default function AuthForm({
         setLoading(false);
       }
     },
-    [loading]
+    [loading, popup]
   );
 
   return (
     <div>
       <Script
-        id={`turnstile-script-${popup ? "popup" : authMode}`}
+        id="turnstile-script-auth-form"
         src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
         strategy="lazyOnload"
       />
@@ -280,7 +319,9 @@ export default function AuthForm({
         </button>
 
         <p className="text-center text-sm text-white/50">
-          {authMode === "login" ? "Don’t have an account?" : "Already have an account?"}{" "}
+          {authMode === "login"
+            ? "Don’t have an account?"
+            : "Already have an account?"}{" "}
           <button
             type="button"
             onClick={() => {
