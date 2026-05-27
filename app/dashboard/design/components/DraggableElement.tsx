@@ -192,9 +192,11 @@ export default function DraggableElement({
   window.addEventListener("pointercancel", onUp);
 }
 
- const resizeElement = (
+ type Direction = "br" | "tr" | "bl" | "tl" | "r" | "l" | "t" | "b";
+
+const resizeElement = (
   e: React.PointerEvent,
-  direction: "br" | "tr" | "bl" | "tl"
+  direction: Direction
 ) => {
   e.preventDefault();
   e.stopPropagation();
@@ -221,10 +223,59 @@ export default function DraggableElement({
     let nextX = startElX;
     let nextY = startElY;
 
-    // WIDTH
     if (direction.includes("r")) {
       nextWidth = Math.max(24, startWidth + dx * factor);
     }
+
+    if (direction.includes("l")) {
+      nextWidth = Math.max(24, startWidth - dx * factor);
+      nextX = startElX + dx;
+    }
+
+    if (direction.includes("b")) {
+      nextHeight = Math.max(24, startHeight + dy * factor);
+    }
+
+    if (direction.includes("t")) {
+      nextHeight = Math.max(24, startHeight - dy * factor);
+      nextY = startElY + dy;
+    }
+
+    const widthRatio = nextWidth / startWidth;
+    const heightRatio = nextHeight / startHeight;
+
+    patchElement({
+      x: nextX,
+      y: nextY,
+      width: nextWidth,
+      height: nextHeight,
+      meta: {
+        ...(el.meta || {}),
+        scale:
+          el.type === "image"
+            ? Math.max(widthRatio, heightRatio)
+            : el.meta?.scale,
+        fontSize: el.meta?.fontSize,
+        fontFamily: el.meta?.fontFamily,
+        fontWeight: el.meta?.fontWeight,
+        fontStyle: el.meta?.fontStyle,
+      },
+    });
+  };
+
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", onUp);
+  };
+
+  window.addEventListener("pointermove", onMove, {
+    passive: false,
+  });
+
+  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointercancel", onUp);
+};
 
     if (direction.includes("l")) {
       nextWidth = Math.max(24, startWidth - dx * factor);
