@@ -22,6 +22,13 @@ export default function AuthPopup({ open, onClose, onSuccess }: Props) {
     onClose();
   }
 
+  function handleSuccess() {
+    setStep("offer");
+    setMode("signup");
+    onClose();
+    onSuccess?.();
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/70 px-3 pb-3 backdrop-blur-md sm:items-center sm:px-4 sm:pb-0">
       <div className="relative max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-[28px] border border-white/10 bg-[#07111f] p-4 shadow-2xl sm:rounded-[34px] sm:p-6">
@@ -35,7 +42,7 @@ export default function AuthPopup({ open, onClose, onSuccess }: Props) {
 
         {step === "offer" ? (
           <>
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-500 via-violet-500 to-fuchsia-500">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-3xl bg-gradient-to-br from-cyan-500 via-violet-500 to-fuchsia-500 text-white">
               <Gift size={25} />
             </div>
 
@@ -84,7 +91,7 @@ export default function AuthPopup({ open, onClose, onSuccess }: Props) {
           </>
         ) : (
           <>
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-violet-500 to-fuchsia-500">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-500 via-violet-500 to-fuchsia-500 text-white">
               <Lock size={22} />
             </div>
 
@@ -101,11 +108,8 @@ export default function AuthPopup({ open, onClose, onSuccess }: Props) {
             <div className="mt-4">
               <AuthForm
                 mode={mode}
-                popup
-                onSuccess={() => {
-                  onSuccess?.();
-                  closePopup();
-                }}
+                popup={true}
+                onSuccess={handleSuccess}
               />
             </div>
 
