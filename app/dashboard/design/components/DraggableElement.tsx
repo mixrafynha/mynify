@@ -192,11 +192,9 @@ export default function DraggableElement({
   window.addEventListener("pointercancel", onUp);
 }
 
- type Direction = "br" | "tr" | "bl" | "tl" | "r" | "l" | "t" | "b";
-
-const resizeElement = (
+    const resizeElement = (
   e: React.PointerEvent,
-  direction: Direction
+  direction: "br" | "tr" | "bl" | "tl" | "r" | "l" | "t" | "b"
 ) => {
   e.preventDefault();
   e.stopPropagation();
