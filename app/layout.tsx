@@ -94,18 +94,15 @@ export const metadata = {
       "max-video-preview": -1,
     },
   },
-
-        icons: {
-        icon: [
-          { url: "/favicon.ico", sizes: "any", type: "image/x-icon" },
-        ],
-        shortcut: "/favicon.ico",
-        apple: "/apple-touch-icon.png",
-      },
+  
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "any", type: "image/x-icon" },
     ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
 };
-
 // ================= ROOT LAYOUT =================
 
 export default function RootLayout({
