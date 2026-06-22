@@ -31,10 +31,10 @@ export default async function PreviewPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { tempPreview?: string };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const supabase = createSupabaseServer();
-  const isTempPreview = searchParams?.tempPreview === "1";
+  const isTempPreview = false;
 
   if (isTempPreview) {
     const { data: baseProduct } = await supabase

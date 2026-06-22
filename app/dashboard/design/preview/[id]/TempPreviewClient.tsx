@@ -1,13 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toPng } from "html-to-image";
 import {
   ArrowLeft,
@@ -27,13 +21,103 @@ const MOCKUP_AREA = {
   height: 1024,
 };
 
+function rectOf(el: any) {
+  return {
+    x: Number(el?.x || 0),
+    y: Number(el?.y || 0),
+    width: Math.max(1, Number(el?.width || 0)),
+    height: Math.max(1, Number(el?.height || 0)),
+  };
+}
+
+function intersects(a: any, b: any) {
+  return (
+    a.x < b.x + b.width &&
+    a.x + a.width > b.x &&
+    a.y < b.y + b.height &&
+    a.y + a.height > b.y
+  );
+}
+
+function inside(a: any, b: any) {
+  return (
+    a.x >= b.x &&
+    a.y >= b.y &&
+    a.x + a.width <= b.x + b.width &&
+    a.y + a.height <= b.y + b.height
+  );
+}
+
+function getPreviewProductionStats(
+  elements: any[],
+  printBox: any,
+  previewData: any,
+) {
+  const box = {
+    x: Number(printBox?.x || 0),
+    y: Number(printBox?.y || 0),
+    width: Math.max(1, Number(printBox?.width || 0)),
+    height: Math.max(1, Number(printBox?.height || 0)),
+  };
+
+  const warnings: string[] = [];
+  let minDpi: number | null = null;
+
+  for (const el of elements || []) {
+    const r = rectOf(el);
+    if (!intersects(r, box))
+      warnings.push(`${el.type || "Element"} is outside print area`);
+    else if (!inside(r, box))
+      warnings.push(`${el.type || "Element"} is partially outside print area`);
+
+    if (el.type === "image") {
+      const naturalWidth = Number(
+        el?.meta?.naturalWidth || el?.naturalWidth || 0,
+      );
+      const naturalHeight = Number(
+        el?.meta?.naturalHeight || el?.naturalHeight || 0,
+      );
+      if (naturalWidth > 0 && naturalHeight > 0) {
+        const scaleQuality = Math.min(
+          naturalWidth / r.width,
+          naturalHeight / r.height,
+        );
+        const estimatedDpi = Math.round(scaleQuality * 96);
+        minDpi =
+          minDpi === null ? estimatedDpi : Math.min(minDpi, estimatedDpi);
+        if (estimatedDpi < 150)
+          warnings.push(`${el.type || "Image"} has low source resolution`);
+      }
+    }
+  }
+
+  const layerCount = Array.isArray(elements) ? elements.length : 0;
+  const ready = warnings.length === 0 && layerCount > 0;
+
+  return {
+    ready,
+    status: ready
+      ? "Ready for production"
+      : layerCount === 0
+        ? "Empty design"
+        : "Needs review",
+    minDpi,
+    dpiLabel: minDpi ? `${minDpi} DPI` : "Vector / text",
+    exportSize: `${MOCKUP_AREA.width * 2} × ${MOCKUP_AREA.height * 2}px`,
+    resolution: `${MOCKUP_AREA.width} × ${MOCKUP_AREA.height}px canvas`,
+    side: previewData?.side === "back" ? "Back" : "Front",
+    layerCount,
+    warnings: Array.from(new Set(warnings)),
+  };
+}
+
 function normalizeImages(value: any): string[] {
   if (!value) return [];
 
   if (Array.isArray(value)) {
     return value
       .map((item) =>
-        typeof item === "string" ? item : item?.imageUrl || item?.url
+        typeof item === "string" ? item : item?.imageUrl || item?.url,
       )
       .filter(Boolean);
   }
@@ -44,7 +128,7 @@ function normalizeImages(value: any): string[] {
       if (Array.isArray(parsed)) {
         return parsed
           .map((item) =>
-            typeof item === "string" ? item : item?.imageUrl || item?.url
+            typeof item === "string" ? item : item?.imageUrl || item?.url,
           )
           .filter(Boolean);
       }
@@ -144,9 +228,9 @@ export default function TempPreviewClient({ product }: { product: any }) {
   // CORREÇÃO: Função para aguardar todas as imagens carregarem
   const waitForImages = useCallback((container: HTMLElement): Promise<void> => {
     const imgElements = Array.from(container.querySelectorAll("img"));
-    
+
     if (imgElements.length === 0) return Promise.resolve();
-    
+
     return Promise.all(
       imgElements.map(
         (img) =>
@@ -155,27 +239,27 @@ export default function TempPreviewClient({ product }: { product: any }) {
               resolve();
               return;
             }
-            
+
             const onLoad = () => {
               cleanup();
               resolve();
             };
-            
+
             const onError = () => {
               cleanup();
               console.warn("Failed to load image:", img.src);
               resolve(); // Não bloqueia mesmo se falhar
             };
-            
+
             const cleanup = () => {
               img.removeEventListener("load", onLoad);
               img.removeEventListener("error", onError);
             };
-            
+
             img.addEventListener("load", onLoad);
             img.addEventListener("error", onError);
-          })
-      )
+          }),
+      ),
     ).then(() => undefined);
   }, []);
 
@@ -263,7 +347,7 @@ export default function TempPreviewClient({ product }: { product: any }) {
           throw new Error(
             rawText
               ? `Mockup endpoint returned invalid JSON: ${rawText.slice(0, 160)}`
-              : "Mockup endpoint returned an empty response."
+              : "Mockup endpoint returned an empty response.",
           );
         }
 
@@ -288,7 +372,7 @@ export default function TempPreviewClient({ product }: { product: any }) {
           .filter(Boolean)
           .filter(
             (img: string, index: number, arr: string[]) =>
-              arr.indexOf(img) === index
+              arr.indexOf(img) === index,
           );
 
         if (!images.length) {
@@ -304,7 +388,7 @@ export default function TempPreviewClient({ product }: { product: any }) {
         requestInFlightRef.current = false;
       }
     },
-    [previewData, productId, category, printBox, safeArea, waitForImages]
+    [previewData, productId, category, printBox, safeArea, waitForImages],
   );
 
   useEffect(() => {
@@ -320,6 +404,11 @@ export default function TempPreviewClient({ product }: { product: any }) {
   const previewImages = useMemo(() => {
     return mockupImages.filter(Boolean);
   }, [mockupImages]);
+
+  const productionStats = useMemo(
+    () => getPreviewProductionStats(activeElements, printBox, previewData),
+    [activeElements, printBox, previewData],
+  );
 
   const handleRealSave = async () => {
     if (!previewData || saving) return;
@@ -352,7 +441,7 @@ export default function TempPreviewClient({ product }: { product: any }) {
       sessionStorage.removeItem(storageKey);
       localStorage.removeItem(storageKey);
 
-      window.location.href = `/dashboard/design/preview/${data.product.id}`;
+      console.info("Design saved", data);
     } catch {
       alert("Something went wrong while saving.");
     } finally {
@@ -497,8 +586,8 @@ export default function TempPreviewClient({ product }: { product: any }) {
               {generating
                 ? "Rendering mockups"
                 : mockupImages.length
-                ? "Mockups ready"
-                : "Preview"}
+                  ? "Mockups ready"
+                  : "Preview"}
             </div>
 
             <h1 className="max-w-4xl text-[30px] font-black uppercase leading-[0.9] tracking-[-0.04em] sm:text-5xl md:text-6xl">
@@ -542,6 +631,63 @@ export default function TempPreviewClient({ product }: { product: any }) {
             )}
           </div>
 
+          <div className="mb-5 grid gap-3 lg:grid-cols-[1.2fr_.8fr]">
+            <section className="rounded-[28px] border border-white/10 bg-white/[0.045] p-4 shadow-[0_18px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/40">
+                    Production Preview
+                  </p>
+                  <h2 className="mt-1 text-2xl font-black tracking-[-0.04em] text-white">
+                    {productionStats.status}
+                  </h2>
+                </div>
+                <span
+                  className={`rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] ${productionStats.ready ? "bg-emerald-400/12 text-emerald-200 ring-1 ring-emerald-300/25" : "bg-amber-400/12 text-amber-200 ring-1 ring-amber-300/25"}`}
+                >
+                  {productionStats.ready ? "Print Ready" : "Review"}
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <InfoTile label="Side" value={productionStats.side} />
+                <InfoTile label="DPI" value={productionStats.dpiLabel} />
+                <InfoTile
+                  label="Layers"
+                  value={String(productionStats.layerCount)}
+                />
+                <InfoTile label="Export" value={productionStats.exportSize} />
+              </div>
+            </section>
+
+            <aside className="rounded-[28px] border border-white/10 bg-white/[0.045] p-4 backdrop-blur-xl">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/40">
+                  Warnings
+                </p>
+                <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black text-white/70">
+                  {productionStats.warnings.length}
+                </span>
+              </div>
+              {productionStats.warnings.length ? (
+                <div className="mt-3 space-y-2">
+                  {productionStats.warnings.slice(0, 4).map((warning) => (
+                    <div
+                      key={warning}
+                      className="rounded-2xl border border-amber-300/15 bg-amber-300/10 px-3 py-2 text-xs font-bold text-amber-100"
+                    >
+                      {warning}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-3 rounded-2xl border border-emerald-300/15 bg-emerald-300/10 px-3 py-3 text-xs font-bold text-emerald-100">
+                  No production warnings found.
+                </div>
+              )}
+            </aside>
+          </div>
+
           {previewImages.length > 0 ? (
             <PreviewGallery
               images={previewImages.slice(0, 4)}
@@ -570,5 +716,16 @@ export default function TempPreviewClient({ product }: { product: any }) {
         </div>
       </section>
     </main>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/18 px-3 py-3">
+      <p className="text-[10px] font-black uppercase tracking-[0.14em] text-white/38">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-sm font-black text-white">{value}</p>
+    </div>
   );
 }
