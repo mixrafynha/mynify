@@ -201,7 +201,7 @@ export default function CartDrawer({
 
                 <div className="min-w-0">
                   <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-purple-200/70">
-                    Mynify cart
+                    Ryfio cart
                   </p>
 
                   <h2 className="truncate text-lg font-black tracking-[-0.04em]">

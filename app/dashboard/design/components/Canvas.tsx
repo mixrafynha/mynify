@@ -1,643 +1,455 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import SafeArea from "@/app/dashboard/design/components/SafeArea";
-
-import { PRODUCTS } from "./canvas/productConfig";
-import { MOCKUP_AREA } from "./canvas/constants";
 import {
-  getPrintBox,
-  getSafeArea,
-  clampElementToSafeArea,
-} from "./canvas/canvasMath";
-import { Side } from "./canvas/types";
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
+
 import DraggableElement from "./DraggableElement";
 import CanvasMockup from "./canvas/CanvasMockup";
+import SafeAreaLayer from "./canvas/components/SafeAreaLayer";
+import SafeArea from "@/app/dashboard/design/components/SafeArea";
 
-const DESKTOP_ZOOM_BOOST = 0.78;
-const MOBILE_ZOOM_BOOST = 0.99;
+import { useCanvasPan } from "./canvas/hooks/useCanvasPan";
+import { useCanvasScale } from "./canvas/hooks/useCanvasScale";
+import { useCanvasPinch } from "./canvas/hooks/useCanvasPinch";
+import { useCanvasColors } from "./canvas/hooks/useCanvasColors";
+import { useCanvasElements } from "./canvas/hooks/useCanvasElements";
+import { useCanvasStorage } from "./canvas/hooks/useCanvasStorage";
+import { useCanvasWarnings } from "./canvas/hooks/useCanvasWarnings";
+import { useHistory } from "./canvas/hooks/useHistory";
 
-function getElementSize(el: any) {
-  return {
-    width: el?.width || 220,
-    height:
-      el?.height || (el?.type === "text" ? el?.meta?.fontSize || 40 : 140),
-  };
-}
+import { PRODUCTS, GELATO_PRINT_SIZE_MM_BY_PRODUCT } from "./canvas/productConfig";
+import { MOCKUP_AREA } from "./canvas/constants";
+import {
+  centerElementInSafeArea,
+  getLocalSafeArea,
+  getPrintBox,
+  getSafeArea,
+} from "./canvas/canvasMath";
+import type { CanvasSide } from "./canvas/types";
 
-function centerElementInSafeArea(el: any, safeArea: any) {
-  const raw = getElementSize(el);
+const ColorSelector = dynamic(() => import("./canvas/components/ColorSelector"));
+const WarningsPanel = dynamic(() => import("./canvas/components/WarningsPanel"));
+const LostElementsOverlay = dynamic(() => import("./canvas/components/LostElementsOverlay"));
+const GelatoDesignDropzone = dynamic(() => import("./canvas/components/GelatoDesignDropzone"));
+const FloatingEditToolbar = dynamic(() => import("./toolbar/FloatingEditToolbar"));
 
-  const width = Math.min(raw.width, safeArea.width * 0.85);
-  const height = Math.min(raw.height, safeArea.height * 0.85);
-
-  const yOffset = Number(el?.meta?.insertedYOffset ?? 20);
-
-  return clampElementToSafeArea(
-    {
-      ...el,
-      width,
-      height,
-      x: safeArea.x + safeArea.width / 2 - width / 2,
-      y: safeArea.y + safeArea.height / 2 - height / 2 + yOffset,
-      meta: {
-        ...(el?.meta || {}),
-        __centered: true,
-        insertedYOffset: yOffset,
-      },
-    },
-    safeArea
-  );
-}
+const MemoDraggableElement = memo(DraggableElement);
 
 export default function Canvas({
   side,
-  elements,
-  setElements,
-  zoom = 1,
+  elements: externalElements = [],
+  setElements: externalSetElements,
+  zoom: externalZoom = 1,
+  onZoomChange,
   selectedId,
   setSelectedId,
   setSelectedElement,
   mockupColor = "#ffffff",
   setMockupColor,
+  mode = "edit",
 }: any) {
   const params = useParams();
   const searchParams = useSearchParams();
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
 
   const productId = searchParams.get("productId");
+  const mockupId = String(params?.id || "hoodie").toLowerCase();
+  const productColorKey = productId || mockupId;
+  const currentSide: CanvasSide = side === "back" ? "back" : "front";
+  const isPreviewMode = mode === "preview" || searchParams.get("mode") === "preview" || searchParams.get("preview") === "1";
 
-  const wrapperRef = useRef<HTMLDivElement | null>(null);
-  const groupDragStartRef = useRef<any[] | null>(null);
-  const initializedRef = useRef(false);
-  const knownIdsRef = useRef<Set<string>>(new Set());
-
-  const activePointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(
-    new Map()
-  );
-
-  const pinchRef = useRef<{
-    distance: number;
-    userZoom: number;
-  } | null>(null);
-
-  const [canvasScale, setCanvasScale] = useState(1);
-  const [userZoom, setUserZoom] = useState(1);
-  const [showColors, setShowColors] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionBox, setSelectionBox] = useState<any>(null);
-  const [availableColors, setAvailableColors] = useState<
-    { name: string; hex: string }[]
-  >([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>(
-    selectedId ? [selectedId] : []
-  );
+  const [zoom, setZoom] = useState(externalZoom);
 
-  const paramsId = String(params?.id || "hoodie").toLowerCase();
-  const mockupId = paramsId;
-  const currentSide: Side = side === "back" ? "back" : "front";
-  const storageKey = `canvas:${mockupId}:${currentSide}`;
+  const { panOffset, startPan, onPanMove, endPan, resetPan } = useCanvasPan();
+  const { state: elements, push, replace, reset } = useHistory<any[]>(externalElements || []);
+
+  useEffect(() => {
+    reset(externalElements || []);
+  }, [externalElements, reset]);
+
+  useEffect(() => {
+    setZoom(externalZoom);
+  }, [externalZoom]);
+
+  const setElements = useCallback(
+    (updater: any, options: { record?: boolean } = {}) => {
+      if (externalSetElements) {
+        externalSetElements((prev: any[]) => {
+          const next = typeof updater === "function" ? updater(prev || []) : updater;
+          if (options.record !== false) push(next);
+          else replace(next);
+          return next;
+        });
+        return;
+      }
+
+      const next = typeof updater === "function" ? updater(elements || []) : updater;
+      if (options.record !== false) push(next);
+      else replace(next);
+    },
+    [elements, externalSetElements, push, replace]
+  );
 
   const productMockup = PRODUCTS[mockupId] || PRODUCTS.hoodie;
-  const mockup = productMockup[currentSide];
-
-  const printBox = useMemo(
-    () => getPrintBox(mockupId, currentSide),
-    [mockupId, currentSide]
-  );
-
+  const mockup = useMemo(() => productMockup[currentSide], [currentSide, productMockup]);
+  const printBox = useMemo(() => getPrintBox(mockupId, currentSide), [currentSide, mockupId]);
   const safeArea = useMemo(() => getSafeArea(printBox), [printBox]);
+  const localSafeArea = useMemo(() => getLocalSafeArea(safeArea), [safeArea]);
 
-  function clearSelection() {
+  const gelatoPrintSize = useMemo(
+    () =>
+      GELATO_PRINT_SIZE_MM_BY_PRODUCT[mockupId]?.[currentSide] ||
+      GELATO_PRINT_SIZE_MM_BY_PRODUCT.hoodie?.front,
+    [currentSide, mockupId]
+  );
+
+  const canvasScale = useCanvasScale(wrapperRef);
+  const finalScale = useMemo(() => zoom * canvasScale, [canvasScale, zoom]);
+
+  const handleZoomChange = useCallback(
+    (value: number) => {
+      const next = Math.min(4, Math.max(0.25, Number(value) || 1));
+      setZoom(next);
+      onZoomChange?.(Math.round(next * 100));
+    },
+    [onZoomChange]
+  );
+
+  const { updateSelectedElements, endSelectedElementsDrag } = useCanvasElements({
+    safeArea: localSafeArea,
+    setElements,
+  });
+
+  useCanvasStorage({
+    storageKey: `canvas:${mockupId}:${currentSide}`,
+    elements,
+    setElements,
+    safeArea: localSafeArea,
+    centerElementInSafeArea,
+  });
+
+  const { warnings, warningCount, quality } = useCanvasWarnings(elements, localSafeArea, gelatoPrintSize);
+  const { handlePinchDown, handlePinchMove, handlePinchEnd } = useCanvasPinch({
+    zoom,
+    onZoomChange: handleZoomChange,
+  });
+  const { showColors, setShowColors, availableColors } = useCanvasColors(
+    productColorKey,
+    mockupColor,
+    setMockupColor
+  );
+
+
+  const clearSelection = useCallback(() => {
     setSelectedIds([]);
-    setSelectedId(null);
+    setSelectedId?.(null);
     setSelectedElement?.(null);
-  }
+  }, [setSelectedElement, setSelectedId]);
 
-  function isMobileTouch(e: React.PointerEvent) {
-    return e.pointerType === "touch" && window.innerWidth < 768;
-  }
+  const selectElement = useCallback((element: any) => {
+    if (!element?.id) return;
+    setSelectedIds([element.id]);
+    setSelectedId?.(element.id);
+    setSelectedElement?.(element);
+  }, [setSelectedElement, setSelectedId]);
 
-  function handleMobilePinchDown(e: React.PointerEvent) {
-    if (!isMobileTouch(e)) return;
+  const handleUpdateElement = useCallback(
+    (id: string, patch: any) => {
+      const record = patch?.__transient !== true;
+      setElements((prev: any[]) => {
+        const list = Array.isArray(prev) ? prev : [];
+        const current = list.find((item) => item.id === id);
+        if (!current) return list;
 
-    activePointersRef.current.set(e.pointerId, {
-      clientX: e.clientX,
-      clientY: e.clientY,
-    });
-
-    if (activePointersRef.current.size === 2) {
-      const points = Array.from(activePointersRef.current.values());
-      const dx = points[0].clientX - points[1].clientX;
-      const dy = points[0].clientY - points[1].clientY;
-
-      pinchRef.current = {
-        distance: Math.hypot(dx, dy),
-        userZoom,
-      };
-    }
-  }
-
-  function handleMobilePinchMove(e: React.PointerEvent) {
-    if (!isMobileTouch(e)) return;
-    if (!activePointersRef.current.has(e.pointerId)) return;
-
-    activePointersRef.current.set(e.pointerId, {
-      clientX: e.clientX,
-      clientY: e.clientY,
-    });
-
-    if (activePointersRef.current.size === 2 && pinchRef.current) {
-      e.preventDefault();
-
-      const points = Array.from(activePointersRef.current.values());
-      const dx = points[0].clientX - points[1].clientX;
-      const dy = points[0].clientY - points[1].clientY;
-
-      const distance = Math.hypot(dx, dy);
-      const nextZoom =
-        pinchRef.current.userZoom * (distance / pinchRef.current.distance);
-
-      setUserZoom(Math.max(0.7, Math.min(3.2, nextZoom)));
-    }
-  }
-
-  function handleMobilePinchEnd(e: React.PointerEvent) {
-    activePointersRef.current.delete(e.pointerId);
-
-    if (activePointersRef.current.size < 2) {
-      pinchRef.current = null;
-    }
-  }
-
-  useEffect(() => {
-    async function loadColors() {
-      try {
-        if (!productId) {
-          setAvailableColors([]);
-          return;
+        if (patch.delete) {
+          return list.filter((item) => item.id !== id);
         }
 
-        const res = await fetch(`/api/product-colors?productId=${productId}`, {
-          cache: "no-store",
-        });
-
-        const json = await res.json();
-        setAvailableColors(json.colors || []);
-      } catch {
-        setAvailableColors([]);
-      }
-    }
-
-    loadColors();
-  }, [productId]);
-
-  useEffect(() => {
-    if (!availableColors.length) return;
-
-    const exists = availableColors.some(
-      (color) => color.hex.toLowerCase() === String(mockupColor).toLowerCase()
-    );
-
-    if (!exists) {
-      setMockupColor?.(availableColors[0].hex);
-    }
-  }, [availableColors, mockupColor, setMockupColor]);
-
-  useEffect(() => {
-    if (selectedId && !selectedIds.includes(selectedId)) {
-      setSelectedIds([selectedId]);
-    }
-
-    if (!selectedId && selectedIds.length) {
-      setSelectedIds([]);
-    }
-  }, [selectedId]);
-
-  useEffect(() => {
-    try {
-      const saved = sessionStorage.getItem(storageKey);
-
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setElements(parsed);
-        knownIdsRef.current = new Set(parsed.map((el: any) => el.id));
-      } else {
-        knownIdsRef.current = new Set(elements.map((el: any) => el.id));
-      }
-
-      initializedRef.current = true;
-    } catch {
-      initializedRef.current = true;
-    }
-  }, [storageKey, setElements]);
-
-  useEffect(() => {
-  if (!initializedRef.current) return;
-
-  const hasNew = elements.some(
-    (el: any) => !knownIdsRef.current.has(el.id)
-  );
-
-  if (!hasNew) return;
-
-  setElements((prev: any[]) =>
-    prev.map((el) => {
-      if (knownIdsRef.current.has(el.id)) {
-        return el;
-      }
-
-      knownIdsRef.current.add(el.id);
-
-      return centerElementInSafeArea(
-        {
-          ...el,
-
-          // ignora posição antiga
-          x: undefined,
-          y: undefined,
-
-          meta: {
-            ...(el.meta || {}),
-
-            // sem offset estranho
-            insertedYOffset: 0,
-          },
-        },
-        safeArea
-      );
-    })
-  );
-}, [elements, safeArea, setElements]);
-
-useEffect(() => {
-  try {
-    sessionStorage.setItem(
-      storageKey,
-      JSON.stringify(elements)
-    );
-  } catch {}
-}, [storageKey, elements]);
-
-  useEffect(() => {
-    const updateScale = () => {
-      const wrapper = wrapperRef.current;
-      if (!wrapper) return;
-
-      const rect = wrapper.getBoundingClientRect();
-      const isMobile = window.innerWidth < 768;
-
-      const scaleX = rect.width / MOCKUP_AREA.width;
-      const scaleY = rect.height / MOCKUP_AREA.height;
-      const fitScale = Math.min(scaleX, scaleY);
-
-      const boost = isMobile ? MOBILE_ZOOM_BOOST : DESKTOP_ZOOM_BOOST;
-      const nextScale = fitScale * boost;
-
-      setCanvasScale(
-        Math.max(0, Math.min(2.45, Number(nextScale.toFixed(4))))
-      );
-    };
-
-    updateScale();
-
-    const observer = new ResizeObserver(updateScale);
-    if (wrapperRef.current) observer.observe(wrapperRef.current);
-
-    window.addEventListener("resize", updateScale);
-    window.addEventListener("orientationchange", updateScale);
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateScale);
-      window.removeEventListener("orientationchange", updateScale);
-    };
-  }, []);
-
-  function handleUpdateElement(id: string, patch: any) {
-    setElements((prev: any[]) => {
-      const current = prev.find((item) => item.id === id);
-      if (!current) return prev;
-
-      if (patch.delete) {
-        setSelectedIds((prevIds) => prevIds.filter((selected) => selected !== id));
-
-        if (selectedId === id) {
-          setSelectedId(null);
-          setSelectedElement?.(null);
-        }
-
-        return prev.filter((item) => item.id !== id);
-      }
-
-      if (patch.duplicate) {
-        const duplicated = centerElementInSafeArea(
-          {
+        if (patch.duplicate) {
+          const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
+          const copy = {
             ...current,
             id: crypto.randomUUID(),
-            meta: { ...(current.meta || {}) },
-          },
-          safeArea
-        );
+            x: (Number(current.x) || 0) + 24,
+            y: (Number(current.y) || 0) + 24,
+            zIndex: maxZ + 1,
+            selected: false,
+          };
 
-        return [...prev, duplicated];
-      }
+          setSelectedIds([copy.id]);
+          setSelectedId?.(copy.id);
+          setSelectedElement?.(copy);
+          return [...list, copy];
+        }
 
-      const cleanPatch = { ...patch };
+        if (patch.zAction === "bringForward") {
+          return list.map((item) =>
+            item.id === id ? { ...item, zIndex: (item.zIndex || 0) + 1 } : item
+          );
+        }
 
-      if (typeof patch.x !== "number") delete cleanPatch.x;
-      if (typeof patch.y !== "number") delete cleanPatch.y;
+        if (patch.zAction === "sendBackward") {
+          return list.map((item) =>
+            item.id === id ? { ...item, zIndex: Math.max(0, (item.zIndex || 0) - 1) } : item
+          );
+        }
 
-      return prev.map((item) => {
-        if (item.id !== id) return item;
+        if (patch.zAction === "bringToFront") {
+          const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
+          return list.map((item) => (item.id === id ? { ...item, zIndex: maxZ + 1 } : item));
+        }
 
-        const nextElement = {
-          ...item,
-          ...cleanPatch,
-          meta: {
-            ...(item.meta || {}),
-            ...(patch.meta || {}),
-          },
-        };
+        if (patch.zAction === "sendToBack") {
+          return list.map((item) =>
+            item.id === id ? { ...item, zIndex: 0 } : { ...item, zIndex: (item.zIndex || 0) + 1 }
+          );
+        }
 
-        return clampElementToSafeArea(nextElement, safeArea);
-      });
-    });
-  }
+        return list.map((item) => {
+          if (item.id !== id) return item;
 
-  const finalScale = zoom * canvasScale * userZoom;
-
-  function updateSelectedElements(ids: string[], dx: number, dy: number) {
-    setElements((prev: any[]) => {
-      if (!groupDragStartRef.current) {
-        groupDragStartRef.current = prev
-          .filter((item) => ids.includes(item.id))
-          .map((item) => ({
-            id: item.id,
-            x: item.x,
-            y: item.y,
-          }));
-      }
-
-      return prev.map((item) => {
-        if (!ids.includes(item.id)) return item;
-
-        const start = groupDragStartRef.current?.find(
-          (pos) => pos.id === item.id
-        );
-
-        if (!start) return item;
-
-        return clampElementToSafeArea(
-          {
+          const next = {
             ...item,
-            x: start.x + dx / finalScale,
-            y: start.y + dy / finalScale,
-          },
-          safeArea
-        );
-      });
-    });
-  }
+            ...patch,
+            meta: {
+              ...(item.meta || {}),
+              ...(patch.meta || {}),
+            },
+          };
 
-  function endSelectedElementsDrag() {
-    groupDragStartRef.current = null;
-  }
+          delete next.delete;
+          delete next.duplicate;
+          delete next.zAction;
+          delete next.__transient;
+
+          return next;
+        });
+      }, { record });
+    },
+    [localSafeArea, setElements, setSelectedElement, setSelectedId]
+  );
+
+  const sortedElements = useMemo(
+    () => [...(elements || [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)),
+    [elements]
+  );
+
+  const selectedElements = useMemo(
+    () => sortedElements.filter((item: any) => selectedIds.includes(item.id)),
+    [selectedIds, sortedElements]
+  );
+
+  const addImageFromFile = useCallback(
+    (file: File) => {
+      if (!file || !file.type?.startsWith("image/")) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const src = String(reader.result || "");
+        if (!src) return;
+
+        const img = new Image();
+        img.onload = () => {
+          const naturalWidth = img.naturalWidth || 1000;
+          const naturalHeight = img.naturalHeight || 1000;
+          const maxWidth = Math.max(80, localSafeArea.width * 0.72);
+          const maxHeight = Math.max(80, localSafeArea.height * 0.72);
+          const ratio = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
+          const width = Math.max(48, Math.round(naturalWidth * ratio));
+          const height = Math.max(48, Math.round(naturalHeight * ratio));
+          const maxZ = Math.max(0, ...(Array.isArray(elements) ? elements : []).map((item: any) => item.zIndex || 0));
+
+          const next = {
+            id: crypto.randomUUID(),
+            type: "image",
+            src,
+            x: Math.round((localSafeArea.width - width) / 2),
+            y: Math.round((localSafeArea.height - height) / 2),
+            width,
+            height,
+            zIndex: maxZ + 1,
+            meta: {
+              naturalWidth,
+              naturalHeight,
+              fileName: file.name,
+              uploadedAt: Date.now(),
+              opacity: 1,
+            },
+          };
+
+          setElements((prev: any[]) => [...(Array.isArray(prev) ? prev : []), next]);
+          setSelectedIds([next.id]);
+          setSelectedId?.(next.id);
+          setSelectedElement?.(next);
+        };
+        img.src = src;
+      };
+
+      reader.readAsDataURL(file);
+    },
+    [elements, localSafeArea.height, localSafeArea.width, setElements, setSelectedElement, setSelectedId]
+  );
+
+  const deleteElements = useCallback(
+    (ids: string[]) => {
+      if (!ids.length) return;
+      setElements((prev: any[]) => (prev || []).filter((item) => !ids.includes(item.id)));
+      setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
+      setSelectedId?.(null);
+      setSelectedElement?.(null);
+    },
+    [setElements, setSelectedElement, setSelectedId]
+  );
+
+  const duplicateElementById = useCallback(
+    (id: string) => {
+      handleUpdateElement(id, { duplicate: true });
+    },
+    [handleUpdateElement]
+  );
+
+  const handleCanvasPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+      const clickedCanvas = e.currentTarget === e.target;
+      const clickedMockupRoot = target.id === "mockup-export-root";
+
+      if (!clickedCanvas && !clickedMockupRoot) return;
+
+      clearSelection();
+
+      if (e.button === 1) {
+        startPan(e);
+      }
+    },
+    [clearSelection, startPan]
+  );
+
+  const handleWheel = useCallback(
+    (e: React.WheelEvent) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+
+      const direction = e.deltaY > 0 ? -1 : 1;
+      const step = e.shiftKey ? 0.18 : 0.08;
+      handleZoomChange(zoom + direction * step);
+    },
+    [handleZoomChange, zoom]
+  );
+
+  const resetViewport = useCallback(() => {
+    handleZoomChange(1);
+    resetPan();
+  }, [handleZoomChange, resetPan]);
 
   return (
     <div
       ref={wrapperRef}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-transparent"
-      onPointerDownCapture={handleMobilePinchDown}
-      onPointerMoveCapture={handleMobilePinchMove}
-      onPointerUpCapture={handleMobilePinchEnd}
-      onPointerCancelCapture={handleMobilePinchEnd}
-      onPointerDown={(e) => {
-        if (e.target !== e.currentTarget) return;
-        clearSelection();
-      }}
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#05070d]"
+      onPointerDown={handleCanvasPointerDown}
+      onPointerMove={onPanMove}
+      onPointerUp={endPan}
+      onPointerCancel={endPan}
+      onPointerDownCapture={handlePinchDown}
+      onPointerMoveCapture={handlePinchMove}
+      onPointerUpCapture={handlePinchEnd}
+      onPointerCancelCapture={handlePinchEnd}
+      onWheel={handleWheel}
     >
-      <div
-        className="absolute right-4 top-4 z-50"
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <div className="relative flex justify-center">
-          <button
-            type="button"
-            onClick={() => setShowColors((v) => !v)}
-            className="
-              flex h-8 w-8 items-center justify-center
-              rounded-full border border-zinc-200
-              bg-white/90 shadow-md backdrop-blur
-              transition-transform hover:scale-105
-            "
-          >
-            <span
-              className="h-4 w-4 rounded-full border border-black/10"
-              style={{ backgroundColor: mockupColor }}
-            />
-          </button>
+      {!isPreviewMode && <ColorSelector
+        mockupColor={mockupColor}
+        setMockupColor={setMockupColor}
+        showColors={showColors}
+        setShowColors={setShowColors}
+        availableColors={availableColors}
+      />}
 
-          {showColors && (
-            <div
-              className="
-                absolute top-10 left-1/2 -translate-x-1/2
-                flex flex-col items-center gap-2
-                p-0 m-0
-              "
-            >
-              {availableColors.map((color) => {
-                const selected =
-                  color.hex.toLowerCase() === String(mockupColor).toLowerCase();
+      {!isPreviewMode && <WarningsPanel warnings={warnings} warningCount={warningCount} quality={quality} elements={elements} safeArea={localSafeArea} printSize={gelatoPrintSize} />}
 
-                return (
-                  <button
-                    key={`${color.name}-${color.hex}`}
-                    type="button"
-                    title={color.name}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={() => {
-                      setMockupColor?.(color.hex);
-                      setShowColors(false);
-                    }}
-                    className={`
-                      relative h-5 w-5 rounded-full border transition-all duration-150
-                      ${
-                        selected
-                          ? "scale-110 border-black ring-2 ring-black/15"
-                          : "border-black/10 hover:scale-110"
-                      }
-                    `}
-                    style={{ backgroundColor: color.hex }}
-                  >
-                    {selected && (
-                      <span className="absolute inset-0 rounded-full border border-white/50" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+      {!isPreviewMode && <FloatingEditToolbar
+        selectedElements={selectedElements}
+        safeArea={localSafeArea}
+        updateElement={handleUpdateElement}
+        deleteElements={deleteElements}
+        duplicateElement={duplicateElementById}
+        clearSelection={clearSelection}
+      />}
+
+
 
       <div
-        className="relative shrink-0 transition-transform duration-150 ease-out"
-        onPointerDown={(e) => {
-          if (e.target !== e.currentTarget) return;
-          clearSelection();
-        }}
+        id="mockup-export-root"
+        className="relative shrink-0"
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,
-          transform: `translateZ(0) scale(${finalScale})`,
+          transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${finalScale})`,
           transformOrigin: "center center",
           touchAction: "none",
           willChange: "transform",
         }}
       >
-        <CanvasMockup
-          mockup={mockup}
-          mockupId={mockupId}
-          currentSide={currentSide}
-          color={mockupColor}
-        />
+        <CanvasMockup mockup={mockup} mockupId={mockupId} currentSide={currentSide} color={mockupColor} />
 
-        <div
-          className="absolute z-20 overflow-hidden"
-          onPointerDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-
-            const rect = e.currentTarget.getBoundingClientRect();
-
-            const startX = e.clientX - rect.left;
-            const startY = e.clientY - rect.top;
-
-            clearSelection();
-
-            setSelectionBox({
-              x: startX,
-              y: startY,
-              w: 0,
-              h: 0,
-            });
-
-            const onMove = (ev: PointerEvent) => {
-              const currentX = ev.clientX - rect.left;
-              const currentY = ev.clientY - rect.top;
-
-              setSelectionBox({
-                x: Math.min(startX, currentX),
-                y: Math.min(startY, currentY),
-                w: Math.abs(currentX - startX),
-                h: Math.abs(currentY - startY),
-              });
-            };
-
-            const onUp = (ev: PointerEvent) => {
-              const endX = ev.clientX - rect.left;
-              const endY = ev.clientY - rect.top;
-
-              const box = {
-                x: Math.min(startX, endX),
-                y: Math.min(startY, endY),
-                w: Math.abs(endX - startX),
-                h: Math.abs(endY - startY),
-              };
-
-              const selected = elements
-                .filter((el: any) => {
-                  const x = el.x - safeArea.x;
-                  const y = el.y - safeArea.y;
-                  const w = el.width || 220;
-                  const h =
-                    el.height ||
-                    (el.type === "text" ? el.meta?.fontSize || 40 : 120);
-
-                  return (
-                    x < box.x + box.w &&
-                    x + w > box.x &&
-                    y < box.y + box.h &&
-                    y + h > box.y
-                  );
-                })
-                .map((el: any) => el.id);
-
-              setSelectedIds(selected);
-              setSelectedId(selected[selected.length - 1] || null);
-
-              const lastSelected = elements.find(
-                (el: any) => el.id === selected[selected.length - 1]
-              );
-
-              setSelectedElement?.(lastSelected || null);
-              setSelectionBox(null);
-
-              window.removeEventListener("pointermove", onMove);
-              window.removeEventListener("pointerup", onUp);
-              window.removeEventListener("pointercancel", onUp);
-            };
-
-            window.addEventListener("pointermove", onMove);
-            window.addEventListener("pointerup", onUp);
-            window.addEventListener("pointercancel", onUp);
-          }}
-          style={{
-            left: safeArea.x,
-            top: safeArea.y,
-            width: safeArea.width,
-            height: safeArea.height,
-            pointerEvents: "auto",
-            clipPath: "inset(0px)",
-            touchAction: "none",
-          }}
+        <SafeAreaLayer
+          safeArea={safeArea}
+          finalScale={finalScale}
+          elements={sortedElements}
+          setSelectedIds={setSelectedIds}
+          setSelectedId={setSelectedId}
+          setSelectedElement={setSelectedElement}
+          setSelectionBox={setSelectionBox}
+          selectionBox={selectionBox}
+          clearSelection={clearSelection}
+          previewMode={isPreviewMode}
         >
-          {elements.map((el: any) => (
-            <DraggableElement
+          <GelatoDesignDropzone
+            visible={!isPreviewMode && sortedElements.length === 0}
+            onUpload={addImageFromFile}
+          />
+
+          {!isPreviewMode && (
+            <LostElementsOverlay
+              elements={sortedElements}
+              safeArea={localSafeArea}
+              selectedIds={selectedIds}
+              onSelect={selectElement}
+            />
+          )}
+
+          {sortedElements.map((el: any) => (
+            <MemoDraggableElement
               key={el.id}
-              el={{
-                ...el,
-                x: el.x - safeArea.x,
-                y: el.y - safeArea.y,
-              }}
-              safeArea={safeArea}
+              el={el}
+              safeArea={localSafeArea}
               zoom={finalScale}
-              isSelected={selectedIds.includes(el.id)}
+              isSelected={!isPreviewMode && selectedIds.includes(el.id)}
               selectedIds={selectedIds}
               setSelectedIds={setSelectedIds}
               setSelectedId={setSelectedId}
               setSelectedElement={setSelectedElement}
               updateSelectedElements={updateSelectedElements}
               endSelectedElementsDrag={endSelectedElementsDrag}
-              updateElement={(patch: any) => {
-                const nextPatch = { ...patch };
-
-                if (typeof patch.x === "number") {
-                  nextPatch.x = patch.x + safeArea.x;
-                }
-
-                if (typeof patch.y === "number") {
-                  nextPatch.y = patch.y + safeArea.y;
-                }
-
-                handleUpdateElement(el.id, nextPatch);
-              }}
+              allElements={sortedElements}
+              printBox={printBox}
+              gelatoPrintSize={gelatoPrintSize}
+              updateElement={(patch: any) => !isPreviewMode && handleUpdateElement(el.id, patch)}
+              previewMode={isPreviewMode}
             />
           ))}
+        </SafeAreaLayer>
 
-          {selectionBox && (
-            <div
-              className="pointer-events-none absolute z-[999] border border-violet-500 bg-violet-500/10"
-              style={{
-                left: selectionBox.x,
-                top: selectionBox.y,
-                width: selectionBox.w,
-                height: selectionBox.h,
-              }}
-            />
-          )}
-        </div>
-
-        <SafeArea printBox={printBox} selected />
+        {!isPreviewMode && <SafeArea printBox={printBox} selected={selectedIds.length > 0} />}
       </div>
     </div>
   );

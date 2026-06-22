@@ -28,7 +28,7 @@ export default function SidebarHeader({
 
           <Image
             src="/sidelogo.ico"
-            alt="Mynify"
+            alt="Ryfio"
             width={48}
             height={48}
             priority

@@ -13,7 +13,6 @@ export function getGelatoPrintSizeMm(productId: string, side: Side = "front") {
 
 export function getGelatoExportSizePx(productId: string, side: Side = "front") {
   const size = getGelatoPrintSizeMm(productId, side);
-
   return {
     width: Math.round(size.widthMm * MM_TO_INCH * DPI),
     height: Math.round(size.heightMm * MM_TO_INCH * DPI),
@@ -27,7 +26,6 @@ export function hasElementsOutsidePrintArea(
 ) {
   const printBox = getPrintBox(productId, side);
   const safeArea = getSafeArea(printBox);
-
   return elements.some((el) => !isInsideSafeArea(el, safeArea));
 }
 
@@ -37,25 +35,23 @@ export function mapElementToGelatoExport(
   side: Side = "front"
 ) {
   const printBox = getPrintBox(productId, side);
-  const safeArea = getSafeArea(printBox);
   const exportSize = getGelatoExportSizePx(productId, side);
-
-  const scaleX = exportSize.width / safeArea.width;
-  const scaleY = exportSize.height / safeArea.height;
+  
+  const relativeX = (el.x - printBox.x) / printBox.width;
+  const relativeY = (el.y - printBox.y) / printBox.height;
+  const relativeWidth = el.width / printBox.width;
+  const relativeHeight = el.height / printBox.height;
 
   return {
     ...el,
-
-    x: Math.round((el.x - safeArea.x) * scaleX),
-    y: Math.round((el.y - safeArea.y) * scaleY),
-
-    width: el.width ? Math.round(el.width * scaleX) : undefined,
-    height: el.height ? Math.round(el.height * scaleY) : undefined,
-
+    x: Math.round(relativeX * exportSize.width),
+    y: Math.round(relativeY * exportSize.height),
+    width: el.width ? Math.round(relativeWidth * exportSize.width) : undefined,
+    height: el.height ? Math.round(relativeHeight * exportSize.height) : undefined,
     meta: {
       ...(el.meta || {}),
       fontSize: el.meta?.fontSize
-        ? Math.round(el.meta.fontSize * scaleY)
+        ? Math.round((el.meta.fontSize / printBox.height) * exportSize.height)
         : undefined,
     },
   };

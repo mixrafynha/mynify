@@ -209,13 +209,13 @@ export default function ContactPage() {
 
             <div className="space-y-4">
               <a
-                href="mailto:support@mynify.com"
+                href="mailto:support@ryfio.com"
                 className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 text-white/75 transition hover:border-purple-500/40 hover:bg-purple-500/10"
               >
                 <Mail className="text-purple-400" size={24} />
                 <div>
                   <p className="text-sm text-white/40">Email</p>
-                  <p className="font-semibold">support@mynify.com</p>
+                  <p className="font-semibold">support@ryfio.com</p>
                 </div>
               </a>
 
@@ -223,7 +223,7 @@ export default function ContactPage() {
                 <Phone className="text-purple-400" size={24} />
                 <div>
                   <p className="text-sm text-white/40">Phone</p>
-                  <p className="font-semibold">+351 999 999 999</p>
+                  <p className="font-semibold"></p>
                 </div>
               </div>
 
@@ -231,7 +231,7 @@ export default function ContactPage() {
                 <MapPin className="text-purple-400" size={24} />
                 <div>
                   <p className="text-sm text-white/40">Location</p>
-                  <p className="font-semibold">Lisbon, Portugal</p>
+                  <p className="font-semibold">Paris</p>
                 </div>
               </div>
             </div>

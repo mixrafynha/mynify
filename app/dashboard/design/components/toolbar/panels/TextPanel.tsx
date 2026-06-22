@@ -1,406 +1,156 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import {
-  Type,
-  ChevronDown,
-  ChevronUp,
-  Search,
-} from "lucide-react";
+import { Search, Star, Type } from "lucide-react";
+import { FONT_CATEGORIES, FONT_COMBINATIONS, FONT_ITEMS, TEXT_PRESETS, loadEditorFont, type FontCategory, type FontItem, type TextPreset } from "../data";
 
-import { FONTS, COLORS } from "../data";
+const FAVORITES_KEY = "mynify-editor-favorite-fonts";
+const RECENTS_KEY = "mynify-editor-recent-fonts";
+const PAGE_SIZE = 36;
 
-type TextShape = "straight" | "wave" | "arc";
+function readStorage(key: string) {
+  if (typeof window === "undefined") return [] as string[];
+  try { return JSON.parse(localStorage.getItem(key) || "[]") as string[]; } catch { return [] as string[]; }
+}
 
-export default function TextPanel({
-  createElement,
-  onAddText,
-}: {
-  createElement?: (element: any) => void;
-  onAddText?: () => void;
-}) {
-  const [textValue, setTextValue] =
-    useState("Dream big");
+function writeStorage(key: string, value: string[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(key, JSON.stringify(value.slice(0, 40)));
+}
 
-  const [textFont, setTextFont] =
-    useState(FONTS?.[0] || "Arial");
+function buildTextElement(preset: TextPreset) {
+  const text = preset.text || "Add your text";
+  const fontSize = preset.fontSize || 36;
+  const width = Math.max(128, Math.round(text.length * fontSize * 0.56));
+  const height = Math.max(34, Math.round(fontSize * (preset.lineHeight || 1.28)));
+  return {
+    type: "text",
+    text,
+    content: text,
+    width,
+    height,
+    fontFamily: preset.fontFamily || "Inter",
+    fontSize,
+    fontWeight: preset.fontWeight || 800,
+    color: preset.color || "#111111",
+    meta: { fontFamily: preset.fontFamily || "Inter", fontSize, fontWeight: preset.fontWeight || 800, color: preset.color || "#111111", letterSpacing: preset.letterSpacing || 0, lineHeight: preset.lineHeight || 1.25, textAlign: "center", textShape: "straight", opacity: 1, rotation: 0 },
+  };
+}
 
-  const [textColor, setTextColor] =
-    useState(COLORS?.[0] || "#ffffff");
+export default function TextPanel({ createElement, onAddText }: { createElement?: (element: any) => void; onAddText?: () => void }) {
+  const lockedRef = useRef(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<FontCategory | "all" | "favorites" | "recent">("all");
+  const [favorites, setFavorites] = useState<string[]>(() => readStorage(FAVORITES_KEY));
+  const [recents, setRecents] = useState<string[]>(() => readStorage(RECENTS_KEY));
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
-  const [textSize, setTextSize] =
-    useState(44);
+  const allFilteredFonts = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    let source: FontItem[] = FONT_ITEMS;
+    if (category === "favorites") source = FONT_ITEMS.filter((font) => favorites.includes(font.family));
+    else if (category === "recent") source = FONT_ITEMS.filter((font) => recents.includes(font.family));
+    else if (category !== "all") source = FONT_ITEMS.filter((font) => font.category === category);
+    return source.filter((font) => !term || `${font.family} ${font.category}`.toLowerCase().includes(term));
+  }, [category, favorites, query, recents]);
 
-  const [textShape] =
-    useState<TextShape>("straight");
+  const filteredFonts = allFilteredFonts.slice(0, limit);
 
-  const [fontOpen, setFontOpen] =
-    useState(false);
+  const markRecent = (family: string) => {
+    const next = [family, ...recents.filter((item) => item !== family)].slice(0, 24);
+    setRecents(next);
+    writeStorage(RECENTS_KEY, next);
+  };
 
-  const [fontSearch, setFontSearch] =
-    useState("");
+  const toggleFavorite = (family: string) => {
+    const next = favorites.includes(family) ? favorites.filter((item) => item !== family) : [family, ...favorites];
+    setFavorites(next);
+    writeStorage(FAVORITES_KEY, next);
+  };
 
-  // evita clique duplo / duplicação
-  const addingRef = useRef(false);
+  const addText = (preset: TextPreset) => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
+    loadEditorFont(preset.fontFamily);
+    markRecent(preset.fontFamily);
+    createElement?.(buildTextElement(preset));
+    window.setTimeout(() => { lockedRef.current = false; }, 180);
+  };
 
-  const filteredFonts = useMemo(() => {
-    return FONTS.filter((font) =>
-      font
-        .toLowerCase()
-        .includes(fontSearch.toLowerCase()),
-    );
-  }, [fontSearch]);
+  const addFont = (font: FontItem) => {
+    loadEditorFont(font);
+    addText({ label: font.family, text: font.family, fontFamily: font.family, fontSize: 32, fontWeight: 800, color: "#111111" });
+  };
 
-  const addCustomText = () => {
-    const text = textValue.trim();
-
-    if (!text) return;
-    if (addingRef.current) return;
-
-    addingRef.current = true;
-
-   createElement?.({
-  type: "text",
-  text,
-  content: text,
-
-  width: text.length * (textSize * 0.62),
-  height: textSize * 1.4,
-
-  // importante: fonte também no root do elemento
-  fontFamily: textFont,
-  fontSize: textSize,
-  fontWeight: "800",
-  fontStyle: "normal",
-  color: textColor,
-
-  meta: {
-    fontFamily: textFont,
-    fontSize: textSize,
-    fontWeight: "800",
-    fontStyle: "normal",
-    color: textColor,
-    textShape,
-  },
-});
-
-    setTimeout(() => {
-      addingRef.current = false;
-    }, 350);
+  const changeCategory = (item: any) => {
+    setCategory(item);
+    setLimit(PAGE_SIZE);
   };
 
   return (
-    <div className="flex min-h-full flex-col">
-      {/* scrollable content */}
-      <div className="space-y-5 pb-6">
-        {/* TEXT */}
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Text
-          </label>
+    <div className="space-y-3 pb-6 text-white">
+      <button type="button" onClick={onAddText || (() => addText(TEXT_PRESETS[0]))} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white active:scale-[0.99]">
+        <Type size={17} /> Add text
+      </button>
 
-          <textarea
-            rows={3}
-            value={textValue}
-            onChange={(e) =>
-              setTextValue(
-                e.target.value,
-              )
-            }
-            className="
-              mt-3 w-full resize-none
-              rounded-2xl
-              border border-white/10
-              bg-[#070711]
-              px-4 py-3
-              text-base font-bold
-              text-white
-              outline-none
-              transition
-              focus:border-violet-400
-            "
-          />
+      <section className="space-y-2">
+        <PanelLabel title="Presets" count={TEXT_PRESETS.length + FONT_COMBINATIONS.length} />
+        <div className="grid grid-cols-2 gap-2">
+          {[...TEXT_PRESETS, ...FONT_COMBINATIONS].slice(0, 10).map((preset) => (
+            <button key={preset.label} type="button" onClick={() => addText(preset)} className="min-h-[58px] rounded-2xl bg-white/[0.045] px-3 text-left ring-1 ring-white/10 active:scale-[0.98]">
+              <span className="block truncate text-sm font-black" style={{ fontFamily: preset.fontFamily }}>{preset.text}</span>
+              <span className="mt-1 block truncate text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">{preset.label}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2">
+        <PanelLabel title="Fonts" count={allFilteredFonts.length} />
+        <label className="flex h-11 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10">
+          <Search size={15} />
+          <input value={query} onChange={(e) => { setQuery(e.target.value); setLimit(PAGE_SIZE); }} placeholder={`Search ${FONT_ITEMS.length}+ fonts`} className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600" />
+        </label>
+
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {["all", "favorites", "recent", ...FONT_CATEGORIES].map((item) => (
+            <button key={item} type="button" onClick={() => changeCategory(item)} className={`shrink-0 rounded-full px-3 py-2 text-xs font-black capitalize transition-colors active:scale-95 ${category === item ? "bg-violet-500 text-white" : "bg-white/[0.045] text-slate-400 ring-1 ring-white/10"}`}>
+              {item}
+            </button>
+          ))}
         </div>
 
-        {/* PREVIEW */}
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Preview
-          </label>
-
-          <div
-            className="
-              mt-3 flex min-h-[120px]
-              items-center justify-center
-              rounded-3xl
-              border border-white/10
-              bg-[#070711]
-              p-5 text-center
-            "
-          >
-            <span
-              className="break-words font-black leading-tight"
-              style={{
-                fontFamily: `"${textFont}", sans-serif`,
-                color: textColor,
-                fontSize: Math.min(
-                  textSize,
-                  58,
-                ),
-              }}
-            >
-              {textValue ||
-                "Text"}
-            </span>
-          </div>
+        <div className="grid grid-cols-1 gap-1.5 overflow-hidden">
+          {filteredFonts.map((font) => {
+            const favorite = favorites.includes(font.family);
+            return (
+              <div key={font.id} className="flex h-10 items-center gap-1 rounded-2xl bg-white/[0.035] px-2 ring-1 ring-white/10">
+                <button type="button" onClick={() => addFont(font)} className="min-w-0 flex-1 text-left">
+                  <span className="block truncate text-sm text-white" style={{ fontFamily: font.family, fontWeight: 800 }}>{font.family}</span>
+                </button>
+                <button type="button" onClick={() => toggleFavorite(font.family)} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${favorite ? "bg-yellow-300 text-slate-950" : "bg-white/[0.05] text-slate-500"}`} aria-label="Favorite font">
+                  <Star size={14} fill={favorite ? "currentColor" : "none"} />
+                </button>
+              </div>
+            );
+          })}
         </div>
 
-        {/* FONT PICKER */}
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Font
-          </label>
-
-          <button
-            type="button"
-            onClick={() =>
-              setFontOpen(
-                (v) => !v,
-              )
-            }
-            className="
-              mt-3 flex h-14
-              w-full items-center
-              justify-between
-              rounded-2xl
-              border border-white/10
-              bg-[#070711]
-              px-4 text-white
-              transition
-              hover:border-violet-400/50
-            "
-          >
-            <div className="flex min-w-0 items-center gap-3 overflow-hidden">
-              <Type size={18} />
-
-              <span
-                className="truncate font-bold"
-                style={{
-                  fontFamily: `"${textFont}", sans-serif`,
-                }}
-              >
-                {textFont}
-              </span>
-            </div>
-
-            {fontOpen ? (
-              <ChevronUp
-                size={18}
-              />
-            ) : (
-              <ChevronDown
-                size={18}
-              />
-            )}
+        {limit < allFilteredFonts.length && (
+          <button type="button" onClick={() => setLimit((v) => v + PAGE_SIZE)} className="h-10 w-full rounded-2xl bg-white/[0.055] text-xs font-black text-slate-300 ring-1 ring-white/10 active:scale-[0.98]">
+            Load more fonts
           </button>
+        )}
+      </section>
+    </div>
+  );
+}
 
-          {fontOpen && (
-            <div className="mt-4 rounded-3xl border border-white/10 bg-[#070711] p-3">
-              <div
-                className="
-                  mb-3 flex items-center gap-2
-                  rounded-2xl
-                  border border-white/10
-                  bg-white/[0.04]
-                  px-3
-                "
-              >
-                <Search
-                  size={16}
-                  className="text-slate-500"
-                />
-
-                <input
-                  value={
-                    fontSearch
-                  }
-                  onChange={(
-                    e,
-                  ) =>
-                    setFontSearch(
-                      e.target
-                        .value,
-                    )
-                  }
-                  placeholder="Search font..."
-                  className="
-                    h-11 w-full
-                    bg-transparent
-                    text-white
-                    outline-none
-                    placeholder:text-slate-500
-                  "
-                />
-              </div>
-
-              <div
-                className="
-                  max-h-[38dvh]
-                  overflow-y-auto
-                  overscroll-contain
-                  space-y-2 pr-1
-                "
-              >
-                {filteredFonts.map(
-                  (font) => (
-                    <button
-                      key={
-                        font
-                      }
-                      type="button"
-                      onClick={() => {
-                        setTextFont(
-                          font,
-                        );
-
-                        setFontOpen(
-                          false,
-                        );
-                      }}
-                      style={{
-                        fontFamily: `"${font}", sans-serif`,
-                      }}
-                      className={`flex min-h-[58px] w-full items-center rounded-2xl border px-4 text-left transition active:scale-[0.98] ${
-                        textFont ===
-                        font
-                          ? "border-violet-400 bg-violet-500/20 text-white"
-                          : "border-white/10 bg-white/[0.05] text-slate-200 hover:bg-white/[0.08]"
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate font-black">
-                          {
-                            font
-                          }
-                        </div>
-
-                        <div className="truncate text-xs opacity-70">
-                          The
-                          quick
-                          brown
-                          fox
-                        </div>
-                      </div>
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SIZE */}
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-              Size
-            </label>
-
-            <span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black text-white">
-              {textSize}px
-            </span>
-          </div>
-
-          <input
-            type="range"
-            min={16}
-            max={120}
-            value={textSize}
-            onChange={(
-              e,
-            ) =>
-              setTextSize(
-                Number(
-                  e
-                    .target
-                    .value,
-                ),
-              )
-            }
-            className="mt-4 w-full accent-violet-500"
-          />
-        </div>
-
-        {/* COLORS */}
-        <div className="rounded-3xl border border-white/10 bg-white/[0.05] p-4">
-          <label className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">
-            Color
-          </label>
-
-          <div className="mt-3 grid grid-cols-7 gap-3">
-            {COLORS.map(
-              (
-                color,
-              ) => (
-                <button
-                  key={
-                    color
-                  }
-                  type="button"
-                  onClick={() =>
-                    setTextColor(
-                      color,
-                    )
-                  }
-                  style={{
-                    backgroundColor:
-                      color,
-                  }}
-                  className={`h-9 w-9 rounded-full border border-white/20 transition hover:scale-110 active:scale-95 ${
-                    textColor ===
-                    color
-                      ? "ring-2 ring-violet-400 ring-offset-2 ring-offset-[#0f1020]"
-                      : ""
-                  }`}
-                />
-              ),
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* fixed bottom button */}
-      <div className="mt-auto pt-5">
-        <button
-          type="button"
-          onClick={
-            addCustomText
-          }
-          disabled={
-            !textValue.trim()
-          }
-          className="
-            flex h-14 w-full
-            items-center
-            justify-center
-            rounded-2xl
-            bg-gradient-to-r
-            from-violet-600
-            via-fuchsia-500
-            to-cyan-500
-            px-5
-            text-base font-black
-            text-white
-            shadow-[0_14px_35px_rgba(168,85,247,0.35)]
-            transition
-            hover:scale-[1.01]
-            active:scale-[0.98]
-            disabled:opacity-40
-          "
-        >
-          Add text
-        </button>
-      </div>
+function PanelLabel({ title, count }: { title: string; count?: number }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-1">
+      <h3 className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{title}</h3>
+      {typeof count === "number" && <span className="text-[10px] font-black text-violet-300">{count}</span>}
     </div>
   );
 }

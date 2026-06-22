@@ -1,0 +1,34 @@
+html.mynify-preview-open,
+body.mynify-preview-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+}
+
+body.mynify-preview-open > *:not([data-mynify-preview-overlay="true"]) {
+  pointer-events: none !important;
+}
+
+body.mynify-preview-open [data-editor-only],
+body.mynify-preview-open [data-editor-ui],
+body.mynify-preview-open [data-bottom-toolbar],
+body.mynify-preview-open [data-mobile-toolbar],
+body.mynify-preview-open [data-ai-panel],
+body.mynify-preview-open [data-editor-sidebar],
+body.mynify-preview-open [data-editor-topbar],
+body.mynify-preview-open [data-toolbar],
+body.mynify-preview-open [data-sidebar],
+body.mynify-preview-open nav[class*="fixed"],
+body.mynify-preview-open aside[class*="fixed"],
+body.mynify-preview-open div[class*="bottom-0"][class*="fixed"],
+body.mynify-preview-open div[class*="bottom-"][class*="fixed"] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.mynify-preview-open [data-mynify-preview-overlay="true"],
+body.mynify-preview-open [data-mynify-preview-overlay="true"] * {
+  visibility: visible !important;
+  pointer-events: auto;
+}

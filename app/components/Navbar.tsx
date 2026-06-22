@@ -14,7 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 const LINKS = Object.freeze([
   { name: "Catalog", href: "/catalog" },
-  { name: "How it works", dropdown: ["How Mynify works"] },
+  { name: "How it works", dropdown: ["How Ryfio works"] },
   { name: "Pricing", href: "/pricing" },
   { name: "Blog", href: "/blog" },
   { name: "Support", dropdown: ["Contact"] },
@@ -127,53 +127,51 @@ export default function Navbar() {
             >
               ☰
             </button>
-              <Link
-  href="/"
-  className="group overflow-visible select-none shrink-0 ml-3"
->
-  <div className="relative flex items-center">
-    <span
-      className="
-        text-3xl
-        md:text-4xl
-        font-black
-        tracking-[-0.06em]
-        text-white
-        transition-all
-        duration-300
-        group-hover:scale-[1.03]
-      "
-      style={{
-        fontFamily:
-          "'Clash Display', 'Space Grotesk', sans-serif",
-      }}
-    >
-      <span
-        className="
-          inline-block
-          bg-gradient-to-br
-          from-fuchsia-400
-          via-purple-500
-          to-cyan-400
-          bg-clip-text
-          text-transparent
-          drop-shadow-[0_0_20px_rgba(168,85,247,0.7)]
-        "
-      >
-        M
-      </span>
-      <span className="text-white">
-        ynify
-      </span>
-    </span>
 
-    <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
-  </div>
-</Link>
-            
+            <Link
+              href="/"
+              className="group overflow-visible select-none shrink-0 ml-3"
+            >
+              <div className="relative flex items-center">
+                <span
+                  className="
+                    text-3xl
+                    md:text-4xl
+                    font-black
+                    tracking-[-0.06em]
+                    text-white
+                    transition-all
+                    duration-300
+                    group-hover:scale-[1.03]
+                  "
+                  style={{
+                    fontFamily:
+                      "'Clash Display', 'Space Grotesk', sans-serif",
+                  }}
+                >
+                  <span
+                    className="
+                      inline-block
+                      bg-gradient-to-br
+                      from-fuchsia-400
+                      via-purple-500
+                      to-cyan-400
+                      bg-clip-text
+                      text-transparent
+                      drop-shadow-[0_0_20px_rgba(168,85,247,0.7)]
+                    "
+                  >
+                    R
+                  </span>
+                  <span className="text-white">
+                    YFIO
+                  </span>
+                </span>
 
-          
-        </div>
+                <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
+              </div>
+            </Link>
+          </div>
 
           <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
             {links.map((link) => (
@@ -292,10 +290,10 @@ export default function Navbar() {
       )}
 
       <div
-        className={`fixed left-0 top-[78px] w-[240px] bg-[#070711]/95 backdrop-blur-2xl border border-white/10 z-50 shadow-[0_0_45px_rgba(168,85,247,0.28)] rounded-2xl transition-all duration-300 ${
+        className={`fixed left-0 top-[78px] w-[240px] bg-[#070711]/95 backdrop-blur-2xl border border-white/10 z-50 shadow-[0_0_45px_rgba(168,85,247,0.28)] rounded-2xl transition-opacity duration-300 ${
           open
-            ? "opacity-100 translate-y-0"
-            : "opacity-0 -translate-y-2 pointer-events-none"
+            ? "opacity-100"
+            : "opacity-0 pointer-events-none"
         }`}
       >
         <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_40%),radial-gradient(circle_at_90%_100%,rgba(14,165,233,0.10),transparent_32%)]" />

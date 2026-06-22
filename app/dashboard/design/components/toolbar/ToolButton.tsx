@@ -12,83 +12,27 @@ type ToolButtonProps = {
   onClick?: () => void;
 };
 
-export default function ToolButton({
-  icon,
-  label,
-  active = false,
-  disabled = false,
-  badge,
-  onClick,
-}: ToolButtonProps) {
+export default function ToolButton({ icon, label, active = false, disabled = false, badge, onClick }: ToolButtonProps) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
       className={clsx(
-        `
-          relative flex h-[60px] w-[74px]
-          shrink-0 flex-col items-center
-          justify-center gap-1 rounded-2xl
-          border transition-all duration-200
-          active:scale-[0.97]
-        `,
+        "relative flex h-[46px] min-w-[52px] shrink-0 select-none flex-col items-center justify-center gap-1 rounded-xl px-1.5 text-[9px] font-bold leading-none touch-manipulation transition-colors duration-100 active:scale-[0.98]",
         active
-          ? `
-            border-cyan-400/40
-            bg-cyan-500/15
-            text-cyan-200
-            shadow-[0_0_22px_rgba(14,165,233,0.24)]
-          `
-          : `
-            border-white/10
-            bg-white/[0.05]
-            text-slate-100
-            hover:bg-white/[0.10]
-            active:bg-white/[0.12]
-          `,
-        disabled &&
-          "pointer-events-none opacity-35 saturate-0"
+          ? "bg-violet-500 text-white"
+          : "bg-transparent text-slate-300 active:bg-white/[0.08]",
+        disabled && "pointer-events-none opacity-35"
       )}
     >
       {badge && (
-        <span
-          className="
-            absolute right-2 top-1
-            rounded-full
-            bg-gradient-to-r
-            from-cyan-500 to-blue-500
-            px-1.5 py-[2px]
-            text-[9px] font-black
-            text-white
-            shadow-[0_0_14px_rgba(14,165,233,0.45)]
-          "
-        >
+        <span className="absolute right-1 top-1 rounded-full bg-fuchsia-500 px-1.5 py-[1px] text-[8px] font-black text-white">
           {badge}
         </span>
       )}
-
-      <div
-        className={clsx(
-          "flex items-center justify-center transition-colors",
-          active
-            ? "text-cyan-200"
-            : "text-slate-100"
-        )}
-      >
-        {icon}
-      </div>
-
-      <span
-        className={clsx(
-          "max-w-[68px] truncate text-[11px] font-bold transition-colors",
-          active
-            ? "text-cyan-100"
-            : "text-slate-200"
-        )}
-      >
-        {label}
-      </span>
+      <span className={clsx("flex items-center justify-center", active ? "text-white" : "text-slate-300")}>{icon}</span>
+      <span className="max-w-[48px] truncate">{label}</span>
     </button>
   );
 }

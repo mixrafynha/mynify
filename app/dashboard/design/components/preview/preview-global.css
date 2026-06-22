@@ -1,0 +1,8 @@
+/* Optional: add this to globals.css if any editor fixed bar still appears above preview. */
+body.mynify-preview-open [data-editor-bottom-bar],
+body.mynify-preview-open [data-editor-sidebar],
+body.mynify-preview-open [data-editor-toolbar],
+body.mynify-preview-open [data-ai-panel] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

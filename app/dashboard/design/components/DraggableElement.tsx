@@ -1,12 +1,45 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import ElementRenderer from "./element/ElementRenderer";
-import ElementControls from "./element/ElementControls";
-import ResizeHandles from "./element/ResizeHandles";
+import SelectionFrame from "./element/SelectionFrame";
+import { finiteNumber, getElementSize } from "./canvas/canvasMath";
+import {
+  getElementRect,
+  getOutsideSeverity,
+  isOutsideSafeArea,
+  isFullyOutsideSafeArea,
+} from "./canvas/engine/bounds";
+import { fitElementToSafeArea } from "./canvas/engine/transform";
+import { normalizeTextElement } from "./canvas/engine/textBounds";
 
-export default function DraggableElement({
+import { useElementSelection } from "./element/hooks/useElementSelection";
+import { useElementDrag } from "./element/hooks/useElementDrag";
+import { useElementResize } from "./element/hooks/useElementResize";
+import { useElementRotate } from "./element/hooks/useElementRotate";
+
+function stopPointer(e: React.PointerEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+function sanitizeText(value: string) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/[<>]/g, "")
+    .slice(0, 200);
+}
+
+function toLocalSafeArea(safeArea: any) {
+  return {
+    x: 0,
+    y: 0,
+    width: finiteNumber(safeArea?.width, 0),
+    height: finiteNumber(safeArea?.height, 0),
+  };
+}
+
+function DraggableElement({
   el,
   safeArea,
   zoom = 1,
@@ -16,376 +49,329 @@ export default function DraggableElement({
   setSelectedId,
   setSelectedElement,
   updateSelectedElements,
+  endSelectedElementsDrag,
   updateElement,
+  allElements = [],
+  previewMode = false,
 }: any) {
   const [editing, setEditing] = useState(false);
-  const ref = useRef<HTMLInputElement | null>(null);
-  const lastTapRef = useRef(0);
 
-  useEffect(() => {
-    if (!editing) return;
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const elementRef = useRef<HTMLDivElement>(null);
 
-    const handleOutsideClick = (e: PointerEvent) => {
-      const target = e.target as Node;
+  const isHidden = !!el?.meta?.hidden;
 
-      // se clicou dentro do input continua a editar
-      if (ref.current?.contains(target)) return;
+  const isLocked = previewMode || !!el.locked || !!el.meta?.locked;
+  const isText = el.type === "text";
 
-      // qualquer clique fora fecha edição
-      setEditing(false);
-    };
+  const localSafeArea = useMemo(() => toLocalSafeArea(safeArea), [safeArea]);
 
-    window.addEventListener("pointerdown", handleOutsideClick, true);
+  const size = useMemo(() => getElementSize(el), [el]);
 
-    return () => {
-      window.removeEventListener(
-        "pointerdown",
-        handleOutsideClick,
-        true
-      );
-    };
-  }, [editing]);
-
-  const rotation = el.meta?.rotation || 0;
-  const flipX = el.meta?.flipX ? -1 : 1;
-  const flipY = el.meta?.flipY ? -1 : 1;
-
-  const elementWidth = el.width || 220;
-  const elementHeight =
-    el.height || (el.type === "text" ? el.meta?.fontSize || 40 : 120);
-
-  const baseStyle = useMemo(
+  /**
+   * IMPORTANTE:
+   * Não fazemos clamp aqui.
+   * O elemento pode sair da área de edição.
+   * O preflight/warning mostra o problema.
+   */
+  const rect = useMemo(
     () => ({
-      position: "absolute" as const,
-      left: el.x,
-      top: el.y,
-      width: elementWidth,
-      height: elementHeight,
-      transform: `rotate(${rotation}deg) scale(${flipX}, ${flipY})`,
-      transformOrigin: "center center",
-      pointerEvents: "auto" as const,
-      touchAction: "none" as const,
-      willChange: "left, top, width, height, transform",
+      x: finiteNumber(el.x, 0),
+      y: finiteNumber(el.y, 0),
+      width: size.width,
+      height: size.height,
     }),
-    [el.x, el.y, rotation, flipX, flipY, elementWidth, elementHeight]
+    [el.x, el.y, size.height, size.width]
   );
 
-  const patchElement = (patch: any) => updateElement?.(patch);
+  const outside = useMemo(
+    () => isOutsideSafeArea(rect, localSafeArea),
+    [rect, localSafeArea]
+  );
 
-  function selectElement(e?: React.PointerEvent) {
-    const multi = e?.shiftKey || e?.ctrlKey || e?.metaKey;
+  const fullyOutside = useMemo(
+    () => isFullyOutsideSafeArea(rect, localSafeArea),
+    [rect, localSafeArea]
+  );
 
-    if (multi) {
-      setSelectedIds?.((prev: string[]) => {
-        const next = prev.includes(el.id)
-          ? prev.filter((id) => id !== el.id)
-          : [...prev, el.id];
+  const severity = useMemo(
+    () => getOutsideSeverity(rect, localSafeArea),
+    [rect, localSafeArea]
+  );
 
-        setSelectedId?.(next[next.length - 1] || null);
-        return next;
-      });
-    } else {
-      setSelectedIds?.([el.id]);
-      setSelectedId?.(el.id);
-    }
+  const { selectedIdSet, select } = useElementSelection({
+    el,
+    selectedIds,
+    setSelectedIds,
+    setSelectedId,
+    setSelectedElement,
+  });
 
-    setSelectedElement?.(el);
-  }
+  const { startDrag } = useElementDrag({
+    el,
+    elementRef,
+    editing,
+    isLocked,
+    selectedIds,
+    selectedIdSet,
+    select,
+    allElements,
+    safeArea: localSafeArea,
+    zoom,
+    updateElement,
+    updateSelectedElements,
+    endSelectedElementsDrag,
 
-  const updateText = (value: string) => {
-    patchElement({
-      text: value,
-      content: value,
-      width: elementWidth,
-      height: elementHeight,
-    });
-  };
+    /**
+     * Se os teus hooks suportarem isto, usa para permitir overflow.
+     * Se não suportarem, remove do hook e garante que lá dentro não usa clamp.
+     */
+    allowOverflow: true,
+  });
 
-  const startEditing = () => {
-    setSelectedIds?.([el.id]);
-    setSelectedId?.(el.id);
-    setSelectedElement?.(el);
+  const { resizeElement } = useElementResize({
+    el,
+    elementRef,
+    editing,
+    isLocked,
+    safeArea: localSafeArea,
+    zoom,
+    updateElement,
+    allowOverflow: true,
+  });
+
+  const { startRotate } = useElementRotate({
+    el,
+    elementRef,
+    editing,
+    isLocked,
+    updateElement,
+  });
+
+  const startEdit = useCallback(() => {
+    if (!isText || isLocked) return;
 
     setEditing(true);
-
     window.setTimeout(() => {
-      ref.current?.focus();
-      ref.current?.select();
-    }, 50);
-  };
+      inputRef.current?.focus();
+      inputRef.current?.select?.();
+    }, 30);
+  }, [isText, isLocked]);
 
- function startDrag(e: React.PointerEvent<HTMLDivElement>) {
-  if (editing || el.meta?.lock) return;
+  const updateText = useCallback(
+    (text: string) => {
+      const value = sanitizeText(text);
 
-  e.preventDefault();
-  e.stopPropagation();
+      const normalized = normalizeTextElement(
+        {
+          ...el,
+          text: value,
+          content: value,
+          height: undefined,
+        },
+        localSafeArea
+      );
 
-  selectElement(e);
+      /**
+       * Texto pode ficar fora.
+       * Não clampa posição.
+       * Só normaliza width/height/font metrics.
+       */
+      updateElement?.({
+        x: finiteNumber(el.x, 0),
+        y: finiteNumber(el.y, 0),
+        width: normalized.width,
+        height: normalized.height,
+        text: value,
+        content: value,
+        meta: normalized.meta,
+      });
+    },
+    [el, localSafeArea, updateElement]
+  );
 
-  if (el.type === "text") {
-    if (e.pointerType === "touch") {
-      const now = Date.now();
+  const fitToBounds = useCallback(
+    (e: React.PointerEvent) => {
+      stopPointer(e);
 
-      if (now - lastTapRef.current < 400) {
-        startEditing();
+      const currentRect = getElementRect(el);
+      const patch = fitElementToSafeArea(el, localSafeArea, currentRect);
+
+      if (isText) {
+        const normalized = normalizeTextElement(
+          {
+            ...el,
+            ...patch,
+            height: undefined,
+          },
+          localSafeArea
+        );
+
+        updateElement?.({
+          x: normalized.x,
+          y: normalized.y,
+          width: normalized.width,
+          height: normalized.height,
+          meta: normalized.meta,
+        });
+
         return;
       }
 
-      lastTapRef.current = now;
-    }
-  }
+      updateElement?.(patch);
+    },
+    [el, isText, localSafeArea, updateElement]
+  );
 
-  e.currentTarget.setPointerCapture?.(e.pointerId);
+  const flipElement = useCallback(
+    (e: React.PointerEvent) => {
+      stopPointer(e);
+      if (isLocked) return;
 
-  const startX = e.clientX;
-  const startY = e.clientY;
-  const startElX = el.x;
-  const startElY = el.y;
-
-  let moved = false;
-
-  const dragIds =
-    selectedIds.includes(el.id) && selectedIds.length > 1
-      ? selectedIds
-      : [el.id];
-
-  const onMove = (ev: PointerEvent) => {
-    ev.preventDefault();
-
-    const dx = (ev.clientX - startX) / zoom;
-    const dy = (ev.clientY - startY) / zoom;
-
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-      moved = true;
-    }
-
-    if (dragIds.length > 1) {
-      updateSelectedElements?.(dragIds, dx, dy);
-      return;
-    }
-
-    patchElement({
-      x: startElX + dx,
-      y: startElY + dy,
-    });
-  };
-
-  const onUp = (ev: PointerEvent) => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-    window.removeEventListener("pointercancel", onUp);
-
-    if (
-      el.type === "text" &&
-      ev.pointerType === "mouse" &&
-      !moved
-    ) {
-      startEditing();
-    }
-  };
-
-  window.addEventListener("pointermove", onMove, {
-    passive: false,
-  });
-
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointercancel", onUp);
-}
-
-  const resizeElement = (
-  e: React.PointerEvent,
-  direction: "br" | "tr" | "bl" | "tl" | "r" | "l" | "t" | "b"
-) => {
-  e.preventDefault();
-  e.stopPropagation();
-
-  selectElement(e);
-
-  const startX = e.clientX;
-  const startY = e.clientY;
-  const startWidth = elementWidth;
-  const startHeight = elementHeight;
-  const startElX = el.x;
-  const startElY = el.y;
-
-  const onMove = (ev: PointerEvent) => {
-    ev.preventDefault();
-
-    const dx = (ev.clientX - startX) / zoom;
-    const dy = (ev.clientY - startY) / zoom;
-
-    const factor = 1.35;
-
-    let nextWidth = startWidth;
-    let nextHeight = startHeight;
-    let nextX = startElX;
-    let nextY = startElY;
-
-    // WIDTH
-    if (direction.includes("r")) {
-      nextWidth = Math.max(24, startWidth + dx * factor);
-    }
-
-    if (direction.includes("l")) {
-      nextWidth = Math.max(24, startWidth - dx * factor);
-      nextX = startElX + dx;
-    }
-
-    // HEIGHT
-    if (direction.includes("b")) {
-      nextHeight = Math.max(24, startHeight + dy * factor);
-    }
-
-    if (direction.includes("t")) {
-      nextHeight = Math.max(24, startHeight - dy * factor);
-      nextY = startElY + dy;
-    }
-
-    // IMAGE SCALE ONLY
-    const widthRatio = nextWidth / startWidth;
-    const heightRatio = nextHeight / startHeight;
-
-    patchElement({
-      x: nextX,
-      y: nextY,
-      width: nextWidth,
-      height: nextHeight,
-      meta: {
-        ...(el.meta || {}),
-
-        scale:
-          el.type === "image"
-            ? Math.max(widthRatio, heightRatio)
-            : el.meta?.scale,
-
-        fontSize: el.meta?.fontSize,
-        fontFamily: el.meta?.fontFamily,
-        fontWeight: el.meta?.fontWeight,
-        fontStyle: el.meta?.fontStyle,
-      },
-    });
-  };
-
-  const onUp = () => {
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-    window.removeEventListener("pointercancel", onUp);
-  };
-
-  window.addEventListener("pointermove", onMove, {
-    passive: false,
-  });
-
-  window.addEventListener("pointerup", onUp);
-  window.addEventListener("pointercancel", onUp);
-};
-
-  const rotateElement = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    selectElement(e);
-
-    const box = (
-      e.currentTarget.parentElement as HTMLElement
-    ).getBoundingClientRect();
-
-    const centerX = box.left + box.width / 2;
-    const centerY = box.top + box.height / 2;
-
-    const onMove = (ev: PointerEvent) => {
-      ev.preventDefault();
-
-      const angle =
-        Math.atan2(ev.clientY - centerY, ev.clientX - centerX) *
-          (180 / Math.PI) +
-        90;
-
-      patchElement({
+      updateElement?.({
         meta: {
           ...(el.meta || {}),
-          rotation: Math.round(angle),
+          flipX: !el.meta?.flipX,
         },
       });
-    };
+    },
+    [el.meta, isLocked, updateElement]
+  );
 
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    };
+  const duplicateElement = useCallback(
+    (e: React.PointerEvent) => {
+      stopPointer(e);
+      updateElement?.({ duplicate: true });
+    },
+    [updateElement]
+  );
 
-    window.addEventListener("pointermove", onMove, {
-      passive: false,
-    });
+  const removeElement = useCallback(
+    (e: React.PointerEvent) => {
+      stopPointer(e);
+      updateElement?.({ delete: true });
+    },
+    [updateElement]
+  );
 
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  };
+  const toggleLock = useCallback(
+    (e: React.PointerEvent) => {
+      stopPointer(e);
 
-  const flipElement = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+      updateElement?.({
+        locked: !isLocked,
+        meta: {
+          ...(el.meta || {}),
+          locked: !isLocked,
+        },
+      });
+    },
+    [el.meta, isLocked, updateElement]
+  );
 
-    patchElement({
+  const style: React.CSSProperties = useMemo(
+    () => ({
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: rect.width,
+      height: rect.height,
+      transform: `translate3d(${rect.x}px, ${rect.y}px, 0) rotate(${
+        Number(el.meta?.rotation) || 0
+      }deg) scale(${el.meta?.flipX ? -1 : 1}, 1)`,
+      transformOrigin: "center center",
+      cursor: previewMode ? "default" : isLocked ? "not-allowed" : isSelected ? "move" : "grab",
+      zIndex: el.zIndex ?? (isSelected ? 50 : 10),
+      opacity: el.meta?.opacity ?? 1,
+      touchAction: previewMode ? "auto" : "none",
+      userSelect: "none",
+      pointerEvents: previewMode ? "none" : "auto",
+      willChange: isSelected ? "transform,width,height" : "auto",
+    }),
+    [
+      el.meta?.flipX,
+      el.meta?.opacity,
+      el.meta?.rotation,
+      el.zIndex,
+      isLocked,
+      isSelected,
+      previewMode,
+      rect.height,
+      rect.width,
+      rect.x,
+      rect.y,
+    ]
+  );
+
+  const rendererElement = useMemo(
+    () => ({
+      ...el,
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
       meta: {
         ...(el.meta || {}),
-        flipX: !el.meta?.flipX,
+        outsidePrintArea: outside,
+        outsideSeverity: severity,
       },
-    });
-  };
+    }),
+    [el, outside, rect.height, rect.width, rect.x, rect.y, severity]
+  );
 
-  const duplicateElement = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    patchElement({ duplicate: true });
-  };
-
-  const removeElement = (e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    patchElement({ delete: true });
-  };
+  if (isHidden) return null;
 
   return (
     <div
+      data-draggable-element
+      data-outside-print-area={outside ? "true" : "false"}
+      ref={elementRef}
       onPointerDown={startDrag}
-      className={`absolute select-none touch-none cursor-move ${
-        isSelected ? "z-50" : "z-10"
-      }`}
-      style={baseStyle}
+      onDoubleClick={startEdit}
+      style={style}
+      className="absolute select-none touch-none"
     >
-      <div className="relative h-full w-full overflow-visible">
-        <ElementRenderer
-          el={el}
-          isSelected={isSelected}
-          editing={editing}
-          inputRef={ref}
-          startEditing={startEditing}
-          updateText={updateText}
-          setEditing={setEditing}
-        />
+      <ElementRenderer
+        el={rendererElement}
+        isSelected={isSelected}
+        editing={editing}
+        inputRef={inputRef}
+        startEditing={startEdit}
+        updateText={updateText}
+        setEditing={setEditing}
+      />
 
-        {isSelected &&
-          !editing &&
-          selectedIds.length <= 1 && (
-            <div
-              className="pointer-events-none absolute inset-0 z-[90]"
-              style={{ overflow: "visible" }}
-            >
-              <ElementControls
-                rotateElement={rotateElement}
-                flipElement={flipElement}
-                duplicateElement={duplicateElement}
-                removeElement={removeElement}
-              />
+      {!previewMode && isText && fullyOutside && !isSelected && !editing && (
+        <>
+          <div
+            data-lost-text-frame
+            className="pointer-events-none absolute inset-0 z-20 rounded-[1px] border-2 border-orange-400 shadow-[0_0_0_1px_rgba(255,255,255,0.75)]"
+          />
+          <div className="pointer-events-none absolute -right-2 -top-2 z-40 flex h-5 w-5 items-center justify-center rounded-full border border-white bg-orange-400 text-[11px] font-black text-white shadow-lg">
+            !
+          </div>
+        </>
+      )}
 
-              <ResizeHandles
-                resizeElement={resizeElement}
-              />
-            </div>
-          )}
-      </div>
+      {!previewMode && <SelectionFrame
+        isSelected={isSelected}
+        editing={editing}
+        locked={isLocked}
+        outside={outside}
+        severity={severity}
+        dpiBadge={null}
+        rotateElement={startRotate}
+        resizeElement={resizeElement}
+        flipElement={flipElement}
+        duplicateElement={duplicateElement}
+        removeElement={removeElement}
+        fitToBounds={fitToBounds}
+        toggleLock={toggleLock}
+        bringForward={() => updateElement?.({ zAction: "bringForward" })}
+        sendBackward={() => updateElement?.({ zAction: "sendBackward" })}
+      />}
     </div>
   );
 }
+
+export default memo(DraggableElement);

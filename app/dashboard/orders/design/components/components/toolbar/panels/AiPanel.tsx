@@ -1,0 +1,193 @@
+"use client";
+
+import { useCallback, useMemo, useState } from "react";
+import AuthPopup from "./AuthPopup";
+import AiPromptBox from "./AiPromptBox";
+import PreviewImages from "./PreviewImages";
+import UserGeneratedImages from "./UserGeneratedImages";
+import { AI_IMAGE_QUALITY, IMAGE_TEMPLATES } from "../data";
+import { imageDpiMeta } from "./dpi";
+
+function safePrompt(value: string) {
+  return value.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
+}
+
+function buildFinalPrompt(prompt: string) {
+  return `${prompt}
+
+Print-ready apparel graphic.
+Transparent background.
+No mockup. No shirt. No person. No watermark. No copyrighted logo. No brand name.
+Centered PNG alpha. Sharp edges. High detail. 4096px to 8192px output.`;
+}
+
+export default function AiPanel({ createElement }: { createElement?: (data: any) => void }) {
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [showAuthPopup, setShowAuthPopup] = useState(false);
+  const [lastAddedSrc, setLastAddedSrc] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<any[]>([]);
+
+  const previewImages = useMemo(
+    () =>
+      IMAGE_TEMPLATES.slice(0, 8).map((item: any) => ({
+        title: item.title || item.label || "Print asset",
+        prompt: `${item.title || item.label || "Premium print asset"} ${(item.tags || []).join(" ")} transparent apparel graphic`,
+        src: item.previewUrl || item.printUrl || item.src,
+        printUrl: item.printUrl || item.src || item.previewUrl,
+        width: item.width || AI_IMAGE_QUALITY.targetOutputPixels,
+        height: item.height || AI_IMAGE_QUALITY.targetOutputPixels,
+        dpi: item.dpi || AI_IMAGE_QUALITY.dpi,
+        transparent: true,
+        qualityMode: "print-reference",
+      })),
+    []
+  );
+
+  const randomPrompt = useCallback(() => {
+    const item: any = previewImages[Math.floor(Math.random() * previewImages.length)];
+    if (!item) return;
+
+    setPrompt(item.prompt);
+    setError("");
+    setNotice("Prompt ready. You can generate now.");
+  }, [previewImages]);
+
+  const addImageToCanvas = useCallback(
+    (item: any) => {
+      const src = item.printUrl || item.src;
+      if (!src) return;
+
+      createElement?.({
+        type: "image",
+        src,
+        width: 300,
+        height: 300,
+        meta: {
+          prompt: item.prompt || item.title,
+          transparent: true,
+          source: item.generationId ? "ai-generated-print" : "print-reference",
+...imageDpiMeta({ ...item, dpi: item.dpi || AI_IMAGE_QUALITY.dpi, width: item.width || AI_IMAGE_QUALITY.targetOutputPixels, height: item.height || AI_IMAGE_QUALITY.targetOutputPixels }, "ai", { metadataDpi: AI_IMAGE_QUALITY.metadataDpi, qualityMode: item.qualityMode || "ai-transparent-400dpi" }),
+        },
+      });
+
+      setLastAddedSrc(item.src || src);
+      setNotice("Added to canvas. Ready for print preview.");
+    },
+    [createElement]
+  );
+
+  const generateImage = useCallback(async () => {
+    const cleanPrompt = safePrompt(prompt);
+    if (!cleanPrompt || loading) return;
+
+    try {
+      setLoading(true);
+      setError("");
+      setNotice("Creating transparent print asset...");
+
+      const response = await fetch("/api/ai-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: buildFinalPrompt(cleanPrompt),
+          originalPrompt: cleanPrompt,
+          transparent: true,
+          size: AI_IMAGE_QUALITY.requestedSize,
+          fallbackSize: AI_IMAGE_QUALITY.fallbackSize,
+          minOutputPixels: AI_IMAGE_QUALITY.minOutputPixels,
+          targetOutputPixels: AI_IMAGE_QUALITY.targetOutputPixels,
+          dpi: AI_IMAGE_QUALITY.dpi,
+          metadataDpi: AI_IMAGE_QUALITY.metadataDpi,
+          format: AI_IMAGE_QUALITY.format,
+        }),
+      });
+
+      if (response.status === 401 || response.status === 402) {
+        setShowAuthPopup(true);
+        setNotice("Sign in to unlock AI generation. Your work stays here.");
+        return;
+      }
+
+      if (!response.ok) throw new Error("AI generation failed");
+
+      const data = await response.json();
+      const src = data.url || data.imageUrl || data.src;
+      if (!src) throw new Error("Missing image");
+
+      setGeneratedImages((prev) =>
+        [
+          {
+            title: cleanPrompt,
+            prompt: cleanPrompt,
+            src,
+            generationId: data.id,
+            width: data.width || AI_IMAGE_QUALITY.targetOutputPixels,
+            height: data.height || AI_IMAGE_QUALITY.targetOutputPixels,
+            dpi: data.dpi || AI_IMAGE_QUALITY.dpi,
+            transparent: true,
+            qualityMode: AI_IMAGE_QUALITY.mode,
+          },
+          ...prev,
+        ].slice(0, 8)
+      );
+
+      setNotice("Done. Your image is ready to add to the canvas.");
+    } catch {
+      setError("Generation failed. Check /api/ai-image and try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, [prompt, loading]);
+
+  return (
+    <div className="relative min-h-0 space-y-2 pb-3 text-slate-900">
+      <AiPromptBox
+        prompt={prompt}
+        loading={loading}
+        notice={notice}
+        error={error}
+        setPrompt={setPrompt}
+        setNotice={setNotice}
+        setError={setError}
+        randomPrompt={randomPrompt}
+        generateImage={generateImage}
+      />
+
+      <StatusLine notice={notice} error={error} />
+
+      <UserGeneratedImages images={generatedImages} lastAddedSrc={lastAddedSrc} onAdd={addImageToCanvas} />
+
+      <div className="pt-1">
+        <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-500">Inspiration</p>
+          <p className="text-[10px] font-bold text-slate-400">print-ready references</p>
+        </div>
+        <PreviewImages images={previewImages} lastAddedSrc={lastAddedSrc} onAdd={addImageToCanvas} />
+      </div>
+
+      <AuthPopup
+        open={showAuthPopup}
+        onClose={() => setShowAuthPopup(false)}
+        onSuccess={() => {
+          setShowAuthPopup(false);
+          setNotice("You are signed in. AI image generation is ready.");
+          setError("");
+        }}
+      />
+    </div>
+  );
+}
+
+function StatusLine({ notice, error }: { notice: string; error: string }) {
+  const message = error || notice;
+  if (!message) return null;
+
+  return (
+    <p className={`px-1 text-xs font-bold leading-relaxed ${error ? "text-red-600" : "text-slate-600"}`}>
+      {message}
+    </p>
+  );
+}

@@ -1,15 +1,58 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { ArrowLeft, Zap } from "lucide-react";
 import PreviewGallery from "./PreviewGallery";
+import TempPreviewClient from "./TempPreviewClient";
+
+function normalizeImages(value: any): string[] {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+
+      if (Array.isArray(parsed)) {
+        return parsed.filter(Boolean);
+      }
+    } catch {}
+
+    return [value];
+  }
+
+  return [];
+}
 
 export default async function PreviewPage({
   params,
+  searchParams,
 }: {
   params: { id: string };
+  searchParams?: { tempPreview?: string };
 }) {
   const supabase = createSupabaseServer();
+  const isTempPreview = searchParams?.tempPreview === "1";
+
+  if (isTempPreview) {
+    const { data: baseProduct } = await supabase
+      .from("products")
+      .select("*")
+      .eq("id", params.id)
+      .single();
+
+    if (!baseProduct) {
+      return (
+        <main className="flex min-h-screen items-center justify-center bg-[#03030a] text-white">
+          Product not found
+        </main>
+      );
+    }
+
+    return <TempPreviewClient product={baseProduct} />;
+  }
 
   const { data: product } = await supabase
     .from("user_products")
@@ -34,49 +77,31 @@ export default async function PreviewPage({
     );
   }
 
-  const needsAi =
-    !product.ai_mockup_url &&
-    (!product.ai_mockup_images || product.ai_mockup_images.length === 0) &&
-    product.design_image_url;
-
-  if (needsAi) {
-    redirect(
-      `/api/products/${product.id}/generate-ai-mockup?redirect=/dashboard/design/preview/${product.id}`
-    );
-  }
-
-  const baseImages = [
-    product.base_product?.image,
-    ...(product.base_product?.images || []),
-  ]
-    .filter(Boolean)
-    .filter(
-      (img: string, index: number, arr: string[]) => arr.indexOf(img) === index
-    );
-
   const category =
-    product.category || product.base_product?.category || "Product";
+    product.category ||
+    product.base_product?.category ||
+    "Product";
 
-  const fallbackMockup = category.toLowerCase().includes("shirt")
-    ? "/mockups/tshirt-front.png"
-    : "/mockups/hoodie-front.png";
+  const editorProductId =
+    product.baseProductId ||
+    product.base_product_id ||
+    product.base_product?.id ||
+    product.id;
 
-  const previewImages = (
-    product.ai_mockup_images?.length > 0
-      ? product.ai_mockup_images
-      : product.ai_mockup_url
-        ? [product.ai_mockup_url, ...baseImages]
-        : baseImages.length > 0
-          ? baseImages
-          : [fallbackMockup]
-  )
-    .filter(Boolean)
-    .filter(
-      (img: string, index: number, arr: string[]) => arr.indexOf(img) === index
-    );
+  const editorCategory = String(category)
+    .toLowerCase()
+    .replace(/\s+/g, "-");
 
-  const isAi =
-    product.ai_mockup_images?.length > 0 || Boolean(product.ai_mockup_url);
+ const previewImages = [
+  ...normalizeImages(product.mockup_images),
+  ...normalizeImages(product.mockup_url),
+]
+  .filter(Boolean)
+  .filter(
+    (img: string, index: number, arr: string[]) =>
+      arr.indexOf(img) === index
+  );
+  const hasPreview = previewImages.length > 0;
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
@@ -86,15 +111,15 @@ export default async function PreviewPage({
         <div className="relative mx-auto max-w-7xl px-4 md:px-8 lg:px-12">
           <div className="mb-5 flex items-center justify-between gap-3">
             <Link
-              href={`/dashboard/design?productId=${product.baseProductId || product.base_product_id || product.base_product?.id || product.id}`}
+              href={`/dashboard/design/${editorCategory}?productId=${editorProductId}`}
               className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-white/80 backdrop-blur-xl transition hover:border-purple-500/40 hover:bg-white/10"
             >
               <ArrowLeft size={17} />
               Back to editor
             </Link>
 
-            <div className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)] sm:text-xs">
-              {isAi ? "AI preview ready" : "Generating AI preview..."}
+            <div className="rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] text-white/85">
+              {hasPreview ? "Mockup ready" : "Preview unavailable"}
             </div>
           </div>
 
@@ -109,13 +134,19 @@ export default async function PreviewPage({
             </h1>
           </div>
 
-          <PreviewGallery
-            images={previewImages.slice(0, 7)}
-            title={product.title}
-            category={category}
-            price={Number(product.final_price || product.price || 0)}
-            isAi={isAi}
-          />
+          {hasPreview ? (
+            <PreviewGallery
+              images={previewImages.slice(0, 7)}
+              title={product.title}
+              category={category}
+              price={Number(product.final_price || product.price || 0)}
+              isAi={false}
+            />
+          ) : (
+            <div className="rounded-[32px] border border-white/10 bg-white/[0.05] p-10 text-center text-white/70">
+              No mockup images found for this product.
+            </div>
+          )}
         </div>
       </section>
     </main>

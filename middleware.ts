@@ -66,16 +66,7 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  const rate = await checkRateLimit(req, pathname);
-
-  if (!rate.success) {
-    return new NextResponse("Too many requests", {
-      status: 429,
-      headers: {
-        "Retry-After": "60",
-      },
-    });
-  }
+  
 
   // ✅ liberar /dashboard/design e produtos dentro dele
   if (

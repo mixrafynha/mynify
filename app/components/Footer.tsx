@@ -22,7 +22,7 @@ const safeText = (val: unknown) => {
 
 const LINKS = Object.freeze({
   platform: [
-    { label: "How it works", href: "/how-mynify-works" },
+    { label: "How it works", href: "/how-Ryfio-works" },
     { label: "Features", href: "/" },
   ],
   creators: [
@@ -72,7 +72,7 @@ export default function Footer() {
 
               <div className="min-w-0">
                 <h2 className="text-2xl font-black uppercase tracking-tight">
-                  MYNIFY
+                  RYFIO
                 </h2>
                 <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-400">
                   AI Commerce
@@ -135,7 +135,7 @@ export default function Footer() {
             </div>
 
             <div className="min-w-0">
-              <h4 className="font-black text-white">Earn with MYNIFY 🎟️</h4>
+              <h4 className="font-black text-white">Earn with RYFIO 🎟️</h4>
               <p className="mt-1 text-sm text-white/50">
                 Join our creator program and monetize your audience.
               </p>
@@ -152,7 +152,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 flex flex-col items-center justify-between gap-5 border-t border-white/10 pt-6 text-center text-sm text-white/35 md:flex-row md:text-left">
-          <p>© {new Date().getFullYear()} MYNIFY. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} RYFIO. All rights reserved.</p>
 
           <div className="flex flex-wrap items-center justify-center gap-5">
             <Link href={safeHref("/privacy")} className="transition hover:text-purple-400">

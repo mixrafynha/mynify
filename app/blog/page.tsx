@@ -97,7 +97,7 @@ export default function BlogPage() {
           </div>
 
           <h1 className="mx-auto mb-6 max-w-5xl text-5xl font-black uppercase leading-[0.9] tracking-tight sm:text-6xl md:text-7xl lg:text-8xl">
-            MYNIFY{" "}
+            RYFIO{" "}
             <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
               Blog
             </span>

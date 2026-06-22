@@ -17,8 +17,11 @@ export default function EditorShell({
 }: EditorShellProps) {
   return (
     <div className="h-[100dvh] w-full overflow-hidden bg-[#070711] text-white">
+      {/* Desktop */}
       <div className="hidden h-full w-full flex-col overflow-hidden md:flex">
-        <div className="h-[52px] shrink-0">{topbar}</div>
+        <div className="h-[52px] shrink-0">
+          {topbar}
+        </div>
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {toolbar}
@@ -31,14 +34,35 @@ export default function EditorShell({
         </div>
       </div>
 
-      <div className="flex h-full flex-col overflow-hidden md:hidden">
-        <div className="shrink-0">{topbar}</div>
+      {/* Mobile */}
+      <div className="relative flex h-full flex-col overflow-hidden md:hidden">
+        <div className="relative z-40 shrink-0">
+          {topbar}
+        </div>
 
-        <section className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-[#070711]">
+        <section
+          className="
+            relative min-h-0 min-w-0
+            flex-1 overflow-hidden
+            bg-[#070711]
+            pb-[74px]
+          "
+        >
           {canvas}
         </section>
 
-        <div className="shrink-0">{toolbar}</div>
+        <div
+          className="
+            fixed inset-x-0 bottom-0
+            z-[60]
+            pointer-events-none
+            will-change-transform
+          "
+        >
+          <div className="pointer-events-auto">
+            {toolbar}
+          </div>
+        </div>
       </div>
     </div>
   );
