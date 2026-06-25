@@ -99,10 +99,23 @@ async function uploadDataImage(args: {
   };
 }
 
-function sideValue<T>(value: any, side: Side): T | null {
-  if (!value) return null;
-  if (typeof value === "string") return side === "front" ? value : null;
-  if (typeof value === "object") return value[side] ?? null;
+function sideValue(value: unknown, side: Side): unknown {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return side === "front" ? value : null;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  ) {
+    return (value as Partial<Record<Side, unknown>>)[side] ?? null;
+  }
+
   return null;
 }
 
