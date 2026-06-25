@@ -1,15 +1,20 @@
 import "./globals.css";
 import Providers from "./providers";
 import Script from "next/script";
-import { Manrope, Inter } from "next/font/google";
-
-// ================= FONTS (PREMIUM SAAS / APPLE STYLE) =================
+import type { Metadata } from "next";
+import { Manrope, Inter, Audiowide } from "next/font/google";
 
 const manrope = Manrope({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-manrope",
   weight: ["400", "600", "700"],
+});
+
+const audiowide = Audiowide({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-logo",
 });
 
 const inter = Inter({
@@ -19,70 +24,40 @@ const inter = Inter({
   weight: ["400", "600"],
 });
 
-// ================= METADATA =================
+const siteUrl = "https://ryfio.com";
+const siteName = "Ryfio";
+const defaultTitle = "Ryfio — Create & Sell Custom Products";
+const defaultDescription =
+  "Design custom products, launch your brand and sell worldwide with print-on-demand fulfillment.";
 
-export const metadata = {
-  title: "MYNIFY – Create Your Brand with AI | Sell Products Without Inventory",
-
-  description:
-    "Create your own brand with AI using MYNIFY. Generate designs, customize products, launch your online store, and sell t-shirts, hoodies, mugs, and more without inventory.",
-
+export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: defaultTitle,
+    template: "%s | Ryfio",
+  },
+  description: defaultDescription,
   keywords: [
-    "AI ecommerce platform",
-    "AI brand generator",
-    "create brand with AI",
     "print on demand",
-    "sell custom products",
-    "custom merch platform",
-    "AI product design",
-    "AI mockup generator",
-    "creator commerce",
-    "sell merch online",
-    "create online store",
-    "custom t-shirts",
-    "custom hoodies",
-    "no inventory ecommerce",
-    "dropshipping custom products",
+    "custom products",
+    "custom apparel",
+    "t-shirt design",
+    "hoodie design",
+    "product designer",
+    "ecommerce",
+    "dropshipping",
+    "online store",
+    "print provider",
+    "Ryfio",
   ],
-
-  authors: [{ name: "MYNIFY" }],
-  creator: "MYNIFY",
-  publisher: "MYNIFY",
-
-  metadataBase: new URL("https://mynify.vercel.app"),
-
+  authors: [{ name: siteName }],
+  creator: siteName,
+  publisher: siteName,
+  category: "ecommerce",
+  applicationName: siteName,
   alternates: {
-    canonical: "https://mynify.vercel.app",
+    canonical: "/",
   },
-
-  openGraph: {
-    title: "MYNIFY – Create Your Brand with AI",
-    description:
-      "Turn your ideas into products, brands, and online stores with AI. Create and sell custom merch without inventory.",
-    url: "https://mynify.vercel.app",
-    siteName: "MYNIFY",
-    type: "website",
-    locale: "en_US",
-    images: [
-      {
-        url: "https://mynify.vercel.app/ogimage.jpg",
-        width: 1200,
-        height: 630,
-        alt: "MYNIFY AI Ecommerce Platform",
-      },
-    ],
-  },
-
-  twitter: {
-    card: "summary_large_image",
-    site: "@mynify",
-    creator: "@mynify",
-    title: "MYNIFY – Create Your Brand with AI",
-    description:
-      "Generate designs, customize products, launch your store, and sell online without inventory.",
-    images: ["https://mynify.vercel.app/ogimage.jpg"],
-  },
-
   robots: {
     index: true,
     follow: true,
@@ -94,16 +69,50 @@ export const metadata = {
       "max-video-preview": -1,
     },
   },
-  
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any", type: "image/x-icon" },
+  openGraph: {
+    title: defaultTitle,
+    description: defaultDescription,
+    url: siteUrl,
+    siteName,
+    type: "website",
+    locale: "en_US",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Ryfio — Create and sell custom products",
+      },
     ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: defaultTitle,
+    description: defaultDescription,
+    images: ["/og-image.png"],
+  },
+  icons: {
+    icon: [{ url: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
     shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+  manifest: "/manifest.webmanifest",
 };
-// ================= ROOT LAYOUT =================
+
+const organizationJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: siteName,
+  url: siteUrl,
+  logo: `${siteUrl}/favicon.ico`,
+};
+
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: siteName,
+  url: siteUrl,
+};
 
 export default function RootLayout({
   children,
@@ -112,9 +121,9 @@ export default function RootLayout({
 }) {
   return (
     <html
-      lang="pt"
-      className={`${manrope.variable} ${inter.variable} w-full h-full`}
-    >
+        lang="en"
+        className={`${manrope.variable} ${inter.variable} ${audiowide.variable} w-full h-full`}
+      >
       <body
         className={`
           ${manrope.className}
@@ -128,9 +137,18 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
 
-        <Script
-          src="https://example.com/analytics.js"
-          strategy="lazyOnload"
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationJsonLd),
+          }}
+        />
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteJsonLd),
+          }}
         />
 
         <div className="flex flex-col flex-1 w-full min-h-screen">

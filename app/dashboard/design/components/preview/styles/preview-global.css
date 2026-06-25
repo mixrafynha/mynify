@@ -1,0 +1,34 @@
+html.ryfio-preview-open,
+body.ryfio-preview-open {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  touch-action: none !important;
+}
+
+body.ryfio-preview-open > *:not([data-ryfio-preview-overlay="true"]) {
+  pointer-events: none !important;
+}
+
+body.ryfio-preview-open [data-editor-only],
+body.ryfio-preview-open [data-editor-ui],
+body.ryfio-preview-open [data-bottom-toolbar],
+body.ryfio-preview-open [data-mobile-toolbar],
+body.ryfio-preview-open [data-ai-panel],
+body.ryfio-preview-open [data-editor-sidebar],
+body.ryfio-preview-open [data-editor-topbar],
+body.ryfio-preview-open [data-toolbar],
+body.ryfio-preview-open [data-sidebar],
+body.ryfio-preview-open nav[class*="fixed"],
+body.ryfio-preview-open aside[class*="fixed"],
+body.ryfio-preview-open div[class*="bottom-0"][class*="fixed"],
+body.ryfio-preview-open div[class*="bottom-"][class*="fixed"] {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+body.ryfio-preview-open [data-ryfio-preview-overlay="true"],
+body.ryfio-preview-open [data-ryfio-preview-overlay="true"] * {
+  visibility: visible !important;
+  pointer-events: auto;
+}

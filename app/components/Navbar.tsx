@@ -114,174 +114,181 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
+     <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
+  <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button
-              type="button"
-              aria-label="Toggle menu"
-              onClick={toggleSidebar}
-              className="lg:hidden text-2xl text-white hover:text-purple-400 transition"
+  <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
+    <div className="flex items-center gap-3 sm:gap-4">
+      <button
+        type="button"
+        aria-label="Toggle menu"
+        onClick={toggleSidebar}
+        className="lg:hidden text-2xl text-white hover:text-purple-400 transition"
+      >
+        ☰
+      </button>
+
+      <Link
+        href="/"
+        className="group overflow-visible select-none shrink-0 ml-3"
+      >
+        <div className="relative flex items-center">
+          <span
+            className="
+              text-[27px]
+              md:text-[40px]
+              uppercase
+              leading-none
+              tracking-[-0.03em]
+              select-none
+              transition-all
+              duration-300
+              group-hover:scale-[1.03]
+            "
+            style={{
+              fontFamily: "var(--font-logo)",
+              textShadow: "0 0 18px rgba(102, 67, 136, 0.35)",
+            }}
+          >
+            <span className="ryfio-letter text-white" style={{ animationDelay: "0ms" }}>
+              R
+            </span>
+            <span className="ryfio-letter text-white" style={{ animationDelay: "120ms" }}>
+              Y
+            </span>
+            <span
+              className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+              style={{ animationDelay: "240ms" }}
             >
-              ☰
-            </button>
-
-            <Link
-              href="/"
-              className="group overflow-visible select-none shrink-0 ml-3"
+              F
+            </span>
+            <span
+              className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+              style={{ animationDelay: "360ms" }}
             >
-              <div className="relative flex items-center">
-                <span
-                  className="
-                    text-3xl
-                    md:text-4xl
-                    font-black
-                    tracking-[-0.06em]
-                    text-white
-                    transition-all
-                    duration-300
-                    group-hover:scale-[1.03]
-                  "
-                  style={{
-                    fontFamily:
-                      "'Clash Display', 'Space Grotesk', sans-serif",
-                  }}
-                >
-                  <span
-                    className="
-                      inline-block
-                      bg-gradient-to-br
-                      from-fuchsia-400
-                      via-purple-500
-                      to-cyan-400
-                      bg-clip-text
-                      text-transparent
-                      drop-shadow-[0_0_20px_rgba(168,85,247,0.7)]
-                    "
-                  >
-                    R
-                  </span>
-                  <span className="text-white">
-                    YFIO
-                  </span>
-                </span>
+              I
+            </span>
+            <span
+              className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+              style={{ animationDelay: "480ms" }}
+            >
+              O
+            </span>
+          </span>
 
-                <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
-              </div>
-            </Link>
-          </div>
+          <div className="absolute -inset-3 bg-purple-500/10 blur-2xl rounded-full opacity-70 pointer-events-none" />
+        </div>
+      </Link>
+    </div>
 
-          <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
-            {links.map((link) => (
-              <div
-                key={link.name}
-                className="relative"
-                onMouseEnter={() =>
-                  setActiveDropdown(link.name)
-                }
-                onMouseLeave={() =>
-                  setActiveDropdown(null)
-                }
-              >
-                <div className="flex items-center gap-1 cursor-pointer group">
-                  {!link.dropdown ? (
-                    <Link
-                      href={link.href ?? "/"}
-                      className="hover:text-purple-400 transition"
-                    >
-                      {link.name}
-                    </Link>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        toggleDropdown(link.name)
-                      }
-                      className="hover:text-purple-400 transition"
-                    >
-                      {link.name}
-                    </button>
-                  )}
-
-                  {link.dropdown && (
-                    <ChevronDown
-                      size={16}
-                      className={`transition ${
-                        isOpen(link.name)
-                          ? "rotate-180 text-purple-400"
-                          : "text-white/70"
-                      }`}
-                    />
-                  )}
-                </div>
-
-                {link.dropdown && (
-                  <div
-                    className={`absolute left-0 top-full z-[999] pt-4 transition duration-200 ${
-                      isOpen(link.name)
-                        ? "translate-y-0 opacity-100"
-                        : "-translate-y-1 opacity-0 pointer-events-none"
-                    }`}
-                  >
-                    <div className="bg-[#070711]/95 shadow-[0_0_45px_rgba(168,85,247,0.22)] rounded-2xl p-3 min-w-[220px] border border-white/10 backdrop-blur-2xl">
-                      {link.dropdown.map((item) => (
-                        <Link
-                          key={item}
-                          href={formatLink(item)}
-                          className="block px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-purple-500/15 rounded-lg transition"
-                          onClick={() =>
-                            setClickedDropdown(null)
-                          }
-                        >
-                          {item}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
-            {!authChecked ? (
-              <div className="flex items-center gap-2">
-                <div className="h-10 w-24 rounded-xl bg-white/10 animate-pulse" />
-                <div className="h-10 w-28 rounded-xl bg-purple-500/20 animate-pulse" />
-              </div>
-            ) : !isAuthenticated ? (
-              <>
-                <Link href="/login">
-                  <button className="px-4 py-2 border border-white/10 bg-white/[0.04] rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400/50 transition">
-                    Log in
-                  </button>
-                </Link>
-
-                <Link href="/signup">
-                  <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
-                    Sign up
-                  </button>
-                </Link>
-              </>
-            ) : (
+    <div className="hidden lg:flex items-center gap-12 text-[16px] font-semibold text-white/80">
+      {links.map((link) => (
+        <div
+          key={link.name}
+          className="relative"
+          onMouseEnter={() =>
+            setActiveDropdown(link.name)
+          }
+          onMouseLeave={() =>
+            setActiveDropdown(null)
+          }
+        >
+          <div className="flex items-center gap-1 cursor-pointer group">
+            {!link.dropdown ? (
               <Link
-                href={
-                  role === "admin"
-                    ? "/admin"
-                    : "/dashboard"
-                }
+                href={link.href ?? "/"}
+                className="hover:text-purple-400 transition"
               >
-                <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-white shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
-                  Dashboard
-                </button>
+                {link.name}
               </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={() =>
+                  toggleDropdown(link.name)
+                }
+                className="hover:text-purple-400 transition"
+              >
+                {link.name}
+              </button>
+            )}
+
+            {link.dropdown && (
+              <ChevronDown
+                size={16}
+                className={`transition ${
+                  isOpen(link.name)
+                    ? "rotate-180 text-purple-400"
+                    : "text-white/70"
+                }`}
+              />
             )}
           </div>
-        </div>
-      </nav>
 
+          {link.dropdown && (
+            <div
+              className={`absolute left-0 top-full z-[999] pt-4 transition duration-200 ${
+                isOpen(link.name)
+                  ? "translate-y-0 opacity-100"
+                  : "-translate-y-1 opacity-0 pointer-events-none"
+              }`}
+            >
+              <div className="bg-[#070711]/95 shadow-[0_0_45px_rgba(168,85,247,0.22)] rounded-2xl p-3 min-w-[220px] border border-white/10 backdrop-blur-2xl">
+                {link.dropdown.map((item) => (
+                  <Link
+                    key={item}
+                    href={formatLink(item)}
+                    className="block px-4 py-2 text-sm text-white/70 hover:text-white hover:bg-purple-500/15 rounded-lg transition"
+                    onClick={() =>
+                      setClickedDropdown(null)
+                    }
+                  >
+                    {item}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+
+    <div className="flex items-center gap-2 sm:gap-3">
+      {!authChecked ? (
+        <div className="flex items-center gap-2">
+          <div className="h-10 w-24 rounded-xl bg-white/10 animate-pulse" />
+          <div className="h-10 w-28 rounded-xl bg-purple-500/20 animate-pulse" />
+        </div>
+      ) : !isAuthenticated ? (
+        <>
+          <Link href="/login">
+            <button className="px-4 py-2 border border-white/10 bg-white/[0.04] rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400/50 transition">
+              Log in
+            </button>
+          </Link>
+
+          <Link href="/signup">
+            <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
+              Sign up
+            </button>
+          </Link>
+        </>
+      ) : (
+        <Link
+          href={
+            role === "admin"
+              ? "/admin"
+              : "/dashboard"
+          }
+        >
+          <button className="px-5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-white shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
+            Dashboard
+          </button>
+        </Link>
+      )}
+    </div>
+  </div>
+</nav>
       {open && (
         <div
           className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"

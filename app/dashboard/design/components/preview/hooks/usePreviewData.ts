@@ -1,11 +1,10 @@
 import { useMemo } from "react";
-import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
-
 import {
   GELATO_PRINT_SIZE_MM_BY_PRODUCT,
   PRINT_BOX_BY_PRODUCT,
   PRODUCTS,
 } from "../../canvas/productConfig";
+import { getGelatoExportSizePx } from "../../canvas/gelato";
 
 import { getSafeArea } from "../../canvas/canvasMath";
 import {
@@ -57,58 +56,48 @@ function sideElements(elements: PreviewElement[], side: PreviewSide) {
   return list.filter((el) => (el?.side || el?.meta?.side || "front") === side);
 }
 
-function rect(el: PreviewElement) {
-  return {
-    x: Number(el?.x || 0),
-    y: Number(el?.y || 0),
-    width: Math.max(1, Number(el?.width ?? el?.meta?.width ?? 1)),
-    height: Math.max(1, Number(el?.height ?? el?.meta?.height ?? 1)),
-  };
-}
-
-function intersects(a: PreviewBox, b: PreviewBox) {
-  return (
-    a.x < b.x + b.width &&
-    a.x + a.width > b.x &&
-    a.y < b.y + b.height &&
-    a.y + a.height > b.y
-  );
-}
-
 function normalizeElementCoordinates(
   elements: PreviewElement[],
   printBox: PreviewBox,
-  safeArea: PreviewBox,
 ) {
   const list = Array.isArray(elements) ? elements : [];
   if (!list.length) return [];
 
-  // Some editor versions store x/y relative to the print area.
-  // Others store x/y as absolute canvas/mockup coordinates.
-  // The preview renderer needs local print-area coordinates.
-  const absoluteHits = list.filter((el) => intersects(rect(el), safeArea)).length;
-  const localHits = list.filter((el) =>
-    intersects(rect(el), { x: 0, y: 0, width: safeArea.width, height: safeArea.height }),
-  ).length;
+  const safeArea = getSafeArea(printBox) as PreviewBox;
 
-  const looksAbsolute = absoluteHits > localHits;
-  const offsetX = looksAbsolute ? safeArea.x : 0;
-  const offsetY = looksAbsolute ? safeArea.y : 0;
+  return list.map((el) => {
+    const rawX = Number(el.x || 0);
+    const rawY = Number(el.y || 0);
+    const width = Math.max(1, Number(el.width ?? el.meta?.width ?? 1));
+    const height = Math.max(1, Number(el.height ?? el.meta?.height ?? 1));
+    const centerX = rawX + width / 2;
+    const centerY = rawY + height / 2;
+    const alreadyAbsolute =
+      el.meta?.previewCoordinateMode === "mockup-absolute" ||
+      el.meta?.previewCoordinateMode === "canvas-absolute" ||
+      (
+        centerX >= safeArea.x - 2 &&
+        centerY >= safeArea.y - 2 &&
+        centerX <= safeArea.x + safeArea.width + 2 &&
+        centerY <= safeArea.y + safeArea.height + 2 &&
+        (rawX > safeArea.width || rawY > safeArea.height || rawX >= safeArea.x || rawY >= safeArea.y)
+      );
 
-  return list.map((el) => ({
-    ...el,
-    x: Number(el.x || 0) - offsetX,
-    y: Number(el.y || 0) - offsetY,
-    width: Number(el.width ?? el.meta?.width ?? 1),
-    height: Number(el.height ?? el.meta?.height ?? 1),
-    meta: {
-      ...(el.meta || {}),
-      previewCoordinateMode: looksAbsolute ? "absolute-canvas" : "print-local",
-      originalPreviewX: el.x,
-      originalPreviewY: el.y,
-      printBox,
-    },
-  }));
+    return {
+      ...el,
+      x: alreadyAbsolute ? rawX - safeArea.x : rawX,
+      y: alreadyAbsolute ? rawY - safeArea.y : rawY,
+      width,
+      height,
+      meta: {
+        ...(el.meta || {}),
+        previewCoordinateMode: "safe-area-local",
+        originalPreviewX: el.x,
+        originalPreviewY: el.y,
+        printBox,
+      },
+    };
+  });
 }
 
 export function usePreviewData(input: ProductionPreviewInput): ProductionPreviewData {
@@ -138,7 +127,7 @@ export function usePreviewData(input: ProductionPreviewInput): ProductionPreview
       const rawElements = Array.isArray(sideSpecificElements)
         ? sideSpecificElements
         : sideElements((input.elements || []) as PreviewElement[], side);
-      const elements = normalizeElementCoordinates(rawElements, printBox, safeArea);
+      const elements = normalizeElementCoordinates(rawElements, printBox);
 
       const validation = validatePreviewSide({
         side,
@@ -158,7 +147,7 @@ export function usePreviewData(input: ProductionPreviewInput): ProductionPreview
         printBox,
         safeArea,
         printSize,
-        exportResolution: EXPORT_MOCKUP_AREA,
+        exportResolution: getGelatoExportSizePx(productId, side),
         validation,
       };
     };

@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import Canvas from "@/app/dashboard/design/components/Canvas";
 import TopBar from "@/app/dashboard/design/components/TopBar";
 import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
+import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
+import { captureProductionPreview } from "@/app/dashboard/design/components/preview/services/previewCapture";
+import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
 
 import { useElements } from "@/features/elements/useElements";
 import { useUpload } from "@/features/upload/useUpload";
@@ -14,29 +17,17 @@ import { useUpload } from "@/features/upload/useUpload";
 export type ElementType = {
   id: string;
   type: "image" | "text" | "shape";
-
   src?: string;
   text?: string;
-
   x: number;
   y: number;
-
   width?: number;
   height?: number;
-
-  zIndex?: number;
-  rotation?: number;
-  opacity?: number;
-  locked?: boolean;
-
   meta?: {
     fontSize?: number;
     fontFamily?: string;
     color?: string;
-    fontWeight?: string | number;
-    textAlign?: "left" | "center" | "right";
-
-    [key: string]: unknown;
+    [key: string]: any;
   };
 };
 
@@ -47,43 +38,27 @@ type HistoryState = {
   backElements: ElementType[];
 };
 
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isUuid(value?: string | null) {
-  return !!value && UUID_RE.test(value);
-}
-
 export default function EditorPage() {
-  const params = useParams<{ id?: string }>();
+  const params = useParams();
   const searchParams = useSearchParams();
-
-  const routeId = typeof params?.id === "string" ? params.id : "";
-  const queryProductId = searchParams.get("productId");
-
-  const [resolvedProductId, setResolvedProductId] = useState<string | null>(
-    isUuid(queryProductId) ? queryProductId : isUuid(routeId) ? routeId : null,
-  );
-
-  const productId = resolvedProductId;
+  const router = useRouter();
+  const productId = searchParams.get("productId") || searchParams.get("baseProductId");
+  const category = String(params?.id || "tshirt").toLowerCase();
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const previewCanvasRef = useRef<HTMLDivElement>(null);
   const hasLoadedDraft = useRef(false);
   const isHistoryAction = useRef(false);
-  const lastHistorySnapshot = useRef<string>("");
+  const pendingSaveAfterAuthRef = useRef(false);
 
   const editorStorageKey = useMemo(
-    () => `editor-design:${productId || routeId || "draft"}`,
-    [productId, routeId],
-  );
-
-  const previewStorageKey = useMemo(
-    () => `mynify-editor-preview:${productId || routeId || "draft"}`,
-    [productId, routeId],
+    () => `editor-design:${productId || category || "draft"}`,
+    [productId, category],
   );
 
   const [side, setSide] = useState<Side>("front");
   const [saving, setSaving] = useState(false);
+  const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedElement, setSelectedElement] = useState<ElementType | null>(null);
 
@@ -93,65 +68,39 @@ export default function EditorPage() {
   const [frontElements, setFrontElements] = useState<ElementType[]>([]);
   const [backElements, setBackElements] = useState<ElementType[]>([]);
 
+  useEffect(() => {
+    const preventGesture = (event: Event) => {
+      event.preventDefault();
+    };
+
+    const preventMultiTouch = (event: TouchEvent) => {
+      if (event.touches.length > 1) event.preventDefault();
+    };
+
+    const preventEditorDoubleTapZoom = (event: MouseEvent) => {
+      const target = event.target as Element | null;
+      if (target?.closest("[data-ryfio-editor-root]")) event.preventDefault();
+    };
+
+    document.addEventListener("gesturestart", preventGesture, { passive: false } as AddEventListenerOptions);
+    document.addEventListener("gesturechange", preventGesture, { passive: false } as AddEventListenerOptions);
+    document.addEventListener("gestureend", preventGesture, { passive: false } as AddEventListenerOptions);
+    document.addEventListener("touchmove", preventMultiTouch, { passive: false });
+    document.addEventListener("dblclick", preventEditorDoubleTapZoom, { passive: false });
+
+    return () => {
+      document.removeEventListener("gesturestart", preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+      document.removeEventListener("gestureend", preventGesture);
+      document.removeEventListener("touchmove", preventMultiTouch);
+      document.removeEventListener("dblclick", preventEditorDoubleTapZoom);
+    };
+  }, []);
+
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [future, setFuture] = useState<HistoryState[]>([]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveProductId() {
-      const raw = queryProductId || routeId;
-
-      if (!raw) return;
-
-      if (isUuid(raw)) {
-        setResolvedProductId(raw);
-        return;
-      }
-
-      try {
-        const res = await fetch("/api/products", { cache: "no-store" });
-        const data = await res.json();
-
-        const products = Array.isArray(data) ? data : data.products || [];
-
-        const product = products.find((item: any) => {
-          const rawLower = raw.toLowerCase();
-
-          return (
-            item?.id === raw ||
-            item?.slug === raw ||
-            item?.category === raw ||
-            item?.type === raw ||
-            item?.handle === raw ||
-            item?.name?.toLowerCase?.() === rawLower
-          );
-        });
-
-        if (!cancelled) {
-          setResolvedProductId(product?.id || null);
-        }
-      } catch (error) {
-        console.error("PRODUCT RESOLVE ERROR:", error);
-
-        if (!cancelled) {
-          setResolvedProductId(null);
-        }
-      }
-    }
-
-    resolveProductId();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [queryProductId, routeId]);
-
-  const elements = useMemo(
-    () => (side === "back" ? backElements : frontElements),
-    [side, backElements, frontElements],
-  );
-
+  const elements = side === "back" ? backElements : frontElements;
   const setElements = side === "back" ? setBackElements : setFrontElements;
 
   const { addText, addElement } = useElements({
@@ -174,15 +123,11 @@ export default function EditorPage() {
   );
 
   const zoomIn = useCallback(() => {
-    setZoom((z) => Math.min(4, Number((z + 0.1).toFixed(2))));
+    setZoom((z) => Math.min(1.35, z + 0.1));
   }, []);
 
   const zoomOut = useCallback(() => {
-    setZoom((z) => Math.max(0.25, Number((z - 0.1).toFixed(2))));
-  }, []);
-
-  const handleZoomChange = useCallback((nextZoom: number) => {
-    setZoom(Math.min(4, Math.max(0.25, nextZoom / 100)));
+    setZoom((z) => Math.max(0.75, z - 0.1));
   }, []);
 
   const saveDraftToSession = useCallback(() => {
@@ -203,39 +148,6 @@ export default function EditorPage() {
     }
   }, [editorStorageKey, side, zoom, mockupColor, frontElements, backElements]);
 
-  const savePreviewData = useCallback(() => {
-    if (!productId) return;
-
-    const data = {
-      productId,
-      productSlug: routeId,
-      side,
-      mockupColor,
-      designFront: frontElements,
-      designBack: backElements,
-      elements,
-      generateMockupAI: true,
-      temporaryPreview: true,
-      updatedAt: Date.now(),
-    };
-
-    try {
-      sessionStorage.setItem(previewStorageKey, JSON.stringify(data));
-      localStorage.setItem(previewStorageKey, JSON.stringify(data));
-    } catch (error) {
-      console.warn("Could not save preview data:", error);
-    }
-  }, [
-    productId,
-    routeId,
-    side,
-    mockupColor,
-    frontElements,
-    backElements,
-    elements,
-    previewStorageKey,
-  ]);
-
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(editorStorageKey);
@@ -251,7 +163,6 @@ export default function EditorPage() {
       const loadedFront = Array.isArray(parsed.frontElements)
         ? parsed.frontElements
         : [];
-
       const loadedBack = Array.isArray(parsed.backElements)
         ? parsed.backElements
         : [];
@@ -261,7 +172,7 @@ export default function EditorPage() {
       }
 
       if (typeof parsed.zoom === "number") {
-        setZoom(Math.min(4, Math.max(0.25, parsed.zoom)));
+        setZoom(Math.min(2, Math.max(0.4, parsed.zoom)));
       }
 
       if (typeof parsed.mockupColor === "string") {
@@ -278,33 +189,58 @@ export default function EditorPage() {
   }, [editorStorageKey]);
 
   const handleSaveDesign = useCallback(async () => {
-    if (!productId || saving) return;
+    if (saving) return;
+
+    const baseProductId = productId || category;
+
+    if (!baseProductId) {
+      alert("Product missing. Open the editor from a product page before saving.");
+      return;
+    }
 
     try {
       setSaving(true);
       saveDraftToSession();
 
-      const response = await fetch("/api/user-products/save-design", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          baseProductId: productId,
-          designFront: frontElements,
-          designBack: backElements,
-          mockupColor,
-          markup: 0,
-          generateMockupAI: true,
-        }),
+      const designPayload = await buildDesignSavePayload({
+        productId: baseProductId,
+        category,
+        side,
+        elements,
+        frontElements,
+        backElements,
+        mockupColor,
+        color: mockupColor,
       });
 
-      const data = await response.json();
+      const response = await fetch("/api/user-products/save-design", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(designPayload),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (response.status === 401) {
+        pendingSaveAfterAuthRef.current = true;
+        setAuthPopupOpen(true);
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(data?.error || "Failed to save design");
       }
 
-      savePreviewData();
-      alert("Design saved successfully.");
+      sessionStorage.removeItem(editorStorageKey);
+      const cartUrl = data?.redirectTo || (data?.designId ? `/cart?designId=${data.designId}` : null);
+
+      if (cartUrl) {
+        router.push(cartUrl);
+        return;
+      }
+
+      console.info("Design saved", data);
     } catch (error) {
       console.error("SAVE ERROR:", error);
       alert("Error saving design");
@@ -313,96 +249,131 @@ export default function EditorPage() {
     }
   }, [
     productId,
+    category,
+    side,
+    elements,
     saving,
     saveDraftToSession,
     frontElements,
     backElements,
     mockupColor,
-    savePreviewData,
+    editorStorageKey,
+    router,
   ]);
 
-  const handlePreviewDesign = useCallback(() => {
-    if (!productId) return;
+  const handleAuthSuccess = useCallback(() => {
+    setAuthPopupOpen(false);
 
-    try {
-      saveDraftToSession();
-      savePreviewData();
-    } catch (error) {
-      console.error("PREVIEW ERROR:", error);
+    if (!pendingSaveAfterAuthRef.current) return;
+
+    pendingSaveAfterAuthRef.current = false;
+    window.setTimeout(() => {
+      void handleSaveDesign();
+    }, 250);
+  }, [handleSaveDesign]);
+
+const handlePreviewDesign = useCallback(async () => {
+  try {
+    saveDraftToSession();
+
+    if (!previewCanvasRef.current) {
+      console.error("PREVIEW CANVAS REF MISSING");
+      return null;
     }
-  }, [productId, saveDraftToSession, savePreviewData]);
 
+    const exportNode =
+      previewCanvasRef.current.querySelector(
+        "#mockup-export-root"
+      ) as HTMLElement | null;
+
+    if (!exportNode) {
+      console.error("MOCKUP EXPORT ROOT MISSING");
+      return null;
+    }
+
+    console.log("EXPORT NODE", exportNode);
+
+    const designImage = await captureProductionPreview(exportNode);
+
+    console.log("REAL PREVIEW IMAGE", {
+      type: typeof designImage,
+      length: designImage?.length,
+      start:
+        typeof designImage === "string"
+          ? designImage.slice(0, 80)
+          : null,
+    });
+
+    if (
+      typeof designImage !== "string" ||
+      !designImage.startsWith("data:image/")
+    ) {
+      console.error("INVALID DESIGN IMAGE", designImage);
+      return null;
+    }
+
+    return designImage;
+  } catch (error) {
+    console.error("PREVIEW ERROR:", error);
+    return null;
+  }
+}, [saveDraftToSession]);
   useEffect(() => {
-    if (!hasLoadedDraft.current) return;
+    if (!hasLoadedDraft.current || isHistoryAction.current) return;
 
-    const snapshot = JSON.stringify({ frontElements, backElements });
+    const snapshot = { frontElements, backElements };
+    const serialized = JSON.stringify(snapshot);
+    const last = history[history.length - 1];
 
-    if (!lastHistorySnapshot.current) {
-      lastHistorySnapshot.current = snapshot;
-      setHistory([{ frontElements, backElements }]);
-      return;
-    }
+    if (last && JSON.stringify(last) === serialized) return;
 
-    if (isHistoryAction.current) {
-      isHistoryAction.current = false;
-      lastHistorySnapshot.current = snapshot;
-      return;
-    }
-
-    if (snapshot === lastHistorySnapshot.current) return;
-
-    lastHistorySnapshot.current = snapshot;
     setHistory((prev) => {
-      const next = [...prev, { frontElements, backElements }];
-      return next.slice(-80);
+      const previous = prev[prev.length - 1];
+      if (previous && JSON.stringify(previous) === serialized) return prev;
+      return [...prev, snapshot].slice(-80);
     });
     setFuture([]);
-  }, [frontElements, backElements]);
+  }, [frontElements, backElements, history]);
+
+  const applyHistoryState = useCallback((state: HistoryState) => {
+    isHistoryAction.current = true;
+    setFrontElements(state.frontElements || []);
+    setBackElements(state.backElements || []);
+    setSelectedId(null);
+    setSelectedElement(null);
+    queueMicrotask(() => {
+      isHistoryAction.current = false;
+    });
+  }, []);
 
   const handleUndo = useCallback(() => {
     setHistory((prev) => {
       if (prev.length <= 1) return prev;
-
       const current = prev[prev.length - 1];
       const previous = prev[prev.length - 2];
-
-      isHistoryAction.current = true;
-      setFuture((items) => [current, ...items].slice(0, 80));
-      setFrontElements(previous.frontElements);
-      setBackElements(previous.backElements);
-      setSelectedId(null);
-      setSelectedElement(null);
-
+      setFuture((next) => [current, ...next].slice(0, 80));
+      applyHistoryState(previous);
       return prev.slice(0, -1);
     });
-  }, []);
+  }, [applyHistoryState]);
 
   const handleRedo = useCallback(() => {
     setFuture((prev) => {
       if (!prev.length) return prev;
-
-      const next = prev[0];
-
-      isHistoryAction.current = true;
-      setHistory((items) => [...items, next].slice(-80));
-      setFrontElements(next.frontElements);
-      setBackElements(next.backElements);
-      setSelectedId(null);
-      setSelectedElement(null);
-
-      return prev.slice(1);
+      const [next, ...rest] = prev;
+      setHistory((historyPrev) => [...historyPrev, next].slice(-80));
+      applyHistoryState(next);
+      return rest;
     });
-  }, []);
+  }, [applyHistoryState]);
 
-  if (!productId) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#05050d] text-white">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 text-center">
-          <p className="text-sm font-bold text-white/70">Loading product...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleRevert = useCallback(() => {
+    const empty = { frontElements: [], backElements: [] };
+    applyHistoryState(empty);
+    setHistory([empty]);
+    setFuture([]);
+    saveDraftToSession();
+  }, [applyHistoryState, saveDraftToSession]);
 
   return (
     <>
@@ -410,17 +381,20 @@ export default function EditorPage() {
         sidebar={null}
         topbar={
           <TopBar
-            productId={productId}
+            productId={productId || undefined}
+            category={category}
             side={side}
             setSide={setSide}
             zoomIn={zoomIn}
             zoomOut={zoomOut}
             zoom={Math.round(zoom * 100)}
-            onZoomChange={handleZoomChange}
             onSaveDesign={handleSaveDesign}
             onPreviewDesign={handlePreviewDesign}
             onUndo={handleUndo}
             onRedo={handleRedo}
+            onRevert={handleRevert}
+            canUndo={history.length > 1}
+            canRedo={future.length > 0}
             saving={saving}
             elements={elements}
             frontElements={frontElements}
@@ -439,6 +413,7 @@ export default function EditorPage() {
             setSelectedElement={setSelectedElement}
             mockupColor={mockupColor}
             setMockupColor={setMockupColor}
+            canvasRef={previewCanvasRef}
           />
         }
         toolbar={
@@ -466,6 +441,19 @@ export default function EditorPage() {
         accept="image/png,image/jpeg,image/webp"
         onChange={handleUploadChange}
       />
+
+      {authPopupOpen && (
+        <div className="fixed inset-0 z-[999]">
+          <AuthPopup
+            open={authPopupOpen}
+            onClose={() => {
+              pendingSaveAfterAuthRef.current = false;
+              setAuthPopupOpen(false);
+            }}
+            onSuccess={handleAuthSuccess}
+          />
+        </div>
+      )}
     </>
   );
 }

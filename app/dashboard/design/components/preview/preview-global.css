@@ -1,0 +1,8 @@
+/* Optional: add this to globals.css if any editor fixed bar still appears above preview. */
+body.ryfio-preview-open [data-editor-bottom-bar],
+body.ryfio-preview-open [data-editor-sidebar],
+body.ryfio-preview-open [data-editor-toolbar],
+body.ryfio-preview-open [data-ai-panel] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

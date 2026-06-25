@@ -24,6 +24,8 @@ const adminLimiter = new Ratelimit({
   analytics: true,
 });
 
+const noindexRoutes = ["/admin", "/dashboard", "/settings", "/profile"];
+
 function getIp(req: NextRequest) {
   return (
     req.headers.get("cf-connecting-ip") ||
@@ -48,9 +50,7 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
     "/api/select",
   ];
 
-  const isStrict = strictRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isStrict = strictRoutes.some((route) => pathname.startsWith(route));
 
   if (isStrict) {
     return strictLimiter.limit(`strict:${ip}:${pathname}`);
@@ -63,17 +63,36 @@ async function checkRateLimit(req: NextRequest, pathname: string) {
   return { success: true };
 }
 
+function applySeoHeaders(res: NextResponse, pathname: string) {
+  const shouldNoindex = noindexRoutes.some((route) => pathname.startsWith(route));
+
+  if (shouldNoindex) {
+    res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  }
+
+  return res;
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  
+  const rateLimit = await checkRateLimit(req, pathname);
 
-  // ✅ liberar /dashboard/design e produtos dentro dele
+  if (!rateLimit.success) {
+    return new NextResponse("Too many requests", {
+      status: 429,
+      headers: {
+        "Retry-After": "60",
+        "X-Robots-Tag": "noindex, nofollow",
+      },
+    });
+  }
+
   if (
     pathname === "/dashboard/design" ||
     pathname.startsWith("/dashboard/design/")
   ) {
-    return NextResponse.next();
+    return applySeoHeaders(NextResponse.next(), pathname);
   }
 
   let res = NextResponse.next({
@@ -110,35 +129,24 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const protectedRoutes = [
-    "/dashboard",
-    "/admin",
-    "/settings",
-    "/profile",
-  ];
+  const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
 
-  const isProtected = protectedRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
+  const isProtected = protectedRoutes.some((route) => pathname.startsWith(route));
 
   if (isProtected && !user) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("redirect", pathname);
 
-    return NextResponse.redirect(loginUrl);
+    return applySeoHeaders(NextResponse.redirect(loginUrl), pathname);
   }
 
   if (pathname === "/login" && user) {
-    return NextResponse.redirect(
-      new URL("/dashboard", req.url)
-    );
+    return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
   if (pathname.startsWith("/admin")) {
     if (!user) {
-      return NextResponse.redirect(
-        new URL("/login", req.url)
-      );
+      return applySeoHeaders(NextResponse.redirect(new URL("/login", req.url)), pathname);
     }
 
     const { data: profile } = await supabase
@@ -148,13 +156,11 @@ export async function middleware(req: NextRequest) {
       .maybeSingle();
 
     if (profile?.role !== "admin") {
-      return NextResponse.redirect(
-        new URL("/dashboard", req.url)
-      );
+      return applySeoHeaders(NextResponse.redirect(new URL("/dashboard", req.url)), pathname);
     }
   }
 
-  return res;
+  return applySeoHeaders(res, pathname);
 }
 
 export const config = {

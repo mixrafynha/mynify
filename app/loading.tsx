@@ -41,7 +41,7 @@ export default function Loading() {
       <div className="relative flex flex-col items-center gap-8">
         <div className="relative text-center">
           <div className="text-4xl font-black tracking-[-0.07em] text-white sm:text-5xl">
-            MY<span className="text-purple-300">NIFY</span>
+            RY<span className="text-purple-300">FIO</span>
           </div>
 
           <div className="mx-auto mt-3 h-[2px] w-20 rounded-full bg-gradient-to-r from-purple-500 via-fuchsia-400 to-purple-500 shadow-[0_0_24px_rgba(168,85,247,0.65)]" />
