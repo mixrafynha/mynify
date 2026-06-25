@@ -1,5 +1,12 @@
 import { getPrintBox, getSafeArea } from "../../canvas/canvasMath";
-import { captureProductionDesign, captureVisualMockupPreview } from "../../preview/services/previewCapture";
+import {
+  captureProductionDesign,
+  captureVisualMockupPreview,
+} from "../../preview/services/previewCapture";
+import type {
+  PreviewElement,
+  PreviewSideData,
+} from "../../preview/types/preview";
 import { buildProductionQualityReport, buildProductionRules } from "./productionValidation";
 import type { EditorSide, PreviewPayloadInput } from "../types";
 
@@ -128,13 +135,20 @@ function makeSideData(
   category: string,
   side: DesignSide,
   rawElements: unknown[],
-) {
-  const printBox = input.side === side && input.printBox ? input.printBox : getPrintBox(category, side);
-  const safeArea = input.side === side && input.safeArea ? input.safeArea : getSafeArea(printBox);
+): PreviewSideData {
+  const printBox =
+    input.side === side && input.printBox
+      ? input.printBox
+      : getPrintBox(category, side);
+
+  const safeArea =
+    input.side === side && input.safeArea
+      ? input.safeArea
+      : getSafeArea(printBox);
 
   return {
     side,
-    elements: rawElements,
+    elements: rawElements as PreviewElement[],
     mockupUrl: "",
     printBox,
     safeArea,
@@ -147,16 +161,15 @@ function makeSideData(
       height: 1024,
     },
     validation: {
-      status: "ready" as const,
+      status: "ready",
       statusLabel: "Ready",
       dpi: null,
       warnings: [],
       printReady: true,
-      riskLevel: "low" as const,
+      riskLevel: "low",
     },
   };
 }
-
 
 function getVisibleMockupRoot() {
   if (typeof document === "undefined") return null;
