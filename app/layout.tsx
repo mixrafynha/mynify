@@ -1,6 +1,5 @@
 import "./globals.css";
 import Providers from "./providers";
-import Script from "next/script";
 import type { Metadata } from "next";
 import { Manrope, Inter, Audiowide } from "next/font/google";
 
@@ -24,11 +23,11 @@ const inter = Inter({
   weight: ["400", "600"],
 });
 
-const siteUrl = "https://ryfio.com";
+const siteUrl = "https://www.ryfio.com";
 const siteName = "Ryfio";
 const defaultTitle = "Ryfio — Create & Sell Custom Products";
 const defaultDescription =
-  "Design custom products, launch your brand and sell worldwide with print-on-demand fulfillment.";
+  "Create custom products with our online design editor and sell worldwide using print-on-demand fulfillment.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -97,6 +96,12 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
+  themeColor: "#03030a",
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
 };
 
 const organizationJsonLd = {
@@ -121,9 +126,9 @@ export default function RootLayout({
 }) {
   return (
     <html
-        lang="en"
-        className={`${manrope.variable} ${inter.variable} ${audiowide.variable} w-full h-full`}
-      >
+      lang="en"
+      className={`${manrope.variable} ${inter.variable} ${audiowide.variable} w-full h-full`}
+    >
       <body
         className={`
           ${manrope.className}
@@ -132,11 +137,6 @@ export default function RootLayout({
           flex flex-col
         `}
       >
-        <Script
-          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
-          strategy="afterInteractive"
-        />
-
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

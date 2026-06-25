@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
@@ -54,12 +55,15 @@ export default function UpdatePassword() {
   };
 
   return (
-    <div className="min-h-[100dvh] grid md:grid-cols-2">
-      <div className="hidden md:flex relative bg-black text-white overflow-hidden">
-        <img
-          src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
-          className="absolute inset-0 w-full h-full object-cover"
-          alt="background"
+    <div className="grid min-h-[100dvh] bg-[#03030a] text-white md:grid-cols-2">
+      <div className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
+        <Image
+          src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=1200&q=72"
+          alt=""
+          fill
+          sizes="(min-width: 768px) 50vw, 0vw"
+          className="object-cover opacity-45"
+          aria-hidden="true"
         />
 
         <div className="absolute inset-0 bg-black/60" />
@@ -68,10 +72,10 @@ export default function UpdatePassword() {
           <div className="max-w-md">
             <div className="flex items-center gap-3 mb-8">
               <div className="bg-white text-black w-10 h-10 flex items-center justify-center rounded-lg font-bold">
-                M
+                R
               </div>
-              <span className="text-xl font-extrabold tracking-tight">
-                MYNIFY
+              <span className="text-xl font-black tracking-tight">
+                RYFIO
               </span>
             </div>
 
@@ -86,25 +90,25 @@ export default function UpdatePassword() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center bg-[#f5f5f3] p-6">
-        <div className="w-full max-w-md relative">
+      <div className="relative flex items-center justify-center overflow-hidden bg-[#03030a] px-4 py-5 sm:p-6">
+        <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_0_35px_rgba(168,85,247,0.10)] backdrop-blur-xl sm:rounded-3xl sm:p-8">
           <button
             onClick={() => router.push(safeRoute("/login"))}
-            className="absolute top-2 right-2 text-gray-500 hover:text-black"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/50 transition hover:border-purple-500/40 hover:bg-purple-500/10 hover:text-white"
           >
             ✕
           </button>
 
           <div className="flex items-center gap-3 mb-6">
-            <div className="bg-black text-white w-10 h-10 flex items-center justify-center rounded-lg font-bold">
-              M
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
+              R
             </div>
-            <span className="text-xl font-extrabold tracking-tight">
-              MYNIFY
+            <span className="text-xl font-black tracking-tight">
+              RYFIO
             </span>
           </div>
 
-          <h2 className="text-2xl font-extrabold mb-6">
+          <h2 className="mb-5 text-2xl font-black uppercase sm:mb-6">
             Update password
           </h2>
 
@@ -114,7 +118,7 @@ export default function UpdatePassword() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="New password"
-              className="w-full border px-4 py-3 rounded-lg focus:ring-2 focus:ring-black"
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
             />
 
             {error && (
@@ -125,7 +129,7 @@ export default function UpdatePassword() {
               type="button"
               onClick={handleUpdate}
               disabled={loading}
-              className="w-full bg-[#39E58C] py-3.5 rounded-lg font-semibold disabled:opacity-50"
+              className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-3.5 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.35)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? "Updating..." : "Update password"}
             </button>

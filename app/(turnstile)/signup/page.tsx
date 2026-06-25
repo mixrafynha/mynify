@@ -1,13 +1,13 @@
 "use client";
 
-import SignupForm from "../components/SignupForm";
+import SignupForm from "../../components/SignupForm";
 import Image from "next/image";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
-import { Gamepad2, X } from "lucide-react";
-import { supabase } from "../../lib/supabase";
+import { PackageCheck, X } from "lucide-react";
+import { supabase } from "../../../lib/supabase";
 
 /* =========================
    🔐 SECURITY HELPERS
@@ -24,7 +24,7 @@ const safeUrl = (url: string) => {
 const img = (url: string, w: number = 1600) => {
   if (typeof url !== "string") return "";
   if (!url.startsWith("http")) return "";
-  return `${url}?auto=format&fit=crop&w=${w}&q=85`;
+  return `${url}?auto=format&fit=crop&w=${w}&q=72`;
 };
 
 const bgImage =
@@ -83,8 +83,7 @@ export default function SignupPage() {
             src={img(bgImage)}
             alt="Business background"
             fill
-            priority
-            sizes="50vw"
+            sizes="(min-width: 768px) 50vw, 0vw"
             className="object-cover opacity-35"
           />
 
@@ -95,17 +94,17 @@ export default function SignupPage() {
             <div className="max-w-md">
               <div className="mb-8 flex items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
-                  M
+                  R
                 </div>
 
                 <span className="text-xl font-black tracking-tight">
-                  MYNIFY
+                  RYFIO
                 </span>
               </div>
 
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
-                <Gamepad2 size={15} className="text-purple-400" />
-                Start your creator brand
+                <PackageCheck size={15} className="text-purple-400" />
+                Start your product brand
               </div>
 
               <h1 className="mb-5 text-5xl font-black uppercase leading-[0.9] tracking-tight lg:text-7xl">
@@ -116,7 +115,7 @@ export default function SignupPage() {
               </h1>
 
               <p className="max-w-md text-lg leading-relaxed text-white/65">
-                Launch your brand, customize premium products, and start selling
+                Create custom products, launch your brand, and sell
                 worldwide — all in one place.
               </p>
             </div>
@@ -131,7 +130,7 @@ export default function SignupPage() {
         <div className="relative flex min-h-[100dvh] w-full overflow-hidden bg-[#03030a]">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
 
-          <div className="relative flex min-h-[100dvh] w-full flex-col px-5 py-6 sm:px-8 md:px-10">
+          <div className="relative flex min-h-[100dvh] w-full flex-col px-4 py-5 sm:px-8 md:px-10">
             <button
               type="button"
               onClick={goHome}
@@ -140,29 +139,29 @@ export default function SignupPage() {
               <X size={18} />
             </button>
 
-            <div className="flex flex-1 items-center justify-center py-10">
-              <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-center shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl md:text-left sm:p-8">
+            <div className="flex flex-1 items-center justify-center py-8 sm:py-10">
+              <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 text-center shadow-[0_0_35px_rgba(168,85,247,0.10)] backdrop-blur-xl md:text-left sm:rounded-3xl sm:p-8">
                 {/* LOGO */}
-                <div className="mb-6 flex items-center justify-center gap-3 md:justify-start">
+                <div className="mb-5 flex items-center justify-center gap-3 md:justify-start sm:mb-6">
                   <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
-                    M
+                    R
                   </div>
 
                   <span className="text-xl font-black tracking-tight sm:text-2xl">
-                    MYNIFY
+                    RYFIO
                   </span>
                 </div>
 
-                <h2 className="mb-2 text-3xl font-black uppercase">
+                <h2 className="mb-2 text-2xl font-black uppercase sm:text-3xl">
                   Create your account
                 </h2>
 
-                <p className="mb-6 text-sm leading-relaxed text-white/50">
+                <p className="mb-5 text-sm leading-relaxed text-white/50 sm:mb-6">
                   Sign up and start building your custom product brand today.
                 </p>
 
                 {/* SOCIAL */}
-                <div className="mb-6 space-y-3">
+                <div className="mb-5 space-y-3 sm:mb-6">
                   <button
                     type="button"
                     onClick={() => handleOAuth("google")}
@@ -188,7 +187,7 @@ export default function SignupPage() {
                   </button>
                 </div>
 
-                <div className="my-6 flex items-center gap-3">
+                <div className="my-5 flex items-center gap-3 sm:my-6">
                   <div className="h-px flex-1 bg-white/10" />
                   <span className="text-xs font-bold text-white/35">OR</span>
                   <div className="h-px flex-1 bg-white/10" />
@@ -196,7 +195,7 @@ export default function SignupPage() {
 
                 <SignupForm />
 
-                <p className="mt-6 text-center text-sm text-white/50 md:text-left">
+                <p className="mt-5 text-center text-sm text-white/50 md:text-left sm:mt-6">
                   Already have an account?{" "}
                   <span
                     onClick={goLogin}

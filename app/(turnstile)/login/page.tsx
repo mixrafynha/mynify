@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import Script from "next/script";
-import { Eye, EyeOff, Gamepad2, X, Zap } from "lucide-react";
+import Image from "next/image";
+import { Eye, EyeOff, PackageCheck, X, Zap } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { FaApple } from "react-icons/fa";
 import { useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -258,21 +258,18 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-[100dvh] overflow-hidden bg-[#03030a] text-white">
-      <Script
-        id="turnstile-script-login"
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
-        strategy="afterInteractive"
-      />
 
       <div className="grid min-h-[100dvh] md:grid-cols-2">
         {/* ── Left panel ── */}
         <div className="relative hidden overflow-hidden bg-[#03030a] text-white md:flex">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_32%,rgba(168,85,247,0.35),transparent_28%),radial-gradient(circle_at_58%_52%,rgba(14,165,233,0.25),transparent_24%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
 
-          <img
-            src="https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1600&auto=format&fit=crop"
-            className="absolute inset-0 h-full w-full object-cover opacity-35"
+          <Image
+            src="https://images.unsplash.com/photo-1544441893-675973e31985?auto=format&fit=crop&w=1200&q=72"
             alt=""
+            fill
+            sizes="(min-width: 768px) 50vw, 0vw"
+            className="object-cover opacity-35"
             aria-hidden="true"
           />
 
@@ -283,13 +280,13 @@ export default function LoginPage() {
             <div className="max-w-md">
               <div className="mb-8 flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
-                  M
+                  R
                 </div>
-                <span className="text-xl font-black tracking-tight">MYNIFY</span>
+                <span className="text-xl font-black tracking-tight">RYFIO</span>
               </div>
 
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/60 bg-purple-500/10 px-4 py-2 text-xs font-black uppercase tracking-wide text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.35)]">
-                <Gamepad2 size={15} className="text-purple-400" />
+                <PackageCheck size={15} className="text-purple-400" />
                 Welcome back creator
               </div>
 
@@ -309,10 +306,10 @@ export default function LoginPage() {
         </div>
 
         {/* ── Right panel (form) ── */}
-        <div className="relative flex items-center justify-center overflow-hidden bg-[#03030a] p-6">
+        <div className="relative flex items-center justify-center overflow-hidden bg-[#03030a] px-4 py-5 sm:p-6">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(168,85,247,0.22),transparent_30%),radial-gradient(circle_at_20%_80%,rgba(14,165,233,0.16),transparent_28%)]" />
 
-          <div className="relative w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.035] p-6 shadow-[0_0_50px_rgba(168,85,247,0.12)] backdrop-blur-xl sm:p-8">
+          <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_0_35px_rgba(168,85,247,0.10)] backdrop-blur-xl sm:rounded-3xl sm:p-8">
             <button
               onClick={() => router.push(safeRoute("/"))}
               aria-label="Go back to home"
@@ -321,21 +318,21 @@ export default function LoginPage() {
               <X size={18} />
             </button>
 
-            <div className="mb-6 flex items-center gap-3">
+            <div className="mb-5 flex items-center gap-3 sm:mb-6">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
-                M
+                R
               </div>
-              <span className="text-xl font-black tracking-tight">MYNIFY</span>
+              <span className="text-xl font-black tracking-tight">RYFIO</span>
             </div>
 
-            <h2 className="mb-2 text-3xl font-black uppercase">Welcome back</h2>
+            <h2 className="mb-2 text-2xl font-black uppercase sm:text-3xl">Welcome back</h2>
 
-            <p className="mb-6 text-sm leading-relaxed text-white/50">
+            <p className="mb-5 text-sm leading-relaxed text-white/50 sm:mb-6">
               Sign in to continue building your custom product brand.
             </p>
 
             {/* OAuth buttons */}
-            <div className="mb-6 space-y-3">
+            <div className="mb-5 space-y-3 sm:mb-6">
               <button
                 disabled={loading}
                 onClick={handleGoogle}
@@ -355,14 +352,14 @@ export default function LoginPage() {
               </button>
             </div>
 
-            <div className="my-6 flex items-center gap-3">
+            <div className="my-5 flex items-center gap-3 sm:my-6">
               <div className="h-px flex-1 bg-white/10" />
               <span className="text-xs font-bold text-white/35">OR</span>
               <div className="h-px flex-1 bg-white/10" />
             </div>
 
             {/* Credentials form */}
-            <div className="space-y-5">
+            <div className="space-y-4 sm:space-y-5">
               <input
                 type="email"
                 autoComplete="email"
@@ -370,7 +367,7 @@ export default function LoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Email"
                 aria-label="Email address"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
               />
 
               <div className="relative">
@@ -382,7 +379,7 @@ export default function LoginPage() {
                   placeholder="Password"
                   aria-label="Password"
                   maxLength={PASSWORD_MAX_LENGTH}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-4 pr-12 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
                 />
                 <button
                   type="button"
@@ -428,7 +425,7 @@ export default function LoginPage() {
                 type="button"
                 onClick={handleLogin}
                 disabled={loading}
-                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-3.5 font-bold sm:py-4 text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {loading ? "Signing in…" : "Sign in"}
                 <Zap size={18} />
