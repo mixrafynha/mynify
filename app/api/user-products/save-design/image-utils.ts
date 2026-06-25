@@ -54,10 +54,14 @@ export function cleanDataUrls(value: unknown): unknown {
 }
 
 export function sideValue(value: unknown, side: DesignSide): unknown {
-  if (!value) return null;
-  if (typeof value === "string") return side === "front" ? value : null;
-  if (typeof value === "object") {
-    return (value as Record<string, unknown>)[side] ?? null;
+  if (value == null || value === "") return null;
+
+  if (typeof value === "string") {
+    return side === "front" ? value : null;
+  }
+
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return (value as Partial<Record<DesignSide, unknown>>)[side] ?? null;
   }
 
   return null;
