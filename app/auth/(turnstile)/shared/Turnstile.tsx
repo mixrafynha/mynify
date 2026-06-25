@@ -24,7 +24,7 @@ function loadTurnstileScript(): Promise<void> {
   if (currentWindow.turnstile) return Promise.resolve();
   if (currentWindow.__ryfioTurnstileLoading) return currentWindow.__ryfioTurnstileLoading;
 
-  currentWindow.__ryfioTurnstileLoading = new Promise((resolve, reject) => {
+  currentWindow.__ryfioTurnstileLoading = new Promise<void>((resolve, reject) => {
     const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
 
     if (existingScript) {
