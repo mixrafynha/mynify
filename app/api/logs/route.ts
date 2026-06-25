@@ -59,7 +59,15 @@ function getClientIp(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    if (!firestore) {
+      return NextResponse.json({
+        success: true,
+        skipped: true,
+      });
+    }
+
     const body = await req.json().catch(() => null);
+
     const parsed = LogSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -70,9 +78,13 @@ export async function POST(req: Request) {
     }
 
     const event = parsed.data.event ?? parsed.data.type ?? "unknown";
+
     const mergedData = {
       ...(parsed.data.data ?? {}),
-      provider: parsed.data.provider ?? parsed.data.data?.provider ?? null,
+      provider:
+        parsed.data.provider ??
+        parsed.data.data?.provider ??
+        null,
     };
 
     await firestore.collection("events").add({
@@ -85,10 +97,12 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json(
-      { success: false, error: "Failed to save log" },
-      { status: 500 }
-    );
+  } catch (err) {
+    console.error(err);
+
+    return NextResponse.json({
+      success: true,
+      skipped: true,
+    });
   }
 }

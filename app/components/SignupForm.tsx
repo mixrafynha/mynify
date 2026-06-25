@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 type TurnstileApi = {
   render: (
@@ -26,13 +25,35 @@ function getTurnstile(): TurnstileApi | null {
   return maybeWindow.turnstile ?? null;
 }
 
-export default function SignupForm() {
-  const router = useRouter();
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
 
+function isStrongPassword(value: string) {
+  return (
+    value.length >= 10 &&
+    value.length <= 128 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[^A-Za-z0-9]/.test(value)
+  );
+}
+
+type SignupResponse = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  userId?: string | null;
+};
+
+export default function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+
   const [token, setToken] = useState("");
   const [loading, setLoading] = useState(false);
+
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -63,7 +84,10 @@ export default function SignupForm() {
           setToken(value);
           setError("");
         },
-        "expired-callback": () => setToken(""),
+        "expired-callback": () => {
+          setToken("");
+          setError("Captcha expired. Complete it again.");
+        },
         "error-callback": () => {
           setToken("");
           setError("Captcha failed. Try again.");
@@ -94,16 +118,6 @@ export default function SignupForm() {
 
     setToken("");
   }, []);
-
-  const isValidEmail = (value: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-
-  const isStrongPassword = (value: string) =>
-    value.length >= 10 &&
-    /[A-Z]/.test(value) &&
-    /[a-z]/.test(value) &&
-    /[0-9]/.test(value) &&
-    /[^A-Za-z0-9]/.test(value);
 
   const handleEmailSignup = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -141,6 +155,7 @@ export default function SignupForm() {
 
         const res = await fetch("/api/signup", {
           method: "POST",
+          credentials: "same-origin",
           headers: {
             "Content-Type": "application/json",
           },
@@ -154,16 +169,51 @@ export default function SignupForm() {
 
         window.clearTimeout(timeout);
 
-        if (!res.ok) {
-          throw new Error("Signup failed.");
+        let data: SignupResponse | null = null;
+
+        try {
+          data = (await res.json()) as SignupResponse;
+        } catch {
+          data = null;
         }
 
-        setMessage("Account created. Redirecting...");
+        if (!res.ok) {
+          if (data?.error === "email_exists") {
+            setError("User already exists. Try logging in.");
+            resetCaptcha();
+            return;
+          }
+
+          if (data?.error === "invalid_request") {
+            setError(
+              "Password must have 10+ characters, uppercase, lowercase, number and symbol."
+            );
+            resetCaptcha();
+            return;
+          }
+
+          if (data?.error === "captcha_failed") {
+            setError("Captcha failed. Please try again.");
+            resetCaptcha();
+            return;
+          }
+
+          if (data?.error === "server_config") {
+            setError("Signup is not configured correctly.");
+            resetCaptcha();
+            return;
+          }
+
+          setError(data?.message || "Signup failed. Try again.");
+          resetCaptcha();
+          return;
+        }
+
         setEmail("");
         setPassword("");
         resetCaptcha();
 
-        router.replace("/login?registered=true");
+        setMessage("Account created. We sent you a verification email.");
       } catch (err) {
         const errorName = err instanceof Error ? err.name : "";
 
@@ -178,7 +228,7 @@ export default function SignupForm() {
         setLoading(false);
       }
     },
-    [email, password, token, loading, resetCaptcha, router]
+    [email, password, token, loading, resetCaptcha]
   );
 
   return (
@@ -189,7 +239,7 @@ export default function SignupForm() {
           inputMode="email"
           autoComplete="email"
           placeholder="Email"
-          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3.5 text-[16px] text-black outline-none transition focus:border-black/30 focus:ring-2 focus:ring-black/10"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3.5 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/45 focus:ring-2 focus:ring-purple-500/20"
           value={email}
           onChange={(e) => setEmail(e.target.value.trim().toLowerCase())}
           required
@@ -199,7 +249,7 @@ export default function SignupForm() {
           type="password"
           autoComplete="new-password"
           placeholder="Password"
-          className="w-full rounded-xl border border-black/10 bg-white px-4 py-3.5 text-[16px] text-black outline-none transition focus:border-black/30 focus:ring-2 focus:ring-black/10"
+          className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3.5 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/45 focus:ring-2 focus:ring-purple-500/20"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
@@ -212,18 +262,23 @@ export default function SignupForm() {
         <button
           type="submit"
           disabled={loading || !token}
-          className="flex w-full items-center justify-center rounded-xl bg-[#8BE04E] px-4 py-3.5 text-[16px] font-semibold text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center rounded-xl bg-[#8BE04E] px-4 py-3.5 text-[16px] font-black text-black transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loading ? (
             <span className="h-5 w-5 animate-spin rounded-full border-2 border-black/30 border-t-black" />
           ) : (
-            "Sign up"
+            "Create account"
           )}
         </button>
       </form>
 
-      {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
-      {message && <p className="mt-3 text-sm text-green-600">{message}</p>}
+      {error && <p className="mt-3 text-sm font-medium text-red-400">{error}</p>}
+
+      {message && (
+        <p className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-200">
+          {message}
+        </p>
+      )}
     </div>
   );
 }

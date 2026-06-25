@@ -1,130 +1,161 @@
 import { NextResponse } from "next/server";
-import disposable from "disposable-email-domains";
 import { createClient } from "@supabase/supabase-js";
 
-const requestLimit = new Map<string, number[]>();
-const dailyLimit = new Map<string, number>();
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-const RATE_WINDOW = 60 * 1000;
-const RATE_MAX = 5;
-const DAILY_MAX = 3;
+type SignupBody = {
+  email?: string;
+  password?: string;
+  token?: string;
+};
 
-function getIP(req: Request) {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  return (forwardedFor?.split(",")[0] || "unknown").slice(0, 45);
+function json(error: string, message: string, status: number) {
+  return NextResponse.json({ ok: false, error, message }, { status });
 }
 
-function checkRateLimit(ip: string) {
-  const now = Date.now();
-  const logs = requestLimit.get(ip) || [];
-  const recent = logs.filter((time) => now - time < RATE_WINDOW);
-
-  if (recent.length >= RATE_MAX) return false;
-
-  recent.push(now);
-  requestLimit.set(ip, recent);
-
-  return true;
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-function isValidEmail(email: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length < 254;
-}
-
-function isStrongPassword(password: string) {
+function isStrongPassword(value: string) {
   return (
-    password.length >= 10 &&
-    password.length <= 128 &&
-    /[A-Z]/.test(password) &&
-    /[a-z]/.test(password) &&
-    /[0-9]/.test(password) &&
-    /[^A-Za-z0-9]/.test(password)
+    value.length >= 10 &&
+    value.length <= 128 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[^A-Za-z0-9]/.test(value)
   );
+}
+
+function getSiteUrl() {
+  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
+  return "http://localhost:3000";
 }
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body !== "object") return fail();
-
-    let email = String((body as { email?: unknown }).email ?? "")
-      .trim()
-      .toLowerCase();
-
-    const password = String((body as { password?: unknown }).password ?? "");
-    const token = String((body as { token?: unknown }).token ?? "");
-
-    const ip = getIP(req);
-
-    if (!checkRateLimit(ip)) {
-      return NextResponse.json(
-        { message: "Too many requests. Try again later." },
-        { status: 429 }
-      );
-    }
-
-    if (!token) return fail();
-    if (!isValidEmail(email)) return fail();
-    if (!isStrongPassword(password)) return fail();
-
-    const domain = email.split("@")[1];
-
-    if (!domain || disposable.includes(domain)) {
-      return fail();
-    }
-
-    const day = new Date().toISOString().slice(0, 10);
-    const key = `${ip}-${day}`;
-    const used = dailyLimit.get(key) || 0;
-
-    if (used >= DAILY_MAX) {
-      return NextResponse.json(
-        { message: "Too many accounts today. Try again tomorrow." },
-        { status: 429 }
-      );
-    }
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.json(
-        { message: "Signup is temporarily unavailable." },
-        { status: 503 }
+      return json(
+        "server_config",
+        "Signup is not configured correctly.",
+        500
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const body = (await req.json().catch(() => null)) as SignupBody | null;
 
-    const { error } = await supabase.auth.signUp({
+    const email = String(body?.email || "").trim().toLowerCase();
+    const password = String(body?.password || "");
+    const token = String(body?.token || "");
+
+    if (!isValidEmail(email)) {
+      return json("invalid_email", "Enter a valid email.", 400);
+    }
+
+    if (!isStrongPassword(password)) {
+      return json(
+        "weak_password",
+        "Password must have 10+ characters, uppercase, lowercase, number and symbol.",
+        400
+      );
+    }
+
+    if (!token) {
+      return json("captcha_required", "Complete the captcha.", 400);
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+
+    const siteUrl = getSiteUrl();
+
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
+        emailRedirectTo: `${siteUrl}/auth/callback`,
         captchaToken: token,
       },
     });
 
-    if (error) {
-      return NextResponse.json(
-        { message: "Unable to create account." },
-        { status: 400 }
-      );
+    if (
+      !error &&
+      data.user &&
+      Array.isArray(data.user.identities) &&
+      data.user.identities.length === 0
+    ) {
+      return json("email_exists", "User already exists. Try logging in.", 409);
     }
 
-    dailyLimit.set(key, used + 1);
+    if (error) {
+      console.error("Supabase signup error:", {
+        name: error.name,
+        message: error.message,
+        status: error.status,
+      });
+
+      const message = error.message.toLowerCase();
+
+      if (
+        message.includes("already") ||
+        message.includes("registered") ||
+        message.includes("exists")
+      ) {
+        return json("email_exists", "User already exists. Try logging in.", 409);
+      }
+
+      if (
+        message.includes("captcha") ||
+        message.includes("timeout-or-duplicate")
+      ) {
+        return json(
+          "captcha_failed",
+          "Captcha failed. Please verify again.",
+          400
+        );
+      }
+
+      if (message.includes("password")) {
+        return json(
+          "weak_password",
+          "Password must have 10+ characters, uppercase, lowercase, number and symbol.",
+          400
+        );
+      }
+
+      if (message.includes("redirect")) {
+        return json(
+          "redirect_not_allowed",
+          "Signup redirect URL is not allowed in Supabase.",
+          400
+        );
+      }
+
+      return json("signup_failed", error.message || "Signup failed.", 400);
+    }
 
     return NextResponse.json(
-      { message: "Account created successfully" },
+      {
+        ok: true,
+        userId: data.user?.id ?? null,
+        message: "Account created. We sent you a verification email.",
+      },
       { status: 201 }
     );
-  } catch {
-    return NextResponse.json(
-      { message: "Signup is temporarily unavailable." },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Signup API error:", error);
+    return json("server_error", "Server error. Try again.", 500);
   }
-}
-
-function fail() {
-  return NextResponse.json({ message: "Invalid request" }, { status: 400 });
 }
