@@ -4,7 +4,8 @@ import { memo, useEffect, useRef } from "react";
 import type { TurnstileApi } from "./types";
 
 const SCRIPT_ID = "cloudflare-turnstile-script";
-const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+const SCRIPT_SRC =
+  "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
 
 type TurnstileWindow = Window & {
   turnstile?: TurnstileApi;
@@ -22,26 +23,38 @@ function loadTurnstileScript(): Promise<void> {
   const currentWindow = window as TurnstileWindow;
 
   if (currentWindow.turnstile) return Promise.resolve();
-  if (currentWindow.__ryfioTurnstileLoading) return currentWindow.__ryfioTurnstileLoading;
+  if (currentWindow.__ryfioTurnstileLoading) {
+    return currentWindow.__ryfioTurnstileLoading;
+  }
 
-  currentWindow.__ryfioTurnstileLoading = new Promise((resolve, reject) => {
-    const existingScript = document.getElementById(SCRIPT_ID) as HTMLScriptElement | null;
+  currentWindow.__ryfioTurnstileLoading = new Promise<void>(
+    (resolve, reject) => {
+      const existingScript = document.getElementById(
+        SCRIPT_ID
+      ) as HTMLScriptElement | null;
 
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Turnstile script failed.")), { once: true });
-      return;
+      if (existingScript) {
+        existingScript.addEventListener("load", () => resolve(), {
+          once: true,
+        });
+        existingScript.addEventListener(
+          "error",
+          () => reject(new Error("Turnstile script failed.")),
+          { once: true }
+        );
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.id = SCRIPT_ID;
+      script.src = SCRIPT_SRC;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Turnstile script failed."));
+      document.head.appendChild(script);
     }
-
-    const script = document.createElement("script");
-    script.id = SCRIPT_ID;
-    script.src = SCRIPT_SRC;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Turnstile script failed."));
-    document.head.appendChild(script);
-  }).finally(() => {
+  ).finally(() => {
     delete currentWindow.__ryfioTurnstileLoading;
   });
 
@@ -90,9 +103,17 @@ function Turnstile({
 
     loadTurnstileScript()
       .then(() => {
-        if (cancelled || !mountedRef.current || !captchaRef.current || widgetIdRef.current) return;
+        if (
+          cancelled ||
+          !mountedRef.current ||
+          !captchaRef.current ||
+          widgetIdRef.current
+        ) {
+          return;
+        }
 
         const turnstile = getTurnstile();
+
         if (!turnstile) {
           onErrorRef.current("Captcha failed to load. Refresh and try again.");
           return;
@@ -113,7 +134,9 @@ function Turnstile({
         });
       })
       .catch(() => {
-        if (!cancelled) onErrorRef.current("Captcha failed to load. Check your connection.");
+        if (!cancelled) {
+          onErrorRef.current("Captcha failed to load. Check your connection.");
+        }
       });
 
     return () => {
@@ -121,6 +144,7 @@ function Turnstile({
       mountedRef.current = false;
 
       const turnstile = getTurnstile();
+
       if (turnstile && widgetIdRef.current) {
         if (typeof turnstile.remove === "function") {
           turnstile.remove(widgetIdRef.current);
@@ -136,6 +160,7 @@ function Turnstile({
 
   useEffect(() => {
     const turnstile = getTurnstile();
+
     if (!turnstile || !widgetIdRef.current) return;
 
     turnstile.reset(widgetIdRef.current);
