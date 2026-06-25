@@ -272,13 +272,13 @@ export default function EditorPage() {
     }, 250);
   }, [handleSaveDesign]);
 
-const handlePreviewDesign = useCallback(async () => {
+const handlePreviewDesign = useCallback(async (): Promise<void> => {
   try {
     saveDraftToSession();
 
     if (!previewCanvasRef.current) {
       console.error("PREVIEW CANVAS REF MISSING");
-      return null;
+      return;
     }
 
     const exportNode =
@@ -288,7 +288,7 @@ const handlePreviewDesign = useCallback(async () => {
 
     if (!exportNode) {
       console.error("MOCKUP EXPORT ROOT MISSING");
-      return null;
+      return;
     }
 
     console.log("EXPORT NODE", exportNode);
@@ -309,13 +309,16 @@ const handlePreviewDesign = useCallback(async () => {
       !designImage.startsWith("data:image/")
     ) {
       console.error("INVALID DESIGN IMAGE", designImage);
-      return null;
+      return;
     }
 
-    return designImage;
+    // Se precisares de usar a imagem, guarda-a num estado:
+    // setPreviewImage(designImage);
+
+    return;
   } catch (error) {
     console.error("PREVIEW ERROR:", error);
-    return null;
+    return;
   }
 }, [saveDraftToSession]);
   useEffect(() => {
