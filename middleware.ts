@@ -17,7 +17,7 @@ function applySeoHeaders(res: NextResponse, pathname: string) {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
 
   if (
     pathname === "/dashboard/design" ||
@@ -60,12 +60,7 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const protectedRoutes = [
-    "/dashboard",
-    "/admin",
-    "/settings",
-    "/profile",
-  ];
+  const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
 
   const isProtected = protectedRoutes.some((route) =>
     pathname.startsWith(route)
@@ -73,12 +68,12 @@ export async function middleware(req: NextRequest) {
 
   if (isProtected && !user) {
     const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("redirect", pathname);
+    loginUrl.searchParams.set("redirect", pathname + search);
 
     return applySeoHeaders(NextResponse.redirect(loginUrl), pathname);
   }
 
-  if (pathname === "/login" && user) {
+  if ((pathname === "/login" || pathname === "/signup") && user) {
     return NextResponse.redirect(new URL("/dashboard", req.url));
   }
 
@@ -111,6 +106,7 @@ export const config = {
   matcher: [
     "/login",
     "/signup",
+    "/auth/:path*",
     "/dashboard/:path*",
     "/admin/:path*",
     "/settings/:path*",

@@ -1,6 +1,6 @@
 import "./globals.css";
 import Providers from "./providers";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Manrope, Inter, Audiowide } from "next/font/google";
 
 const manrope = Manrope({
@@ -28,6 +28,10 @@ const siteName = "Ryfio";
 const defaultTitle = "Ryfio — Create & Sell Custom Products";
 const defaultDescription =
   "Create custom products with our online design editor and sell worldwide using print-on-demand fulfillment.";
+
+export const viewport: Viewport = {
+  themeColor: "#03030a",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -96,7 +100,6 @@ export const metadata: Metadata = {
     apple: "/apple-touch-icon.png",
   },
   manifest: "/manifest.webmanifest",
-  themeColor: "#03030a",
   formatDetection: {
     telephone: false,
     email: false,
