@@ -92,9 +92,14 @@ export default function SignupPage() {
           <div className="relative z-10 flex h-full w-full flex-col justify-center px-8 py-10 lg:px-12 lg:py-12">
             <div className="max-w-md">
               <div className="mb-8 flex items-center gap-3">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
-                  R
-                </div>
+                <Image
+                  src="/favicon.ico"
+                  alt="Ryfio"
+                  width={49}
+                  height={49}
+                  priority
+                  className="h-[49px] w-[49px] shrink-0 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.45)] ring-1 ring-white/10"
+                />
 
                 <span className="text-xl font-black tracking-tight">
                   RYFIO
@@ -142,9 +147,14 @@ export default function SignupPage() {
               <div className="relative w-full max-w-md rounded-[1.6rem] border border-white/10 bg-white/[0.035] p-5 text-center shadow-[0_0_35px_rgba(168,85,247,0.10)] backdrop-blur-xl md:text-left sm:rounded-3xl sm:p-8">
                 {/* LOGO */}
                 <div className="mb-5 flex items-center justify-center gap-3 md:justify-start sm:mb-6">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
-                    R
-                  </div>
+                  <Image
+                    src="/favicon.ico"
+                    alt="Ryfio"
+                    width={49}
+                    height={49}
+                    priority
+                    className="h-[49px] w-[49px] shrink-0 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.40)] ring-1 ring-white/10"
+                  />
 
                   <span className="text-xl font-black tracking-tight sm:text-2xl">
                     RYFIO

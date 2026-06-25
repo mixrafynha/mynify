@@ -64,6 +64,34 @@ const isValidEmail = (value: string): boolean =>
 const isValidPassword = (value: string): boolean =>
   value.length >= PASSWORD_MIN_LENGTH && value.length <= PASSWORD_MAX_LENGTH;
 
+const logAuthEvent = async (data: {
+  userId: string;
+  email?: string | null;
+  provider: "email" | "google" | "apple";
+}) => {
+  try {
+    await fetch("/api/logs", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "login",
+        level: "info",
+        data: {
+          userId: data.userId,
+          email: data.email ?? null,
+          provider: data.provider,
+          method: "email",
+        },
+      }),
+    });
+  } catch {
+    // Logging must never block authentication.
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function LoginPage() {
@@ -213,6 +241,12 @@ export default function LoginPage() {
         throw new Error("No session created");
       }
 
+      await logAuthEvent({
+        userId: data.session.user.id,
+        email: data.session.user.email,
+        provider: "email",
+      });
+
       router.replace("/dashboard");
     } catch (err: unknown) {
       setError("Invalid email or password");
@@ -281,9 +315,14 @@ export default function LoginPage() {
           <div className="relative z-10 flex w-full flex-col justify-center p-12">
             <div className="max-w-md">
               <div className="mb-8 flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.55)]">
-                  R
-                </div>
+                <Image
+                  src="/favicon.ico"
+                  alt="Ryfio"
+                  width={49}
+                  height={49}
+                  priority
+                  className="h-[49px] w-[49px] shrink-0 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.45)] ring-1 ring-white/10"
+                />
                 <span className="text-xl font-black tracking-tight">RYFIO</span>
               </div>
 
@@ -321,9 +360,14 @@ export default function LoginPage() {
             </button>
 
             <div className="mb-5 flex items-center gap-3 sm:mb-6">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.45)]">
-                R
-              </div>
+              <Image
+                src="/favicon.ico"
+                alt="Ryfio"
+                width={49}
+                height={49}
+                priority
+                className="h-[49px] w-[49px] shrink-0 rounded-2xl shadow-[0_0_30px_rgba(168,85,247,0.40)] ring-1 ring-white/10"
+              />
               <span className="text-xl font-black tracking-tight">RYFIO</span>
             </div>
 
