@@ -1,9 +1,34 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+
+
+
+type TurnstileApi = {
+  render: (
+    element: HTMLElement,
+    options: {
+      sitekey: string;
+      callback: (value: string) => void;
+      "expired-callback": () => void;
+      "error-callback": () => void;
+    }
+  ) => string;
+  reset: (widgetId: string) => void;
+};
+
+function getTurnstile(): TurnstileApi | null {
+  if (typeof window === "undefined") return null;
+
+  const maybeWindow = window as Window & {
+    turnstile?: TurnstileApi;
+  };
+
+  return maybeWindow.turnstile ?? null;
+}
 
 const safeRoute = (path: string) => {
   if (typeof path !== "string") return "/";
@@ -26,7 +51,7 @@ export default function ForgotPassword() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const turnstile = (window as any).turnstile;
+      const turnstile = getTurnstile();
 
       if (!turnstile) return;
       if (!captchaRef.current) return;
@@ -35,7 +60,7 @@ export default function ForgotPassword() {
       const sitekey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
       if (!sitekey) {
-        setError("Missing captcha site key");
+        setError("Captcha is not configured.");
         clearInterval(interval);
         return;
       }
@@ -49,7 +74,7 @@ export default function ForgotPassword() {
         "expired-callback": () => setToken(""),
         "error-callback": () => {
           setToken("");
-          setError("Captcha error");
+          setError("Captcha failed. Try again.");
         },
       });
 
@@ -60,7 +85,7 @@ export default function ForgotPassword() {
   }, []);
 
   const resetCaptcha = useCallback(() => {
-    const turnstile = (window as any).turnstile;
+    const turnstile = getTurnstile();
 
     if (turnstile && widgetIdRef.current) {
       turnstile.reset(widgetIdRef.current);
@@ -75,7 +100,9 @@ export default function ForgotPassword() {
     setError("");
     setSuccess("");
 
-    if (!email) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (!normalizedEmail) {
       setError("Enter your email");
       return;
     }
@@ -88,18 +115,23 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/login/update-password`,
-      captchaToken: token,
-    } as any);
+      const resetOptions = {
+        redirectTo: `${window.location.origin}/login/update-password`,
+        captchaToken: token,
+      };
+
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        normalizedEmail,
+        resetOptions
+      );
 
       if (error) throw error;
 
       setSuccess("Check your email");
       setEmail("");
       resetCaptcha();
-    } catch (err: any) {
-      setError(err?.message || "Reset failed");
+    } catch {
+      setError("Reset failed. Try again.");
       resetCaptcha();
     } finally {
       setLoading(false);
@@ -169,7 +201,7 @@ export default function ForgotPassword() {
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
               placeholder="Email"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
             />
 
             <div className="flex justify-center min-h-[65px]">
@@ -182,7 +214,7 @@ export default function ForgotPassword() {
             <button
               type="button"
               onClick={handleReset}
-              disabled={loading}
+              disabled={loading || !token}
               className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-3.5 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.35)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? "Sending..." : "Send reset link"}

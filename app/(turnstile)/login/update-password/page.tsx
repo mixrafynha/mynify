@@ -5,6 +5,14 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+const isStrongPassword = (value: string) =>
+  value.length >= 10 &&
+  value.length <= 128 &&
+  /[A-Z]/.test(value) &&
+  /[a-z]/.test(value) &&
+  /[0-9]/.test(value) &&
+  /[^A-Za-z0-9]/.test(value);
+
 const safeRoute = (path: string) => {
   if (typeof path !== "string") return "/";
   if (path.startsWith("javascript:")) return "/";
@@ -32,8 +40,8 @@ export default function UpdatePassword() {
 
     setError("");
 
-    if (!password) {
-      setError("Enter a password");
+    if (!isStrongPassword(password)) {
+      setError("Password must have 10+ characters, uppercase, lowercase, number and symbol.");
       return;
     }
 
@@ -47,8 +55,8 @@ export default function UpdatePassword() {
       if (error) throw error;
 
       router.replace("/dashboard");
-    } catch (err: any) {
-      setError(err?.message || "Update failed");
+    } catch {
+      setError("Update failed. Try again.");
     } finally {
       setLoading(false);
     }
@@ -118,7 +126,7 @@ export default function UpdatePassword() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="New password"
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
             />
 
             {error && (
@@ -128,7 +136,7 @@ export default function UpdatePassword() {
             <button
               type="button"
               onClick={handleUpdate}
-              disabled={loading}
+              disabled={loading || !password}
               className="w-full rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-3.5 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.35)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
             >
               {loading ? "Updating..." : "Update password"}

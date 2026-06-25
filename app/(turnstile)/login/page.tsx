@@ -10,21 +10,27 @@ import { supabase } from "../../../lib/supabase";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-declare global {
-  interface Window {
-    turnstile: {
-      render: (
-        el: HTMLElement,
-        opts: {
-          sitekey: string;
-          callback: (token: string) => void;
-          "expired-callback": () => void;
-          "error-callback": () => void;
-        }
-      ) => string;
-      reset: (widgetId: string) => void;
-    };
-  }
+type TurnstileApi = {
+  render: (
+    element: HTMLElement,
+    options: {
+      sitekey: string;
+      callback: (value: string) => void;
+      "expired-callback": () => void;
+      "error-callback": () => void;
+    }
+  ) => string;
+  reset: (widgetId: string) => void;
+};
+
+function getTurnstile(): TurnstileApi | null {
+  if (typeof window === "undefined") return null;
+
+  const maybeWindow = window as Window & {
+    turnstile?: TurnstileApi;
+  };
+
+  return maybeWindow.turnstile ?? null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -115,7 +121,7 @@ export default function LoginPage() {
     if (checking) return;
 
     const interval = setInterval(() => {
-      const turnstile = window.turnstile; // typed — no more `any`
+      const turnstile = getTurnstile();
 
       if (!turnstile) return;
       if (!captchaRef.current) return;
@@ -151,7 +157,7 @@ export default function LoginPage() {
   // ── Reset CAPTCHA ───────────────────────────────────────────────────────────
 
   const resetCaptcha = useCallback(() => {
-    const turnstile = window.turnstile;
+    const turnstile = getTurnstile();
     if (turnstile && widgetIdRef.current) {
       turnstile.reset(widgetIdRef.current);
     }
@@ -209,8 +215,6 @@ export default function LoginPage() {
 
       router.replace("/dashboard");
     } catch (err: unknown) {
-      // Log the real error for debugging without exposing it to the user
-      console.error("[LoginPage] signIn error:", err);
       setError("Invalid email or password");
       resetCaptcha();
     } finally {
@@ -228,8 +232,7 @@ export default function LoginPage() {
         provider: "google",
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
-    } catch (err: unknown) {
-      console.error("[LoginPage] Google OAuth error:", err);
+    } catch {
       setError("Could not sign in with Google. Please try again.");
       setLoading(false);
     }
@@ -243,8 +246,7 @@ export default function LoginPage() {
         provider: "apple",
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
-    } catch (err: unknown) {
-      console.error("[LoginPage] Apple OAuth error:", err);
+    } catch {
       setError("Could not sign in with Apple. Please try again.");
       setLoading(false);
     }
@@ -364,10 +366,10 @@ export default function LoginPage() {
                 type="email"
                 autoComplete="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value.trim().toLowerCase())}
                 placeholder="Email"
                 aria-label="Email address"
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
               />
 
               <div className="relative">
@@ -379,7 +381,7 @@ export default function LoginPage() {
                   placeholder="Password"
                   aria-label="Password"
                   maxLength={PASSWORD_MAX_LENGTH}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3.5 pr-12 text-[16px] text-white outline-none transition placeholder:text-white/35 focus:border-purple-500/60 focus:bg-white/10 focus:ring-2 focus:ring-purple-500/20"
                 />
                 <button
                   type="button"
@@ -424,7 +426,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={handleLogin}
-                disabled={loading}
+                disabled={loading || !token}
                 className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 py-3.5 font-bold sm:py-4 text-white shadow-[0_0_35px_rgba(168,85,247,0.45)] transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
               >
                 {loading ? "Signing in…" : "Sign in"}

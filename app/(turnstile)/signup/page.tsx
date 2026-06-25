@@ -24,7 +24,7 @@ const safeUrl = (url: string) => {
 const img = (url: string, w: number = 1600) => {
   if (typeof url !== "string") return "";
   if (!url.startsWith("http")) return "";
-  return `${url}?auto=format&fit=crop&w=${w}&q=72`;
+  return `${url}?auto=format&fit=crop&w=${w}&q=64`;
 };
 
 const bgImage =
@@ -64,8 +64,7 @@ export default function SignupPage() {
             redirectTo,
           },
         });
-      } catch (err) {
-        console.error("OAuth error:", err);
+      } catch {
         setLoadingProvider(null);
       }
     },
@@ -108,9 +107,9 @@ export default function SignupPage() {
               </div>
 
               <h1 className="mb-5 text-5xl font-black uppercase leading-[0.9] tracking-tight lg:text-7xl">
-                Build your{" "}
+                Create{" "}
                 <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-                  online business.
+                  custom products.
                 </span>
               </h1>
 
