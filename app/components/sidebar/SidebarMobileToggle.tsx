@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
 import { X } from "lucide-react";
 
 type MenuItem = {
@@ -12,25 +13,38 @@ type MenuItem = {
 type Props = {
   mobileOpen: boolean;
   setMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  menu: MenuItem[];
-  onNavigate: (path: string) => void;
-  pathname?: string;
+  menu?: MenuItem[];
+  pathname?: string | null;
+  onNavigate?: (path: string) => void;
 };
 
-const normalize = (p?: string) => (p || "").split("?")[0].replace(/\/+$/, "");
+const labelMap: Record<string, string> = {
+  Dashboard: "Dashboard",
+  Products: "Products",
+  Orders: "Orders",
+  Profile: "Profile",
+  Settings: "Settings",
+  Contact: "Contact",
+};
 
-function HexagonIcon({ active = false }: { active?: boolean }) {
+const normalize = (p?: string | null) =>
+  (p || "").split("?")[0].replace(/\/+$/, "") || "/";
+
+function HexagonIcon({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
-      className={[
-        "relative block h-9 w-9 shrink-0 transition-all duration-300",
-        active ? "scale-95" : "animate-[ryfio-hex-idle_2.2s_ease-in-out_infinite]",
-      ].join(" ")}
+      className={`relative block h-8 w-8 ${className}`}
     >
-      <span className="absolute inset-0 bg-[linear-gradient(135deg,#c084fc,#a855f7,#7dd3fc)] [clip-path:polygon(25%_6%,75%_6%,100%_50%,75%_94%,25%_94%,0_50%)]" />
-      <span className="absolute inset-[2px] bg-[#050812] [clip-path:polygon(25%_6%,75%_6%,100%_50%,75%_94%,25%_94%,0_50%)]" />
-      <span className="absolute inset-0 rounded-full shadow-[0_0_22px_rgba(168,85,247,0.75)]" />
+      <svg viewBox="0 0 48 48" className="h-full w-full overflow-visible">
+        <path
+          d="M24 3.8 41.2 13.9v20.2L24 44.2 6.8 34.1V13.9L24 3.8Z"
+          fill="rgba(0,0,0,0.96)"
+          stroke="rgb(196,76,255)"
+          strokeWidth="2.6"
+          strokeLinejoin="round"
+        />
+      </svg>
     </span>
   );
 }
@@ -38,15 +52,17 @@ function HexagonIcon({ active = false }: { active?: boolean }) {
 function SidebarMobileToggle({
   mobileOpen,
   setMobileOpen,
-  menu,
+  menu = [],
+  pathname,
   onNavigate,
-  pathname = "",
 }: Props) {
-  const startX = useRef<number | null>(null);
   const [dragX, setDragX] = useState(0);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const startX = useRef<number | null>(null);
+  const usableMenu = menu;
 
-  const openMenu = useCallback(() => setMobileOpen(true), [setMobileOpen]);
-  const closeMenu = useCallback(() => setMobileOpen(false), [setMobileOpen]);
+  const open = useCallback(() => setMobileOpen(true), [setMobileOpen]);
+  const close = useCallback(() => setMobileOpen(false), [setMobileOpen]);
 
   const onPointerDown = useCallback((event: React.PointerEvent) => {
     startX.current = event.clientX;
@@ -57,119 +73,164 @@ function SidebarMobileToggle({
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
       if (startX.current === null) return;
-      const delta = event.clientX - startX.current;
-      setDragX(mobileOpen ? Math.min(0, delta) : Math.max(0, delta));
+      const next = event.clientX - startX.current;
+      setDragX(Math.max(-90, Math.min(120, next)));
     },
-    [mobileOpen]
+    []
   );
 
-  const onPointerEnd = useCallback(() => {
-    if (!mobileOpen && dragX > 46) openMenu();
-    if (mobileOpen && dragX < -46) closeMenu();
+  const onPointerUp = useCallback(() => {
+    if (dragX > 42) open();
+    if (dragX < -42) close();
     startX.current = null;
     setDragX(0);
-  }, [closeMenu, dragX, mobileOpen, openMenu]);
+  }, [close, dragX, open]);
+
+  const handleNavigate = useCallback(
+    (path: string) => {
+      onNavigate?.(path);
+      close();
+    },
+    [close, onNavigate]
+  );
 
   useEffect(() => {
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeMenu();
+    if (!mobileOpen) {
+      setShowSwipeHint(false);
+      return;
+    }
+
+    const start = window.setTimeout(() => setShowSwipeHint(true), 300);
+    const end = window.setTimeout(() => setShowSwipeHint(false), 1150);
+
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(end);
     };
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [closeMenu]);
-
-  const visibleMenu = Array.isArray(menu) ? menu.slice(0, 5) : [];
-
-  if (!mobileOpen) {
-    return (
-      <div className="fixed inset-x-0 bottom-0 z-[90] flex h-[78px] items-center justify-center border-t border-white/10 bg-[#030712]/95 pb-[max(env(safe-area-inset-bottom),8px)] shadow-[0_-18px_70px_rgba(0,0,0,0.7)] backdrop-blur-2xl md:hidden">
-        <button
-          type="button"
-          aria-label="Open dashboard menu"
-          onClick={openMenu}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerEnd}
-          onPointerCancel={onPointerEnd}
-          style={{ transform: `translateX(${Math.min(dragX, 130)}px)` }}
-          className="flex h-16 w-20 touch-pan-x items-center justify-center rounded-3xl transition-transform duration-200 active:scale-95"
-        >
-          <HexagonIcon />
-        </button>
-
-        {dragX > 8 && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-y-1/2 translate-x-5 items-center gap-2 text-purple-400">
-            <span className="h-px w-24 border-t border-dashed border-purple-400/80" />
-            <span className="text-2xl leading-none">→</span>
-          </div>
-        )}
-
-        <style jsx>{`
-          @keyframes ryfio-hex-idle {
-            0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
-            50% { transform: translateY(-2px) scale(1.04); opacity: 1; }
-          }
-        `}</style>
-      </div>
-    );
-  }
+  }, [mobileOpen]);
 
   return (
-    <nav
-      aria-label="Dashboard mobile menu"
-      className="fixed inset-x-0 bottom-0 z-[90] border-t border-white/10 bg-[#050812]/98 px-3 pt-5 pb-[max(env(safe-area-inset-bottom),12px)] shadow-[0_-24px_90px_rgba(0,0,0,0.82)] backdrop-blur-2xl md:hidden"
-    >
-      <div className="absolute left-1/2 top-2 h-1 w-12 -translate-x-1/2 rounded-full bg-purple-500 shadow-[0_0_18px_rgba(168,85,247,0.95)]" />
-
-      <div
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerEnd}
-        onPointerCancel={onPointerEnd}
-        style={{ transform: `translateX(${Math.max(dragX, -140)}px)` }}
-        className="mx-auto flex min-h-[86px] max-w-[560px] touch-pan-x items-center justify-between gap-1 rounded-[28px] border border-white/10 bg-white/[0.035] px-2 transition-transform duration-200"
-      >
-        {visibleMenu.map((item) => {
-          const Icon = item.icon;
-          const active = normalize(pathname) === normalize(item.path);
-
-          return (
-            <button
-              key={item.path}
-              type="button"
-              aria-current={active ? "page" : undefined}
-              onClick={() => onNavigate(item.path)}
-              className={[
-                "flex min-w-0 flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-3 text-[11px] font-medium transition-all duration-200 active:scale-95",
-                active
-                  ? "bg-purple-500/20 text-purple-300 shadow-[0_0_26px_rgba(168,85,247,0.32)]"
-                  : "text-white/80 hover:bg-white/[0.06] hover:text-white",
-              ].join(" ")}
-            >
-              <Icon size={24} strokeWidth={1.9} />
-              <span className="max-w-full truncate">{item.name === "Dashboard" ? "Início" : item.name}</span>
-            </button>
-          );
-        })}
-
+    <div className="fixed inset-0 z-[90] md:hidden pointer-events-none">
+      {!mobileOpen && (
         <button
           type="button"
-          aria-label="Close dashboard menu"
-          onClick={closeMenu}
-          className="ml-1 flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/[0.07] text-white shadow-[0_0_20px_rgba(255,255,255,0.06)] transition-all duration-200 active:scale-90"
+          aria-label="Open menu"
+          onClick={open}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          style={{
+            transform: `translateX(calc(-50% + ${dragX}px))`,
+            bottom: "max(10px, env(safe-area-inset-bottom))",
+          }}
+          className="
+            pointer-events-auto fixed left-1/2 z-[92]
+            flex h-[48px] w-[48px] touch-none items-center justify-center
+            bg-transparent p-0 outline-none
+            transition-transform duration-300 ease-[cubic-bezier(.2,.9,.2,1)] active:scale-95
+          "
         >
-          <X size={26} strokeWidth={1.8} />
+          <HexagonIcon className="h-8 w-8 animate-[hex-float_2.4s_cubic-bezier(.45,0,.2,1)_infinite] drop-shadow-[0_0_10px_rgba(192,76,255,0.75)]" />
         </button>
-      </div>
+      )}
+
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close mobile menu overlay"
+          onClick={close}
+          className="pointer-events-auto fixed inset-0 z-[90] cursor-default bg-transparent"
+        />
+      )}
+
+      <nav
+        aria-label="Mobile menu"
+        onClick={(event) => event.stopPropagation()}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        className={`
+          pointer-events-auto fixed left-2.5 right-2.5 z-[91]
+          h-[76px] bottom-[max(10px,env(safe-area-inset-bottom))]
+          rounded-[32px] border border-purple-400/45
+          bg-[#050711]/96 px-2.5 py-1.5 text-white shadow-[0_14px_46px_rgba(0,0,0,0.50),0_0_26px_rgba(168,85,247,0.22),inset_0_1px_0_rgba(255,255,255,0.07)]
+          backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(.2,.9,.2,1)]
+          ${mobileOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-[calc(100%+20px)] opacity-0"}
+        `}
+      >
+        <div
+          className="flex h-full items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-2 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ animation: showSwipeHint ? "ryfio-swipe-hint 800ms ease-in-out 1" : undefined }}
+        >
+          {usableMenu.map((item, index) => {
+            const Icon = item.icon;
+            const active = normalize(pathname) === normalize(item.path);
+            const label = labelMap[item.name] || item.name;
+
+            return (
+              <button
+                key={item.path}
+                type="button"
+                onClick={() => handleNavigate(item.path)}
+                aria-current={active ? "page" : undefined}
+                className={`
+                  group flex h-[54px] min-w-[62px] shrink-0 snap-start flex-col items-center justify-center gap-1
+                  rounded-[18px] px-2 py-2 text-[10px] leading-none
+                  transition-all duration-300 active:scale-95
+                  ${active ? "bg-[linear-gradient(180deg,rgba(168,85,247,0.26),rgba(88,28,135,0.18))] text-purple-100 shadow-[0_8px_22px_rgba(168,85,247,0.14),inset_0_0_22px_rgba(168,85,247,0.18)]" : "text-white/80 hover:bg-white/[0.06] hover:text-white"}
+                `}
+                style={{
+                  transitionDelay: mobileOpen ? `${80 + index * 35}ms` : "0ms",
+                  opacity: mobileOpen ? 1 : 0,
+                  transform: mobileOpen ? "translateY(0)" : "translateY(10px)",
+                }}
+              >
+                <Icon
+                  size={20}
+                  strokeWidth={1.85}
+                  className={active ? "drop-shadow-[0_0_10px_rgba(192,76,255,0.7)]" : ""}
+                />
+                <span className="max-w-full truncate">{label}</span>
+              </button>
+            );
+          })}
+
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={close}
+            className="ml-0.5 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.24),inset_0_0_18px_rgba(255,255,255,0.035)] transition-all duration-300 hover:bg-white/[0.13] active:scale-95"
+          >
+            <X size={16} strokeWidth={2.1} />
+          </button>
+        </div>
+      </nav>
 
       <style jsx>{`
-        @keyframes ryfio-hex-idle {
-          0%, 100% { transform: translateY(0) scale(1); opacity: 0.9; }
-          50% { transform: translateY(-2px) scale(1.04); opacity: 1; }
+        @keyframes ryfio-swipe-hint {
+          0% { transform: translateX(0); }
+          42% { transform: translateX(12px); }
+          100% { transform: translateX(0); }
+        }
+
+        @keyframes hex-float {
+          0%, 100% {
+            transform: translateY(0) scale(1);
+            filter: drop-shadow(0 0 8px rgba(192,76,255,0.55));
+          }
+          45% {
+            transform: translateY(-4px) scale(1.045);
+            filter: drop-shadow(0 0 15px rgba(192,76,255,0.85));
+          }
+          70% {
+            transform: translateY(-1px) scale(0.99);
+            filter: drop-shadow(0 0 10px rgba(192,76,255,0.65));
+          }
         }
       `}</style>
-    </nav>
+    </div>
   );
 }
 

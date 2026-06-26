@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
 import { X } from "lucide-react";
 
@@ -19,12 +19,12 @@ type Props = {
 };
 
 const labelMap: Record<string, string> = {
-  Dashboard: "Início",
-  Products: "Produtos",
-  Orders: "Pedidos",
-  Profile: "Perfil",
-  Settings: "Definições",
-  Contact: "Contacto",
+  Dashboard: "Dashboard",
+  Products: "Products",
+  Orders: "Orders",
+  Profile: "Profile",
+  Settings: "Settings",
+  Contact: "Contact",
 };
 
 const normalize = (p?: string | null) =>
@@ -57,6 +57,7 @@ function SidebarMobileToggle({
   onNavigate,
 }: Props) {
   const [dragX, setDragX] = useState(0);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
   const startX = useRef<number | null>(null);
   const usableMenu = menu;
 
@@ -93,12 +94,27 @@ function SidebarMobileToggle({
     [close, onNavigate]
   );
 
+  useEffect(() => {
+    if (!mobileOpen) {
+      setShowSwipeHint(false);
+      return;
+    }
+
+    const start = window.setTimeout(() => setShowSwipeHint(true), 300);
+    const end = window.setTimeout(() => setShowSwipeHint(false), 1150);
+
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(end);
+    };
+  }, [mobileOpen]);
+
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[90] md:hidden pointer-events-none">
+    <div className="fixed inset-0 z-[90] md:hidden pointer-events-none">
       {!mobileOpen && (
         <button
           type="button"
-          aria-label="Abrir menu"
+          aria-label="Open menu"
           onClick={open}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -119,22 +135,35 @@ function SidebarMobileToggle({
         </button>
       )}
 
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close mobile menu overlay"
+          onClick={close}
+          className="pointer-events-auto fixed inset-0 z-[90] cursor-default bg-transparent"
+        />
+      )}
+
       <nav
-        aria-label="Menu mobile"
+        aria-label="Mobile menu"
+        onClick={(event) => event.stopPropagation()}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         className={`
-          pointer-events-auto fixed inset-x-0 bottom-0 z-[91]
-          h-[82px] pb-[max(8px,env(safe-area-inset-bottom))]
-          rounded-t-[26px] border border-white/10 border-b-0
-          bg-[#050711]/96 px-2.5 pt-2 text-white shadow-[0_-12px_46px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)]
+          pointer-events-auto fixed left-2.5 right-2.5 z-[91]
+          h-[76px] bottom-[max(10px,env(safe-area-inset-bottom))]
+          rounded-[32px] border border-purple-400/45
+          bg-[#050711]/96 px-2.5 py-1.5 text-white shadow-[0_14px_46px_rgba(0,0,0,0.50),0_0_26px_rgba(168,85,247,0.22),inset_0_1px_0_rgba(255,255,255,0.07)]
           backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(.2,.9,.2,1)]
-          ${mobileOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0"}
+          ${mobileOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-[calc(100%+20px)] opacity-0"}
         `}
       >
-        <div className="flex h-full items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div
+          className="flex h-full items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-2 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          style={{ animation: showSwipeHint ? "ryfio-swipe-hint 800ms ease-in-out 1" : undefined }}
+        >
           {usableMenu.map((item, index) => {
             const Icon = item.icon;
             const active = normalize(pathname) === normalize(item.path);
@@ -147,7 +176,7 @@ function SidebarMobileToggle({
                 onClick={() => handleNavigate(item.path)}
                 aria-current={active ? "page" : undefined}
                 className={`
-                  group flex h-[58px] min-w-[64px] shrink-0 flex-col items-center justify-center gap-1
+                  group flex h-[54px] min-w-[62px] shrink-0 snap-start flex-col items-center justify-center gap-1
                   rounded-[18px] px-2 py-2 text-[10px] leading-none
                   transition-all duration-300 active:scale-95
                   ${active ? "bg-[linear-gradient(180deg,rgba(168,85,247,0.26),rgba(88,28,135,0.18))] text-purple-100 shadow-[0_8px_22px_rgba(168,85,247,0.14),inset_0_0_22px_rgba(168,85,247,0.18)]" : "text-white/80 hover:bg-white/[0.06] hover:text-white"}
@@ -159,7 +188,7 @@ function SidebarMobileToggle({
                 }}
               >
                 <Icon
-                  size={21}
+                  size={20}
                   strokeWidth={1.85}
                   className={active ? "drop-shadow-[0_0_10px_rgba(192,76,255,0.7)]" : ""}
                 />
@@ -170,16 +199,22 @@ function SidebarMobileToggle({
 
           <button
             type="button"
-            aria-label="Fechar menu"
+            aria-label="Close menu"
             onClick={close}
-            className="ml-0.5 flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.24),inset_0_0_18px_rgba(255,255,255,0.035)] transition-all duration-300 hover:bg-white/[0.13] active:scale-95"
+            className="ml-0.5 flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.24),inset_0_0_18px_rgba(255,255,255,0.035)] transition-all duration-300 hover:bg-white/[0.13] active:scale-95"
           >
-            <X size={18} strokeWidth={2.1} />
+            <X size={16} strokeWidth={2.1} />
           </button>
         </div>
       </nav>
 
       <style jsx>{`
+        @keyframes ryfio-swipe-hint {
+          0% { transform: translateX(0); }
+          42% { transform: translateX(12px); }
+          100% { transform: translateX(0); }
+        }
+
         @keyframes hex-float {
           0%, 100% {
             transform: translateY(0) scale(1);
