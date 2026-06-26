@@ -14,7 +14,6 @@ import {
   Zap,
 } from "lucide-react";
 
-import { ProductBreadcrumb } from "./ProductBreadcrumb";
 import { ProductLeft } from "./ProductLeft";
 import { ProductRight } from "./ProductRight";
 
@@ -50,6 +49,7 @@ export default function ProductClient({
   const [variants, setVariants] = useState<Variant[]>([]);
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
+  const [hasExplicitSizeSelection, setHasExplicitSizeSelection] = useState(false);
 
   const lastSaveRef = useRef(0);
 
@@ -83,6 +83,7 @@ export default function ProductClient({
     setVariants(mapped);
     setSelectedVariant(initial);
     setSelectedColor(initial?.color ?? null);
+    setHasExplicitSizeSelection(false);
   }, [product]);
 
   const colors = useMemo(() => {
@@ -184,6 +185,7 @@ export default function ProductClient({
 
       setSelectedColor(color);
       setSelectedVariant(nextVariant);
+      setHasExplicitSizeSelection(false);
       saveSelection(nextVariant, color);
     },
     [variants, saveSelection]
@@ -195,6 +197,7 @@ export default function ProductClient({
 
       setSelectedVariant(variant);
       setSelectedColor(nextColor);
+      setHasExplicitSizeSelection(true);
       saveSelection(variant, nextColor);
     },
     [saveSelection, selectedColor]
@@ -202,12 +205,8 @@ export default function ProductClient({
 
   return (
     <div className="w-full min-w-0 space-y-4 bg-transparent">
-      <div className="px-1">
-        <ProductBreadcrumb title={product?.title} />
-      </div>
-
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] xl:gap-5">
-        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-[#090811]/70 p-2 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-3">
+        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-white/[0.025] p-2 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-3">
           <ProductLeft
             images={safeImages}
             product={product}
@@ -221,15 +220,19 @@ export default function ProductClient({
           />
         </div>
 
-        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-[#090811]/70 p-3 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-4 lg:sticky lg:top-20">
-          <ProductRight product={product} selectedVariant={selectedVariant} />
+        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-white/[0.025] p-3 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-4 lg:sticky lg:top-20">
+          <ProductRight
+            product={product}
+            selectedVariant={selectedVariant}
+            hasExplicitSizeSelection={hasExplicitSizeSelection}
+          />
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[28px] border border-white/[0.06] bg-[#090811]/70 shadow-[0_18px_52px_rgba(0,0,0,0.22)]">
+      <section className="overflow-hidden rounded-[28px] border border-white/[0.06] bg-white/[0.025] shadow-[0_18px_52px_rgba(0,0,0,0.22)]">
         <div className="relative overflow-hidden border-b border-white/[0.06] px-4 py-5 sm:px-6 sm:py-6">
           <div className="relative">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">
               <Zap size={14} className="text-fuchsia-200" aria-hidden="true" />
               Product details
             </div>
@@ -431,9 +434,9 @@ function SpecCard({
   tone: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/[0.08] bg-[#090811]/70 p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
+    <div className="rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex h-13 w-13 items-center justify-center rounded-[18px] border border-white/[0.08] bg-[#090811]/70 p-3">
+        <div className="flex h-13 w-13 items-center justify-center rounded-[18px] border border-white/[0.08] bg-white/[0.025] p-3">
           <Icon className={tone} size={26} strokeWidth={2.35} aria-hidden />
         </div>
       </div>
@@ -461,11 +464,11 @@ function InfoBox({
   items: InfoItem[];
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#090811]/70 p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
+    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-white/[0.025] p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
       <div className={`pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-bl-full ${accent}`} />
 
       <div className="relative mb-4 flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-white/[0.08] bg-[#090811]/70">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-white/[0.08] bg-white/[0.025]">
           <Icon size={25} strokeWidth={2.35} className="text-white" aria-hidden />
         </div>
 
@@ -483,7 +486,7 @@ function InfoBox({
         {items.map(([label, value]) => (
           <div
             key={label}
-            className="rounded-[18px] border border-white/[0.07] bg-[#090811]/70 p-3"
+            className="rounded-[18px] border border-white/[0.07] bg-white/[0.025] p-3"
           >
             <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/30">
               {label}

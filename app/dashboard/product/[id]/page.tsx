@@ -127,7 +127,7 @@ export default async function ProductPage({
 
   if (!id) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#070711] px-4 text-center text-red-300">
+      <main className="flex min-h-screen items-center justify-center bg-[#10091a] px-4 text-center text-red-300">
         Invalid product ID
       </main>
     );
@@ -137,7 +137,7 @@ export default async function ProductPage({
 
   if (!product) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#070711] px-4 text-center text-white/55">
+      <main className="flex min-h-screen items-center justify-center bg-[#10091a] px-4 text-center text-white/55">
         Product not found
       </main>
     );
@@ -150,12 +150,12 @@ export default async function ProductPage({
       className="min-h-screen overflow-x-hidden text-white"
       style={{
         background:
-          "radial-gradient(circle at 18% 0%, rgba(168,85,247,0.16), transparent 32%), radial-gradient(circle at 86% 5%, rgba(14,165,233,0.09), transparent 30%), linear-gradient(180deg, #0b0814 0%, #0a0913 45%, #070711 100%)",
+          "radial-gradient(circle at 16% 0%, rgba(168,85,247,0.24), transparent 34%), radial-gradient(circle at 88% 8%, rgba(217,70,239,0.14), transparent 32%), radial-gradient(circle at 50% 100%, rgba(14,165,233,0.08), transparent 38%), linear-gradient(180deg, #160b24 0%, #12091f 46%, #0d0718 100%)",
       }}
     >
       <section className="relative min-h-screen bg-transparent">
         {/* HEADER COM A MESMA UX DO NAVBAR, MAS SEM FUNDO DIFERENTE */}
-        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#090811]/85 shadow-[0_0_55px_rgba(168,85,247,0.14)] backdrop-blur-2xl">
+        <header className="sticky top-0 z-50 border-b border-white/10 bg-transparent shadow-[0_0_55px_rgba(168,85,247,0.14)] backdrop-blur-2xl">
           <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
             <Link
               href="/"
@@ -182,7 +182,7 @@ export default async function ProductPage({
 
             <Link
               href="/dashboard/product"
-              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-[#070711] text-white shadow-[0_0_25px_rgba(168,85,247,0.14)] backdrop-blur-xl transition active:scale-[0.98] hover:border-fuchsia-300/30 hover:border-fuchsia-300/30 hover:shadow-[0_0_30px_rgba(217,70,239,0.18)] sm:right-5 md:static"
+              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white shadow-[0_0_25px_rgba(168,85,247,0.14)] backdrop-blur-xl transition active:scale-[0.98] hover:border-fuchsia-300/30 hover:border-fuchsia-300/30 hover:shadow-[0_0_30px_rgba(217,70,239,0.18)] sm:right-5 md:static"
               aria-label="Back to products"
             >
               <ArrowLeft
@@ -198,14 +198,14 @@ export default async function ProductPage({
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (
-            <div className="mt-4 rounded-[24px] border border-white/[0.06] bg-[#070711] p-4">
+            <div className="mt-4 rounded-[24px] border border-white/[0.06] bg-white/[0.03] p-4">
               <p className="text-sm font-bold text-white/75">
                 Admin tools
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link href={`/admin/products/${product.id}`}>
-                  <button className="w-full rounded-full border border-white/[0.08] bg-[#070711] px-4 py-2.5 font-black text-white transition active:scale-[0.98] sm:w-auto md:hover:border-fuchsia-300/30">
+                  <button className="w-full rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 font-black text-white transition active:scale-[0.98] sm:w-auto md:hover:border-fuchsia-300/30">
                     Edit product
                   </button>
                 </Link>

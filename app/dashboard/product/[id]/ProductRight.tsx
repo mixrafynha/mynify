@@ -3,19 +3,20 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CheckCircle,
   Minus,
   Plus,
-  ShieldCheck,
   Sparkles,
   Star,
-  Truck,
   Zap,
   ShoppingCart,
   Palette,
 } from "lucide-react";
 
-export function ProductRight({ product, selectedVariant }: any) {
+export function ProductRight({
+  product,
+  selectedVariant,
+  hasExplicitSizeSelection = false,
+}: any) {
   const router = useRouter();
 
   const [quantity, setQuantity] = useState(1);
@@ -31,6 +32,12 @@ export function ProductRight({ product, selectedVariant }: any) {
   const price = Number(
     selectedVariant?.price ?? product?.discount_price ?? product?.price ?? 0
   );
+
+  const selectedVariantLabel = selectedVariant
+    ? [selectedVariant.color, selectedVariant.size].filter(Boolean).join(" / ") ||
+      selectedVariant.sku ||
+      "Selected variant"
+    : "Choose color and size";
 
   const originalPrice =
     product?.discount_price && product?.price ? Number(product.price) : null;
@@ -143,14 +150,81 @@ export function ProductRight({ product, selectedVariant }: any) {
     }
   };
 
-  const handleStartDesigning = () => {
-    if (!product?.id || !selectedVariant || loading) return;
+  const handleStartDesigning = async () => {
+    if (!product?.id || loading) return;
 
-    const mockup = getMockup();
+    if (!selectedVariant || !hasExplicitSizeSelection) {
+      showToast("error", "Choose a size before opening the editor.");
+      return;
+    }
 
-    router.push(
-      `/dashboard/design/${mockup}?productId=${encodeURIComponent(product.id)}`
-    );
+    setLoading(true);
+
+    try {
+      const mockup = getMockup();
+
+      const selection = {
+        productId: product.id,
+        product_id: product.id,
+        variantId: selectedVariant.id,
+        variant_id: selectedVariant.id,
+        selectedVariantId: selectedVariant.id,
+        selected_variant_id: selectedVariant.id,
+        size: selectedVariant.size ?? null,
+        selectedSize: selectedVariant.size ?? null,
+        selected_size: selectedVariant.size ?? null,
+        color: selectedVariant.color ?? null,
+        initialColor: selectedVariant.color ?? null,
+        initial_color: selectedVariant.color ?? null,
+        colorEditable: true,
+        color_editable: true,
+        sku: selectedVariant.sku ?? null,
+        productColorId: selectedVariant.product_color_id ?? null,
+        product_color_id: selectedVariant.product_color_id ?? null,
+        title: product?.title ?? null,
+        image: product?.image ?? product?.images?.[0] ?? null,
+        source: "product-page",
+        savedAt: new Date().toISOString(),
+      };
+
+      try {
+        const payload = JSON.stringify(selection);
+        window.localStorage.setItem("ryfio:selected-design-variant", payload);
+        window.localStorage.setItem("ryfio:design-selection", payload);
+        window.localStorage.setItem("ryfio:editor-initial-variant", payload);
+        window.sessionStorage.setItem("ryfio:selected-design-variant", payload);
+        window.sessionStorage.setItem("ryfio:design-selection", payload);
+        window.sessionStorage.setItem("ryfio:editor-initial-variant", payload);
+      } catch {
+        // Storage can fail in private mode; navigation should still work.
+      }
+
+            const params = new URLSearchParams({
+        productId: product.id,
+        product_id: product.id,
+        variantId: selectedVariant.id,
+        variant_id: selectedVariant.id,
+        selectedVariantId: selectedVariant.id,
+        colorEditable: "true",
+      });
+
+      if (selectedVariant.size) {
+        params.set("size", selectedVariant.size);
+        params.set("selectedSize", selectedVariant.size);
+      }
+      if (selectedVariant.color) {
+        params.set("color", selectedVariant.color);
+        params.set("initialColor", selectedVariant.color);
+      }
+      if (selectedVariant.sku) params.set("sku", selectedVariant.sku);
+      if (selectedVariant.product_color_id) {
+        params.set("productColorId", selectedVariant.product_color_id);
+      }
+
+      router.push(`/dashboard/design/${mockup}?${params.toString()}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -160,8 +234,8 @@ export function ProductRight({ product, selectedVariant }: any) {
           <div
             className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
               toast.type === "success"
-                ? "border-emerald-400/40 bg-[#090811]/70 text-emerald-100 shadow-emerald-500/20"
-                : "border-red-400/40 bg-[#090811]/70 text-red-100 shadow-red-500/20"
+                ? "border-emerald-400/40 bg-white/[0.025] text-emerald-100 shadow-emerald-500/20"
+                : "border-red-400/40 bg-white/[0.025] text-red-100 shadow-red-500/20"
             }`}
           >
             <div className="flex items-start gap-4">
@@ -184,7 +258,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                   </p>
 
                   {toast.type === "success" && (
-                    <span className="rounded-full bg-[#090811]/70 border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
+                    <span className="rounded-full bg-white/[0.025] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
                       success
                     </span>
                   )}
@@ -221,7 +295,7 @@ export function ProductRight({ product, selectedVariant }: any) {
 
       <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[#090811]/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-white/[0.025] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
             <Sparkles size={13} aria-hidden="true" />
             Made on demand
           </div>
@@ -235,9 +309,9 @@ export function ProductRight({ product, selectedVariant }: any) {
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
-          <div className="flex items-end justify-between gap-4">
-            <div className="space-y-1">
+        <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 space-y-2">
               <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
                 €{price.toFixed(2)}
               </div>
@@ -247,9 +321,14 @@ export function ProductRight({ product, selectedVariant }: any) {
                   €{originalPrice.toFixed(2)}
                 </div>
               )}
+
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50 shadow-[0_0_24px_rgba(168,85,247,0.16)]">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300 shadow-[0_0_12px_rgba(217,70,239,0.9)]" />
+                <span className="truncate">{selectedVariantLabel}</span>
+              </div>
             </div>
 
-            <div className="rounded-full border border-cyan-300/20 bg-[#090811]/70 px-3 py-1 text-[11px] font-bold text-cyan-100">
+            <div className="shrink-0 rounded-full border border-cyan-300/20 bg-white/[0.025] px-3 py-1 text-[11px] font-bold text-cyan-100">
               No inventory needed
             </div>
           </div>
@@ -269,7 +348,7 @@ export function ProductRight({ product, selectedVariant }: any) {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
+        <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-white/75">Quantity</span>
 
@@ -278,7 +357,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                 type="button"
                 onClick={decreaseQuantity}
                 disabled={quantity <= 1 || loading}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#090811]/70 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Minus size={16} />
               </button>
@@ -295,13 +374,19 @@ export function ProductRight({ product, selectedVariant }: any) {
                   isOutOfStock ||
                   (typeof stock === "number" && quantity >= stock)
                 }
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#090811]/70 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Plus size={16} />
               </button>
             </div>
           </div>
         </div>
+
+        {!hasExplicitSizeSelection && (
+          <div className="rounded-3xl border border-fuchsia-300/20 bg-fuchsia-500/[0.06] px-4 py-3 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(168,85,247,0.14)]">
+            Choose a size before opening the editor. Your selected variant will be saved for the design step.
+          </div>
+        )}
 
         <div className="space-y-3">
           <button
@@ -329,9 +414,9 @@ export function ProductRight({ product, selectedVariant }: any) {
 
           <button
             type="button"
-            disabled={!selectedVariant || loading}
+            disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/25 bg-[#090811]/70 px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white shadow-[0_0_28px_rgba(168,85,247,0.20)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:border-fuchsia-300/35 md:hover:shadow-[0_0_50px_rgba(217,70,239,0.30)]"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/25 bg-white/[0.025] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white shadow-[0_0_28px_rgba(168,85,247,0.20)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:border-fuchsia-300/35 md:hover:shadow-[0_0_50px_rgba(217,70,239,0.30)]"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -343,29 +428,8 @@ export function ProductRight({ product, selectedVariant }: any) {
           </button>
         </div>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
-          <p className="mb-3 text-sm font-black text-white">
-            Production & Delivery
-          </p>
-
-          <div className="space-y-2 text-sm text-white/58">
-            <p className="flex items-center gap-2">
-              <CheckCircle size={15} className="text-fuchsia-200" />
-              Production: 2–4 business days
-            </p>
-            <p className="flex items-center gap-2">
-              <Truck size={15} className="text-cyan-300" />
-              Shipping: 3–7 business days
-            </p>
-            <p className="flex items-center gap-2">
-              <ShieldCheck size={15} className="text-emerald-300" />
-              Secure checkout
-            </p>
-          </div>
-        </div>
-
         {verifiedReviews.length > 0 && (
-          <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
+          <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-black text-white">Verified reviews</p>
 
@@ -380,7 +444,7 @@ export function ProductRight({ product, selectedVariant }: any) {
               {verifiedReviews.map((review: any) => (
                 <div
                   key={review.id}
-                  className="rounded-2xl border border-white/[0.08] bg-[#090811]/70 p-3"
+                  className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3"
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 text-xs font-black text-white">
@@ -407,16 +471,16 @@ export function ProductRight({ product, selectedVariant }: any) {
         )}
 
         <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
-          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
             ✔ Secure checkout
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
             ✔ Quality tested
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
             ✔ Fast production
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
             ✔ Worldwide shipping
           </span>
         </div>
