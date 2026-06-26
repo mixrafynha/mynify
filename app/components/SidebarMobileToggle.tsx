@@ -122,7 +122,7 @@ function SidebarMobileToggle({
           onPointerCancel={onPointerUp}
           style={{
             transform: `translateX(calc(-50% + ${dragX}px))`,
-            bottom: "max(10px, env(safe-area-inset-bottom))",
+            bottom: "max(2px, env(safe-area-inset-bottom))",
           }}
           className="
             pointer-events-auto fixed left-1/2 z-[92]
@@ -152,8 +152,8 @@ function SidebarMobileToggle({
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         className={`
-          pointer-events-auto fixed left-2.5 right-2.5 z-[91]
-          h-[76px] bottom-[max(10px,env(safe-area-inset-bottom))]
+          pointer-events-auto fixed left-[4px] right-[4px] z-[91]
+          h-[74px] bottom-[max(3px,env(safe-area-inset-bottom))]
           rounded-[32px] border border-purple-400/45
           bg-[#050711]/96 px-2.5 py-1.5 text-white shadow-[0_14px_46px_rgba(0,0,0,0.50),0_0_26px_rgba(168,85,247,0.22),inset_0_1px_0_rgba(255,255,255,0.07)]
           backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(.2,.9,.2,1)]
