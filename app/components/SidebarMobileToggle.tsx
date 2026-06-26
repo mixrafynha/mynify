@@ -2,7 +2,9 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import type React from "react";
-import { X } from "lucide-react";
+import { LogOut, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 type MenuItem = {
   name: string;
@@ -19,12 +21,12 @@ type Props = {
 };
 
 const labelMap: Record<string, string> = {
-  Dashboard: "Dashboard",
+  Dashboard: "Home",
   Products: "Products",
   Orders: "Orders",
   Profile: "Profile",
   Settings: "Settings",
-  Contact: "Contact",
+  Contact: "Help",
 };
 
 const normalize = (p?: string | null) =>
@@ -60,6 +62,7 @@ function SidebarMobileToggle({
   const [showSwipeHint, setShowSwipeHint] = useState(false);
   const startX = useRef<number | null>(null);
   const usableMenu = menu;
+  const router = useRouter();
 
   const open = useCallback(() => setMobileOpen(true), [setMobileOpen]);
   const close = useCallback(() => setMobileOpen(false), [setMobileOpen]);
@@ -93,6 +96,13 @@ function SidebarMobileToggle({
     },
     [close, onNavigate]
   );
+
+  const handleLogout = useCallback(async () => {
+    close();
+    await supabase.auth.signOut();
+    router.replace("/login");
+    router.refresh();
+  }, [close, router]);
 
   useEffect(() => {
     if (!mobileOpen) {
@@ -196,6 +206,25 @@ function SidebarMobileToggle({
               </button>
             );
           })}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            aria-label="Logout"
+            className="group flex h-[54px] min-w-[68px] shrink-0 snap-start flex-col items-center justify-center gap-1 rounded-[18px] px-2 py-2 text-[10px] leading-none text-red-300/90 transition-all duration-300 hover:bg-red-500/10 hover:text-red-200 active:scale-95"
+            style={{
+              transitionDelay: mobileOpen ? `${80 + usableMenu.length * 35}ms` : "0ms",
+              opacity: mobileOpen ? 1 : 0,
+              transform: mobileOpen ? "translateY(0)" : "translateY(10px)",
+            }}
+          >
+            <LogOut
+              size={20}
+              strokeWidth={1.85}
+              className="transition-transform duration-300 group-hover:translate-x-0.5"
+            />
+            <span className="max-w-full truncate">Logout</span>
+          </button>
 
           <button
             type="button"
