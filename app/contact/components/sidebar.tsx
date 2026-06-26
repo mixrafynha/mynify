@@ -12,10 +12,10 @@ import {
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
-import SidebarHeader from "./SidebarHeader";
-import SidebarMenu from "./SidebarMenu";
-import SidebarFooter from "./SidebarFooter";
-import SidebarMobileToggle from "./SidebarMobileToggle";
+import SidebarHeader from "./sidebar/SidebarHeader";
+import SidebarMenu from "./sidebar/SidebarMenu";
+import SidebarFooter from "./sidebar/SidebarFooter";
+import SidebarMobileToggle from "./sidebar/SidebarMobileToggle";
 
 import { useUser } from "@/hooks/useUser";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -96,7 +96,6 @@ export default function Sidebar() {
     });
   }, []);
 
-
   const handleNav = useCallback(
     (path: string) => {
       if (pathname !== path) router.push(path);
@@ -119,14 +118,23 @@ export default function Sidebar() {
         />
       )}
 
-
-      {!isMobile && (
-        <aside
-          style={{
-            width: sidebarWidth,
-          }}
-          className="fixed left-0 top-0 z-50 flex h-dvh flex-col border-r border-white/10 bg-black text-white transition-[width,transform] duration-300 ease-out"
-        >
+      {!isMobile && <aside
+        style={{
+          width: sidebarWidth,
+        }}
+        className={`
+          fixed left-0 top-0 z-50 flex h-dvh flex-col
+          border-r border-white/10 bg-black text-white
+          transition-[width,transform] duration-300 ease-out
+          ${
+            isMobile
+              ? mobileOpen
+                ? "translate-x-0"
+                : "-translate-x-full"
+              : "translate-x-0"
+          }
+        `}
+      >
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <SidebarHeader expanded={expanded} />
 
@@ -139,6 +147,7 @@ export default function Sidebar() {
           <SidebarFooter user={user} expanded={expanded} />
         </div>
 
+        {!isMobile && (
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -152,8 +161,8 @@ export default function Sidebar() {
               }`}
             />
           </button>
-        </aside>
-      )}
+        )}
+      </aside>}
     </>
   );
 }

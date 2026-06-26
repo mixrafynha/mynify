@@ -19,12 +19,12 @@ type Props = {
 };
 
 const labelMap: Record<string, string> = {
-  Dashboard: "Início",
-  Products: "Produtos",
-  Orders: "Pedidos",
-  Profile: "Perfil",
-  Settings: "Definições",
-  Contact: "Contacto",
+  Dashboard: "Dashboard",
+  Products: "Products",
+  Orders: "Orders",
+  Profile: "Profile",
+  Settings: "Settings",
+  Contact: "Contact",
 };
 
 const normalize = (p?: string | null) =>
@@ -98,7 +98,7 @@ function SidebarMobileToggle({
       {!mobileOpen && (
         <button
           type="button"
-          aria-label="Abrir menu"
+          aria-label="Open menu"
           onClick={open}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -120,21 +120,30 @@ function SidebarMobileToggle({
       )}
 
       <nav
-        aria-label="Menu mobile"
+        aria-label="Mobile menu"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         className={`
           pointer-events-auto fixed inset-x-0 bottom-0 z-[91]
-          h-[82px] pb-[max(8px,env(safe-area-inset-bottom))]
-          rounded-t-[26px] border border-white/10 border-b-0
+          h-[92px] pb-[max(8px,env(safe-area-inset-bottom))]
+          rounded-t-[24px] border border-white/10 border-b-0
           bg-[#050711]/96 px-2.5 pt-2 text-white shadow-[0_-12px_46px_rgba(0,0,0,0.48),inset_0_1px_0_rgba(255,255,255,0.07)]
           backdrop-blur-2xl transition-all duration-500 ease-[cubic-bezier(.2,.9,.2,1)]
           ${mobileOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-full opacity-0"}
         `}
       >
-        <div className="flex h-full items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex h-full flex-col gap-1.5">
+          <div className="flex h-4 items-center justify-center">
+            <div
+              aria-hidden="true"
+              className="h-1 w-10 rounded-full bg-white/28 shadow-[0_0_14px_rgba(255,255,255,0.12)]"
+            />
+          </div>
+
+          <div className="relative flex min-h-0 flex-1 items-center">
+            <div className="flex h-full flex-1 items-center gap-1.5 overflow-x-auto overflow-y-hidden overscroll-x-contain pr-[52px] [-ms-overflow-style:none] [scrollbar-width:none] [scroll-snap-type:x_proximity] [&::-webkit-scrollbar]:hidden">
           {usableMenu.map((item, index) => {
             const Icon = item.icon;
             const active = normalize(pathname) === normalize(item.path);
@@ -147,7 +156,7 @@ function SidebarMobileToggle({
                 onClick={() => handleNavigate(item.path)}
                 aria-current={active ? "page" : undefined}
                 className={`
-                  group flex h-[58px] min-w-[64px] shrink-0 flex-col items-center justify-center gap-1
+                  group flex h-[56px] min-w-[64px] shrink-0 snap-start flex-col items-center justify-center gap-1
                   rounded-[18px] px-2 py-2 text-[10px] leading-none
                   transition-all duration-300 active:scale-95
                   ${active ? "bg-[linear-gradient(180deg,rgba(168,85,247,0.26),rgba(88,28,135,0.18))] text-purple-100 shadow-[0_8px_22px_rgba(168,85,247,0.14),inset_0_0_22px_rgba(168,85,247,0.18)]" : "text-white/80 hover:bg-white/[0.06] hover:text-white"}
@@ -168,14 +177,17 @@ function SidebarMobileToggle({
             );
           })}
 
-          <button
-            type="button"
-            aria-label="Fechar menu"
-            onClick={close}
-            className="ml-0.5 flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/90 shadow-[0_8px_18px_rgba(0,0,0,0.24),inset_0_0_18px_rgba(255,255,255,0.035)] transition-all duration-300 hover:bg-white/[0.13] active:scale-95"
-          >
-            <X size={18} strokeWidth={2.1} />
-          </button>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Close menu"
+              onClick={close}
+              className="absolute right-1 top-1/2 flex h-[34px] w-[34px] -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[#080914]/92 text-white/85 shadow-[0_8px_18px_rgba(0,0,0,0.28),inset_0_0_18px_rgba(255,255,255,0.035)] transition-all duration-300 hover:bg-white/[0.1] active:scale-95"
+            >
+              <X size={15} strokeWidth={2.2} />
+            </button>
+          </div>
         </div>
       </nav>
 
