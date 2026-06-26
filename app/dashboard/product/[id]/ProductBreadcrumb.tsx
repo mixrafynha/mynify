@@ -9,11 +9,11 @@ export function ProductBreadcrumb({ title }: { title: string }) {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="mb-4 flex min-w-0 items-center gap-1 text-xs font-bold text-white/45 sm:text-sm"
+      className="mb-4 flex min-w-0 items-center gap-1 text-xs font-bold text-white/50 sm:text-sm"
     >
       <Link
         href="/"
-        className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 transition-colors duration-200 hover:bg-white/[0.06] hover:text-white"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-1 transition-colors duration-200 hover:text-white"
       >
         <Home size={14} />
         <span className="hidden sm:inline">Home</span>
@@ -23,7 +23,7 @@ export function ProductBreadcrumb({ title }: { title: string }) {
 
       <Link
         href="/dashboard"
-        className="shrink-0 rounded-full px-2 py-1 transition-colors duration-200 hover:bg-white/[0.06] hover:text-white"
+        className="shrink-0 rounded-full px-2 py-1 transition-colors duration-200 hover:text-white"
       >
         Products
       </Link>

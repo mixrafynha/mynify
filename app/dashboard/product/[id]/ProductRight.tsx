@@ -160,8 +160,8 @@ export function ProductRight({ product, selectedVariant }: any) {
           <div
             className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
               toast.type === "success"
-                ? "border-emerald-400/40 bg-[#0f1720]/95 text-emerald-100 shadow-emerald-500/20"
-                : "border-red-400/40 bg-[#0f1720]/95 text-red-100 shadow-red-500/20"
+                ? "border-emerald-400/40 bg-[#090811]/70 text-emerald-100 shadow-emerald-500/20"
+                : "border-red-400/40 bg-[#090811]/70 text-red-100 shadow-red-500/20"
             }`}
           >
             <div className="flex items-start gap-4">
@@ -184,7 +184,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                   </p>
 
                   {toast.type === "success" && (
-                    <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
+                    <span className="rounded-full bg-[#090811]/70 border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
                       success
                     </span>
                   )}
@@ -194,7 +194,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                   {toast.message}
                 </p>
 
-                <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/10">
+                <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.08]">
                   <div
                     className={`h-full animate-[toastBar_3s_linear_forwards] rounded-full ${
                       toast.type === "success" ? "bg-emerald-400" : "bg-red-400"
@@ -221,7 +221,7 @@ export function ProductRight({ product, selectedVariant }: any) {
 
       <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-purple-200">
+          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[#090811]/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
             <Sparkles size={13} aria-hidden="true" />
             Made on demand
           </div>
@@ -230,13 +230,12 @@ export function ProductRight({ product, selectedVariant }: any) {
             {product?.title ?? "Untitled product"}
           </h1>
 
-          <p className="text-sm leading-relaxed text-white/55 sm:text-base">
-            Premium customizable apparel made for creators, gamers and online
-            brands.
+          <p className="text-sm leading-relaxed text-white/58 sm:text-base">
+            Premium customizable products made for creators, online brands and RYFIO stores.
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
           <div className="flex items-end justify-between gap-4">
             <div className="space-y-1">
               <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
@@ -244,13 +243,13 @@ export function ProductRight({ product, selectedVariant }: any) {
               </div>
 
               {originalPrice && (
-                <div className="text-sm text-white/35 line-through">
+                <div className="text-sm text-white/38 line-through">
                   €{originalPrice.toFixed(2)}
                 </div>
               )}
             </div>
 
-            <div className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-bold text-cyan-200">
+            <div className="rounded-full border border-cyan-300/20 bg-[#090811]/70 px-3 py-1 text-[11px] font-bold text-cyan-100">
               No inventory needed
             </div>
           </div>
@@ -265,12 +264,12 @@ export function ProductRight({ product, selectedVariant }: any) {
                 <span className="font-bold text-red-300">● Out of stock</span>
               )
             ) : (
-              <span className="text-white/45">Select variant</span>
+              <span className="text-white/50">Select variant</span>
             )}
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-white/75">Quantity</span>
 
@@ -279,7 +278,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                 type="button"
                 onClick={decreaseQuantity}
                 disabled={quantity <= 1 || loading}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:bg-white/10"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#090811]/70 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Minus size={16} />
               </button>
@@ -296,7 +295,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                   isOutOfStock ||
                   (typeof stock === "number" && quantity >= stock)
                 }
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:bg-white/10"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#090811]/70 text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Plus size={16} />
               </button>
@@ -309,7 +308,7 @@ export function ProductRight({ product, selectedVariant }: any) {
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-white/20 bg-gradient-to-r from-purple-600 via-pink-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-[0_0_45px_rgba(217,70,239,0.45)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:scale-[1.02] md:hover:shadow-[0_0_70px_rgba(34,211,238,0.55)]"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-[0_0_44px_rgba(168,85,247,0.34)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:scale-[1.02] md:hover:shadow-[0_0_64px_rgba(217,70,239,0.38)]"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -332,11 +331,11 @@ export function ProductRight({ product, selectedVariant }: any) {
             type="button"
             disabled={!selectedVariant || loading}
             onClick={handleStartDesigning}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-purple-400/40 bg-purple-500/15 px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white shadow-[0_0_30px_rgba(168,85,247,0.25)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:bg-purple-500/25 md:hover:shadow-[0_0_55px_rgba(168,85,247,0.45)]"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/25 bg-[#090811]/70 px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white shadow-[0_0_28px_rgba(168,85,247,0.20)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:border-fuchsia-300/35 md:hover:shadow-[0_0_50px_rgba(217,70,239,0.30)]"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-purple-600/20 via-fuchsia-500/25 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-purple-400/25">
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-fuchsia-300/20">
               <Palette size={20} />
             </span>
 
@@ -344,14 +343,14 @@ export function ProductRight({ product, selectedVariant }: any) {
           </button>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-black/20 p-4">
+        <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
           <p className="mb-3 text-sm font-black text-white">
             Production & Delivery
           </p>
 
-          <div className="space-y-2 text-sm text-white/55">
+          <div className="space-y-2 text-sm text-white/58">
             <p className="flex items-center gap-2">
-              <CheckCircle size={15} className="text-purple-300" />
+              <CheckCircle size={15} className="text-fuchsia-200" />
               Production: 2–4 business days
             </p>
             <p className="flex items-center gap-2">
@@ -366,7 +365,7 @@ export function ProductRight({ product, selectedVariant }: any) {
         </div>
 
         {verifiedReviews.length > 0 && (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-4">
+          <div className="rounded-3xl border border-white/[0.07] bg-[#090811]/70 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-black text-white">Verified reviews</p>
 
@@ -381,10 +380,10 @@ export function ProductRight({ product, selectedVariant }: any) {
               {verifiedReviews.map((review: any) => (
                 <div
                   key={review.id}
-                  className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                  className="rounded-2xl border border-white/[0.08] bg-[#090811]/70 p-3"
                 >
                   <div className="mb-2 flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500 text-xs font-black text-white">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 text-xs font-black text-white">
                       {review.name?.[0]?.toUpperCase() ?? "U"}
                     </div>
 
@@ -398,7 +397,7 @@ export function ProductRight({ product, selectedVariant }: any) {
                     </div>
                   </div>
 
-                  <p className="text-xs leading-relaxed text-white/55">
+                  <p className="text-xs leading-relaxed text-white/58">
                     {review.message}
                   </p>
                 </div>
@@ -408,16 +407,16 @@ export function ProductRight({ product, selectedVariant }: any) {
         )}
 
         <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
             ✔ Secure checkout
           </span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
             ✔ Quality tested
           </span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
             ✔ Fast production
           </span>
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1">
             ✔ Worldwide shipping
           </span>
         </div>

@@ -201,13 +201,13 @@ export default function ProductClient({
   );
 
   return (
-    <div className="w-full min-w-0 space-y-4">
+    <div className="w-full min-w-0 space-y-4 bg-transparent">
       <div className="px-1">
         <ProductBreadcrumb title={product?.title} />
       </div>
 
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] xl:gap-5">
-        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.045] p-2 shadow-lg sm:p-3">
+        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-[#090811]/70 p-2 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-3">
           <ProductLeft
             images={safeImages}
             product={product}
@@ -221,18 +221,16 @@ export default function ProductClient({
           />
         </div>
 
-        <div className="min-w-0 rounded-[24px] border border-white/10 bg-white/[0.045] p-3 shadow-lg sm:p-4 lg:sticky lg:top-20">
+        <div className="min-w-0 rounded-[24px] border border-white/[0.06] bg-[#090811]/70 p-3 shadow-[0_18px_52px_rgba(0,0,0,0.22)] sm:p-4 lg:sticky lg:top-20">
           <ProductRight product={product} selectedVariant={selectedVariant} />
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[#10101f]/80 shadow-[0_18px_70px_rgba(0,0,0,0.22)]">
-        <div className="relative overflow-hidden border-b border-white/[0.07] px-4 py-5 sm:px-6 sm:py-6">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_0%_0%,rgba(217,70,239,0.16),transparent_34%),radial-gradient(circle_at_100%_0%,rgba(34,211,238,0.12),transparent_32%)]" />
-
+      <section className="overflow-hidden rounded-[28px] border border-white/[0.06] bg-[#090811]/70 shadow-[0_18px_52px_rgba(0,0,0,0.22)]">
+        <div className="relative overflow-hidden border-b border-white/[0.06] px-4 py-5 sm:px-6 sm:py-6">
           <div className="relative">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">
-              <Zap size={14} className="text-fuchsia-300" aria-hidden="true" />
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-[#090811]/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">
+              <Zap size={14} className="text-fuchsia-200" aria-hidden="true" />
               Product details
             </div>
 
@@ -240,7 +238,7 @@ export default function ProductClient({
               Everything you need to know
             </h2>
 
-            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-white/48">
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-white/50">
               Materials, fit, sizing, production, care and delivery details to
               help customers buy with confidence.
             </p>
@@ -433,9 +431,9 @@ function SpecCard({
   tone: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-white/10 bg-white/[0.055] p-4 transition-colors duration-200 hover:bg-white/[0.075]">
+    <div className="rounded-[24px] border border-white/[0.08] bg-[#090811]/70 p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
       <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="flex h-13 w-13 items-center justify-center rounded-[18px] border border-white/10 bg-white/[0.07] p-3">
+        <div className="flex h-13 w-13 items-center justify-center rounded-[18px] border border-white/[0.08] bg-[#090811]/70 p-3">
           <Icon className={tone} size={26} strokeWidth={2.35} aria-hidden />
         </div>
       </div>
@@ -463,11 +461,11 @@ function InfoBox({
   items: InfoItem[];
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.045] p-4 transition-colors duration-200 hover:bg-white/[0.06]">
+    <div className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#090811]/70 p-4 transition-colors duration-200 hover:border-fuchsia-300/18">
       <div className={`pointer-events-none absolute right-0 top-0 h-24 w-24 rounded-bl-full ${accent}`} />
 
       <div className="relative mb-4 flex items-center gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-white/10 bg-white/[0.075]">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] border border-white/[0.08] bg-[#090811]/70">
           <Icon size={25} strokeWidth={2.35} className="text-white" aria-hidden />
         </div>
 
@@ -485,7 +483,7 @@ function InfoBox({
         {items.map(([label, value]) => (
           <div
             key={label}
-            className="rounded-[18px] border border-white/[0.06] bg-black/[0.14] p-3"
+            className="rounded-[18px] border border-white/[0.07] bg-[#090811]/70 p-3"
           >
             <p className="text-[10px] font-black uppercase tracking-[0.15em] text-white/30">
               {label}

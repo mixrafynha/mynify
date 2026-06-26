@@ -127,7 +127,7 @@ export default async function ProductPage({
 
   if (!id) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0b0b18] px-4 text-center text-red-300">
+      <main className="flex min-h-screen items-center justify-center bg-[#070711] px-4 text-center text-red-300">
         Invalid product ID
       </main>
     );
@@ -137,7 +137,7 @@ export default async function ProductPage({
 
   if (!product) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#0b0b18] px-4 text-center text-white/55">
+      <main className="flex min-h-screen items-center justify-center bg-[#070711] px-4 text-center text-white/55">
         Product not found
       </main>
     );
@@ -146,26 +146,43 @@ export default async function ProductPage({
   const isAdmin = user?.user_metadata?.role === "admin";
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#0b0b18] text-white">
-      <section className="relative min-h-screen overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_16%_0%,rgba(192,132,252,0.28),transparent_34%),radial-gradient(circle_at_88%_10%,rgba(34,211,238,0.18),transparent_30%),linear-gradient(180deg,#0b0b18_0%,#15152d_55%,#0b0b18_100%)]" />
-
-        {/* HEADER COM MESMO FUNDO */}
-        <header className="sticky top-0 z-50 border-b border-cyan-400/10 bg-transparent">
+    <main
+      className="min-h-screen overflow-x-hidden text-white"
+      style={{
+        background:
+          "radial-gradient(circle at 18% 0%, rgba(168,85,247,0.16), transparent 32%), radial-gradient(circle at 86% 5%, rgba(14,165,233,0.09), transparent 30%), linear-gradient(180deg, #0b0814 0%, #0a0913 45%, #070711 100%)",
+      }}
+    >
+      <section className="relative min-h-screen bg-transparent">
+        {/* HEADER COM A MESMA UX DO NAVBAR, MAS SEM FUNDO DIFERENTE */}
+        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#090811]/85 shadow-[0_0_55px_rgba(168,85,247,0.14)] backdrop-blur-2xl">
           <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
             <Link
               href="/"
-              className="text-3xl font-black tracking-[-0.07em] text-white transition active:scale-[0.98] md:hover:opacity-90"
+              className="group overflow-visible select-none shrink-0 text-white transition active:scale-[0.98] md:hover:opacity-90"
+              aria-label="RYFIO home"
             >
-              MY
-              <span className="bg-gradient-to-r from-cyan-300 via-fuchsia-400 to-violet-300 bg-clip-text text-transparent drop-shadow-[0_0_18px_rgba(168,85,247,0.45)]">
-                NIFY
-              </span>
+              <div className="relative flex items-center">
+                <span
+                  className="text-[27px] md:text-[40px] uppercase leading-none tracking-[-0.03em] select-none transition-all duration-300 group-hover:scale-[1.03]"
+                  style={{
+                    fontFamily: "var(--font-logo)",
+                    textShadow: "0 0 18px rgba(102, 67, 136, 0.35)",
+                  }}
+                >
+                  <span className="ryfio-letter text-white" style={{ animationDelay: "0ms" }}>R</span>
+                  <span className="ryfio-letter text-white" style={{ animationDelay: "120ms" }}>Y</span>
+                  <span className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent" style={{ animationDelay: "240ms" }}>F</span>
+                  <span className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent" style={{ animationDelay: "360ms" }}>I</span>
+                  <span className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent" style={{ animationDelay: "480ms" }}>O</span>
+                </span>
+                <div className="absolute -inset-3 rounded-full bg-purple-500/10 opacity-70 blur-2xl pointer-events-none" />
+              </div>
             </Link>
 
             <Link
               href="/dashboard/product"
-              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-cyan-400/20 bg-black/30 text-white shadow-[0_0_25px_rgba(34,211,238,0.14)] transition active:scale-[0.98] hover:border-fuchsia-400/40 hover:bg-white/[0.08] hover:shadow-[0_0_30px_rgba(217,70,239,0.22)] sm:right-5 md:static"
+              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-[#070711] text-white shadow-[0_0_25px_rgba(168,85,247,0.14)] backdrop-blur-xl transition active:scale-[0.98] hover:border-fuchsia-300/30 hover:border-fuchsia-300/30 hover:shadow-[0_0_30px_rgba(217,70,239,0.18)] sm:right-5 md:static"
               aria-label="Back to products"
             >
               <ArrowLeft
@@ -181,14 +198,14 @@ export default async function ProductPage({
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (
-            <div className="mt-4 rounded-[24px] bg-white/[0.06] p-4 backdrop-blur-xl">
+            <div className="mt-4 rounded-[24px] border border-white/[0.06] bg-[#070711] p-4">
               <p className="text-sm font-bold text-white/75">
                 Admin tools
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Link href={`/admin/products/${product.id}`}>
-                  <button className="w-full rounded-full bg-white px-4 py-2.5 font-black text-[#121225] transition active:scale-[0.98] sm:w-auto md:hover:scale-[1.02]">
+                  <button className="w-full rounded-full border border-white/[0.08] bg-[#070711] px-4 py-2.5 font-black text-white transition active:scale-[0.98] sm:w-auto md:hover:border-fuchsia-300/30">
                     Edit product
                   </button>
                 </Link>
