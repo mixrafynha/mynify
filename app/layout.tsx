@@ -35,11 +35,14 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
+
   title: {
     default: defaultTitle,
     template: "%s | Ryfio",
   },
+
   description: defaultDescription,
+
   keywords: [
     "print on demand",
     "custom products",
@@ -53,14 +56,13 @@ export const metadata: Metadata = {
     "print provider",
     "Ryfio",
   ],
+
   authors: [{ name: siteName }],
   creator: siteName,
   publisher: siteName,
   category: "ecommerce",
   applicationName: siteName,
-  alternates: {
-    canonical: "/",
-  },
+
   robots: {
     index: true,
     follow: true,
@@ -72,6 +74,7 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+
   openGraph: {
     title: defaultTitle,
     description: defaultDescription,
@@ -88,18 +91,22 @@ export const metadata: Metadata = {
       },
     ],
   },
+
   twitter: {
     card: "summary_large_image",
     title: defaultTitle,
     description: defaultDescription,
     images: ["/og-image.png"],
   },
+
   icons: {
     icon: [{ url: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
     shortcut: "/favicon.ico",
     apple: "/apple-touch-icon.png",
   },
+
   manifest: "/manifest.webmanifest",
+
   formatDetection: {
     telephone: false,
     email: false,

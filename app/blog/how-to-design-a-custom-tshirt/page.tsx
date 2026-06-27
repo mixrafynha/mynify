@@ -8,11 +8,11 @@ const post = getPost("how-to-design-a-custom-tshirt");
 export const metadata: Metadata = {
   title: "How to Design a Custom T-Shirt That Looks Professional | Ryfio",
   description: "Design principles for custom t-shirts that look clean, wearable, and ready to sell online.",
-  alternates: { canonical: "https://ryfio.com/blog/how-to-design-a-custom-tshirt" },
+  alternates: { canonical: "https://www.ryfio.com/blog/how-to-design-a-custom-tshirt" },
   openGraph: {
     title: "How to Design a Custom T-Shirt That Looks Professional | Ryfio",
     description: "Design principles for custom t-shirts that look clean, wearable, and ready to sell online.",
-    url: "https://ryfio.com/blog/how-to-design-a-custom-tshirt",
+    url: "https://www.ryfio.com/blog/how-to-design-a-custom-tshirt",
     siteName: "Ryfio",
     type: "article",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "How to Design a Custom T-Shirt That Looks Professional" }],

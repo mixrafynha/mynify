@@ -7,11 +7,11 @@ import { BlogCard, BlogVisual } from "./_components";
 export const metadata: Metadata = {
   title: "Print-on-Demand Blog | Ryfio",
   description: "Practical guides about print on demand, custom products, AI product design, ecommerce, and launching a brand without inventory.",
-  alternates: { canonical: "https://ryfio.com/blog" },
+  alternates: { canonical: "https://www.ryfio.com/blog" },
   openGraph: {
     title: "Print-on-Demand Blog | Ryfio",
     description: "Learn how to design, launch, and sell custom products online with print-on-demand fulfillment.",
-    url: "https://ryfio.com/blog",
+    url: "https://www.ryfio.com/blog",
     siteName: "Ryfio",
     type: "website",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Ryfio Blog" }],

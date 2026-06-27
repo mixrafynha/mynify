@@ -8,11 +8,11 @@ const post = getPost("ai-product-design-guide");
 export const metadata: Metadata = {
   title: "AI Product Design: How to Turn Ideas Into Sellable Products | Ryfio",
   description: "Use AI design tools without creating generic products that look like everything else online.",
-  alternates: { canonical: "https://ryfio.com/blog/ai-product-design-guide" },
+  alternates: { canonical: "https://www.ryfio.com/blog/ai-product-design-guide" },
   openGraph: {
     title: "AI Product Design: How to Turn Ideas Into Sellable Products | Ryfio",
     description: "Use AI design tools without creating generic products that look like everything else online.",
-    url: "https://ryfio.com/blog/ai-product-design-guide",
+    url: "https://www.ryfio.com/blog/ai-product-design-guide",
     siteName: "Ryfio",
     type: "article",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "AI Product Design: How to Turn Ideas Into Sellable Products" }],

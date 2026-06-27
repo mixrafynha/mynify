@@ -8,11 +8,11 @@ const post = getPost("how-to-start-a-clothing-brand");
 export const metadata: Metadata = {
   title: "How to Start a Clothing Brand in 2026 | Ryfio",
   description: "Build a focused clothing brand with a real niche, a small product line, print-on-demand fulfillment, and a launch plan that does not require inventory.",
-  alternates: { canonical: "https://ryfio.com/blog/how-to-start-a-clothing-brand" },
+  alternates: { canonical: "https://www.ryfio.com/blog/how-to-start-a-clothing-brand" },
   openGraph: {
     title: "How to Start a Clothing Brand in 2026 | Ryfio",
     description: "Build a focused clothing brand with a real niche, a small product line, print-on-demand fulfillment, and a launch plan that does not require inventory.",
-    url: "https://ryfio.com/blog/how-to-start-a-clothing-brand",
+    url: "https://www.ryfio.com/blog/how-to-start-a-clothing-brand",
     siteName: "Ryfio",
     type: "article",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "How to Start a Clothing Brand in 2026" }],

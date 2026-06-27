@@ -8,11 +8,11 @@ const post = getPost("best-print-on-demand-products");
 export const metadata: Metadata = {
   title: "Best Print-on-Demand Products to Sell in 2026 | Ryfio",
   description: "A practical list of products that are easier to position, design, and sell for new print-on-demand brands.",
-  alternates: { canonical: "https://ryfio.com/blog/best-print-on-demand-products" },
+  alternates: { canonical: "https://www.ryfio.com/blog/best-print-on-demand-products" },
   openGraph: {
     title: "Best Print-on-Demand Products to Sell in 2026 | Ryfio",
     description: "A practical list of products that are easier to position, design, and sell for new print-on-demand brands.",
-    url: "https://ryfio.com/blog/best-print-on-demand-products",
+    url: "https://www.ryfio.com/blog/best-print-on-demand-products",
     siteName: "Ryfio",
     type: "article",
     images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Best Print-on-Demand Products to Sell in 2026" }],
