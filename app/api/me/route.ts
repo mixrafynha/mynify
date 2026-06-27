@@ -28,9 +28,16 @@ export async function GET() {
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
-    return NextResponse.json({ user: null }, { status: 401 });
-  }
+ if (authError || !user) {
+  return NextResponse.json(
+    {
+      user: null,
+    },
+    {
+      status: 200,
+    }
+  );
+}
 
   // 📦 PROFILE COMPLETO
   const { data: profile, error: profileError } = await supabase

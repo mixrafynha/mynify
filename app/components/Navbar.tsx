@@ -49,33 +49,38 @@ export default function Navbar() {
   useEffect(() => {
     const controller = new AbortController();
 
-    const checkAuth = async () => {
-      try {
-        const res = await fetch("/api/me", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-          signal: controller.signal,
-        });
+const checkAuth = async () => {
+  try {
+    const res = await fetch("/api/me", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
 
-        if (!res.ok) {
-          setIsAuthenticated(false);
-          setRole(null);
-          return;
-        }
+    if (!res.ok) {
+      setIsAuthenticated(false);
+      setRole(null);
+      return;
+    }
 
-        const data = await res.json();
+    const data = await res.json();
 
-        setIsAuthenticated(true);
-        setRole(data?.user?.profile?.role ?? "user");
-      } catch {
-        setIsAuthenticated(false);
-        setRole(null);
-      } finally {
-        setAuthChecked(true);
-      }
-    };
+    if (!data?.user) {
+      setIsAuthenticated(false);
+      setRole(null);
+      return;
+    }
 
+    setIsAuthenticated(true);
+    setRole(data.user.profile?.role ?? "user");
+  } catch {
+    setIsAuthenticated(false);
+    setRole(null);
+  } finally {
+    setAuthChecked(true);
+  }
+};
     checkAuth();
 
     return () => controller.abort();
