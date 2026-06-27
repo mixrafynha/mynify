@@ -30,11 +30,7 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
       {!hideGlobalLayout && <Navbar />}
 
       <div className="w-full min-h-screen flex flex-col">
-        <main
-          className={`flex-1 ${
-            hideGlobalLayout ? "" : "pt-[65px]"
-          }`}
-        >
+        <main className="flex-1">
           {children}
         </main>
 
