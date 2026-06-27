@@ -119,7 +119,7 @@ const checkAuth = async () => {
 
   return (
     <>
-     <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
+     <nav className="fixed top-0 left-0 right-0 z-[100] w-full overflow-visible border-b border-white/10 bg-[#03030a]/90 backdrop-blur-2xl shadow-[0_0_55px_rgba(168,85,247,0.18)]">
   <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
 
   <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
@@ -267,13 +267,13 @@ const checkAuth = async () => {
       ) : !isAuthenticated ? (
         <>
           <Link href="/login">
-            <button className="px-4 py-2 border border-white/10 bg-white/[0.04] rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400/50 transition">
+            <button className="px-3 py-1.5 text-[15px] sm:px-4 sm:py-2 sm:text-base border border-white/10 bg-white/[0.04] rounded-xl text-white hover:bg-purple-500/10 hover:border-purple-400/50 transition">
               Log in
             </button>
           </Link>
 
           <Link href="/signup">
-            <button className="px-5 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
+            <button className="px-4 py-1.5 text-[15px] sm:px-5 sm:py-2 sm:text-base rounded-xl text-white bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 shadow-[0_0_30px_rgba(168,85,247,0.5)] hover:scale-105 transition">
               Sign up
             </button>
           </Link>
@@ -296,13 +296,13 @@ const checkAuth = async () => {
 </nav>
       {open && (
         <div
-          className="fixed inset-0 bg-black/70 z-40 backdrop-blur-sm"
+          className="fixed inset-0 bg-black/70 z-[80] backdrop-blur-sm"
           onClick={closeSidebar}
         />
       )}
 
       <div
-        className={`fixed left-0 top-[78px] w-[240px] bg-[#070711]/95 backdrop-blur-2xl border border-white/10 z-50 shadow-[0_0_45px_rgba(168,85,247,0.28)] rounded-2xl transition-opacity duration-300 ${
+        className={`fixed left-0 top-[78px] z-[90] w-[240px] bg-[#070711]/95 backdrop-blur-2xl border border-white/10 shadow-[0_0_45px_rgba(168,85,247,0.28)] rounded-2xl transition-opacity duration-300 ${
           open
             ? "opacity-100"
             : "opacity-0 pointer-events-none"

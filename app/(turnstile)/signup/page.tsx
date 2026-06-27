@@ -73,20 +73,19 @@ export default function SignupPage() {
         </aside>
 
         <section className="relative flex min-h-[100dvh] items-center justify-center px-4 py-6 sm:px-6">
-          <button
-            type="button"
-            onClick={goHome}
-            aria-label="Go back to home"
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/45 transition hover:text-white"
-          >
-            <X size={18} />
-          </button>
-
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.035] p-5 shadow-xl sm:p-7">
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.035] p-5 shadow-xl sm:p-7">
+            <button
+              type="button"
+              onClick={goHome}
+              aria-label="Go back to home"
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/45 transition hover:text-white"
+            >
+              <X size={18} />
+            </button>
             <button
               type="button"
               onClick={goLogin}
-              className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-white/55 transition hover:text-white md:hidden"
+              className="mb-6 inline-flex max-w-[calc(100%-56px)] items-center gap-2 text-sm font-semibold text-white/55 transition hover:text-white md:hidden"
             >
               <ArrowLeft size={16} /> Back to login
             </button>
