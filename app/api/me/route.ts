@@ -22,32 +22,20 @@ export async function GET() {
     }
   );
 
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    return NextResponse.json(
-      { user: null },
-      { status: 200 }
-    );
-  }
-
+  // 🔐 AUTH USER
   const {
     data: { user },
     error: authError,
   } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return NextResponse.json(
-      { user: null },
-      { status: 200 }
-    );
+    return NextResponse.json({ user: null }, { status: 401 });
   }
 
+  // 📦 PROFILE COMPLETO
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("*")
+    .select("*") // 🔥 TUDO DA TABELA
     .eq("id", user.id)
     .maybeSingle();
 
@@ -55,10 +43,15 @@ export async function GET() {
     console.error("PROFILE ERROR:", profileError);
   }
 
+  // 🔥 NORMALIZED SAAS USER OBJECT
   const fullUser = {
     id: user.id,
     email: user.email ?? null,
+
+    // auth metadata (caso uses OAuth later)
     user_metadata: user.user_metadata ?? {},
+
+    // DB profile completo
     profile: profile ?? {
       role: "user",
       name: null,
@@ -70,5 +63,7 @@ export async function GET() {
     },
   };
 
-  return NextResponse.json({ user: fullUser });
+  return NextResponse.json({
+    user: fullUser,
+  });
 }
