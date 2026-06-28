@@ -59,6 +59,7 @@ export default function EditorPage() {
   const [side, setSide] = useState<Side>("front");
   const [saving, setSaving] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedElement, setSelectedElement] = useState<ElementType | null>(null);
 
@@ -200,6 +201,7 @@ export default function EditorPage() {
 
     try {
       setSaving(true);
+      setSaveNotice(null);
       saveDraftToSession();
 
       const designPayload = await buildDesignSavePayload({
@@ -224,6 +226,7 @@ export default function EditorPage() {
 
       if (response.status === 401) {
         pendingSaveAfterAuthRef.current = true;
+        setSaveNotice(null);
         setAuthPopupOpen(true);
         return;
       }
@@ -233,14 +236,11 @@ export default function EditorPage() {
       }
 
       sessionStorage.removeItem(editorStorageKey);
-      const cartUrl = data?.redirectTo || (data?.designId ? `/cart?designId=${data.designId}` : null);
+      setSaveNotice("Design saved successfully. Redirecting you to checkout...");
 
-      if (cartUrl) {
-        router.push(cartUrl);
-        return;
-      }
-
-      console.info("Design saved", data);
+      const checkoutUrl = data?.designId ? `/checkout?designId=${data.designId}` : "/checkout";
+      router.push(checkoutUrl);
+      return;
     } catch (error) {
       console.error("SAVE ERROR:", error);
       alert("Error saving design");
@@ -444,6 +444,13 @@ const handlePreviewDesign = useCallback(async (): Promise<void> => {
         accept="image/png,image/jpeg,image/webp"
         onChange={handleUploadChange}
       />
+
+      {saveNotice && (
+        <div className="pointer-events-none fixed left-1/2 top-16 z-[998] w-[calc(100%-2rem)] max-w-[360px] -translate-x-1/2 rounded-2xl border border-white/10 bg-[#090914]/95 px-4 py-3 text-center text-sm font-bold text-white shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+          {saveNotice}
+        </div>
+      )}
+
 
       {authPopupOpen && (
         <div className="fixed inset-0 z-[999]">

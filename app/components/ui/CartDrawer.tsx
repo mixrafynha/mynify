@@ -164,7 +164,7 @@ export default function CartDrawer({
     if (!items.length) return;
 
     onClose();
-    router.push("/stepcategory");
+    router.push("/checkout");
   }, [items.length, onClose, router]);
 
   return (
