@@ -21,7 +21,9 @@ export async function middleware(req: NextRequest) {
 
   if (
     pathname === "/dashboard/design" ||
-    pathname.startsWith("/dashboard/design/")
+    pathname.startsWith("/dashboard/design/") ||
+    pathname === "/dashboard/create" ||
+    pathname.startsWith("/dashboard/create/")
   ) {
     return applySeoHeaders(NextResponse.next(), pathname);
   }

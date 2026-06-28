@@ -19,6 +19,9 @@ const safeText = (val: unknown) => {
     .replace(/>/g, "&gt;");
 };
 
+const createHref = (category: string) =>
+  safeHref(`/dashboard/create?category=${encodeURIComponent(category)}`);
+
 type Product = {
   name: string;
   price: string;
@@ -56,7 +59,7 @@ const products: {
 function ProductCard({ product }: { product: Product }) {
   return (
     <Link
-      href={safeHref(`/dashboard/design/${product.category}`)}
+      href={createHref(product.category)}
       className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40"
     >
       <div className="relative mb-4 h-[210px] overflow-hidden rounded-xl bg-black/40 sm:h-[260px]">
@@ -101,7 +104,7 @@ function ProductSection({
         </h2>
 
         <Link
-          href={safeHref(`/dashboard/design/${category}`)}
+          href={createHref(category)}
           className="hidden items-center gap-2 rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-bold text-white/80 transition hover:border-purple-500/40 sm:inline-flex"
         >
           Design now <ArrowRight size={16} />
@@ -142,7 +145,7 @@ export default function HowItWorksPage() {
 
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <Link
-              href={safeHref("/dashboard/design/tshirt")}
+              href={createHref("tshirt")}
               className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 font-bold text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-[1.02]"
             >
               Start designing
@@ -150,7 +153,7 @@ export default function HowItWorksPage() {
             </Link>
 
             <Link
-              href={safeHref("/dashboard/design/hoodie")}
+              href={createHref("hoodie")}
               className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-8 font-bold text-white/85 transition hover:border-purple-500/40 hover:bg-white/[0.08]"
             >
               Design hoodie
@@ -187,7 +190,7 @@ export default function HowItWorksPage() {
           </div>
 
           <Link
-            href={safeHref("/dashboard/design/tshirt")}
+            href={createHref("tshirt")}
             className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 font-bold text-white shadow-[0_0_35px_rgba(168,85,247,0.45)]"
           >
             Start designing now <ArrowRight size={18} />
