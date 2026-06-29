@@ -1,33 +1,46 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { resolveVariantById } from "../_variant";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function getVariantDetails(supabase: any, variantId: string) {
-  const { data: variant, error: variantError } = await supabase
-    .from("product_variants")
-    .select("id, size, stock, price, sku, product_color_id")
-    .eq("id", variantId)
-    .maybeSingle();
+type CartItem = {
+  id: string;
+  user_id: string;
+  product_id: string;
+  variant_id: string | null;
+  quantity: number | null;
+  image: string | null;
+};
 
-  if (variantError || !variant) return null;
+type SupabaseSingleResponse<T> = {
+  data: T | null;
+  error: { message: string } | null;
+};
 
-  const { data: color } = await supabase
-    .from("product_colors")
-    .select("id, product_id, color, color_hex, image")
-    .eq("id", variant.product_color_id)
-    .maybeSingle();
+type UpdateCartBody = {
+  id?: unknown;
+  itemId?: unknown;
+  item_id?: unknown;
+  quantity?: unknown;
+  variantId?: unknown;
+  variant_id?: unknown;
+};
 
-  return {
-    id: variant.id,
-    size: variant.size ?? null,
-    stock: variant.stock ?? null,
-    price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
-    sku: variant.sku ?? null,
-    color: color?.color ?? null,
-    image: color?.image ?? null,
-    product_color_product_id: color?.product_id ?? null,
-  };
+type CartPatch = {
+  quantity?: number;
+  variant_id?: string;
+  color?: string | null;
+  size?: string | null;
+  sku?: string | null;
+  price?: number;
+  image?: string | null;
+};
+
+function nullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const parsed = String(value).trim();
+  return parsed ? parsed : null;
 }
 
 export async function PATCH(req: Request) {
@@ -43,50 +56,48 @@ export async function PATCH(req: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const id = String(body.id ?? body.itemId ?? body.item_id ?? "").trim();
+    const body = (await req.json()) as UpdateCartBody;
+    const id = nullableString(body.id ?? body.itemId ?? body.item_id);
 
     if (!id) {
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const { data: cartItem, error: cartError } = await supabase
+    const { data: cartItem, error: cartError } = (await supabase
       .from("cart_items")
       .select("id, user_id, product_id, variant_id, quantity, image")
       .eq("id", id)
       .eq("user_id", user.id)
-      .maybeSingle();
+      .maybeSingle()) as SupabaseSingleResponse<CartItem>;
 
     if (cartError || !cartItem) {
       return Response.json({ error: "Cart item not found" }, { status: 404 });
     }
 
-    const patch: Record<string, any> = {};
+    const patch: CartPatch = {};
     let quantityToValidate = Number(cartItem.quantity ?? 1);
 
     if (body.quantity !== undefined) {
       const quantity = Number(body.quantity ?? 0);
+
       if (!Number.isFinite(quantity) || quantity < 1) {
         return Response.json({ error: "Invalid quantity" }, { status: 400 });
       }
-      quantityToValidate = quantity;
-      patch.quantity = quantity;
+
+      quantityToValidate = Math.floor(quantity);
+      patch.quantity = quantityToValidate;
     }
 
-    const incomingVariantId = body.variantId ?? body.variant_id;
+    const incomingVariantId = nullableString(body.variantId ?? body.variant_id);
 
-    if (incomingVariantId !== undefined && incomingVariantId !== null && String(incomingVariantId).trim()) {
-      const selectedVariant = await getVariantDetails(supabase, String(incomingVariantId));
+    if (incomingVariantId) {
+      const selectedVariant = await resolveVariantById(supabase, incomingVariantId);
 
       if (!selectedVariant) {
         return Response.json({ error: "Variant not found" }, { status: 404 });
       }
 
-      if (
-        selectedVariant.stock !== null &&
-        selectedVariant.stock !== undefined &&
-        quantityToValidate > Number(selectedVariant.stock)
-      ) {
+      if (selectedVariant.stock !== null && quantityToValidate > selectedVariant.stock) {
         return Response.json({ error: "Not enough stock", stock: selectedVariant.stock }, { status: 400 });
       }
 
@@ -94,26 +105,19 @@ export async function PATCH(req: Request) {
       patch.color = selectedVariant.color;
       patch.size = selectedVariant.size;
       patch.sku = selectedVariant.sku;
+      patch.image = selectedVariant.image ?? cartItem.image ?? null;
 
       if (selectedVariant.price !== null && selectedVariant.price > 0) {
         patch.price = selectedVariant.price;
       }
-
-      if (selectedVariant.image) {
-        patch.image = selectedVariant.image;
-      }
     } else if (cartItem.variant_id && patch.quantity !== undefined) {
-      const selectedVariant = await getVariantDetails(supabase, String(cartItem.variant_id));
+      const selectedVariant = await resolveVariantById(supabase, cartItem.variant_id);
 
       if (!selectedVariant) {
         return Response.json({ error: "Variant not found" }, { status: 404 });
       }
 
-      if (
-        selectedVariant.stock !== null &&
-        selectedVariant.stock !== undefined &&
-        quantityToValidate > Number(selectedVariant.stock)
-      ) {
+      if (selectedVariant.stock !== null && quantityToValidate > selectedVariant.stock) {
         return Response.json({ error: "Not enough stock", stock: selectedVariant.stock }, { status: 400 });
       }
     }
@@ -135,7 +139,8 @@ export async function PATCH(req: Request) {
     }
 
     return Response.json({ success: true, data });
-  } catch (err: any) {
-    return Response.json({ error: "Server error", details: err?.message ?? "Unknown error" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return Response.json({ error: "Server error", details: message }, { status: 500 });
   }
 }

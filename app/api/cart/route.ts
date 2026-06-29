@@ -1,63 +1,42 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getAvailableVariants } from "./_variant";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-async function resolveProductIds(supabase: any, productId: string) {
-  const ids = [productId];
+type CartVariantRelation = {
+  id: string;
+  stock: number | null;
+  size: string | null;
+  price: number | string | null;
+  sku: string | null;
+  product_color_id: string | null;
+};
 
-  const { data: userProduct } = await supabase
-    .from("user_products")
-    .select("base_product_id")
-    .eq("id", productId)
-    .maybeSingle();
+type CartItem = {
+  id: string;
+  product_id: string;
+  variant_id: string | null;
+  title: string | null;
+  price: number | string | null;
+  currency: string | null;
+  quantity: number | null;
+  color: string | null;
+  size: string | null;
+  sku: string | null;
+  image: string | null;
+  created_at: string | null;
+  product_variants?: CartVariantRelation | CartVariantRelation[] | null;
+};
 
-  if (userProduct?.base_product_id) ids.push(userProduct.base_product_id);
+type SupabaseManyResponse<T> = {
+  data: T[] | null;
+  error: { message: string } | null;
+};
 
-  return Array.from(new Set(ids.filter(Boolean)));
-}
-
-async function getAvailableVariants(supabase: any, productId: string) {
-  const productIds = await resolveProductIds(supabase, productId);
-
-  const { data: colors, error: colorsError } = await supabase
-    .from("product_colors")
-    .select("id, product_id, color, color_hex, image, position")
-    .in("product_id", productIds)
-    .order("position", { ascending: true });
-
-  if (colorsError || !colors?.length) return [];
-
-  const colorIds = colors.map((color: any) => color.id).filter(Boolean);
-
-  const { data: variants, error: variantsError } = await supabase
-    .from("product_variants")
-    .select("id, size, stock, price, sku, name, product_color_id")
-    .in("product_color_id", colorIds)
-    .order("size", { ascending: true });
-
-  if (variantsError || !variants?.length) return [];
-
-  const colorMap = new Map(colors.map((color: any) => [color.id, color]));
-
-  return variants.map((variant: any) => {
-    const color = colorMap.get(variant.product_color_id);
-
-    return {
-      id: variant.id,
-      variant_id: variant.id,
-      size: variant.size ?? null,
-      stock: variant.stock ?? null,
-      price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
-      sku: variant.sku ?? null,
-      name: variant.name ?? null,
-      product_color_id: variant.product_color_id ?? null,
-      color: color?.color ?? null,
-      color_hex: color?.color_hex ?? "#cccccc",
-      image: color?.image ?? null,
-      product_id: color?.product_id ?? null,
-    };
-  });
+function firstRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 export async function GET() {
@@ -73,7 +52,7 @@ export async function GET() {
       return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = (await supabase
       .from("cart_items")
       .select(`
         id,
@@ -98,22 +77,22 @@ export async function GET() {
         )
       `)
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
 
     if (error) {
       return Response.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
     const items = await Promise.all(
-      (data ?? []).map(async (item: any) => {
+      (data ?? []).map(async (item) => {
         const availableVariants = await getAvailableVariants(supabase, item.product_id);
-        const selectedVariant = availableVariants.find(
-          (variant: any) => String(variant.id) === String(item.variant_id),
-        ) ?? null;
+        const selectedVariant = availableVariants.find((variant) => variant.id === item.variant_id) ?? null;
+        const variantRelation = firstRelation(item.product_variants);
 
         return {
           ...item,
-          stock: item.product_variants?.stock ?? selectedVariant?.stock ?? null,
+          product_variants: variantRelation,
+          stock: variantRelation?.stock ?? selectedVariant?.stock ?? null,
           selectedVariant,
           availableVariants,
           variants: availableVariants,
@@ -122,9 +101,10 @@ export async function GET() {
     );
 
     return Response.json({ items }, { headers: { "Cache-Control": "no-store" } });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(
-      { error: "Server error", details: err?.message ?? "Unknown error" },
+      { error: "Server error", details: message },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }

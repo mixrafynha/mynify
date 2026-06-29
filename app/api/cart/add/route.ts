@@ -1,96 +1,52 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getFirstAvailableVariant, resolveVariantById } from "../_variant";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ResolvedVariant = {
+type Product = {
   id: string;
-  size: string | null;
-  stock: number | null;
-  price: number | null;
-  sku: string | null;
-  color: string | null;
-  colorHex: string | null;
+  title: string;
+  price: number | string | null;
+  discount_price: number | string | null;
+  currency: string | null;
   image: string | null;
+  images: string[] | null;
+  is_active: boolean | null;
+  status: string | null;
 };
 
-async function resolveProductIds(supabase: any, productId: string) {
-  const ids = [productId];
+type CartItem = {
+  id: string;
+  quantity: number | null;
+};
 
-  const { data: userProduct } = await supabase
-    .from("user_products")
-    .select("base_product_id")
-    .eq("id", productId)
-    .maybeSingle();
+type SupabaseSingleResponse<T> = {
+  data: T | null;
+  error: { message: string } | null;
+};
 
-  if (userProduct?.base_product_id) ids.push(userProduct.base_product_id);
+type AddCartBody = {
+  productId?: unknown;
+  product_id?: unknown;
+  variantId?: unknown;
+  variant_id?: unknown;
+  quantity?: unknown;
+};
 
-  return Array.from(new Set(ids.filter(Boolean)));
+function parsePositiveQuantity(value: unknown): number {
+  const quantity = Number(value ?? 1);
+  return Number.isFinite(quantity) && quantity > 0 ? Math.max(1, Math.floor(quantity)) : 1;
 }
 
-async function getVariantById(supabase: any, variantId: string): Promise<ResolvedVariant | null> {
-  const { data: variant, error: variantError } = await supabase
-    .from("product_variants")
-    .select("id, size, stock, price, sku, product_color_id")
-    .eq("id", variantId)
-    .maybeSingle();
-
-  if (variantError || !variant) return null;
-
-  const { data: color } = await supabase
-    .from("product_colors")
-    .select("id, color, color_hex, image")
-    .eq("id", variant.product_color_id)
-    .maybeSingle();
-
-  return {
-    id: variant.id,
-    size: variant.size ?? null,
-    stock: variant.stock ?? null,
-    price: variant.price === null || variant.price === undefined ? null : Number(variant.price),
-    sku: variant.sku ?? null,
-    color: color?.color ?? null,
-    colorHex: color?.color_hex ?? null,
-    image: color?.image ?? null,
-  };
+function nullableString(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const parsed = String(value).trim();
+  return parsed ? parsed : null;
 }
 
-async function getDefaultVariant(supabase: any, productId: string): Promise<ResolvedVariant | null> {
-  const productIds = await resolveProductIds(supabase, productId);
-
-  const { data: colors, error: colorsError } = await supabase
-    .from("product_colors")
-    .select("id, color, color_hex, image, position")
-    .in("product_id", productIds)
-    .order("position", { ascending: true });
-
-  if (colorsError || !colors?.length) return null;
-
-  const colorIds = colors.map((item: any) => item.id).filter(Boolean);
-
-  const { data: variants, error: variantsError } = await supabase
-    .from("product_variants")
-    .select("id, size, stock, price, sku, product_color_id")
-    .in("product_color_id", colorIds)
-    .gt("stock", 0)
-    .order("size", { ascending: true });
-
-  if (variantsError || !variants?.length) return null;
-
-  const colorMap = new Map(colors.map((color: any) => [color.id, color]));
-  const selected = variants[0];
-  const color = colorMap.get(selected.product_color_id);
-
-  return {
-    id: selected.id,
-    size: selected.size ?? null,
-    stock: selected.stock ?? null,
-    price: selected.price === null || selected.price === undefined ? null : Number(selected.price),
-    sku: selected.sku ?? null,
-    color: color?.color ?? null,
-    colorHex: color?.color_hex ?? null,
-    image: color?.image ?? null,
-  };
+function getProductPrice(product: Product): number {
+  return Number(product.discount_price ?? product.price ?? 0);
 }
 
 export async function POST(req: Request) {
@@ -106,55 +62,55 @@ export async function POST(req: Request) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const productId = String(body.productId ?? body.product_id ?? "").trim();
-    const requestedVariantId = body.variantId ?? body.variant_id ? String(body.variantId ?? body.variant_id) : null;
-    const quantity = Math.max(1, Number(body.quantity ?? 1));
+    const body = (await req.json()) as AddCartBody;
+    const productId = nullableString(body.productId ?? body.product_id);
+    const requestedVariantId = nullableString(body.variantId ?? body.variant_id);
+    const quantity = parsePositiveQuantity(body.quantity);
 
-    if (!productId || !quantity) {
+    if (!productId) {
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const { data: product, error: productError } = await supabase
+    const { data: product, error: productError } = (await supabase
       .from("products")
       .select("id, title, price, discount_price, currency, image, images, is_active, status")
       .eq("id", productId)
       .eq("is_active", true)
       .eq("status", "active")
-      .maybeSingle();
+      .maybeSingle()) as SupabaseSingleResponse<Product>;
 
     if (productError || !product) {
       return Response.json({ error: "Product not found" }, { status: 404 });
     }
 
     const selectedVariant = requestedVariantId
-      ? await getVariantById(supabase, requestedVariantId)
-      : await getDefaultVariant(supabase, product.id);
+      ? await resolveVariantById(supabase, requestedVariantId)
+      : await getFirstAvailableVariant(supabase, product.id);
 
     if (!selectedVariant?.id) {
       return Response.json({ error: "No available variant found" }, { status: 400 });
     }
 
-    if (selectedVariant.stock !== null && selectedVariant.stock !== undefined && quantity > Number(selectedVariant.stock)) {
+    if (selectedVariant.stock !== null && quantity > selectedVariant.stock) {
       return Response.json({ error: "Not enough stock", stock: selectedVariant.stock }, { status: 400 });
     }
 
-    const basePrice = Number(product.discount_price ?? product.price);
+    const basePrice = getProductPrice(product);
     const finalPrice = Number(selectedVariant.price ?? basePrice);
 
-    if (!finalPrice || finalPrice <= 0) {
+    if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
       return Response.json({ error: "Invalid product price" }, { status: 400 });
     }
 
     const image = selectedVariant.image ?? product.image ?? product.images?.[0] ?? null;
 
-    const { data: existingItem, error: existingError } = await supabase
+    const { data: existingItem, error: existingError } = (await supabase
       .from("cart_items")
       .select("id, quantity")
       .eq("user_id", user.id)
       .eq("product_id", product.id)
       .eq("variant_id", selectedVariant.id)
-      .maybeSingle();
+      .maybeSingle()) as SupabaseSingleResponse<CartItem>;
 
     if (existingError) {
       return Response.json({ error: existingError.message }, { status: 500 });
@@ -174,7 +130,7 @@ export async function POST(req: Request) {
     if (existingItem) {
       const newQuantity = Number(existingItem.quantity ?? 0) + quantity;
 
-      if (selectedVariant.stock !== null && selectedVariant.stock !== undefined && newQuantity > Number(selectedVariant.stock)) {
+      if (selectedVariant.stock !== null && newQuantity > selectedVariant.stock) {
         return Response.json({ error: "Not enough stock", stock: selectedVariant.stock }, { status: 400 });
       }
 
@@ -203,7 +159,8 @@ export async function POST(req: Request) {
 
     if (error) return Response.json({ error: error.message }, { status: 500 });
     return Response.json({ success: true, data });
-  } catch (err: any) {
-    return Response.json({ error: "Server error", details: err?.message ?? "Unknown error" }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return Response.json({ error: "Server error", details: message }, { status: 500 });
   }
 }

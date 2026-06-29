@@ -32,9 +32,10 @@ export async function DELETE(req: Request) {
     }
 
     return Response.json({ success: true });
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(
-      { error: "Server error", details: err.message },
+      { error: "Server error", details: message },
       { status: 500 }
     );
   }
