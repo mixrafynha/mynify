@@ -165,7 +165,7 @@ export default function CheckoutPage() {
     setVariantMap((current) => {
       const next = { ...current };
       entries.forEach(([productId, variants]) => {
-        next[productId] = variants;
+        next[productId] = [...variants];
       });
       return next;
     });
