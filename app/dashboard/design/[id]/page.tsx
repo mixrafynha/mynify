@@ -38,12 +38,94 @@ type HistoryState = {
   backElements: ElementType[];
 };
 
+type EditorVariantSelection = {
+  variantId: string | null;
+  productColorId: string | null;
+  colorId: string | null;
+  size: string | null;
+  colorName: string | null;
+  colorHex: string | null;
+  sku: string | null;
+  price: string | null;
+  variantPrice: string | null;
+  image: string | null;
+  imageUrl: string | null;
+};
+
+type SearchParamReader = { get: (name: string) => string | null };
+
+function readSearchParam(params: SearchParamReader, keys: string[]) {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function buildVariantSelection(
+  params: SearchParamReader,
+): EditorVariantSelection | null {
+  const variantId = readSearchParam(params, [
+    "variantId",
+    "variant_id",
+    "selectedVariantId",
+  ]);
+  const productColorId = readSearchParam(params, [
+    "productColorId",
+    "product_color_id",
+    "colorId",
+    "color_id",
+  ]);
+  const size = readSearchParam(params, ["size", "variantSize"]);
+  const colorName = readSearchParam(params, [
+    "colorName",
+    "color",
+    "variantColor",
+  ]);
+  const colorHex = readSearchParam(params, ["colorHex", "hex", "mockupColor"]);
+  const sku = readSearchParam(params, ["sku", "variantSku"]);
+  const price = readSearchParam(params, ["variantPrice", "price"]);
+  const image = readSearchParam(params, ["variantImage", "image", "imageUrl"]);
+
+  if (
+    !variantId &&
+    !productColorId &&
+    !size &&
+    !colorName &&
+    !colorHex &&
+    !sku &&
+    !price &&
+    !image
+  ) {
+    return null;
+  }
+
+  return {
+    variantId,
+    productColorId,
+    colorId: productColorId,
+    size,
+    colorName,
+    colorHex,
+    sku,
+    price,
+    variantPrice: price,
+    image,
+    imageUrl: image,
+  };
+}
+
 export default function EditorPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const productId = searchParams.get("productId") || searchParams.get("baseProductId");
+  const productId =
+    searchParams.get("productId") || searchParams.get("baseProductId");
   const category = String(params?.id || "tshirt").toLowerCase();
+  const selectedVariant = useMemo(
+    () => buildVariantSelection(searchParams),
+    [searchParams],
+  );
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLDivElement>(null);
@@ -52,8 +134,9 @@ export default function EditorPage() {
   const pendingSaveAfterAuthRef = useRef(false);
 
   const editorStorageKey = useMemo(
-    () => `editor-design:${productId || category || "draft"}`,
-    [productId, category],
+    () =>
+      `editor-design:${productId || category || "draft"}:${selectedVariant?.variantId || "default"}`,
+    [productId, category, selectedVariant?.variantId],
   );
 
   const [side, setSide] = useState<Side>("front");
@@ -61,13 +144,23 @@ export default function EditorPage() {
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedElement, setSelectedElement] = useState<ElementType | null>(null);
+  const [selectedElement, setSelectedElement] = useState<ElementType | null>(
+    null,
+  );
 
   const [zoom, setZoom] = useState(1);
-  const [mockupColor, setMockupColor] = useState("#ffffff");
+  const [mockupColor, setMockupColor] = useState(
+    selectedVariant?.colorHex || "#ffffff",
+  );
 
   const [frontElements, setFrontElements] = useState<ElementType[]>([]);
   const [backElements, setBackElements] = useState<ElementType[]>([]);
+
+  useEffect(() => {
+    if (selectedVariant?.colorHex && !hasLoadedDraft.current) {
+      setMockupColor(selectedVariant.colorHex);
+    }
+  }, [selectedVariant?.colorHex]);
 
   useEffect(() => {
     const preventGesture = (event: Event) => {
@@ -83,11 +176,21 @@ export default function EditorPage() {
       if (target?.closest("[data-ryfio-editor-root]")) event.preventDefault();
     };
 
-    document.addEventListener("gesturestart", preventGesture, { passive: false } as AddEventListenerOptions);
-    document.addEventListener("gesturechange", preventGesture, { passive: false } as AddEventListenerOptions);
-    document.addEventListener("gestureend", preventGesture, { passive: false } as AddEventListenerOptions);
-    document.addEventListener("touchmove", preventMultiTouch, { passive: false });
-    document.addEventListener("dblclick", preventEditorDoubleTapZoom, { passive: false });
+    document.addEventListener("gesturestart", preventGesture, {
+      passive: false,
+    } as AddEventListenerOptions);
+    document.addEventListener("gesturechange", preventGesture, {
+      passive: false,
+    } as AddEventListenerOptions);
+    document.addEventListener("gestureend", preventGesture, {
+      passive: false,
+    } as AddEventListenerOptions);
+    document.addEventListener("touchmove", preventMultiTouch, {
+      passive: false,
+    });
+    document.addEventListener("dblclick", preventEditorDoubleTapZoom, {
+      passive: false,
+    });
 
     return () => {
       document.removeEventListener("gesturestart", preventGesture);
@@ -141,13 +244,22 @@ export default function EditorPage() {
           mockupColor,
           frontElements,
           backElements,
+          selectedVariant,
           updatedAt: Date.now(),
         }),
       );
-    } catch (error) {
-      console.warn("Could not save editor draft:", error);
+    } catch {
+      // Ignore storage failures so the editor remains usable.
     }
-  }, [editorStorageKey, side, zoom, mockupColor, frontElements, backElements]);
+  }, [
+    editorStorageKey,
+    side,
+    zoom,
+    mockupColor,
+    frontElements,
+    backElements,
+    selectedVariant,
+  ]);
 
   useEffect(() => {
     try {
@@ -195,7 +307,9 @@ export default function EditorPage() {
     const baseProductId = productId || category;
 
     if (!baseProductId) {
-      alert("Product missing. Open the editor from a product page before saving.");
+      alert(
+        "Product missing. Open the editor from a product page before saving.",
+      );
       return;
     }
 
@@ -213,6 +327,8 @@ export default function EditorPage() {
         backElements,
         mockupColor,
         color: mockupColor,
+        variantId: selectedVariant?.variantId || null,
+        selectedVariant,
       });
 
       const response = await fetch("/api/user-products/save-design", {
@@ -236,13 +352,16 @@ export default function EditorPage() {
       }
 
       sessionStorage.removeItem(editorStorageKey);
-      setSaveNotice("Design saved successfully. Redirecting you to checkout...");
+      setSaveNotice(
+        "Design saved successfully. Redirecting you to checkout...",
+      );
 
-      const checkoutUrl = data?.designId ? `/checkout?designId=${data.designId}` : "/checkout";
+      const checkoutUrl = data?.designId
+        ? `/checkout?designId=${data.designId}`
+        : "/checkout";
       router.push(checkoutUrl);
       return;
-    } catch (error) {
-      console.error("SAVE ERROR:", error);
+    } catch {
       alert("Error saving design");
     } finally {
       setSaving(false);
@@ -257,6 +376,7 @@ export default function EditorPage() {
     frontElements,
     backElements,
     mockupColor,
+    selectedVariant,
     editorStorageKey,
     router,
   ]);
@@ -272,55 +392,39 @@ export default function EditorPage() {
     }, 250);
   }, [handleSaveDesign]);
 
-const handlePreviewDesign = useCallback(async (): Promise<void> => {
-  try {
-    saveDraftToSession();
+  const handlePreviewDesign = useCallback(async (): Promise<void> => {
+    try {
+      saveDraftToSession();
 
-    if (!previewCanvasRef.current) {
-      console.error("PREVIEW CANVAS REF MISSING");
-      return;
-    }
+      if (!previewCanvasRef.current) {
+        return;
+      }
 
-    const exportNode =
-      previewCanvasRef.current.querySelector(
-        "#mockup-export-root"
+      const exportNode = previewCanvasRef.current.querySelector(
+        "#mockup-export-root",
       ) as HTMLElement | null;
 
-    if (!exportNode) {
-      console.error("MOCKUP EXPORT ROOT MISSING");
+      if (!exportNode) {
+        return;
+      }
+
+      const designImage = await captureProductionPreview(exportNode);
+
+      if (
+        typeof designImage !== "string" ||
+        !designImage.startsWith("data:image/")
+      ) {
+        return;
+      }
+
+      // Se precisares de usar a imagem, guarda-a num estado:
+      // setPreviewImage(designImage);
+
+      return;
+    } catch {
       return;
     }
-
-    console.log("EXPORT NODE", exportNode);
-
-    const designImage = await captureProductionPreview(exportNode);
-
-    console.log("REAL PREVIEW IMAGE", {
-      type: typeof designImage,
-      length: designImage?.length,
-      start:
-        typeof designImage === "string"
-          ? designImage.slice(0, 80)
-          : null,
-    });
-
-    if (
-      typeof designImage !== "string" ||
-      !designImage.startsWith("data:image/")
-    ) {
-      console.error("INVALID DESIGN IMAGE", designImage);
-      return;
-    }
-
-    // Se precisares de usar a imagem, guarda-a num estado:
-    // setPreviewImage(designImage);
-
-    return;
-  } catch (error) {
-    console.error("PREVIEW ERROR:", error);
-    return;
-  }
-}, [saveDraftToSession]);
+  }, [saveDraftToSession]);
   useEffect(() => {
     if (!hasLoadedDraft.current || isHistoryAction.current) return;
 
@@ -450,7 +554,6 @@ const handlePreviewDesign = useCallback(async (): Promise<void> => {
           {saveNotice}
         </div>
       )}
-
 
       {authPopupOpen && (
         <div className="fixed inset-0 z-[999]">

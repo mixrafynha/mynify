@@ -7,8 +7,15 @@ import type {
   PreviewElement,
   PreviewSideData,
 } from "../../preview/types/preview";
-import { buildProductionQualityReport, buildProductionRules } from "./productionValidation";
-import type { EditorSide, PreviewPayloadInput } from "../types";
+import {
+  buildProductionQualityReport,
+  buildProductionRules,
+} from "./productionValidation";
+import type {
+  EditorSide,
+  PreviewPayloadInput,
+  SelectedProductVariant,
+} from "../types";
 
 const PRODUCT_ALIASES: Record<string, string> = {
   "t-shirt": "tshirt",
@@ -51,6 +58,64 @@ type RawElement = Record<string, unknown> & {
   meta?: Record<string, unknown>;
 };
 
+function cleanString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function cleanPrice(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeSelectedVariant(
+  input: PreviewPayloadInput,
+): SelectedProductVariant | null {
+  const raw =
+    input.selectedVariant && typeof input.selectedVariant === "object"
+      ? input.selectedVariant
+      : null;
+
+  const variantId = cleanString(input.variantId) || cleanString(raw?.variantId);
+  const productColorId =
+    cleanString(raw?.productColorId) || cleanString(raw?.colorId);
+  const colorName = cleanString(raw?.colorName);
+  const colorHex = cleanString(raw?.colorHex);
+  const size = cleanString(raw?.size);
+  const sku = cleanString(raw?.sku);
+  const price = cleanPrice(raw?.variantPrice ?? raw?.price);
+  const image = cleanString(raw?.imageUrl) || cleanString(raw?.image);
+
+  if (
+    !variantId &&
+    !productColorId &&
+    !colorName &&
+    !colorHex &&
+    !size &&
+    !sku &&
+    price === null &&
+    !image
+  ) {
+    return null;
+  }
+
+  return {
+    variantId,
+    productColorId,
+    colorId: productColorId,
+    colorName,
+    colorHex,
+    size,
+    sku,
+    price,
+    variantPrice: price,
+    image,
+    imageUrl: image,
+  };
+}
+
 function normalizeCategory(value?: string) {
   const raw = String(value || "tshirt")
     .toLowerCase()
@@ -61,10 +126,12 @@ function normalizeCategory(value?: string) {
 }
 
 function elementsForSide(input: PreviewPayloadInput, side: DesignSide) {
-  const sideElements = side === "back" ? input.backElements : input.frontElements;
+  const sideElements =
+    side === "back" ? input.backElements : input.frontElements;
 
   if (Array.isArray(sideElements)) return sideElements;
-  if (input.side === side && Array.isArray(input.elements)) return input.elements;
+  if (input.side === side && Array.isArray(input.elements))
+    return input.elements;
 
   return [];
 }
@@ -205,11 +272,20 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   const category = normalizeCategory(input.category);
   const productId = input.productId || category;
   const currentSide: DesignSide = input.side === "back" ? "back" : "front";
+  const selectedVariant = normalizeSelectedVariant(input);
+  const selectedVariantId = selectedVariant?.variantId || null;
+  const selectedColor =
+    selectedVariant?.colorHex || input.color || input.mockupColor || "#ffffff";
 
   const frontRawElements = elementsForSide(input, "front");
   const backRawElements = elementsForSide(input, "back");
 
-  const frontSideData = makeSideData(input, category, "front", frontRawElements);
+  const frontSideData = makeSideData(
+    input,
+    category,
+    "front",
+    frontRawElements,
+  );
   const backSideData = makeSideData(input, category, "back", backRawElements);
   const currentSideData = currentSide === "back" ? backSideData : frontSideData;
 
@@ -231,7 +307,9 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
         ? await captureProductionDesign(backSideData, { preferDom: false })
         : null;
 
-  const currentMockupImage = await captureVisualMockupPreview(getVisibleMockupRoot());
+  const currentMockupImage = await captureVisualMockupPreview(
+    getVisibleMockupRoot(),
+  );
 
   const frontMockupImage =
     currentSide === "front" && hasDataImage(currentMockupImage)
@@ -263,17 +341,26 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   });
 
   const allIssues = [...frontQuality.issues, ...backQuality.issues];
-  const hasBlockedSide = frontQuality.status === "blocked" || backQuality.status === "blocked";
-  const hasReviewSide = frontQuality.status === "review" || backQuality.status === "review";
+  const hasBlockedSide =
+    frontQuality.status === "blocked" || backQuality.status === "blocked";
+  const hasReviewSide =
+    frontQuality.status === "review" || backQuality.status === "review";
 
   const designData = {
     schemaVersion: 3,
     productId,
     category,
-    variantId: null,
+    variantId: selectedVariantId,
+    selectedVariant,
+    productColorId:
+      selectedVariant?.productColorId || selectedVariant?.colorId || null,
+    size: selectedVariant?.size || null,
+    sku: selectedVariant?.sku || null,
+    variantPrice:
+      selectedVariant?.variantPrice ?? selectedVariant?.price ?? null,
     status: "draft",
-    color: input.color || input.mockupColor || "#ffffff",
-    mockupColor: input.mockupColor || input.color || "#ffffff",
+    color: selectedColor,
+    mockupColor: input.mockupColor || selectedColor,
     sides: {
       front: buildSideDatabaseData({
         side: "front",
@@ -316,12 +403,24 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
     baseProductId: productId,
     productId,
     category,
-    variantId: null,
+    variantId: selectedVariantId,
+    selectedVariant,
+    productColorId:
+      selectedVariant?.productColorId || selectedVariant?.colorId || null,
+    colorId:
+      selectedVariant?.colorId || selectedVariant?.productColorId || null,
+    size: selectedVariant?.size || null,
+    colorName: selectedVariant?.colorName || null,
+    colorHex: selectedVariant?.colorHex || null,
+    sku: selectedVariant?.sku || null,
+    variantPrice:
+      selectedVariant?.variantPrice ?? selectedVariant?.price ?? null,
+    variantImage: selectedVariant?.imageUrl || selectedVariant?.image || null,
     markup: 0,
     cartStatus: "in_cart",
     status: "draft",
-    color: input.color || input.mockupColor || "#ffffff",
-    mockupColor: input.mockupColor || input.color || "#ffffff",
+    color: selectedColor,
+    mockupColor: input.mockupColor || selectedColor,
 
     designFront: frontElements,
     designBack: backElements,

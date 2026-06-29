@@ -58,9 +58,29 @@ export async function middleware(req: NextRequest) {
     }
   );
 
+let user = null;
+
+try {
   const {
-    data: { user },
+    data: { user: authUser },
   } = await supabase.auth.getUser();
+
+  user = authUser;
+} catch (error: any) {
+  if (error?.code === "refresh_token_not_found") {
+    const cleanRes = NextResponse.redirect(new URL("/login", req.url));
+
+    req.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.includes("supabase") || cookie.name.includes("sb-")) {
+        cleanRes.cookies.delete(cookie.name);
+      }
+    });
+
+    return applySeoHeaders(cleanRes, pathname);
+  }
+
+  throw error;
+}
 
   const protectedRoutes = ["/dashboard", "/admin", "/settings", "/profile"];
 
