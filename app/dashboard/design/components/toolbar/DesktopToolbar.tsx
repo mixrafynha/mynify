@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import TemplatesPanel from "./panels/TemplatesPanel";
-import TextPanel from "./panels/TextPanel";
+import DesktopTextPanel from "./panels/DesktopTextPanel";
 import StickersPanel from "./panels/StickersPanel";
 import IconsPanel from "./panels/IconsPanel";
 import ImageTemplatesPanel from "./panels/ImageTemplatesPanel";
@@ -270,7 +270,7 @@ export default function DesktopToolbar({
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.13),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.08),transparent_30%),#0b0c17] px-3 py-4 [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,.8)_transparent] lg:px-5 lg:py-5">
                 {activePanel === "ai" && <AiPanel createElement={safeCreateElement} />}
                 {activePanel === "templates" && <TemplatesPanel createElement={safeCreateElement} />}
-                {activePanel === "text" && <TextPanel createElement={safeCreateElement} onAddText={safeOnAddText} />}
+                {activePanel === "text" && <DesktopTextPanel createElement={safeCreateElement} onAddText={safeOnAddText} />}
                 {activePanel === "stickers" && <StickersPanel createElement={safeCreateElement} />}
                 {activePanel === "icons" && <IconsPanel createElement={safeCreateElement} />}
                 {activePanel === "images" && <ImageTemplatesPanel createElement={safeCreateElement} />}

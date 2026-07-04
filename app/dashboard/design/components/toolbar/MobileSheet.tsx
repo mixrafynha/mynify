@@ -11,7 +11,7 @@ const PanelLoading = () => (
 );
 
 const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loading: PanelLoading });
-const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
+const MobileTextPanel = dynamic(() => import("./panels/MobileTextPanel"), { loading: PanelLoading });
 const UploadPanel = dynamic(() => import("./panels/UploadPanel"), { loading: PanelLoading });
 const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
 const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
@@ -20,7 +20,7 @@ const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), { loading:
 const AiPanel = dynamic(() => import("./panels/AiPanel"), { loading: PanelLoading });
 const LayersPanel = dynamic(() => import("./panels/LayersPanel"), { loading: PanelLoading });
 
-const TOOLBAR_HEIGHT = 58;
+const TOOLBAR_HEIGHT = 61;
 
 type SheetSize = "peek" | "mid" | "full";
 
@@ -158,7 +158,7 @@ function MobileSheet({
     }
 
     if (panel === "text") {
-      return <TextPanel createElement={createElement} onAddText={onAddText} />;
+      return <MobileTextPanel createElement={createElement} onAddText={onAddText} />;
     }
 
     if (panel === "upload") {
