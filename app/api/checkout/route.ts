@@ -58,7 +58,7 @@ if (!stripeSecretKey) {
 }
 
 const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2025-05-28.basil",
+  apiVersion: "2026-04-22.dahlia",
 });
 
 function parseMoney(value: unknown): number | null {
