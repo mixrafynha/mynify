@@ -5,7 +5,7 @@ import { MOCKUP_AREA } from "../constants";
 
 const DESKTOP_MARGIN = 0.92;
 const TABLET_MARGIN = 0.95;
-const MOBILE_MARGIN = 0.98;
+const MOBILE_MARGIN = 0.88;
 
 const MIN_SCALE = 0.08;
 const MAX_SCALE = 6;
@@ -41,6 +41,9 @@ export function useCanvasScale(
         const rect = wrapper.getBoundingClientRect();
 
         const mode = getViewportMode();
+        const visualViewport = typeof window !== "undefined" ? window.visualViewport : null;
+        const viewportHeight = visualViewport?.height || window.innerHeight || rect.height;
+        const stableMobileHeight = mode === "mobile" ? Math.min(rect.height, viewportHeight - 48 - 74) : rect.height;
 
         const margin =
           mode === "mobile"
@@ -56,7 +59,7 @@ export function useCanvasScale(
 
         const usableHeight = Math.max(
           1,
-          rect.height * margin
+          stableMobileHeight * margin
         );
 
         const fitWidth =
@@ -113,6 +116,12 @@ export function useCanvasScale(
       { passive: true }
     );
 
+    window.visualViewport?.addEventListener(
+      "resize",
+      updateScale,
+      { passive: true }
+    );
+
     return () => {
       observer.disconnect();
 
@@ -123,6 +132,11 @@ export function useCanvasScale(
 
       window.removeEventListener(
         "orientationchange",
+        updateScale
+      );
+
+      window.visualViewport?.removeEventListener(
+        "resize",
         updateScale
       );
 

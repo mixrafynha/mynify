@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 const FALLBACK_COLORS = [
   { name: "White", hex: "#ffffff" },
@@ -13,6 +13,10 @@ const FALLBACK_COLORS = [
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function isValidHexColor(value: unknown) {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || "").trim());
+}
+
 function normalizeColors(input: any): { name: string; hex: string }[] {
   const source = Array.isArray(input) ? input : [];
 
@@ -21,7 +25,7 @@ function normalizeColors(input: any): { name: string; hex: string }[] {
       name: String(color?.name || color?.label || color?.hex || "Color"),
       hex: String(color?.hex || color?.value || color?.color || "").trim(),
     }))
-    .filter((color) => /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(color.hex));
+    .filter((color) => isValidHexColor(color.hex));
 }
 
 export function useCanvasColors(
@@ -67,18 +71,18 @@ export function useCanvasColors(
     };
   }, [productId]);
 
-  const colorKeys = useMemo(
-    () => new Set(availableColors.map((color) => color.hex.toLowerCase())),
-    [availableColors]
-  );
 
   useEffect(() => {
     if (!availableColors.length) return;
 
-    if (!colorKeys.has(String(mockupColor).toLowerCase())) {
-      setMockupColor?.(availableColors[0].hex);
-    }
-  }, [availableColors, colorKeys, mockupColor, setMockupColor]);
+    // The selected product color is canonical for the editor preview.
+    // Do not overwrite a valid user/variant HEX just because it is missing
+    // from the current API/fallback palette; that was resetting blue/black/etc.
+    // back to the first fallback color, usually white.
+    if (isValidHexColor(mockupColor)) return;
+
+    setMockupColor?.(availableColors[0].hex);
+  }, [availableColors, mockupColor, setMockupColor]);
 
   return {
     showColors,

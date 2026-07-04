@@ -13,8 +13,8 @@ function clamp(value: number, min: number, max: number) {
 export function useCanvasPinch({
   zoom,
   onZoomChange,
-  minZoom = 0.35,
-  maxZoom = 3,
+  minZoom = 0.4,
+  maxZoom = 2,
 }: {
   zoom: number;
   onZoomChange: (zoom: number) => void;

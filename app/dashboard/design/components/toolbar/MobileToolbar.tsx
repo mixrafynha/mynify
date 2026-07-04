@@ -114,14 +114,20 @@ function MobileToolbar({
   }, []);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 md:hidden">
-      <div className="mx-auto max-w-[640px] px-2 pb-[max(0.35rem,env(safe-area-inset-bottom))]">
+    <div
+      className={`fixed inset-x-0 bottom-0 z-50 transition-[transform,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
+        open
+          ? "pointer-events-none translate-y-[110%] opacity-0"
+          : "translate-y-0 opacity-100"
+      }`}
+    >
+      <div className="mx-auto max-w-[640px] px-1.5 pb-[max(0.25rem,env(safe-area-inset-bottom))]">
         <div
           className="
-            relative overflow-hidden rounded-[22px]
-            bg-[#07111f]/94 text-white
-            shadow-[0_-8px_24px_rgba(0,0,0,0.28)]
-            ring-1 ring-white/10 backdrop-blur-md
+            relative overflow-hidden rounded-[16px]
+            bg-[#070817] text-white
+            shadow-[0_-10px_28px_rgba(0,0,0,0.34),0_0_22px_rgba(124,58,237,0.12)]
+            ring-1 ring-violet-300/15
           "
         >
           <div
@@ -132,14 +138,14 @@ function MobileToolbar({
             onPointerCancel={stopDrag}
             className="
               relative overflow-x-auto overscroll-x-contain
-              px-1.5 pt-1.5
+              px-1 pt-1
               [-webkit-overflow-scrolling:touch]
               [scrollbar-width:none]
               [&::-webkit-scrollbar]:hidden
               select-none touch-pan-x
             "
           >
-            <div className="flex min-w-max items-center gap-1 pb-1.5">
+            <div className="flex min-w-max items-center gap-0.5 pb-1">
               {tools.map((tool) => (
                 <ToolButton
                   key={tool.id}

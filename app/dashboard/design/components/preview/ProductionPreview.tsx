@@ -70,6 +70,10 @@ function ProductionPreview({
     Partial<Record<PreviewSide, string>>
   >({});
 
+  useEffect(() => {
+    setActiveSide(preview.activeSide);
+  }, [preview.activeSide]);
+
   const current = useMemo(
     () => (activeSide === "back" ? preview.back : preview.front),
     [activeSide, preview.back, preview.front],
@@ -97,8 +101,16 @@ function ProductionPreview({
       elements: current.elements || [],
       frontElements: input.frontElements || [],
       backElements: input.backElements || [],
-      printBox: input.printBox || current.printBox,
-      safeArea: input.safeArea || current.safeArea,
+      printBox: current.printBox,
+      safeArea: current.safeArea,
+      printBoxes: {
+        front: preview.front.printBox,
+        back: preview.back.printBox,
+      },
+      safeAreas: {
+        front: preview.front.safeArea,
+        back: preview.back.safeArea,
+      },
       mockupMode: input.mockupMode || "on_model_ai",
       modelMockup: input.modelMockup ?? true,
       poses: [
@@ -117,6 +129,10 @@ function ProductionPreview({
       preview.category,
       preview.mockupColor,
       preview.productId,
+      preview.front.printBox,
+      preview.back.printBox,
+      preview.front.safeArea,
+      preview.back.safeArea,
     ],
   );
 
@@ -214,7 +230,6 @@ function ProductionPreview({
       } catch (error: any) {
         generatedKeyBySideRef.current[activeSide] = undefined;
         disabledMockupKeyBySideRef.current[activeSide] = requestKey;
-        console.error("MOCKUP GENERATION ERROR:", error);
         setBackendError(
           error?.message ||
             "AI mockup generation failed. Showing clean product preview.",
@@ -242,9 +257,20 @@ function ProductionPreview({
     ],
   );
 
-  useEffect(() => {
-    generateMockup(false);
-  }, [activeSide, generateMockup]);
+  // Do not auto-generate/load remote mockups when switching sides.
+  // Each side preview is rendered deterministically from the active side state,
+  // like Gelato print areas: one side is mounted, rendered and captured at a time.
+  // The regenerate button still allows an explicit AI mockup request for the
+  // currently active side only.
+
+  const switchActiveSide = useCallback((value: PreviewSide) => {
+    if (value === activeSide) return;
+
+    setActiveSide(value);
+    setBackendError(null);
+    setProvider(null);
+    setGenerating(false);
+  }, [activeSide]);
 
   async function downloadPreview() {
     const root = captureRef.current?.querySelector(
@@ -274,7 +300,7 @@ function ProductionPreview({
               <button
                 key={value}
                 type="button"
-                onClick={() => setActiveSide(value)}
+                onClick={() => switchActiveSide(value)}
                 className={`flex h-9 min-w-[72px] items-center justify-center gap-1.5 rounded-full px-3 text-[11px] font-black uppercase tracking-[.08em] transition active:scale-95 ${
                   active
                     ? "bg-black text-white"
@@ -328,6 +354,7 @@ function ProductionPreview({
 
       <div ref={captureRef} className="min-h-0 flex-1 overflow-hidden">
         <PreviewMockup
+          key={`preview-${activeSide}-${preview.productId}-${preview.mockupColor}`}
           data={current}
           productId={preview.productId}
           color={preview.mockupColor}

@@ -19,9 +19,14 @@ interface SafeAreaLayerProps {
   children: React.ReactNode;
   onOutsideClick?: () => void;
   previewMode?: boolean;
+  side?: "front" | "back";
 }
 
-function toLocalPoint(e: PointerEvent | React.PointerEvent, rect: DOMRect, scale: number) {
+function toLocalPoint(
+  e: PointerEvent | React.PointerEvent,
+  rect: DOMRect,
+  scale: number,
+) {
   const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
   return {
     x: (e.clientX - rect.left) / safeScale,
@@ -42,6 +47,7 @@ export default function SafeAreaLayer({
   children,
   onOutsideClick,
   previewMode = false,
+  side = "front",
 }: SafeAreaLayerProps) {
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -111,7 +117,8 @@ export default function SafeAreaLayer({
         setSelectedIds(selected);
         setSelectedId(selected[selected.length - 1] || null);
         setSelectedElement(
-          elements.find((el: any) => el.id === selected[selected.length - 1]) || null
+          elements.find((el: any) => el.id === selected[selected.length - 1]) ||
+            null,
         );
         setSelectionBox(null);
 
@@ -135,13 +142,14 @@ export default function SafeAreaLayer({
       setSelectedIds,
       setSelectionBox,
       previewMode,
-    ]
+    ],
   );
 
   return (
     <>
       <div
         id="design-safe-area"
+        data-printable-capture-layer={side}
         data-logical-width={safeArea.width}
         data-logical-height={safeArea.height}
         className={`absolute z-20 overflow-hidden ${previewMode ? "pointer-events-none" : "pointer-events-auto"}`}
@@ -152,10 +160,16 @@ export default function SafeAreaLayer({
           width: `${(safeArea.width / MOCKUP_AREA.width) * 100}%`,
           height: `${(safeArea.height / MOCKUP_AREA.height) * 100}%`,
           touchAction: previewMode ? "auto" : "none",
+          clipPath: "inset(0)",
           contain: "layout paint size",
         }}
       >
-        {!previewMode && <CanvasGuides logicalWidth={safeArea.width} logicalHeight={safeArea.height} />}
+        {!previewMode && (
+          <CanvasGuides
+            logicalWidth={safeArea.width}
+            logicalHeight={safeArea.height}
+          />
+        )}
         {children}
         {!previewMode && selectionBox && <SelectionBox box={selectionBox} />}
       </div>

@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Search } from "lucide-react";
-import { TEMPLATE_CATEGORIES, TEMPLATES, loadEditorFont, type TemplatePreset } from "../data";
+import { useEffect, useMemo, useState } from "react";
+import { Crown, Search } from "lucide-react";
+import { TEMPLATE_CATEGORIES, TEMPLATES, loadEditorFont, loadVisibleEditorFonts, type TemplatePreset } from "../data";
 
 function addTemplate(createElement: ((element: any) => void) | undefined, template: TemplatePreset) {
-  loadEditorFont(template.fontFamily);
-  const width = Math.max(150, Math.round(template.text.length * template.fontSize * 0.54));
-  const height = Math.round(template.fontSize * 1.34);
+  void loadEditorFont(template.fontFamily);
+  const width = Math.max(150, Math.round(template.text.length * template.fontSize * 0.52));
+  const height = Math.round(template.fontSize * (template.text.includes(" ") ? 1.45 : 1.25));
+
   createElement?.({
     type: "text",
     text: template.text,
@@ -18,7 +19,19 @@ function addTemplate(createElement: ((element: any) => void) | undefined, templa
     fontSize: template.fontSize,
     fontWeight: template.fontWeight,
     color: template.color,
-    meta: { fontFamily: template.fontFamily, color: template.color, fontSize: template.fontSize, fontWeight: template.fontWeight, letterSpacing: template.letterSpacing ?? 0, opacity: 1, rotation: 0, textAlign: "center", textShape: "straight", template: template.label },
+    meta: {
+      fontFamily: template.fontFamily,
+      color: template.color,
+      fontSize: template.fontSize,
+      fontWeight: template.fontWeight,
+      letterSpacing: template.letterSpacing ?? 0,
+      lineHeight: template.lineHeight ?? 0.92,
+      opacity: 1,
+      rotation: 0,
+      textAlign: "center",
+      textShape: "straight",
+      template: template.label,
+    },
   });
 }
 
@@ -31,45 +44,102 @@ export default function TemplatesPanel({ createElement }: { createElement?: (ele
     const term = query.trim().toLowerCase();
     return TEMPLATES.filter((item) => {
       const categoryMatch = category === "all" || item.category === category;
-      const queryMatch = !term || `${item.label} ${item.text} ${item.category}`.toLowerCase().includes(term);
+      const queryMatch = !term || `${item.label} ${item.text} ${item.category} ${item.subtitle ?? ""}`.toLowerCase().includes(term);
       return categoryMatch && queryMatch;
     });
   }, [category, query]);
 
-  const visible = items.slice(0, page * 36);
+  const visible = items.slice(0, page * 30);
+
+  useEffect(() => {
+    void loadVisibleEditorFonts(Array.from(new Set(visible.map((template) => template.fontFamily))), 18);
+  }, [visible]);
 
   return (
-    <div className="space-y-4 pb-6 text-white">
-      <label className="flex h-11 items-center gap-2 rounded-[24px] bg-white/[0.055] ring-1 ring-white/10 px-3 text-slate-400">
-        <Search size={15} />
-        <input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search templates" className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-600" />
+    <div className="space-y-2 pb-3 text-white">
+      <label className="group flex h-8 items-center gap-2 rounded-xl border border-violet-300/18 bg-white/[0.045] px-2.5 text-white/55 shadow-[inset_0_1px_0_rgba(255,255,255,.045)] transition focus-within:border-fuchsia-400/45 focus-within:bg-white/[0.07] focus-within:shadow-[0_0_0_2px_rgba(168,85,247,.12)]">
+        <Search size={14} className="shrink-0 text-violet-200/70 transition group-focus-within:text-fuchsia-200" />
+        <input
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Search templates"
+          className="min-w-0 flex-1 bg-transparent text-[12px] font-bold text-white outline-none placeholder:text-white/38"
+        />
       </label>
 
-      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {["all", ...TEMPLATE_CATEGORIES].map((item) => (
-          <button key={item} type="button" onClick={() => { setCategory(item); setPage(1); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black capitalize transition active:scale-95 ${category === item ? "bg-violet-400 text-slate-950 shadow-[0_10px_26px_rgba(168,85,247,0.18)]" : "bg-white/[0.055] text-slate-400 ring-1 ring-white/10 hover:bg-white/[0.09]"}`}>
-            {item}
-          </button>
-        ))}
+      <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {["all", ...TEMPLATE_CATEGORIES].map((item) => {
+          const active = category === item;
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => {
+                setCategory(item);
+                setPage(1);
+              }}
+              className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-black capitalize transition active:scale-95 ${
+                active
+                  ? "border-fuchsia-300/55 bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white shadow-[0_0_22px_rgba(168,85,247,.35)]"
+                  : "border-white/12 bg-white/[0.04] text-violet-100/78 hover:border-violet-300/35 hover:bg-white/[0.07]"
+              }`}
+            >
+              {item}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((template) => (
-          <button key={template.id} type="button" onClick={() => addTemplate(createElement, template)} className="group relative h-[124px] overflow-hidden rounded-[28px] p-3 text-left shadow-[0_18px_42px_rgba(0,0,0,0.22)] ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:ring-white/30 active:scale-[0.98]" style={{ background: template.background }}>
-            <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-white/18 blur-2xl" />
+          <button
+            key={template.id}
+            type="button"
+            onClick={() => addTemplate(createElement, template)}
+            className="group relative h-[136px] overflow-hidden rounded-[1.35rem] border border-white/10 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,.06)] transition will-change-transform hover:-translate-y-0.5 hover:border-violet-300/35 hover:shadow-[0_16px_36px_rgba(0,0,0,.32),0_0_26px_rgba(139,92,246,.12)] active:scale-[0.985]"
+            style={{ background: template.background }}
+          >
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,.08),transparent_36%,rgba(255,255,255,.025)_72%,transparent)] opacity-70" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/58 to-transparent" />
             <div className="relative flex h-full flex-col justify-between">
-              {template.tag && <span className="w-fit rounded-full bg-black/30 px-2 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur">{template.tag}</span>}
+              <div className="flex items-start justify-between gap-2">
+                {template.tag && (
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-white shadow-sm"
+                    style={{ backgroundColor: `${template.accent}4D`, borderColor: `${template.accent}80` }}
+                  >
+                    {template.tag}
+                  </span>
+                )}
+                {(template.tag === "PRO" || template.tag === "PREMIUM") && <Crown size={13} className="text-amber-300 drop-shadow" />}
+              </div>
+
               <div>
-                <p className="whitespace-pre-line text-xl font-black leading-[0.88] tracking-[-0.05em] text-white drop-shadow" style={{ fontFamily: template.fontFamily }}>{template.preview}</p>
-                <p className="mt-2 truncate text-[10px] font-black uppercase tracking-[0.14em] text-white/70">{template.label}</p>
+                <p
+                  className="whitespace-pre-line text-[1.72rem] font-black uppercase leading-[0.84] tracking-[-0.055em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.55)]"
+                  style={{ fontFamily: template.fontFamily, color: template.color, letterSpacing: template.letterSpacing ?? undefined }}
+                >
+                  {template.preview}
+                </p>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <p className="min-w-0 truncate text-[10px] font-extrabold text-white/68">{template.subtitle ?? template.label}</p>
+                  <span className="h-1.5 w-8 shrink-0 rounded-full" style={{ backgroundColor: template.accent }} />
+                </div>
               </div>
             </div>
           </button>
         ))}
       </div>
 
-      {visible.length < items.length && <button type="button" onClick={() => setPage((value) => value + 1)} className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] text-sm font-black text-white">Load more</button>}
-      {!items.length && <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-center text-sm font-bold text-slate-400">No templates found.</div>}
+      {visible.length < items.length && (
+        <button type="button" onClick={() => setPage((value) => value + 1)} className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]">
+          Load more
+        </button>
+      )}
+      {!items.length && <div className="rounded-2xl border border-white/10 bg-white/[0.055] p-5 text-center text-sm font-bold text-white/55">No templates found.</div>}
     </div>
   );
 }

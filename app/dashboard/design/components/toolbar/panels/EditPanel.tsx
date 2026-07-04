@@ -16,6 +16,8 @@ import {
   Type,
   Square,
 } from "lucide-react";
+import { getEditorFontFamily, loadEditorFont } from "../data";
+import { useEffect } from "react";
 
 type EditPanelProps = {
   selected: any;
@@ -30,6 +32,13 @@ export default function EditPanel({
   updateSelected,
   deleteSelected,
 }: EditPanelProps) {
+  const selectedMeta = selected?.meta ?? {};
+  const selectedIsText = selected?.type === "text";
+
+  useEffect(() => {
+    if (selectedIsText) void loadEditorFont(selectedMeta.fontFamily ?? "Inter");
+  }, [selectedIsText, selectedMeta.fontFamily]);
+
   if (!selected) {
     return (
       <div className="rounded-[26px] border border-white/10 bg-[#0b1120] p-5 text-center text-sm font-semibold text-slate-400">
@@ -38,7 +47,7 @@ export default function EditPanel({
     );
   }
 
-  const meta = selected.meta ?? {};
+  const meta = selectedMeta;
 
   const isText = selected.type === "text";
   const isImage = selected.type === "image";
@@ -50,6 +59,7 @@ export default function EditPanel({
   const fontSize = meta.fontSize ?? 40;
   const rotation = meta.rotation ?? 0;
   const opacity = meta.opacity ?? 1;
+
   const flipX = !!meta.flipX;
   const flipY = !!meta.flipY;
   const locked = !!meta.lock;
@@ -138,8 +148,9 @@ export default function EditPanel({
             <span
               className="max-w-full break-words text-center font-black"
               style={{
-                fontFamily: meta.fontFamily,
+                fontFamily: getEditorFontFamily(meta.fontFamily),
                 fontSize: Math.min(fontSize, 38),
+                fontWeight: 900,
                 color: meta.color ?? "#fff",
                 opacity,
                 letterSpacing: meta.letterSpacing ?? 0,

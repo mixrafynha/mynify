@@ -34,6 +34,7 @@ function TopBar({
   frontElements,
   backElements,
   mockupColor = "#ffffff",
+  productConfig = null,
 }: TopBarProps) {
   const [confirmSave, setConfirmSave] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -59,6 +60,7 @@ function TopBar({
       color: mockupColor,
       mockupMode: "on_model_ai",
       modelMockup: true,
+      productConfig,
     }),
     [
       productId,
@@ -68,6 +70,7 @@ function TopBar({
       frontElements,
       backElements,
       mockupColor,
+      productConfig,
     ],
   );
 
@@ -79,14 +82,16 @@ function TopBar({
     try {
       setPreviewing(true);
 
-      await onPreviewDesign?.();
+      // The drawer receives the generated payload directly in memory. Keep the
+      // legacy callback non-blocking so a failed full-mockup capture cannot stop
+      // the production preview from opening.
+      void onPreviewDesign?.();
 
       const payload = await storePreviewPayload(previewPayload);
 
       setDrawerInput((payload || previewPayload) as PreviewPayloadInput);
       setPreviewOpen(true);
-    } catch (error) {
-      console.error("Preview failed:", error);
+    } catch {
       alert("Error opening preview.");
     } finally {
       setPreviewing(false);
@@ -103,18 +108,17 @@ function TopBar({
     try {
       setConfirmSave(false);
       await onSaveDesign();
-    } catch (error) {
-      console.error("Save failed:", error);
+    } catch {
       alert("Error saving design.");
     }
   }, [onSaveDesign, saving]);
 
   return (
     <>
-      <header className="sticky top-0 z-50 w-full border-b border-white/[0.07] bg-[#05050d]/92 text-white shadow-[0_8px_24px_rgba(0,0,0,.28)] backdrop-blur-2xl supports-[backdrop-filter]:bg-[#05050d]/78">
+      <header className="sticky top-0 z-50 h-12 w-full shrink-0 overflow-hidden border-b border-white/[0.07] bg-[#05050d]/92 text-white shadow-[0_8px_24px_rgba(0,0,0,.28)] backdrop-blur-2xl supports-[backdrop-filter]:bg-[#05050d]/78">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/45 to-transparent" />
 
-        <div className="relative mx-auto flex h-11 w-full max-w-[1800px] items-center gap-1.5 px-1.5 sm:h-12 sm:gap-2 sm:px-3 lg:px-5">
+        <div className="relative mx-auto flex h-full w-full max-w-[1800px] items-center gap-1.5 overflow-hidden px-1.5 sm:gap-2 sm:px-3 lg:px-5">
           <BrandSection />
 
           <SideSwitcher side={side} setSide={setSide} disabled={isBusy} />

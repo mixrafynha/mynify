@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import ConsoleGuard from "./components/ConsoleGuard";
+
 import {
   Anton,
   Bebas_Neue,
@@ -10,6 +12,7 @@ import {
   DM_Serif_Display,
   Space_Grotesk,
   Rubik_Mono_One,
+  Black_Ops_One,
 } from "next/font/google";
 
 const anton = Anton({
@@ -77,6 +80,12 @@ const rubikMono =
       "--font-rubik-mono",
   });
 
+const blackOps = Black_Ops_One({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-black-ops",
+});
+
 export default function DesignLayout({
   children,
 }: {
@@ -94,8 +103,10 @@ export default function DesignLayout({
         ${dmSerif.variable}
         ${spaceGrotesk.variable}
         ${rubikMono.variable}
+        ${blackOps.variable}
       `}
     >
+      <ConsoleGuard />
       {children}
     </section>
   );

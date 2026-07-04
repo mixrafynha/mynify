@@ -8,12 +8,19 @@ export function useCanvasStorage({
   setElements,
   safeArea,
   centerElementInSafeArea,
+  enabled = true,
 }: any) {
   const initializedRef = useRef(false);
   const knownIdsRef = useRef<Set<string>>(new Set());
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    if (!enabled) {
+      initializedRef.current = false;
+      knownIdsRef.current = new Set((Array.isArray(elements) ? elements : []).map((el: any) => el.id));
+      return;
+    }
+
     try {
       const saved = sessionStorage.getItem(storageKey);
       if (saved) {
@@ -31,10 +38,10 @@ export function useCanvasStorage({
       initializedRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageKey]);
+  }, [storageKey, enabled]);
 
   useEffect(() => {
-    if (!initializedRef.current || !Array.isArray(elements)) return;
+    if (!enabled || !initializedRef.current || !Array.isArray(elements)) return;
 
     const hasNew = elements.some((el: any) => !knownIdsRef.current.has(el.id));
     if (!hasNew) return;
@@ -62,10 +69,10 @@ export function useCanvasStorage({
         }),
       { record: false }
     );
-  }, [centerElementInSafeArea, elements, safeArea, setElements]);
+  }, [centerElementInSafeArea, elements, safeArea, setElements, enabled]);
 
   useEffect(() => {
-    if (!initializedRef.current) return;
+    if (!enabled || !initializedRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
 
     saveTimerRef.current = setTimeout(() => {
@@ -77,5 +84,5 @@ export function useCanvasStorage({
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [storageKey, elements]);
+  }, [storageKey, elements, enabled]);
 }

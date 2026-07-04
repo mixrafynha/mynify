@@ -44,20 +44,20 @@ export default function MobilePanelShell({
   if (!open) return null;
 
   return (
-    <section className="fixed inset-x-0 bottom-0 z-[90] mx-auto w-full max-w-md rounded-t-xl border border-slate-200 bg-white text-slate-950 md:static md:max-w-none md:rounded-xl" style={style}>
+    <section className="fixed inset-x-0 bottom-0 z-[90] mx-auto w-full max-w-md rounded-t-2xl border border-violet-300/15 bg-[#070817] text-white shadow-[0_-12px_34px_rgba(0,0,0,0.34)] md:static md:max-w-none md:rounded-xl" style={style}>
       <div
-        className="flex h-7 touch-none items-center justify-center border-b border-slate-100"
+        className="flex h-7 touch-none items-center justify-center border-b border-violet-300/15"
         onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); startDrag(event.clientY); }}
         onPointerMove={(event) => { if (event.buttons) moveDrag(event.clientY); }}
       >
-        <span className="h-1 w-9 rounded-full bg-slate-300" />
+        <span className="h-1 w-9 rounded-full bg-violet-300/45" />
         <span className="sr-only">Drag panel</span>
       </div>
-      <header className="flex h-8 items-center justify-between border-b border-slate-100 px-2.5">
+      <header className="flex h-8 items-center justify-between border-b border-violet-300/15 px-3">
         <p className="truncate text-xs font-black">{title}</p>
-        {onClose && <button type="button" onClick={onClose} className="h-7 rounded-lg px-2 text-xs font-black text-slate-500">Close</button>}
+        {onClose && <button type="button" onClick={onClose} className="h-7 rounded-lg bg-violet-500/12 px-2 text-xs font-black text-violet-100 ring-1 ring-violet-300/20">Close</button>}
       </header>
-      <div className="h-[calc(100%-3.75rem)] overflow-y-auto px-2 py-2 [content-visibility:auto] [contain-intrinsic-size:320px]">
+      <div className="h-[calc(100%-3.75rem)] overflow-y-auto px-3 py-2 [content-visibility:auto] [contain-intrinsic-size:320px]">
         {children}
       </div>
     </section>

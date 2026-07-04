@@ -1,3524 +1,237 @@
 export type FontCategory = "sans" | "serif" | "display" | "handwritten" | "luxury" | "sporty" | "streetwear" | "kids" | "minimalist" | "retro";
 
-export type FontItem = { id: string; family: string; category: FontCategory; preview: string; google?: string; premium?: boolean; };
+export type FontItem = {
+  id: string;
+  family: string;
+  category: FontCategory;
+  preview: string;
+  previewSvg?: string;
+  google?: string;
+  premium?: boolean;
+};
 
-export const FONT_CATEGORIES: FontCategory[] = ["sans","serif","display","handwritten","luxury","sporty","streetwear","kids","minimalist","retro"];
+export const FONT_CATEGORIES: FontCategory[] = ["minimalist", "sans", "luxury", "serif", "display", "sporty", "handwritten", "streetwear", "retro", "kids"];
+
+const PREMIUM_PREVIEW = "RYFIO";
 
 export const FONT_ITEMS: FontItem[] = [
-  {
-    "id": "inter",
-    "family": "Inter",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Inter"
-  },
-  {
-    "id": "roboto",
-    "family": "Roboto",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Roboto"
-  },
-  {
-    "id": "open-sans",
-    "family": "Open Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Open+Sans"
-  },
-  {
-    "id": "lato",
-    "family": "Lato",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lato"
-  },
-  {
-    "id": "montserrat",
-    "family": "Montserrat",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Montserrat"
-  },
-  {
-    "id": "poppins",
-    "family": "Poppins",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Poppins"
-  },
-  {
-    "id": "source-sans-3",
-    "family": "Source Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Source+Sans+3"
-  },
-  {
-    "id": "noto-sans",
-    "family": "Noto Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Noto+Sans"
-  },
-  {
-    "id": "nunito",
-    "family": "Nunito",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Nunito"
-  },
-  {
-    "id": "raleway",
-    "family": "Raleway",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Raleway"
-  },
-  {
-    "id": "ubuntu",
-    "family": "Ubuntu",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Ubuntu"
-  },
-  {
-    "id": "rubik",
-    "family": "Rubik",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Rubik"
-  },
-  {
-    "id": "work-sans",
-    "family": "Work Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Work+Sans"
-  },
-  {
-    "id": "dm-sans",
-    "family": "DM Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "DM+Sans"
-  },
-  {
-    "id": "manrope",
-    "family": "Manrope",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Manrope"
-  },
-  {
-    "id": "urbanist",
-    "family": "Urbanist",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Urbanist"
-  },
-  {
-    "id": "plus-jakarta-sans",
-    "family": "Plus Jakarta Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Plus+Jakarta+Sans"
-  },
-  {
-    "id": "sora",
-    "family": "Sora",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Sora"
-  },
-  {
-    "id": "public-sans",
-    "family": "Public Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Public+Sans"
-  },
-  {
-    "id": "mulish",
-    "family": "Mulish",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Mulish"
-  },
-  {
-    "id": "assistant",
-    "family": "Assistant",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Assistant"
-  },
-  {
-    "id": "heebo",
-    "family": "Heebo",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Heebo"
-  },
-  {
-    "id": "cabin",
-    "family": "Cabin",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Cabin"
-  },
-  {
-    "id": "kanit",
-    "family": "Kanit",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Kanit"
-  },
-  {
-    "id": "prompt",
-    "family": "Prompt",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Prompt"
-  },
-  {
-    "id": "josefin-sans",
-    "family": "Josefin Sans",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Josefin+Sans"
-  },
-  {
-    "id": "quicksand",
-    "family": "Quicksand",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Quicksand"
-  },
-  {
-    "id": "outfit",
-    "family": "Outfit",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Outfit"
-  },
-  {
-    "id": "archivo",
-    "family": "Archivo",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Archivo"
-  },
-  {
-    "id": "barlow",
-    "family": "Barlow",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Barlow"
-  },
-  {
-    "id": "maven-pro",
-    "family": "Maven Pro",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Maven+Pro"
-  },
-  {
-    "id": "hind",
-    "family": "Hind",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Hind"
-  },
-  {
-    "id": "karla",
-    "family": "Karla",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Karla"
-  },
-  {
-    "id": "lexend",
-    "family": "Lexend",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lexend"
-  },
-  {
-    "id": "figtree",
-    "family": "Figtree",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Figtree"
-  },
-  {
-    "id": "onest",
-    "family": "Onest",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Onest"
-  },
-  {
-    "id": "geist",
-    "family": "Geist",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Geist"
-  },
-  {
-    "id": "avenir",
-    "family": "Avenir",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Avenir"
-  },
-  {
-    "id": "futura",
-    "family": "Futura",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Futura"
-  },
-  {
-    "id": "helvetica",
-    "family": "Helvetica",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Helvetica"
-  },
-  {
-    "id": "verdana",
-    "family": "Verdana",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Verdana"
-  },
-  {
-    "id": "tahoma",
-    "family": "Tahoma",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Tahoma"
-  },
-  {
-    "id": "trebuchet-ms",
-    "family": "Trebuchet MS",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Trebuchet+MS"
-  },
-  {
-    "id": "merriweather",
-    "family": "Merriweather",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Merriweather"
-  },
-  {
-    "id": "playfair-display",
-    "family": "Playfair Display",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Playfair+Display"
-  },
-  {
-    "id": "cormorant-garamond",
-    "family": "Cormorant Garamond",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cormorant+Garamond"
-  },
-  {
-    "id": "libre-baskerville",
-    "family": "Libre Baskerville",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Libre+Baskerville"
-  },
-  {
-    "id": "lora",
-    "family": "Lora",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Lora"
-  },
-  {
-    "id": "crimson-text",
-    "family": "Crimson Text",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Crimson+Text"
-  },
-  {
-    "id": "eb-garamond",
-    "family": "EB Garamond",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "EB+Garamond"
-  },
-  {
-    "id": "source-serif-4",
-    "family": "Source Serif 4",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Source+Serif+4"
-  },
-  {
-    "id": "noto-serif",
-    "family": "Noto Serif",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Noto+Serif"
-  },
-  {
-    "id": "pt-serif",
-    "family": "PT Serif",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "PT+Serif"
-  },
-  {
-    "id": "dm-serif-display",
-    "family": "DM Serif Display",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "DM+Serif+Display"
-  },
-  {
-    "id": "prata",
-    "family": "Prata",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Prata"
-  },
-  {
-    "id": "cinzel",
-    "family": "Cinzel",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cinzel"
-  },
-  {
-    "id": "bodoni-moda",
-    "family": "Bodoni Moda",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Bodoni+Moda"
-  },
-  {
-    "id": "cardo",
-    "family": "Cardo",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cardo"
-  },
-  {
-    "id": "fraunces",
-    "family": "Fraunces",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Fraunces"
-  },
-  {
-    "id": "spectral",
-    "family": "Spectral",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Spectral"
-  },
-  {
-    "id": "vollkorn",
-    "family": "Vollkorn",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Vollkorn"
-  },
-  {
-    "id": "alegreya",
-    "family": "Alegreya",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Alegreya"
-  },
-  {
-    "id": "arvo",
-    "family": "Arvo",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Arvo"
-  },
-  {
-    "id": "zilla-slab",
-    "family": "Zilla Slab",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Zilla+Slab"
-  },
-  {
-    "id": "roboto-slab",
-    "family": "Roboto Slab",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Roboto+Slab"
-  },
-  {
-    "id": "bitter",
-    "family": "Bitter",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Bitter"
-  },
-  {
-    "id": "domine",
-    "family": "Domine",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Domine"
-  },
-  {
-    "id": "newsreader",
-    "family": "Newsreader",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Newsreader"
-  },
-  {
-    "id": "abril-fatface",
-    "family": "Abril Fatface",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Abril+Fatface"
-  },
-  {
-    "id": "yeseva-one",
-    "family": "Yeseva One",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Yeseva+One"
-  },
-  {
-    "id": "italiana",
-    "family": "Italiana",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Italiana"
-  },
-  {
-    "id": "marcellus",
-    "family": "Marcellus",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Marcellus"
-  },
-  {
-    "id": "gloock",
-    "family": "Gloock",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Gloock"
-  },
-  {
-    "id": "bebas-neue",
-    "family": "Bebas Neue",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bebas+Neue"
-  },
-  {
-    "id": "anton",
-    "family": "Anton",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Anton"
-  },
-  {
-    "id": "oswald",
-    "family": "Oswald",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Oswald"
-  },
-  {
-    "id": "impact",
-    "family": "Impact",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Impact"
-  },
-  {
-    "id": "archivo-black",
-    "family": "Archivo Black",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Archivo+Black"
-  },
-  {
-    "id": "league-spartan",
-    "family": "League Spartan",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "League+Spartan"
-  },
-  {
-    "id": "barlow-condensed",
-    "family": "Barlow Condensed",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Barlow+Condensed"
-  },
-  {
-    "id": "teko",
-    "family": "Teko",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Teko"
-  },
-  {
-    "id": "fjalla-one",
-    "family": "Fjalla One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Fjalla+One"
-  },
-  {
-    "id": "alfa-slab-one",
-    "family": "Alfa Slab One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Alfa+Slab+One"
-  },
-  {
-    "id": "black-ops-one",
-    "family": "Black Ops One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Black+Ops+One"
-  },
-  {
-    "id": "bungee",
-    "family": "Bungee",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bungee"
-  },
-  {
-    "id": "bungee-shade",
-    "family": "Bungee Shade",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bungee+Shade"
-  },
-  {
-    "id": "righteous",
-    "family": "Righteous",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Righteous"
-  },
-  {
-    "id": "monoton",
-    "family": "Monoton",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Monoton"
-  },
-  {
-    "id": "press-start-2p",
-    "family": "Press Start 2P",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Press+Start+2P"
-  },
-  {
-    "id": "luckiest-guy",
-    "family": "Luckiest Guy",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Luckiest+Guy"
-  },
-  {
-    "id": "fredoka",
-    "family": "Fredoka",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Fredoka"
-  },
-  {
-    "id": "baloo-2",
-    "family": "Baloo 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Baloo+2"
-  },
-  {
-    "id": "titan-one",
-    "family": "Titan One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Titan+One"
-  },
-  {
-    "id": "lilita-one",
-    "family": "Lilita One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Lilita+One"
-  },
-  {
-    "id": "changa-one",
-    "family": "Changa One",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Changa+One"
-  },
-  {
-    "id": "bowlby-one-sc",
-    "family": "Bowlby One SC",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bowlby+One+SC"
-  },
-  {
-    "id": "graduate",
-    "family": "Graduate",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Graduate"
-  },
-  {
-    "id": "staatliches",
-    "family": "Staatliches",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Staatliches"
-  },
-  {
-    "id": "syncopate",
-    "family": "Syncopate",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Syncopate"
-  },
-  {
-    "id": "major-mono-display",
-    "family": "Major Mono Display",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Major+Mono+Display"
-  },
-  {
-    "id": "pacifico",
-    "family": "Pacifico",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Pacifico"
-  },
-  {
-    "id": "lobster",
-    "family": "Lobster",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Lobster"
-  },
-  {
-    "id": "dancing-script",
-    "family": "Dancing Script",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Dancing+Script"
-  },
-  {
-    "id": "great-vibes",
-    "family": "Great Vibes",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Great+Vibes"
-  },
-  {
-    "id": "satisfy",
-    "family": "Satisfy",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Satisfy"
-  },
-  {
-    "id": "sacramento",
-    "family": "Sacramento",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Sacramento"
-  },
-  {
-    "id": "parisienne",
-    "family": "Parisienne",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Parisienne"
-  },
-  {
-    "id": "kaushan-script",
-    "family": "Kaushan Script",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Kaushan+Script"
-  },
-  {
-    "id": "yellowtail",
-    "family": "Yellowtail",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Yellowtail"
-  },
-  {
-    "id": "courgette",
-    "family": "Courgette",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Courgette"
-  },
-  {
-    "id": "amatic-sc",
-    "family": "Amatic SC",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Amatic+SC"
-  },
-  {
-    "id": "caveat",
-    "family": "Caveat",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Caveat"
-  },
-  {
-    "id": "indie-flower",
-    "family": "Indie Flower",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Indie+Flower"
-  },
-  {
-    "id": "shadows-into-light",
-    "family": "Shadows Into Light",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Shadows+Into+Light"
-  },
-  {
-    "id": "permanent-marker",
-    "family": "Permanent Marker",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Permanent+Marker"
-  },
-  {
-    "id": "patrick-hand",
-    "family": "Patrick Hand",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Patrick+Hand"
-  },
-  {
-    "id": "kalam",
-    "family": "Kalam",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Kalam"
-  },
-  {
-    "id": "gloria-hallelujah",
-    "family": "Gloria Hallelujah",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Gloria+Hallelujah"
-  },
-  {
-    "id": "gochi-hand",
-    "family": "Gochi Hand",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Gochi+Hand"
-  },
-  {
-    "id": "just-another-hand",
-    "family": "Just Another Hand",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Just+Another+Hand"
-  },
-  {
-    "id": "reenie-beanie",
-    "family": "Reenie Beanie",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Reenie+Beanie"
-  },
-  {
-    "id": "homemade-apple",
-    "family": "Homemade Apple",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Homemade+Apple"
-  },
-  {
-    "id": "rock-salt",
-    "family": "Rock Salt",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Rock+Salt"
-  },
-  {
-    "id": "architects-daughter",
-    "family": "Architects Daughter",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Architects+Daughter"
-  },
-  {
-    "id": "cinzel",
-    "family": "Cinzel",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cinzel"
-  },
-  {
-    "id": "cormorant-sc",
-    "family": "Cormorant SC",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cormorant+SC"
-  },
-  {
-    "id": "bodoni-72",
-    "family": "Bodoni 72",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Bodoni+72"
-  },
-  {
-    "id": "didot",
-    "family": "Didot",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Didot"
-  },
-  {
-    "id": "garamond",
-    "family": "Garamond",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Garamond"
-  },
-  {
-    "id": "optima",
-    "family": "Optima",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Optima"
-  },
-  {
-    "id": "palatino",
-    "family": "Palatino",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Palatino"
-  },
-  {
-    "id": "trajan-pro",
-    "family": "Trajan Pro",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Trajan+Pro"
-  },
-  {
-    "id": "bellefair",
-    "family": "Bellefair",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Bellefair"
-  },
-  {
-    "id": "balthazar",
-    "family": "Balthazar",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Balthazar"
-  },
-  {
-    "id": "forum",
-    "family": "Forum",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Forum"
-  },
-  {
-    "id": "julius-sans-one",
-    "family": "Julius Sans One",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Julius+Sans+One"
-  },
-  {
-    "id": "josefin-slab",
-    "family": "Josefin Slab",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Josefin+Slab"
-  },
-  {
-    "id": "sorts-mill-goudy",
-    "family": "Sorts Mill Goudy",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Sorts+Mill+Goudy"
-  },
-  {
-    "id": "unna",
-    "family": "Unna",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Unna"
-  },
-  {
-    "id": "vidaloka",
-    "family": "Vidaloka",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Vidaloka"
-  },
-  {
-    "id": "cormorant-infant",
-    "family": "Cormorant Infant",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cormorant+Infant"
-  },
-  {
-    "id": "tenor-sans",
-    "family": "Tenor Sans",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Tenor+Sans"
-  },
-  {
-    "id": "poiret-one",
-    "family": "Poiret One",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Poiret+One"
-  },
-  {
-    "id": "montserrat-alternates",
-    "family": "Montserrat Alternates",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Montserrat+Alternates"
-  },
-  {
-    "id": "varsity",
-    "family": "Varsity",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Varsity"
-  },
-  {
-    "id": "team-college",
-    "family": "Team College",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Team+College"
-  },
-  {
-    "id": "sport-jersey",
-    "family": "Sport Jersey",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Sport+Jersey"
-  },
-  {
-    "id": "winner",
-    "family": "Winner",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Winner"
-  },
-  {
-    "id": "athletic-block",
-    "family": "Athletic Block",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Athletic+Block"
-  },
-  {
-    "id": "champion",
-    "family": "Champion",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Champion"
-  },
-  {
-    "id": "racer",
-    "family": "Racer",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Racer"
-  },
-  {
-    "id": "speedster",
-    "family": "Speedster",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Speedster"
-  },
-  {
-    "id": "knockout",
-    "family": "Knockout",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Knockout"
-  },
-  {
-    "id": "bebas-neue",
-    "family": "Bebas Neue",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Bebas+Neue"
-  },
-  {
-    "id": "oswald",
-    "family": "Oswald",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Oswald"
-  },
-  {
-    "id": "stencil",
-    "family": "Stencil",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Stencil"
-  },
-  {
-    "id": "black-ops-one",
-    "family": "Black Ops One",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Black+Ops+One"
-  },
-  {
-    "id": "graduate",
-    "family": "Graduate",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Graduate"
-  },
-  {
-    "id": "teko",
-    "family": "Teko",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Teko"
-  },
-  {
-    "id": "anton",
-    "family": "Anton",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Anton"
-  },
-  {
-    "id": "street-urban",
-    "family": "Street Urban",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Street+Urban"
-  },
-  {
-    "id": "graffiti-drip",
-    "family": "Graffiti Drip",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Graffiti+Drip"
-  },
-  {
-    "id": "hustle",
-    "family": "Hustle",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Hustle"
-  },
-  {
-    "id": "brooklyn",
-    "family": "Brooklyn",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Brooklyn"
-  },
-  {
-    "id": "bronx",
-    "family": "Bronx",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Bronx"
-  },
-  {
-    "id": "tagger",
-    "family": "Tagger",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Tagger"
-  },
-  {
-    "id": "marker",
-    "family": "Marker",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Marker"
-  },
-  {
-    "id": "permanent-marker",
-    "family": "Permanent Marker",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Permanent+Marker"
-  },
-  {
-    "id": "bungee-shade",
-    "family": "Bungee Shade",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Bungee+Shade"
-  },
-  {
-    "id": "rubik-spray",
-    "family": "Rubik Spray",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Rubik+Spray"
-  },
-  {
-    "id": "paint-bold",
-    "family": "Paint Bold",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Paint+Bold"
-  },
-  {
-    "id": "riot",
-    "family": "Riot",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Riot"
-  },
-  {
-    "id": "destroy",
-    "family": "Destroy",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Destroy"
-  },
-  {
-    "id": "grunge-poster",
-    "family": "Grunge Poster",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Grunge+Poster"
-  },
-  {
-    "id": "gothic-west-coast",
-    "family": "Gothic West Coast",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Gothic+West+Coast"
-  },
-  {
-    "id": "east-side",
-    "family": "East Side",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "East+Side"
-  },
-  {
-    "id": "comic-neue",
-    "family": "Comic Neue",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Comic+Neue"
-  },
-  {
-    "id": "fredoka",
-    "family": "Fredoka",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Fredoka"
-  },
-  {
-    "id": "bubblegum-sans",
-    "family": "Bubblegum Sans",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Bubblegum+Sans"
-  },
-  {
-    "id": "baloo-2",
-    "family": "Baloo 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Baloo+2"
-  },
-  {
-    "id": "chewy",
-    "family": "Chewy",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Chewy"
-  },
-  {
-    "id": "cherry-bomb-one",
-    "family": "Cherry Bomb One",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Cherry+Bomb+One"
-  },
-  {
-    "id": "dynapuff",
-    "family": "DynaPuff",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "DynaPuff"
-  },
-  {
-    "id": "gaegu",
-    "family": "Gaegu",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Gaegu"
-  },
-  {
-    "id": "gochi-hand",
-    "family": "Gochi Hand",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Gochi+Hand"
-  },
-  {
-    "id": "happy-monkey",
-    "family": "Happy Monkey",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Happy+Monkey"
-  },
-  {
-    "id": "jua",
-    "family": "Jua",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Jua"
-  },
-  {
-    "id": "knewave",
-    "family": "Knewave",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Knewave"
-  },
-  {
-    "id": "londrina-solid",
-    "family": "Londrina Solid",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Londrina+Solid"
-  },
-  {
-    "id": "mochiy-pop-one",
-    "family": "Mochiy Pop One",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Mochiy+Pop+One"
-  },
-  {
-    "id": "nerko-one",
-    "family": "Nerko One",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Nerko+One"
-  },
-  {
-    "id": "patrick-hand",
-    "family": "Patrick Hand",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Patrick+Hand"
-  },
-  {
-    "id": "schoolbell",
-    "family": "Schoolbell",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Schoolbell"
-  },
-  {
-    "id": "sniglet",
-    "family": "Sniglet",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Sniglet"
-  },
-  {
-    "id": "minimalist-clean",
-    "family": "Minimalist Clean",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Minimalist+Clean"
-  },
-  {
-    "id": "studio-modern",
-    "family": "Studio Modern",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Studio+Modern"
-  },
-  {
-    "id": "grotesk",
-    "family": "Grotesk",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Grotesk"
-  },
-  {
-    "id": "neue-haas-unica",
-    "family": "Neue Haas Unica",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Neue+Haas+Unica"
-  },
-  {
-    "id": "simple-sans",
-    "family": "Simple Sans",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Simple+Sans"
-  },
-  {
-    "id": "light-sans",
-    "family": "Light Sans",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Light+Sans"
-  },
-  {
-    "id": "thin-geo",
-    "family": "Thin Geo",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Thin+Geo"
-  },
-  {
-    "id": "humanist",
-    "family": "Humanist",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Humanist"
-  },
-  {
-    "id": "rational-pure",
-    "family": "Rational Pure",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Rational+Pure"
-  },
-  {
-    "id": "lineal",
-    "family": "Lineal",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Lineal"
-  },
-  {
-    "id": "inter",
-    "family": "Inter",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Inter"
-  },
-  {
-    "id": "dm-sans",
-    "family": "DM Sans",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "DM+Sans"
-  },
-  {
-    "id": "manrope",
-    "family": "Manrope",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Manrope"
-  },
-  {
-    "id": "urbanist",
-    "family": "Urbanist",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Urbanist"
-  },
-  {
-    "id": "sora",
-    "family": "Sora",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Sora"
-  },
-  {
-    "id": "onest",
-    "family": "Onest",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Onest"
-  },
-  {
-    "id": "geist",
-    "family": "Geist",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Geist"
-  },
-  {
-    "id": "cooper-black",
-    "family": "Cooper Black",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Cooper+Black"
-  },
-  {
-    "id": "lobster-two",
-    "family": "Lobster Two",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Lobster+Two"
-  },
-  {
-    "id": "fascinate-inline",
-    "family": "Fascinate Inline",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Fascinate+Inline"
-  },
-  {
-    "id": "monoton",
-    "family": "Monoton",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Monoton"
-  },
-  {
-    "id": "righteous",
-    "family": "Righteous",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Righteous"
-  },
-  {
-    "id": "rye",
-    "family": "Rye",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Rye"
-  },
-  {
-    "id": "sancreek",
-    "family": "Sancreek",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Sancreek"
-  },
-  {
-    "id": "ultra",
-    "family": "Ultra",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Ultra"
-  },
-  {
-    "id": "limelight",
-    "family": "Limelight",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Limelight"
-  },
-  {
-    "id": "bangers",
-    "family": "Bangers",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Bangers"
-  },
-  {
-    "id": "bungee-inline",
-    "family": "Bungee Inline",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Bungee+Inline"
-  },
-  {
-    "id": "ewert",
-    "family": "Ewert",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Ewert"
-  },
-  {
-    "id": "flavors",
-    "family": "Flavors",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Flavors"
-  },
-  {
-    "id": "frijole",
-    "family": "Frijole",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Frijole"
-  },
-  {
-    "id": "honk",
-    "family": "Honk",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Honk"
-  },
-  {
-    "id": "modak",
-    "family": "Modak",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Modak"
-  },
-  {
-    "id": "playball",
-    "family": "Playball",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Playball"
-  },
-  {
-    "id": "rammetto-one",
-    "family": "Rammetto One",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Rammetto+One"
-  },
-  {
-    "id": "smokum",
-    "family": "Smokum",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Smokum"
-  },
-  {
-    "id": "special-elite",
-    "family": "Special Elite",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Special+Elite"
-  },
-  {
-    "id": "inter-2",
-    "family": "Inter 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Inter"
-  },
-  {
-    "id": "roboto-2",
-    "family": "Roboto 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Roboto"
-  },
-  {
-    "id": "open-sans-2",
-    "family": "Open Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Open+Sans"
-  },
-  {
-    "id": "lato-2",
-    "family": "Lato 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lato"
-  },
-  {
-    "id": "montserrat-2",
-    "family": "Montserrat 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Montserrat"
-  },
-  {
-    "id": "poppins-2",
-    "family": "Poppins 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Poppins"
-  },
-  {
-    "id": "source-sans-3-2",
-    "family": "Source Sans 3 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Source+Sans+3"
-  },
-  {
-    "id": "noto-sans-2",
-    "family": "Noto Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Noto+Sans"
-  },
-  {
-    "id": "nunito-2",
-    "family": "Nunito 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Nunito"
-  },
-  {
-    "id": "raleway-2",
-    "family": "Raleway 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Raleway"
-  },
-  {
-    "id": "ubuntu-2",
-    "family": "Ubuntu 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Ubuntu"
-  },
-  {
-    "id": "rubik-2",
-    "family": "Rubik 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Rubik"
-  },
-  {
-    "id": "work-sans-2",
-    "family": "Work Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Work+Sans"
-  },
-  {
-    "id": "dm-sans-2",
-    "family": "DM Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "DM+Sans"
-  },
-  {
-    "id": "manrope-2",
-    "family": "Manrope 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Manrope"
-  },
-  {
-    "id": "urbanist-2",
-    "family": "Urbanist 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Urbanist"
-  },
-  {
-    "id": "plus-jakarta-sans-2",
-    "family": "Plus Jakarta Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Plus+Jakarta+Sans"
-  },
-  {
-    "id": "sora-2",
-    "family": "Sora 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Sora"
-  },
-  {
-    "id": "public-sans-2",
-    "family": "Public Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Public+Sans"
-  },
-  {
-    "id": "mulish-2",
-    "family": "Mulish 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Mulish"
-  },
-  {
-    "id": "assistant-2",
-    "family": "Assistant 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Assistant"
-  },
-  {
-    "id": "heebo-2",
-    "family": "Heebo 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Heebo"
-  },
-  {
-    "id": "cabin-2",
-    "family": "Cabin 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Cabin"
-  },
-  {
-    "id": "kanit-2",
-    "family": "Kanit 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Kanit"
-  },
-  {
-    "id": "prompt-2",
-    "family": "Prompt 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Prompt"
-  },
-  {
-    "id": "josefin-sans-2",
-    "family": "Josefin Sans 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Josefin+Sans"
-  },
-  {
-    "id": "quicksand-2",
-    "family": "Quicksand 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Quicksand"
-  },
-  {
-    "id": "outfit-2",
-    "family": "Outfit 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Outfit"
-  },
-  {
-    "id": "archivo-2",
-    "family": "Archivo 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Archivo"
-  },
-  {
-    "id": "barlow-2",
-    "family": "Barlow 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Barlow"
-  },
-  {
-    "id": "maven-pro-2",
-    "family": "Maven Pro 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Maven+Pro"
-  },
-  {
-    "id": "hind-2",
-    "family": "Hind 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Hind"
-  },
-  {
-    "id": "karla-2",
-    "family": "Karla 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Karla"
-  },
-  {
-    "id": "lexend-2",
-    "family": "Lexend 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lexend"
-  },
-  {
-    "id": "figtree-2",
-    "family": "Figtree 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Figtree"
-  },
-  {
-    "id": "onest-2",
-    "family": "Onest 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Onest"
-  },
-  {
-    "id": "geist-2",
-    "family": "Geist 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Geist"
-  },
-  {
-    "id": "avenir-2",
-    "family": "Avenir 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Avenir"
-  },
-  {
-    "id": "futura-2",
-    "family": "Futura 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Futura"
-  },
-  {
-    "id": "helvetica-2",
-    "family": "Helvetica 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Helvetica"
-  },
-  {
-    "id": "verdana-2",
-    "family": "Verdana 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Verdana"
-  },
-  {
-    "id": "tahoma-2",
-    "family": "Tahoma 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Tahoma"
-  },
-  {
-    "id": "trebuchet-ms-2",
-    "family": "Trebuchet MS 2",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Trebuchet+MS"
-  },
-  {
-    "id": "merriweather-2",
-    "family": "Merriweather 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Merriweather"
-  },
-  {
-    "id": "playfair-display-2",
-    "family": "Playfair Display 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Playfair+Display"
-  },
-  {
-    "id": "cormorant-garamond-2",
-    "family": "Cormorant Garamond 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cormorant+Garamond"
-  },
-  {
-    "id": "libre-baskerville-2",
-    "family": "Libre Baskerville 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Libre+Baskerville"
-  },
-  {
-    "id": "lora-2",
-    "family": "Lora 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Lora"
-  },
-  {
-    "id": "crimson-text-2",
-    "family": "Crimson Text 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Crimson+Text"
-  },
-  {
-    "id": "eb-garamond-2",
-    "family": "EB Garamond 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "EB+Garamond"
-  },
-  {
-    "id": "source-serif-4-2",
-    "family": "Source Serif 4 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Source+Serif+4"
-  },
-  {
-    "id": "noto-serif-2",
-    "family": "Noto Serif 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Noto+Serif"
-  },
-  {
-    "id": "pt-serif-2",
-    "family": "PT Serif 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "PT+Serif"
-  },
-  {
-    "id": "dm-serif-display-2",
-    "family": "DM Serif Display 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "DM+Serif+Display"
-  },
-  {
-    "id": "prata-2",
-    "family": "Prata 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Prata"
-  },
-  {
-    "id": "cinzel-2",
-    "family": "Cinzel 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cinzel"
-  },
-  {
-    "id": "bodoni-moda-2",
-    "family": "Bodoni Moda 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Bodoni+Moda"
-  },
-  {
-    "id": "cardo-2",
-    "family": "Cardo 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Cardo"
-  },
-  {
-    "id": "fraunces-2",
-    "family": "Fraunces 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Fraunces"
-  },
-  {
-    "id": "spectral-2",
-    "family": "Spectral 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Spectral"
-  },
-  {
-    "id": "vollkorn-2",
-    "family": "Vollkorn 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Vollkorn"
-  },
-  {
-    "id": "alegreya-2",
-    "family": "Alegreya 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Alegreya"
-  },
-  {
-    "id": "arvo-2",
-    "family": "Arvo 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Arvo"
-  },
-  {
-    "id": "zilla-slab-2",
-    "family": "Zilla Slab 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Zilla+Slab"
-  },
-  {
-    "id": "roboto-slab-2",
-    "family": "Roboto Slab 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Roboto+Slab"
-  },
-  {
-    "id": "bitter-2",
-    "family": "Bitter 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Bitter"
-  },
-  {
-    "id": "domine-2",
-    "family": "Domine 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Domine"
-  },
-  {
-    "id": "newsreader-2",
-    "family": "Newsreader 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Newsreader"
-  },
-  {
-    "id": "abril-fatface-2",
-    "family": "Abril Fatface 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Abril+Fatface"
-  },
-  {
-    "id": "yeseva-one-2",
-    "family": "Yeseva One 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Yeseva+One"
-  },
-  {
-    "id": "italiana-2",
-    "family": "Italiana 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Italiana"
-  },
-  {
-    "id": "marcellus-2",
-    "family": "Marcellus 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Marcellus"
-  },
-  {
-    "id": "gloock-2",
-    "family": "Gloock 2",
-    "category": "serif",
-    "preview": "Aa Preview",
-    "google": "Gloock"
-  },
-  {
-    "id": "bebas-neue-2",
-    "family": "Bebas Neue 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bebas+Neue"
-  },
-  {
-    "id": "anton-2",
-    "family": "Anton 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Anton"
-  },
-  {
-    "id": "oswald-2",
-    "family": "Oswald 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Oswald"
-  },
-  {
-    "id": "impact-2",
-    "family": "Impact 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Impact"
-  },
-  {
-    "id": "archivo-black-2",
-    "family": "Archivo Black 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Archivo+Black"
-  },
-  {
-    "id": "league-spartan-2",
-    "family": "League Spartan 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "League+Spartan"
-  },
-  {
-    "id": "barlow-condensed-2",
-    "family": "Barlow Condensed 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Barlow+Condensed"
-  },
-  {
-    "id": "teko-2",
-    "family": "Teko 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Teko"
-  },
-  {
-    "id": "fjalla-one-2",
-    "family": "Fjalla One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Fjalla+One"
-  },
-  {
-    "id": "alfa-slab-one-2",
-    "family": "Alfa Slab One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Alfa+Slab+One"
-  },
-  {
-    "id": "black-ops-one-2",
-    "family": "Black Ops One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Black+Ops+One"
-  },
-  {
-    "id": "bungee-2",
-    "family": "Bungee 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bungee"
-  },
-  {
-    "id": "bungee-shade-2",
-    "family": "Bungee Shade 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bungee+Shade"
-  },
-  {
-    "id": "righteous-2",
-    "family": "Righteous 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Righteous"
-  },
-  {
-    "id": "monoton-2",
-    "family": "Monoton 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Monoton"
-  },
-  {
-    "id": "press-start-2p-2",
-    "family": "Press Start 2P 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Press+Start+2P"
-  },
-  {
-    "id": "luckiest-guy-2",
-    "family": "Luckiest Guy 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Luckiest+Guy"
-  },
-  {
-    "id": "fredoka-2",
-    "family": "Fredoka 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Fredoka"
-  },
-  {
-    "id": "baloo-2-2",
-    "family": "Baloo 2 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Baloo+2"
-  },
-  {
-    "id": "titan-one-2",
-    "family": "Titan One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Titan+One"
-  },
-  {
-    "id": "lilita-one-2",
-    "family": "Lilita One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Lilita+One"
-  },
-  {
-    "id": "changa-one-2",
-    "family": "Changa One 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Changa+One"
-  },
-  {
-    "id": "bowlby-one-sc-2",
-    "family": "Bowlby One SC 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Bowlby+One+SC"
-  },
-  {
-    "id": "graduate-2",
-    "family": "Graduate 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Graduate"
-  },
-  {
-    "id": "staatliches-2",
-    "family": "Staatliches 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Staatliches"
-  },
-  {
-    "id": "syncopate-2",
-    "family": "Syncopate 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Syncopate"
-  },
-  {
-    "id": "major-mono-display-2",
-    "family": "Major Mono Display 2",
-    "category": "display",
-    "preview": "Aa Preview",
-    "google": "Major+Mono+Display"
-  },
-  {
-    "id": "pacifico-2",
-    "family": "Pacifico 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Pacifico"
-  },
-  {
-    "id": "lobster-2",
-    "family": "Lobster 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Lobster"
-  },
-  {
-    "id": "dancing-script-2",
-    "family": "Dancing Script 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Dancing+Script"
-  },
-  {
-    "id": "great-vibes-2",
-    "family": "Great Vibes 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Great+Vibes"
-  },
-  {
-    "id": "satisfy-2",
-    "family": "Satisfy 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Satisfy"
-  },
-  {
-    "id": "sacramento-2",
-    "family": "Sacramento 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Sacramento"
-  },
-  {
-    "id": "parisienne-2",
-    "family": "Parisienne 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Parisienne"
-  },
-  {
-    "id": "kaushan-script-2",
-    "family": "Kaushan Script 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Kaushan+Script"
-  },
-  {
-    "id": "yellowtail-2",
-    "family": "Yellowtail 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Yellowtail"
-  },
-  {
-    "id": "courgette-2",
-    "family": "Courgette 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Courgette"
-  },
-  {
-    "id": "amatic-sc-2",
-    "family": "Amatic SC 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Amatic+SC"
-  },
-  {
-    "id": "caveat-2",
-    "family": "Caveat 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Caveat"
-  },
-  {
-    "id": "indie-flower-2",
-    "family": "Indie Flower 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Indie+Flower"
-  },
-  {
-    "id": "shadows-into-light-2",
-    "family": "Shadows Into Light 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Shadows+Into+Light"
-  },
-  {
-    "id": "permanent-marker-2",
-    "family": "Permanent Marker 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Permanent+Marker"
-  },
-  {
-    "id": "patrick-hand-2",
-    "family": "Patrick Hand 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Patrick+Hand"
-  },
-  {
-    "id": "kalam-2",
-    "family": "Kalam 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Kalam"
-  },
-  {
-    "id": "gloria-hallelujah-2",
-    "family": "Gloria Hallelujah 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Gloria+Hallelujah"
-  },
-  {
-    "id": "gochi-hand-2",
-    "family": "Gochi Hand 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Gochi+Hand"
-  },
-  {
-    "id": "just-another-hand-2",
-    "family": "Just Another Hand 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Just+Another+Hand"
-  },
-  {
-    "id": "reenie-beanie-2",
-    "family": "Reenie Beanie 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Reenie+Beanie"
-  },
-  {
-    "id": "homemade-apple-2",
-    "family": "Homemade Apple 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Homemade+Apple"
-  },
-  {
-    "id": "rock-salt-2",
-    "family": "Rock Salt 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Rock+Salt"
-  },
-  {
-    "id": "architects-daughter-2",
-    "family": "Architects Daughter 2",
-    "category": "handwritten",
-    "preview": "Aa Preview",
-    "google": "Architects+Daughter"
-  },
-  {
-    "id": "cinzel-2",
-    "family": "Cinzel 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cinzel"
-  },
-  {
-    "id": "cormorant-sc-2",
-    "family": "Cormorant SC 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cormorant+SC"
-  },
-  {
-    "id": "bodoni-72-2",
-    "family": "Bodoni 72 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Bodoni+72"
-  },
-  {
-    "id": "didot-2",
-    "family": "Didot 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Didot"
-  },
-  {
-    "id": "garamond-2",
-    "family": "Garamond 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Garamond"
-  },
-  {
-    "id": "optima-2",
-    "family": "Optima 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Optima"
-  },
-  {
-    "id": "palatino-2",
-    "family": "Palatino 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Palatino"
-  },
-  {
-    "id": "trajan-pro-2",
-    "family": "Trajan Pro 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Trajan+Pro"
-  },
-  {
-    "id": "bellefair-2",
-    "family": "Bellefair 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Bellefair"
-  },
-  {
-    "id": "balthazar-2",
-    "family": "Balthazar 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Balthazar"
-  },
-  {
-    "id": "forum-2",
-    "family": "Forum 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Forum"
-  },
-  {
-    "id": "julius-sans-one-2",
-    "family": "Julius Sans One 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Julius+Sans+One"
-  },
-  {
-    "id": "josefin-slab-2",
-    "family": "Josefin Slab 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Josefin+Slab"
-  },
-  {
-    "id": "sorts-mill-goudy-2",
-    "family": "Sorts Mill Goudy 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Sorts+Mill+Goudy"
-  },
-  {
-    "id": "unna-2",
-    "family": "Unna 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Unna"
-  },
-  {
-    "id": "vidaloka-2",
-    "family": "Vidaloka 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Vidaloka"
-  },
-  {
-    "id": "cormorant-infant-2",
-    "family": "Cormorant Infant 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Cormorant+Infant"
-  },
-  {
-    "id": "tenor-sans-2",
-    "family": "Tenor Sans 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Tenor+Sans"
-  },
-  {
-    "id": "poiret-one-2",
-    "family": "Poiret One 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Poiret+One"
-  },
-  {
-    "id": "montserrat-alternates-2",
-    "family": "Montserrat Alternates 2",
-    "category": "luxury",
-    "preview": "Aa Preview",
-    "google": "Montserrat+Alternates"
-  },
-  {
-    "id": "varsity-2",
-    "family": "Varsity 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Varsity"
-  },
-  {
-    "id": "team-college-2",
-    "family": "Team College 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Team+College"
-  },
-  {
-    "id": "sport-jersey-2",
-    "family": "Sport Jersey 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Sport+Jersey"
-  },
-  {
-    "id": "winner-2",
-    "family": "Winner 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Winner"
-  },
-  {
-    "id": "athletic-block-2",
-    "family": "Athletic Block 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Athletic+Block"
-  },
-  {
-    "id": "champion-2",
-    "family": "Champion 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Champion"
-  },
-  {
-    "id": "racer-2",
-    "family": "Racer 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Racer"
-  },
-  {
-    "id": "speedster-2",
-    "family": "Speedster 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Speedster"
-  },
-  {
-    "id": "knockout-2",
-    "family": "Knockout 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Knockout"
-  },
-  {
-    "id": "bebas-neue-2",
-    "family": "Bebas Neue 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Bebas+Neue"
-  },
-  {
-    "id": "oswald-2",
-    "family": "Oswald 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Oswald"
-  },
-  {
-    "id": "stencil-2",
-    "family": "Stencil 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Stencil"
-  },
-  {
-    "id": "black-ops-one-2",
-    "family": "Black Ops One 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Black+Ops+One"
-  },
-  {
-    "id": "graduate-2",
-    "family": "Graduate 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Graduate"
-  },
-  {
-    "id": "teko-2",
-    "family": "Teko 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Teko"
-  },
-  {
-    "id": "anton-2",
-    "family": "Anton 2",
-    "category": "sporty",
-    "preview": "Aa Preview",
-    "google": "Anton"
-  },
-  {
-    "id": "street-urban-2",
-    "family": "Street Urban 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Street+Urban"
-  },
-  {
-    "id": "graffiti-drip-2",
-    "family": "Graffiti Drip 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Graffiti+Drip"
-  },
-  {
-    "id": "hustle-2",
-    "family": "Hustle 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Hustle"
-  },
-  {
-    "id": "brooklyn-2",
-    "family": "Brooklyn 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Brooklyn"
-  },
-  {
-    "id": "bronx-2",
-    "family": "Bronx 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Bronx"
-  },
-  {
-    "id": "tagger-2",
-    "family": "Tagger 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Tagger"
-  },
-  {
-    "id": "marker-2",
-    "family": "Marker 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Marker"
-  },
-  {
-    "id": "permanent-marker-2",
-    "family": "Permanent Marker 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Permanent+Marker"
-  },
-  {
-    "id": "bungee-shade-2",
-    "family": "Bungee Shade 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Bungee+Shade"
-  },
-  {
-    "id": "rubik-spray-2",
-    "family": "Rubik Spray 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Rubik+Spray"
-  },
-  {
-    "id": "paint-bold-2",
-    "family": "Paint Bold 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Paint+Bold"
-  },
-  {
-    "id": "riot-2",
-    "family": "Riot 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Riot"
-  },
-  {
-    "id": "destroy-2",
-    "family": "Destroy 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Destroy"
-  },
-  {
-    "id": "grunge-poster-2",
-    "family": "Grunge Poster 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Grunge+Poster"
-  },
-  {
-    "id": "gothic-west-coast-2",
-    "family": "Gothic West Coast 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "Gothic+West+Coast"
-  },
-  {
-    "id": "east-side-2",
-    "family": "East Side 2",
-    "category": "streetwear",
-    "preview": "Aa Preview",
-    "google": "East+Side"
-  },
-  {
-    "id": "comic-neue-2",
-    "family": "Comic Neue 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Comic+Neue"
-  },
-  {
-    "id": "fredoka-2",
-    "family": "Fredoka 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Fredoka"
-  },
-  {
-    "id": "bubblegum-sans-2",
-    "family": "Bubblegum Sans 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Bubblegum+Sans"
-  },
-  {
-    "id": "baloo-2-2",
-    "family": "Baloo 2 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Baloo+2"
-  },
-  {
-    "id": "chewy-2",
-    "family": "Chewy 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Chewy"
-  },
-  {
-    "id": "cherry-bomb-one-2",
-    "family": "Cherry Bomb One 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Cherry+Bomb+One"
-  },
-  {
-    "id": "dynapuff-2",
-    "family": "DynaPuff 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "DynaPuff"
-  },
-  {
-    "id": "gaegu-2",
-    "family": "Gaegu 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Gaegu"
-  },
-  {
-    "id": "gochi-hand-2",
-    "family": "Gochi Hand 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Gochi+Hand"
-  },
-  {
-    "id": "happy-monkey-2",
-    "family": "Happy Monkey 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Happy+Monkey"
-  },
-  {
-    "id": "jua-2",
-    "family": "Jua 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Jua"
-  },
-  {
-    "id": "knewave-2",
-    "family": "Knewave 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Knewave"
-  },
-  {
-    "id": "londrina-solid-2",
-    "family": "Londrina Solid 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Londrina+Solid"
-  },
-  {
-    "id": "mochiy-pop-one-2",
-    "family": "Mochiy Pop One 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Mochiy+Pop+One"
-  },
-  {
-    "id": "nerko-one-2",
-    "family": "Nerko One 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Nerko+One"
-  },
-  {
-    "id": "patrick-hand-2",
-    "family": "Patrick Hand 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Patrick+Hand"
-  },
-  {
-    "id": "schoolbell-2",
-    "family": "Schoolbell 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Schoolbell"
-  },
-  {
-    "id": "sniglet-2",
-    "family": "Sniglet 2",
-    "category": "kids",
-    "preview": "Aa Preview",
-    "google": "Sniglet"
-  },
-  {
-    "id": "minimalist-clean-2",
-    "family": "Minimalist Clean 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Minimalist+Clean"
-  },
-  {
-    "id": "studio-modern-2",
-    "family": "Studio Modern 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Studio+Modern"
-  },
-  {
-    "id": "grotesk-2",
-    "family": "Grotesk 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Grotesk"
-  },
-  {
-    "id": "neue-haas-unica-2",
-    "family": "Neue Haas Unica 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Neue+Haas+Unica"
-  },
-  {
-    "id": "simple-sans-2",
-    "family": "Simple Sans 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Simple+Sans"
-  },
-  {
-    "id": "light-sans-2",
-    "family": "Light Sans 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Light+Sans"
-  },
-  {
-    "id": "thin-geo-2",
-    "family": "Thin Geo 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Thin+Geo"
-  },
-  {
-    "id": "humanist-2",
-    "family": "Humanist 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Humanist"
-  },
-  {
-    "id": "rational-pure-2",
-    "family": "Rational Pure 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Rational+Pure"
-  },
-  {
-    "id": "lineal-2",
-    "family": "Lineal 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Lineal"
-  },
-  {
-    "id": "inter-2",
-    "family": "Inter 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Inter"
-  },
-  {
-    "id": "dm-sans-2",
-    "family": "DM Sans 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "DM+Sans"
-  },
-  {
-    "id": "manrope-2",
-    "family": "Manrope 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Manrope"
-  },
-  {
-    "id": "urbanist-2",
-    "family": "Urbanist 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Urbanist"
-  },
-  {
-    "id": "sora-2",
-    "family": "Sora 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Sora"
-  },
-  {
-    "id": "onest-2",
-    "family": "Onest 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Onest"
-  },
-  {
-    "id": "geist-2",
-    "family": "Geist 2",
-    "category": "minimalist",
-    "preview": "Aa Preview",
-    "google": "Geist"
-  },
-  {
-    "id": "cooper-black-2",
-    "family": "Cooper Black 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Cooper+Black"
-  },
-  {
-    "id": "lobster-two-2",
-    "family": "Lobster Two 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Lobster+Two"
-  },
-  {
-    "id": "fascinate-inline-2",
-    "family": "Fascinate Inline 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Fascinate+Inline"
-  },
-  {
-    "id": "monoton-2",
-    "family": "Monoton 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Monoton"
-  },
-  {
-    "id": "righteous-2",
-    "family": "Righteous 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Righteous"
-  },
-  {
-    "id": "rye-2",
-    "family": "Rye 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Rye"
-  },
-  {
-    "id": "sancreek-2",
-    "family": "Sancreek 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Sancreek"
-  },
-  {
-    "id": "ultra-2",
-    "family": "Ultra 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Ultra"
-  },
-  {
-    "id": "limelight-2",
-    "family": "Limelight 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Limelight"
-  },
-  {
-    "id": "bangers-2",
-    "family": "Bangers 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Bangers"
-  },
-  {
-    "id": "bungee-inline-2",
-    "family": "Bungee Inline 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Bungee+Inline"
-  },
-  {
-    "id": "ewert-2",
-    "family": "Ewert 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Ewert"
-  },
-  {
-    "id": "flavors-2",
-    "family": "Flavors 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Flavors"
-  },
-  {
-    "id": "frijole-2",
-    "family": "Frijole 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Frijole"
-  },
-  {
-    "id": "honk-2",
-    "family": "Honk 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Honk"
-  },
-  {
-    "id": "modak-2",
-    "family": "Modak 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Modak"
-  },
-  {
-    "id": "playball-2",
-    "family": "Playball 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Playball"
-  },
-  {
-    "id": "rammetto-one-2",
-    "family": "Rammetto One 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Rammetto+One"
-  },
-  {
-    "id": "smokum-2",
-    "family": "Smokum 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Smokum"
-  },
-  {
-    "id": "special-elite-2",
-    "family": "Special Elite 2",
-    "category": "retro",
-    "preview": "Aa Preview",
-    "google": "Special+Elite"
-  },
-  {
-    "id": "inter-3",
-    "family": "Inter 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Inter"
-  },
-  {
-    "id": "roboto-3",
-    "family": "Roboto 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Roboto"
-  },
-  {
-    "id": "open-sans-3",
-    "family": "Open Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Open+Sans"
-  },
-  {
-    "id": "lato-3",
-    "family": "Lato 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lato"
-  },
-  {
-    "id": "montserrat-3",
-    "family": "Montserrat 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Montserrat"
-  },
-  {
-    "id": "poppins-3",
-    "family": "Poppins 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Poppins"
-  },
-  {
-    "id": "source-sans-3-3",
-    "family": "Source Sans 3 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Source+Sans+3"
-  },
-  {
-    "id": "noto-sans-3",
-    "family": "Noto Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Noto+Sans"
-  },
-  {
-    "id": "nunito-3",
-    "family": "Nunito 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Nunito"
-  },
-  {
-    "id": "raleway-3",
-    "family": "Raleway 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Raleway"
-  },
-  {
-    "id": "ubuntu-3",
-    "family": "Ubuntu 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Ubuntu"
-  },
-  {
-    "id": "rubik-3",
-    "family": "Rubik 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Rubik"
-  },
-  {
-    "id": "work-sans-3",
-    "family": "Work Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Work+Sans"
-  },
-  {
-    "id": "dm-sans-3",
-    "family": "DM Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "DM+Sans"
-  },
-  {
-    "id": "manrope-3",
-    "family": "Manrope 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Manrope"
-  },
-  {
-    "id": "urbanist-3",
-    "family": "Urbanist 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Urbanist"
-  },
-  {
-    "id": "plus-jakarta-sans-3",
-    "family": "Plus Jakarta Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Plus+Jakarta+Sans"
-  },
-  {
-    "id": "sora-3",
-    "family": "Sora 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Sora"
-  },
-  {
-    "id": "public-sans-3",
-    "family": "Public Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Public+Sans"
-  },
-  {
-    "id": "mulish-3",
-    "family": "Mulish 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Mulish"
-  },
-  {
-    "id": "assistant-3",
-    "family": "Assistant 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Assistant"
-  },
-  {
-    "id": "heebo-3",
-    "family": "Heebo 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Heebo"
-  },
-  {
-    "id": "cabin-3",
-    "family": "Cabin 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Cabin"
-  },
-  {
-    "id": "kanit-3",
-    "family": "Kanit 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Kanit"
-  },
-  {
-    "id": "prompt-3",
-    "family": "Prompt 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Prompt"
-  },
-  {
-    "id": "josefin-sans-3",
-    "family": "Josefin Sans 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Josefin+Sans"
-  },
-  {
-    "id": "quicksand-3",
-    "family": "Quicksand 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Quicksand"
-  },
-  {
-    "id": "outfit-3",
-    "family": "Outfit 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Outfit"
-  },
-  {
-    "id": "archivo-3",
-    "family": "Archivo 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Archivo"
-  },
-  {
-    "id": "barlow-3",
-    "family": "Barlow 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Barlow"
-  },
-  {
-    "id": "maven-pro-3",
-    "family": "Maven Pro 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Maven+Pro"
-  },
-  {
-    "id": "hind-3",
-    "family": "Hind 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Hind"
-  },
-  {
-    "id": "karla-3",
-    "family": "Karla 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Karla"
-  },
-  {
-    "id": "lexend-3",
-    "family": "Lexend 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Lexend"
-  },
-  {
-    "id": "figtree-3",
-    "family": "Figtree 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Figtree"
-  },
-  {
-    "id": "onest-3",
-    "family": "Onest 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Onest"
-  },
-  {
-    "id": "geist-3",
-    "family": "Geist 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Geist"
-  },
-  {
-    "id": "avenir-3",
-    "family": "Avenir 3",
-    "category": "sans",
-    "preview": "Aa Preview",
-    "google": "Avenir"
-  }
+  { id: "inter", family: "Inter", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/inter.svg", google: "Inter", premium: true },
+  { id: "geist", family: "Geist", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/geist.svg", google: "Geist", premium: true },
+  { id: "manrope", family: "Manrope", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/manrope.svg", google: "Manrope", premium: true },
+  { id: "sora", family: "Sora", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/sora.svg", google: "Sora", premium: true },
+  { id: "onest", family: "Onest", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/onest.svg", google: "Onest", premium: true },
+  { id: "outfit", family: "Outfit", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/outfit.svg", google: "Outfit", premium: true },
+  { id: "urbanist", family: "Urbanist", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/urbanist.svg", google: "Urbanist", premium: true },
+  { id: "plus-jakarta-sans", family: "Plus Jakarta Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/plus-jakarta-sans.svg", google: "Plus Jakarta Sans", premium: true },
+  { id: "dm-sans", family: "DM Sans", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/dm-sans.svg", google: "DM Sans", premium: true },
+  { id: "figtree", family: "Figtree", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/figtree.svg", google: "Figtree", premium: true },
+  { id: "public-sans", family: "Public Sans", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/public-sans.svg", google: "Public Sans", premium: true },
+  { id: "instrument-sans", family: "Instrument Sans", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/instrument-sans.svg", google: "Instrument Sans", premium: true },
+  { id: "space-grotesk", family: "Space Grotesk", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/space-grotesk.svg", google: "Space Grotesk", premium: true },
+  { id: "ibm-plex-sans", family: "IBM Plex Sans", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/ibm-plex-sans.svg", google: "IBM Plex Sans", premium: true },
+  { id: "ibm-plex-sans-condensed", family: "IBM Plex Sans Condensed", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/ibm-plex-sans-condensed.svg", google: "IBM Plex Sans Condensed", premium: true },
+  { id: "work-sans", family: "Work Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/work-sans.svg", google: "Work Sans", premium: true },
+  { id: "archivo", family: "Archivo", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/archivo.svg", google: "Archivo", premium: true },
+  { id: "archivo-narrow", family: "Archivo Narrow", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/archivo-narrow.svg", google: "Archivo Narrow", premium: true },
+  { id: "barlow", family: "Barlow", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/barlow.svg", google: "Barlow", premium: true },
+  { id: "barlow-condensed", family: "Barlow Condensed", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/barlow-condensed.svg", google: "Barlow Condensed", premium: true },
+  { id: "karla", family: "Karla", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/karla.svg", google: "Karla", premium: true },
+  { id: "lexend", family: "Lexend", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/lexend.svg", google: "Lexend", premium: true },
+  { id: "rubik", family: "Rubik", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik.svg", google: "Rubik", premium: true },
+  { id: "raleway", family: "Raleway", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/raleway.svg", google: "Raleway", premium: true },
+  { id: "montserrat", family: "Montserrat", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/montserrat.svg", google: "Montserrat", premium: true },
+  { id: "montserrat-alternates", family: "Montserrat Alternates", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/montserrat-alternates.svg", google: "Montserrat Alternates", premium: true },
+  { id: "poppins", family: "Poppins", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/poppins.svg", google: "Poppins", premium: true },
+  { id: "nunito-sans", family: "Nunito Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/nunito-sans.svg", google: "Nunito Sans", premium: true },
+  { id: "mulish", family: "Mulish", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/mulish.svg", google: "Mulish", premium: true },
+  { id: "cabin", family: "Cabin", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cabin.svg", google: "Cabin", premium: true },
+  { id: "fira-sans", family: "Fira Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fira-sans.svg", google: "Fira Sans", premium: true },
+  { id: "source-sans-3", family: "Source Sans 3", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/source-sans-3.svg", google: "Source Sans 3", premium: true },
+  { id: "noto-sans", family: "Noto Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/noto-sans.svg", google: "Noto Sans", premium: true },
+  { id: "hanken-grotesk", family: "Hanken Grotesk", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/hanken-grotesk.svg", google: "Hanken Grotesk", premium: true },
+  { id: "albert-sans", family: "Albert Sans", category: "minimalist", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/albert-sans.svg", google: "Albert Sans", premium: true },
+  { id: "red-hat-display", family: "Red Hat Display", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/red-hat-display.svg", google: "Red Hat Display", premium: true },
+  { id: "red-hat-text", family: "Red Hat Text", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/red-hat-text.svg", google: "Red Hat Text", premium: true },
+  { id: "epilogue", family: "Epilogue", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/epilogue.svg", google: "Epilogue", premium: true },
+  { id: "syne", family: "Syne", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/syne.svg", google: "Syne", premium: true },
+  { id: "prompt", family: "Prompt", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/prompt.svg", google: "Prompt", premium: true },
+  { id: "kanit", family: "Kanit", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/kanit.svg", google: "Kanit", premium: true },
+  { id: "josefin-sans", family: "Josefin Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/josefin-sans.svg", google: "Josefin Sans", premium: true },
+  { id: "quicksand", family: "Quicksand", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/quicksand.svg", google: "Quicksand", premium: true },
+  { id: "alegreya-sans", family: "Alegreya Sans", category: "sans", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/alegreya-sans.svg", google: "Alegreya Sans", premium: true },
+  { id: "playfair-display", family: "Playfair Display", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/playfair-display.svg", google: "Playfair Display", premium: true },
+  { id: "cormorant-garamond", family: "Cormorant Garamond", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cormorant-garamond.svg", google: "Cormorant Garamond", premium: true },
+  { id: "cormorant-sc", family: "Cormorant SC", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cormorant-sc.svg", google: "Cormorant SC", premium: true },
+  { id: "cormorant-infant", family: "Cormorant Infant", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cormorant-infant.svg", google: "Cormorant Infant", premium: true },
+  { id: "bodoni-moda", family: "Bodoni Moda", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bodoni-moda.svg", google: "Bodoni Moda", premium: true },
+  { id: "prata", family: "Prata", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/prata.svg", google: "Prata", premium: true },
+  { id: "gloock", family: "Gloock", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/gloock.svg", google: "Gloock", premium: true },
+  { id: "bellefair", family: "Bellefair", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bellefair.svg", google: "Bellefair", premium: true },
+  { id: "marcellus", family: "Marcellus", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/marcellus.svg", google: "Marcellus", premium: true },
+  { id: "vidaloka", family: "Vidaloka", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/vidaloka.svg", google: "Vidaloka", premium: true },
+  { id: "fraunces", family: "Fraunces", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fraunces.svg", google: "Fraunces", premium: true },
+  { id: "cinzel", family: "Cinzel", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cinzel.svg", google: "Cinzel", premium: true },
+  { id: "forum", family: "Forum", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/forum.svg", google: "Forum", premium: true },
+  { id: "italiana", family: "Italiana", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/italiana.svg", google: "Italiana", premium: true },
+  { id: "libre-baskerville", family: "Libre Baskerville", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/libre-baskerville.svg", google: "Libre Baskerville", premium: true },
+  { id: "lora", family: "Lora", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/lora.svg", google: "Lora", premium: true },
+  { id: "eb-garamond", family: "EB Garamond", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/eb-garamond.svg", google: "EB Garamond", premium: true },
+  { id: "crimson-text", family: "Crimson Text", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/crimson-text.svg", google: "Crimson Text", premium: true },
+  { id: "source-serif-4", family: "Source Serif 4", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/source-serif-4.svg", google: "Source Serif 4", premium: true },
+  { id: "dm-serif-display", family: "DM Serif Display", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/dm-serif-display.svg", google: "DM Serif Display", premium: true },
+  { id: "newsreader", family: "Newsreader", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/newsreader.svg", google: "Newsreader", premium: true },
+  { id: "spectral", family: "Spectral", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/spectral.svg", google: "Spectral", premium: true },
+  { id: "alegreya", family: "Alegreya", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/alegreya.svg", google: "Alegreya", premium: true },
+  { id: "cardo", family: "Cardo", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cardo.svg", google: "Cardo", premium: true },
+  { id: "unna", family: "Unna", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/unna.svg", google: "Unna", premium: true },
+  { id: "balthazar", family: "Balthazar", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/balthazar.svg", google: "Balthazar", premium: true },
+  { id: "sorts-mill-goudy", family: "Sorts Mill Goudy", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/sorts-mill-goudy.svg", google: "Sorts Mill Goudy", premium: true },
+  { id: "josefin-slab", family: "Josefin Slab", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/josefin-slab.svg", google: "Josefin Slab", premium: true },
+  { id: "noto-serif-display", family: "Noto Serif Display", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/noto-serif-display.svg", google: "Noto Serif Display", premium: true },
+  { id: "noto-serif", family: "Noto Serif", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/noto-serif.svg", google: "Noto Serif", premium: true },
+  { id: "bitter", family: "Bitter", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bitter.svg", google: "Bitter", premium: true },
+  { id: "domine", family: "Domine", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/domine.svg", google: "Domine", premium: true },
+  { id: "vollkorn", family: "Vollkorn", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/vollkorn.svg", google: "Vollkorn", premium: true },
+  { id: "arvo", family: "Arvo", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/arvo.svg", google: "Arvo", premium: true },
+  { id: "zilla-slab", family: "Zilla Slab", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/zilla-slab.svg", google: "Zilla Slab", premium: true },
+  { id: "roboto-slab", family: "Roboto Slab", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/roboto-slab.svg", google: "Roboto Slab", premium: true },
+  { id: "pt-serif", family: "PT Serif", category: "serif", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/pt-serif.svg", google: "PT Serif", premium: true },
+  { id: "abril-fatface", family: "Abril Fatface", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/abril-fatface.svg", google: "Abril Fatface", premium: true },
+  { id: "yeseva-one", family: "Yeseva One", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/yeseva-one.svg", google: "Yeseva One", premium: true },
+  { id: "tenor-sans", family: "Tenor Sans", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/tenor-sans.svg", google: "Tenor Sans", premium: true },
+  { id: "poiret-one", family: "Poiret One", category: "luxury", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/poiret-one.svg", google: "Poiret One", premium: true },
+  { id: "bebas-neue", family: "Bebas Neue", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bebas-neue.svg", google: "Bebas Neue", premium: true },
+  { id: "anton", family: "Anton", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/anton.svg", google: "Anton", premium: true },
+  { id: "oswald", family: "Oswald", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/oswald.svg", google: "Oswald", premium: true },
+  { id: "archivo-black", family: "Archivo Black", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/archivo-black.svg", google: "Archivo Black", premium: true },
+  { id: "league-spartan", family: "League Spartan", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/league-spartan.svg", google: "League Spartan", premium: true },
+  { id: "teko", family: "Teko", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/teko.svg", google: "Teko", premium: true },
+  { id: "fjalla-one", family: "Fjalla One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fjalla-one.svg", google: "Fjalla One", premium: true },
+  { id: "alfa-slab-one", family: "Alfa Slab One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/alfa-slab-one.svg", google: "Alfa Slab One", premium: true },
+  { id: "black-ops-one", family: "Black Ops One", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/black-ops-one.svg", google: "Black Ops One", premium: true },
+  { id: "bungee", family: "Bungee", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bungee.svg", google: "Bungee", premium: true },
+  { id: "bungee-shade", family: "Bungee Shade", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bungee-shade.svg", google: "Bungee Shade", premium: true },
+  { id: "bungee-inline", family: "Bungee Inline", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bungee-inline.svg", google: "Bungee Inline", premium: true },
+  { id: "righteous", family: "Righteous", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/righteous.svg", google: "Righteous", premium: true },
+  { id: "monoton", family: "Monoton", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/monoton.svg", google: "Monoton", premium: true },
+  { id: "press-start-2p", family: "Press Start 2P", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/press-start-2p.svg", google: "Press Start 2P", premium: true },
+  { id: "luckiest-guy", family: "Luckiest Guy", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/luckiest-guy.svg", google: "Luckiest Guy", premium: true },
+  { id: "titan-one", family: "Titan One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/titan-one.svg", google: "Titan One", premium: true },
+  { id: "lilita-one", family: "Lilita One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/lilita-one.svg", google: "Lilita One", premium: true },
+  { id: "changa-one", family: "Changa One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/changa-one.svg", google: "Changa One", premium: true },
+  { id: "bowlby-one-sc", family: "Bowlby One SC", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bowlby-one-sc.svg", google: "Bowlby One SC", premium: true },
+  { id: "graduate", family: "Graduate", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/graduate.svg", google: "Graduate", premium: true },
+  { id: "staatliches", family: "Staatliches", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/staatliches.svg", google: "Staatliches", premium: true },
+  { id: "syncopate", family: "Syncopate", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/syncopate.svg", google: "Syncopate", premium: true },
+  { id: "major-mono-display", family: "Major Mono Display", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/major-mono-display.svg", google: "Major Mono Display", premium: true },
+  { id: "orbitron", family: "Orbitron", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/orbitron.svg", google: "Orbitron", premium: true },
+  { id: "russo-one", family: "Russo One", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/russo-one.svg", google: "Russo One", premium: true },
+  { id: "audiowide", family: "Audiowide", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/audiowide.svg", google: "Audiowide", premium: true },
+  { id: "michroma", family: "Michroma", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/michroma.svg", google: "Michroma", premium: true },
+  { id: "rajdhani", family: "Rajdhani", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rajdhani.svg", google: "Rajdhani", premium: true },
+  { id: "quantico", family: "Quantico", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/quantico.svg", google: "Quantico", premium: true },
+  { id: "saira-condensed", family: "Saira Condensed", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/saira-condensed.svg", google: "Saira Condensed", premium: true },
+  { id: "saira-extra-condensed", family: "Saira Extra Condensed", category: "sporty", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/saira-extra-condensed.svg", google: "Saira Extra Condensed", premium: true },
+  { id: "six-caps", family: "Six Caps", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/six-caps.svg", google: "Six Caps", premium: true },
+  { id: "big-shoulders-display", family: "Big Shoulders Display", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/big-shoulders-display.svg", google: "Big Shoulders Display", premium: true },
+  { id: "big-shoulders-inline-display", family: "Big Shoulders Inline Display", category: "display", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/big-shoulders-inline-display.svg", google: "Big Shoulders Inline Display", premium: true },
+  { id: "great-vibes", family: "Great Vibes", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/great-vibes.svg", google: "Great Vibes", premium: true },
+  { id: "allura", family: "Allura", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/allura.svg", google: "Allura", premium: true },
+  { id: "alex-brush", family: "Alex Brush", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/alex-brush.svg", google: "Alex Brush", premium: true },
+  { id: "parisienne", family: "Parisienne", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/parisienne.svg", google: "Parisienne", premium: true },
+  { id: "qwigley", family: "Qwigley", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/qwigley.svg", google: "Qwigley", premium: true },
+  { id: "sacramento", family: "Sacramento", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/sacramento.svg", google: "Sacramento", premium: true },
+  { id: "dancing-script", family: "Dancing Script", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/dancing-script.svg", google: "Dancing Script", premium: true },
+  { id: "petit-formal-script", family: "Petit Formal Script", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/petit-formal-script.svg", google: "Petit Formal Script", premium: true },
+  { id: "pinyon-script", family: "Pinyon Script", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/pinyon-script.svg", google: "Pinyon Script", premium: true },
+  { id: "tangerine", family: "Tangerine", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/tangerine.svg", google: "Tangerine", premium: true },
+  { id: "cormorant-upright", family: "Cormorant Upright", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cormorant-upright.svg", google: "Cormorant Upright", premium: true },
+  { id: "kaushan-script", family: "Kaushan Script", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/kaushan-script.svg", google: "Kaushan Script", premium: true },
+  { id: "yellowtail", family: "Yellowtail", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/yellowtail.svg", google: "Yellowtail", premium: true },
+  { id: "courgette", family: "Courgette", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/courgette.svg", google: "Courgette", premium: true },
+  { id: "satisfy", family: "Satisfy", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/satisfy.svg", google: "Satisfy", premium: true },
+  { id: "lobster", family: "Lobster", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/lobster.svg", google: "Lobster", premium: true },
+  { id: "lobster-two", family: "Lobster Two", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/lobster-two.svg", google: "Lobster Two", premium: true },
+  { id: "pacifico", family: "Pacifico", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/pacifico.svg", google: "Pacifico", premium: true },
+  { id: "playball", family: "Playball", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/playball.svg", google: "Playball", premium: true },
+  { id: "cookie", family: "Cookie", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cookie.svg", google: "Cookie", premium: true },
+  { id: "caveat", family: "Caveat", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/caveat.svg", google: "Caveat", premium: true },
+  { id: "kalam", family: "Kalam", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/kalam.svg", google: "Kalam", premium: true },
+  { id: "patrick-hand", family: "Patrick Hand", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/patrick-hand.svg", google: "Patrick Hand", premium: true },
+  { id: "permanent-marker", family: "Permanent Marker", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/permanent-marker.svg", google: "Permanent Marker", premium: true },
+  { id: "shadows-into-light", family: "Shadows Into Light", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/shadows-into-light.svg", google: "Shadows Into Light", premium: true },
+  { id: "gloria-hallelujah", family: "Gloria Hallelujah", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/gloria-hallelujah.svg", google: "Gloria Hallelujah", premium: true },
+  { id: "architects-daughter", family: "Architects Daughter", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/architects-daughter.svg", google: "Architects Daughter", premium: true },
+  { id: "reenie-beanie", family: "Reenie Beanie", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/reenie-beanie.svg", google: "Reenie Beanie", premium: true },
+  { id: "homemade-apple", family: "Homemade Apple", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/homemade-apple.svg", google: "Homemade Apple", premium: true },
+  { id: "rock-salt", family: "Rock Salt", category: "handwritten", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rock-salt.svg", google: "Rock Salt", premium: true },
+  { id: "rubik-spray-paint", family: "Rubik Spray Paint", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-spray-paint.svg", google: "Rubik Spray Paint", premium: true },
+  { id: "rubik-dirt", family: "Rubik Dirt", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-dirt.svg", google: "Rubik Dirt", premium: true },
+  { id: "rubik-glitch", family: "Rubik Glitch", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-glitch.svg", google: "Rubik Glitch", premium: true },
+  { id: "rubik-microbe", family: "Rubik Microbe", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-microbe.svg", google: "Rubik Microbe", premium: true },
+  { id: "rubik-burned", family: "Rubik Burned", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-burned.svg", google: "Rubik Burned", premium: true },
+  { id: "rubik-beastly", family: "Rubik Beastly", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-beastly.svg", google: "Rubik Beastly", premium: true },
+  { id: "rubik-moonrocks", family: "Rubik Moonrocks", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-moonrocks.svg", google: "Rubik Moonrocks", premium: true },
+  { id: "rubik-puddles", family: "Rubik Puddles", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-puddles.svg", google: "Rubik Puddles", premium: true },
+  { id: "rubik-vinyl", family: "Rubik Vinyl", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rubik-vinyl.svg", google: "Rubik Vinyl", premium: true },
+  { id: "bungee-outline", family: "Bungee Outline", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bungee-outline.svg", google: "Bungee Outline", premium: true },
+  { id: "knewave", family: "Knewave", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/knewave.svg", google: "Knewave", premium: true },
+  { id: "frijole", family: "Frijole", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/frijole.svg", google: "Frijole", premium: true },
+  { id: "nosifer", family: "Nosifer", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/nosifer.svg", google: "Nosifer", premium: true },
+  { id: "creepster", family: "Creepster", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/creepster.svg", google: "Creepster", premium: true },
+  { id: "metal-mania", family: "Metal Mania", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/metal-mania.svg", google: "Metal Mania", premium: true },
+  { id: "new-rocker", family: "New Rocker", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/new-rocker.svg", google: "New Rocker", premium: true },
+  { id: "pirata-one", family: "Pirata One", category: "streetwear", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/pirata-one.svg", google: "Pirata One", premium: true },
+  { id: "limelight", family: "Limelight", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/limelight.svg", google: "Limelight", premium: true },
+  { id: "rye", family: "Rye", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rye.svg", google: "Rye", premium: true },
+  { id: "ultra", family: "Ultra", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/ultra.svg", google: "Ultra", premium: true },
+  { id: "sancreek", family: "Sancreek", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/sancreek.svg", google: "Sancreek", premium: true },
+  { id: "special-elite", family: "Special Elite", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/special-elite.svg", google: "Special Elite", premium: true },
+  { id: "fascinate-inline", family: "Fascinate Inline", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fascinate-inline.svg", google: "Fascinate Inline", premium: true },
+  { id: "bangers", family: "Bangers", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bangers.svg", google: "Bangers", premium: true },
+  { id: "ewert", family: "Ewert", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/ewert.svg", google: "Ewert", premium: true },
+  { id: "flavors", family: "Flavors", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/flavors.svg", google: "Flavors", premium: true },
+  { id: "honk", family: "Honk", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/honk.svg", google: "Honk", premium: true },
+  { id: "modak", family: "Modak", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/modak.svg", google: "Modak", premium: true },
+  { id: "rammetto-one", family: "Rammetto One", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/rammetto-one.svg", google: "Rammetto One", premium: true },
+  { id: "smokum", family: "Smokum", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/smokum.svg", google: "Smokum", premium: true },
+  { id: "londrina-solid", family: "Londrina Solid", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/londrina-solid.svg", google: "Londrina Solid", premium: true },
+  { id: "londrina-shadow", family: "Londrina Shadow", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/londrina-shadow.svg", google: "Londrina Shadow", premium: true },
+  { id: "londrina-sketch", family: "Londrina Sketch", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/londrina-sketch.svg", google: "Londrina Sketch", premium: true },
+  { id: "fugaz-one", family: "Fugaz One", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fugaz-one.svg", google: "Fugaz One", premium: true },
+  { id: "shrikhand", family: "Shrikhand", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/shrikhand.svg", google: "Shrikhand", premium: true },
+  { id: "oleo-script", family: "Oleo Script", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/oleo-script.svg", google: "Oleo Script", premium: true },
+  { id: "oleo-script-swash-caps", family: "Oleo Script Swash Caps", category: "retro", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/oleo-script-swash-caps.svg", google: "Oleo Script Swash Caps", premium: true },
+  { id: "fredoka", family: "Fredoka", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/fredoka.svg", google: "Fredoka", premium: true },
+  { id: "baloo-2", family: "Baloo 2", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/baloo-2.svg", google: "Baloo 2", premium: true },
+  { id: "bubblegum-sans", family: "Bubblegum Sans", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/bubblegum-sans.svg", google: "Bubblegum Sans", premium: true },
+  { id: "chewy", family: "Chewy", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/chewy.svg", google: "Chewy", premium: true },
+  { id: "cherry-bomb-one", family: "Cherry Bomb One", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/cherry-bomb-one.svg", google: "Cherry Bomb One", premium: true },
+  { id: "dynapuff", family: "DynaPuff", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/dynapuff.svg", google: "DynaPuff", premium: true },
+  { id: "gaegu", family: "Gaegu", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/gaegu.svg", google: "Gaegu", premium: true },
+  { id: "gochi-hand", family: "Gochi Hand", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/gochi-hand.svg", google: "Gochi Hand", premium: true },
+  { id: "happy-monkey", family: "Happy Monkey", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/happy-monkey.svg", google: "Happy Monkey", premium: true },
+  { id: "jua", family: "Jua", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/jua.svg", google: "Jua", premium: true },
+  { id: "mochiy-pop-one", family: "Mochiy Pop One", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/mochiy-pop-one.svg", google: "Mochiy Pop One", premium: true },
+  { id: "nerko-one", family: "Nerko One", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/nerko-one.svg", google: "Nerko One", premium: true },
+  { id: "schoolbell", family: "Schoolbell", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/schoolbell.svg", google: "Schoolbell", premium: true },
+  { id: "sniglet", family: "Sniglet", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/sniglet.svg", google: "Sniglet", premium: true },
+  { id: "comic-neue", family: "Comic Neue", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/comic-neue.svg", google: "Comic Neue", premium: true },
+  { id: "atma", family: "Atma", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/atma.svg", google: "Atma", premium: true },
+  { id: "mali", family: "Mali", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/mali.svg", google: "Mali", premium: true },
+  { id: "short-stack", family: "Short Stack", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/short-stack.svg", google: "Short Stack", premium: true },
+  { id: "coming-soon", family: "Coming Soon", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/coming-soon.svg", google: "Coming Soon", premium: true },
+  { id: "love-ya-like-a-sister", family: "Love Ya Like A Sister", category: "kids", preview: PREMIUM_PREVIEW, previewSvg: "/font-previews/love-ya-like-a-sister.svg", google: "Love Ya Like A Sister", premium: true },
 ];
 
-export const FONTS = Array.from(new Set(FONT_ITEMS.map((font) => font.family).filter(Boolean)));
+export const FONTS = FONT_ITEMS.map((font) => font.family);
 export const FONT_OPTIONS = FONTS;
 
 const LOADED_EDITOR_FONTS = new Set<string>();
-let visibleFontQueue = new Set<string>();
-let visibleFontScheduled = false;
+const LOADING_EDITOR_FONTS = new Map<string, Promise<void>>();
 
-function scheduleIdle(callback: () => void) {
-  if (typeof window === "undefined") return;
-  const win = window as any;
-  if (typeof win.requestIdleCallback === "function") win.requestIdleCallback(callback, { timeout: 700 });
-  else window.setTimeout(callback, 120);
+function normalizeFamily(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, "");
 }
 
 export function getFontsByCategory(category: FontCategory | "all") {
@@ -3526,41 +239,301 @@ export function getFontsByCategory(category: FontCategory | "all") {
 }
 
 export function getFontByFamily(family?: string) {
-  return FONT_ITEMS.find((font) => font.family === family);
+  if (!family) return undefined;
+  const normalized = normalizeFamily(family).toLowerCase();
+  return FONT_ITEMS.find((font) => font.family.toLowerCase() === normalized);
+}
+
+export function isValidEditorFontFamily(family?: string) {
+  return Boolean(getFontByFamily(family));
+}
+
+export function getEditorFontFamily(family?: string, fallback = "Inter") {
+  const font = getFontByFamily(family) ?? getFontByFamily(fallback) ?? FONT_ITEMS[0];
+  return `"${font.family}", sans-serif`;
+}
+
+const SINGLE_WEIGHT_FONTS = new Set([
+  "Abril Fatface",
+  "Alex Brush",
+  "Alfa Slab One",
+  "Allura",
+  "Anton",
+  "Architects Daughter",
+  "Archivo Black",
+  "Audiowide",
+  "Bangers",
+  "Bebas Neue",
+  "Black Ops One",
+  "Bowlby One SC",
+  "Bungee",
+  "Bungee Inline",
+  "Bungee Outline",
+  "Bungee Shade",
+  "Cookie",
+  "Courgette",
+  "Creepster",
+  "DM Serif Display",
+  "Fascinate Inline",
+  "Fjalla One",
+  "Flavors",
+  "Frijole",
+  "Fugaz One",
+  "Gloock",
+  "Great Vibes",
+  "Homemade Apple",
+  "Knewave",
+  "Limelight",
+  "Lobster",
+  "Luckiest Guy",
+  "Major Mono Display",
+  "Metal Mania",
+  "Michroma",
+  "Modak",
+  "Monoton",
+  "New Rocker",
+  "Nosifer",
+  "Pacifico",
+  "Parisienne",
+  "Permanent Marker",
+  "Pirata One",
+  "Playball",
+  "Poiret One",
+  "Press Start 2P",
+  "Prata",
+  "Rammetto One",
+  "Righteous",
+  "Rock Salt",
+  "Rubik Beastly",
+  "Rubik Burned",
+  "Rubik Dirt",
+  "Rubik Glitch",
+  "Rubik Microbe",
+  "Rubik Moonrocks",
+  "Rubik Puddles",
+  "Rubik Spray Paint",
+  "Rubik Vinyl",
+  "Rye",
+  "Sacramento",
+  "Sancreek",
+  "Satisfy",
+  "Shrikhand",
+  "Smokum",
+  "Special Elite",
+  "Staatliches",
+  "Titan One",
+  "Ultra",
+  "Yeseva One",
+]);
+
+const FONT_WEIGHT_OVERRIDES: Record<string, number[]> = {
+  Inter: [400, 500, 600, 700, 800, 900],
+  Geist: [400, 500, 600, 700, 800, 900],
+  Manrope: [400, 500, 600, 700, 800],
+  Sora: [400, 500, 600, 700, 800],
+  Onest: [400, 500, 600, 700, 800],
+  Outfit: [400, 500, 600, 700, 800, 900],
+  Urbanist: [400, 500, 600, 700, 800, 900],
+  "Plus Jakarta Sans": [400, 500, 600, 700, 800],
+  "DM Sans": [400, 500, 600, 700, 800, 900],
+  Figtree: [400, 500, 600, 700, 800, 900],
+  "Public Sans": [400, 500, 600, 700, 800, 900],
+  "Instrument Sans": [400, 500, 600, 700],
+  "Space Grotesk": [400, 500, 600, 700],
+  "IBM Plex Sans": [400, 500, 600, 700],
+  "IBM Plex Sans Condensed": [400, 500, 600, 700],
+  "Work Sans": [400, 500, 600, 700, 800, 900],
+  Archivo: [400, 500, 600, 700, 800, 900],
+  "Archivo Narrow": [400, 500, 600, 700],
+  Barlow: [400, 500, 600, 700, 800, 900],
+  "Barlow Condensed": [400, 500, 600, 700, 800, 900],
+  Karla: [400, 500, 600, 700, 800],
+  Lexend: [400, 500, 600, 700, 800, 900],
+  Rubik: [400, 500, 600, 700, 800, 900],
+  Raleway: [400, 500, 600, 700, 800, 900],
+  Montserrat: [400, 500, 600, 700, 800, 900],
+  "Montserrat Alternates": [400, 500, 600, 700, 800, 900],
+  Poppins: [400, 500, 600, 700, 800, 900],
+  "Nunito Sans": [400, 500, 600, 700, 800, 900],
+  Mulish: [400, 500, 600, 700, 800, 900],
+  Cabin: [400, 500, 600, 700],
+  "Fira Sans": [400, 500, 600, 700, 800, 900],
+  "Source Sans 3": [400, 500, 600, 700, 800, 900],
+  "Noto Sans": [400, 500, 600, 700, 800, 900],
+  "Hanken Grotesk": [400, 500, 600, 700, 800, 900],
+  "Albert Sans": [400, 500, 600, 700, 800, 900],
+  "Red Hat Display": [400, 500, 600, 700, 800, 900],
+  "Red Hat Text": [400, 500, 600, 700],
+  Epilogue: [400, 500, 600, 700, 800, 900],
+  Syne: [400, 500, 600, 700, 800],
+  Prompt: [400, 500, 600, 700, 800, 900],
+  Kanit: [400, 500, 600, 700, 800, 900],
+  "Josefin Sans": [400, 500, 600, 700],
+  Quicksand: [400, 500, 600, 700],
+  "Alegreya Sans": [400, 500, 600, 700, 800, 900],
+  "Playfair Display": [400, 500, 600, 700, 800, 900],
+  "Cormorant Garamond": [400, 500, 600, 700],
+  "Cormorant SC": [400, 500, 600, 700],
+  "Cormorant Infant": [400, 500, 600, 700],
+  "Bodoni Moda": [400, 500, 600, 700, 800, 900],
+  Fraunces: [400, 500, 600, 700, 800, 900],
+  Cinzel: [400, 500, 600, 700, 800, 900],
+  Lora: [400, 500, 600, 700],
+  "EB Garamond": [400, 500, 600, 700, 800],
+  "Crimson Text": [400, 600, 700],
+  "Source Serif 4": [400, 500, 600, 700, 800, 900],
+  Newsreader: [400, 500, 600, 700, 800],
+  Spectral: [400, 500, 600, 700, 800],
+  Alegreya: [400, 500, 600, 700, 800, 900],
+  Cardo: [400, 700],
+  "Noto Serif": [400, 500, 600, 700, 800, 900],
+  "Noto Serif Display": [400, 500, 600, 700, 800, 900],
+  Bitter: [400, 500, 600, 700, 800, 900],
+  Domine: [400, 500, 600, 700],
+  Vollkorn: [400, 500, 600, 700, 800, 900],
+  Arvo: [400, 700],
+  "Zilla Slab": [400, 500, 600, 700],
+  "Roboto Slab": [400, 500, 600, 700, 800, 900],
+  Oswald: [400, 500, 600, 700],
+  "League Spartan": [400, 500, 600, 700, 800, 900],
+  Teko: [400, 500, 600, 700],
+  Orbitron: [400, 500, 600, 700, 800, 900],
+  Rajdhani: [400, 500, 600, 700],
+  Quantico: [400, 700],
+  "Saira Condensed": [400, 500, 600, 700, 800, 900],
+  "Saira Extra Condensed": [400, 500, 600, 700, 800, 900],
+  "Big Shoulders Display": [400, 500, 600, 700, 800, 900],
+  "Big Shoulders Inline Display": [400, 500, 600, 700, 800, 900],
+  "Dancing Script": [400, 500, 600, 700],
+  Caveat: [400, 500, 600, 700],
+  Kalam: [400, 700],
+  Fredoka: [400, 500, 600, 700],
+  "Baloo 2": [400, 500, 600, 700, 800],
+};
+
+function getFontWeights(font: FontItem) {
+  const family = font.google || font.family;
+
+  if (FONT_WEIGHT_OVERRIDES[family]) {
+    return FONT_WEIGHT_OVERRIDES[family];
+  }
+
+  if (SINGLE_WEIGHT_FONTS.has(family)) {
+    return [400];
+  }
+
+  return null;
 }
 
 export function getGoogleFontHref(font: FontItem) {
   const family = encodeURIComponent(font.google || font.family).replace(/%20/g, "+");
-  return `https://fonts.googleapis.com/css2?family=${family}:wght@300;400;500;600;700;800;900&display=swap`;
-}
+  const weights = getFontWeights(font);
 
-export function loadEditorFont(fontOrFamily: FontItem | string) {
-  if (typeof document === "undefined") return;
-  const font = typeof fontOrFamily === "string" ? getFontByFamily(fontOrFamily) : fontOrFamily;
-  if (!font?.google) return;
-  const id = `editor-font-${font.id}`;
-  if (LOADED_EDITOR_FONTS.has(id) || document.getElementById(id)) {
-    LOADED_EDITOR_FONTS.add(id);
-    return;
+  if (!weights?.length) {
+    return `https://fonts.googleapis.com/css2?family=${family}&display=swap`;
   }
-  const link = document.createElement("link");
-  link.id = id;
-  link.rel = "stylesheet";
-  link.href = getGoogleFontHref(font);
-  document.head.appendChild(link);
-  LOADED_EDITOR_FONTS.add(id);
+
+  return `https://fonts.googleapis.com/css2?family=${family}:wght@${weights.join(";")}&display=swap`;
 }
 
-export function loadVisibleEditorFonts(fontFamilies: string[], max = 8) {
-  if (typeof window === "undefined") return;
-  fontFamilies.filter(Boolean).slice(0, max).forEach((family) => visibleFontQueue.add(family));
-  if (visibleFontScheduled) return;
-  visibleFontScheduled = true;
-  scheduleIdle(() => {
-    const next = Array.from(visibleFontQueue).slice(0, max);
-    visibleFontQueue = new Set(Array.from(visibleFontQueue).slice(max));
-    next.forEach((family) => loadEditorFont(family));
-    visibleFontScheduled = false;
-    if (visibleFontQueue.size) loadVisibleEditorFonts([], max);
+function nextPaint() {
+  if (typeof window === "undefined") return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve()));
   });
+}
+
+async function waitForFontPaint(family: string) {
+  if (typeof document === "undefined") return;
+
+  try {
+    await Promise.all([
+      document.fonts?.load(`400 24px "${family}"`) ?? Promise.resolve(),
+      document.fonts?.load(`700 24px "${family}"`) ?? Promise.resolve(),
+      document.fonts?.load(`900 24px "${family}"`) ?? Promise.resolve(),
+    ]);
+    await (document.fonts?.ready ?? Promise.resolve());
+  } catch {
+    // Keep the UI usable if a font provider request fails.
+  }
+
+  await nextPaint();
+}
+
+function ensureGoogleFontsPreconnect() {
+  if (typeof document === "undefined") return;
+
+  if (!document.getElementById("editor-fonts-preconnect-gstatic")) {
+    const gstatic = document.createElement("link");
+    gstatic.id = "editor-fonts-preconnect-gstatic";
+    gstatic.rel = "preconnect";
+    gstatic.href = "https://fonts.gstatic.com";
+    gstatic.crossOrigin = "anonymous";
+    document.head.appendChild(gstatic);
+  }
+
+  if (!document.getElementById("editor-fonts-preconnect-googleapis")) {
+    const googleapis = document.createElement("link");
+    googleapis.id = "editor-fonts-preconnect-googleapis";
+    googleapis.rel = "preconnect";
+    googleapis.href = "https://fonts.googleapis.com";
+    document.head.appendChild(googleapis);
+  }
+}
+
+export function loadEditorFont(fontOrFamily: FontItem | string): Promise<void> {
+  if (typeof document === "undefined") return Promise.resolve();
+
+  ensureGoogleFontsPreconnect();
+
+  const font = typeof fontOrFamily === "string" ? getFontByFamily(fontOrFamily) : fontOrFamily;
+  if (!font?.google) return Promise.resolve();
+
+  const id = `editor-font-${font.id}`;
+  const existingPromise = LOADING_EDITOR_FONTS.get(id);
+  if (existingPromise) return existingPromise;
+
+  const existingLink = document.getElementById(id) as HTMLLinkElement | null;
+
+  const promise = new Promise<void>((resolve) => {
+    const finish = () => {
+      LOADED_EDITOR_FONTS.add(id);
+      void waitForFontPaint(font.family).finally(resolve);
+    };
+
+    if (LOADED_EDITOR_FONTS.has(id) || existingLink?.sheet) {
+      finish();
+      return;
+    }
+
+    if (existingLink) {
+      existingLink.addEventListener("load", finish, { once: true });
+      existingLink.addEventListener("error", finish, { once: true });
+      void waitForFontPaint(font.family).finally(finish);
+      return;
+    }
+
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = getGoogleFontHref(font);
+    link.onload = finish;
+    link.onerror = finish;
+    document.head.appendChild(link);
+  });
+
+  LOADING_EDITOR_FONTS.set(id, promise);
+  return promise;
+}
+
+export function loadVisibleEditorFonts(fontFamilies: string[], max = 12): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+
+  const uniqueFamilies = Array.from(
+    new Set(fontFamilies.filter((family) => isValidEditorFontFamily(family))),
+  ).slice(0, max);
+
+  // Keep this intentionally small. The font picker uses static SVG previews,
+  // so real font files are only needed when a user applies a font to the canvas.
+  return Promise.all(uniqueFamilies.map((family) => loadEditorFont(family))).then(() => undefined);
 }

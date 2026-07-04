@@ -23,6 +23,7 @@ const FONT_MAP: Record<string, string> = {
   "DM Serif Display": "var(--font-dm-serif)",
   "Space Grotesk": "var(--font-space)",
   "Rubik Mono One": "var(--font-rubik-mono)",
+  "Black Ops One": "var(--font-black-ops)",
 };
 
 function resolveFontFamily(font?: string): string {

@@ -9,9 +9,9 @@ type MobilePanelFrameProps = {
   defaultHeight?: number;
 };
 
-const MIN_HEIGHT = 30;
-const MAX_HEIGHT = 76;
-const DEFAULT_HEIGHT = 44;
+const MIN_HEIGHT = 22;
+const MAX_HEIGHT = 54;
+const DEFAULT_HEIGHT = 32;
 
 function clamp(value: number, min = MIN_HEIGHT, max = MAX_HEIGHT) {
   return Math.max(min, Math.min(max, value));
@@ -41,7 +41,7 @@ export default function MobilePanelFrame({ id = "panel", children, className = "
   return (
     <div className={`min-h-0 ${className}`} style={style} data-mobile-panel-frame="true">
       <div
-        className="md:hidden sticky top-0 z-30 -mx-1 mb-1.5 flex h-5 touch-none select-none items-center justify-center rounded-t-xl bg-white/80 backdrop-blur-sm active:cursor-grabbing"
+        className="md:hidden sticky top-0 z-30 -mx-1 mb-1 flex h-4 touch-none select-none items-center justify-center rounded-t-lg bg-[#070817] active:cursor-grabbing"
         role="slider"
         aria-label="Resize panel"
         aria-valuemin={MIN_HEIGHT}
@@ -71,9 +71,9 @@ export default function MobilePanelFrame({ id = "panel", children, className = "
           if (event.key === "End") saveHeight(MAX_HEIGHT);
         }}
       >
-        <span className="h-1 w-9 rounded-full bg-slate-300" />
+        <span className="h-1 w-7 rounded-full bg-violet-300/45" />
       </div>
-      <div className="max-h-[var(--mobile-panel-height)] overflow-y-auto overscroll-contain pr-0.5 md:max-h-none md:overflow-visible [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="max-h-[var(--mobile-panel-height)] overflow-y-auto overscroll-contain pr-0.5 md:max-h-none md:overflow-visible [content-visibility:auto] [contain-intrinsic-size:300px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {children}
       </div>
     </div>

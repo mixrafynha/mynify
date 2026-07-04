@@ -11,11 +11,13 @@ type CartVariantRelation = {
   price: number | string | null;
   sku: string | null;
   product_color_id: string | null;
+  gelato_product_uid: string | null;
 };
 
 type CartItem = {
   id: string;
   product_id: string;
+  user_product_id: string | null;
   variant_id: string | null;
   title: string | null;
   price: number | string | null;
@@ -29,6 +31,24 @@ type CartItem = {
   product_variants?: CartVariantRelation | CartVariantRelation[] | null;
 };
 
+type UserProductRelation = {
+  id: string;
+  base_product_id: string | null;
+  print_files: Record<string, unknown> | null;
+  mockups: Record<string, unknown> | null;
+  design_data: Record<string, unknown> | null;
+};
+
+type UserProductAssets = {
+  user_product_id: string | null;
+  base_product_id: string | null;
+  print_files: Record<string, unknown> | null;
+  printFiles: Record<string, unknown> | null;
+  mockups: Record<string, unknown> | null;
+  design_data: Record<string, unknown> | null;
+  designData: Record<string, unknown> | null;
+};
+
 type SupabaseManyResponse<T> = {
   data: T[] | null;
   error: { message: string } | null;
@@ -37,6 +57,60 @@ type SupabaseManyResponse<T> = {
 function firstRelation<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
   return Array.isArray(value) ? value[0] ?? null : value;
+}
+
+function publicString(value: unknown): string | null {
+  return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
+}
+
+function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
+  if (!mockups) return null;
+  return publicString(mockups.front) ?? publicString(mockups.mockup_front) ?? publicString(mockups.image);
+}
+
+async function resolveUserProductAssets(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  userProductId: string | null,
+): Promise<UserProductAssets> {
+  if (!userProductId) {
+    return {
+      user_product_id: null,
+      base_product_id: null,
+      print_files: null,
+      printFiles: null,
+      mockups: null,
+      design_data: null,
+      designData: null,
+    };
+  }
+
+  const { data } = (await supabase
+    .from("user_products")
+    .select("id, base_product_id, print_files, mockups, design_data")
+    .eq("id", userProductId)
+    .maybeSingle()) as { data: UserProductRelation | null; error: { message: string } | null };
+
+  if (!data) {
+    return {
+      user_product_id: null,
+      base_product_id: null,
+      print_files: null,
+      printFiles: null,
+      mockups: null,
+      design_data: null,
+      designData: null,
+    };
+  }
+
+  return {
+    user_product_id: data.id,
+    base_product_id: data.base_product_id,
+    print_files: data.print_files,
+    printFiles: data.print_files,
+    mockups: data.mockups,
+    design_data: data.design_data,
+    designData: data.design_data,
+  };
 }
 
 export async function GET() {
@@ -57,6 +131,7 @@ export async function GET() {
       .select(`
         id,
         product_id,
+        user_product_id,
         variant_id,
         title,
         price,
@@ -73,7 +148,8 @@ export async function GET() {
           size,
           price,
           sku,
-          product_color_id
+          product_color_id,
+          gelato_product_uid
         )
       `)
       .eq("user_id", user.id)
@@ -89,9 +165,20 @@ export async function GET() {
         const selectedVariant = availableVariants.find((variant) => variant.id === item.variant_id) ?? null;
         const variantRelation = firstRelation(item.product_variants);
 
+        const userProductAssets = await resolveUserProductAssets(supabase, item.user_product_id);
+
+        const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
+        const mockupImage = frontMockupUrl(userProductAssets.mockups);
+
         return {
           ...item,
+          ...userProductAssets,
+          image: mockupImage ?? item.image,
           product_variants: variantRelation,
+          product_uid: gelatoProductUid,
+          productUid: gelatoProductUid,
+          gelato_product_uid: gelatoProductUid,
+          gelatoProductUid: gelatoProductUid,
           stock: variantRelation?.stock ?? selectedVariant?.stock ?? null,
           selectedVariant,
           availableVariants,

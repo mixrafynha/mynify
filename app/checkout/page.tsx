@@ -52,6 +52,7 @@ import {
   CHECKOUT_SESSION_KEY,
   CHECKOUT_STEP_SESSION_KEY,
   GELATO_COUNTRIES,
+  createCheckoutRequestPayload,
 } from "./_lib/checkout";
 import type {
   AddressSuggestion,
@@ -61,7 +62,49 @@ import type {
   ProductAvailability,
   ProductAvailabilityItem,
   Step,
+  CheckoutRequestPayload,
 } from "./_lib/checkout";
+
+type GelatoDraftTestResult = {
+  ok?: boolean;
+  requestPayload?: unknown;
+  responsePayload?: unknown;
+  headers?: Record<string, string>;
+  status?: number;
+  durationMs?: number;
+};
+
+function getObjectValue(source: unknown, keys: string[]): unknown {
+  if (!source || typeof source !== "object") return null;
+
+  if (Array.isArray(source)) {
+    for (const entry of source) {
+      const value = getObjectValue(entry, keys);
+      if (value !== null && value !== undefined) return value;
+    }
+    return null;
+  }
+
+  const record = source as Record<string, unknown>;
+  for (const key of keys) {
+    if (record[key] !== undefined && record[key] !== null) return record[key];
+  }
+
+  for (const value of Object.values(record)) {
+    const nested = getObjectValue(value, keys);
+    if (nested !== null && nested !== undefined) return nested;
+  }
+
+  return null;
+}
+
+function stringifyForDisplay(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -76,6 +119,8 @@ export default function CheckoutPage() {
   const [variantMap, setVariantMap] = useState<Record<string, CartVariant[]>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [testingGelato, setTestingGelato] = useState(false);
+  const [gelatoTestResult, setGelatoTestResult] = useState<GelatoDraftTestResult | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [addressSearching, setAddressSearching] = useState(false);
@@ -570,6 +615,17 @@ export default function CheckoutPage() {
     }
   };
 
+
+  const buildLiveCheckoutPayload = () =>
+    createCheckoutRequestPayload(
+      form,
+      items.map((item) => ({
+        ...item,
+        selectedVariant: item.selectedVariant ?? getCurrentVariant(item),
+      })),
+      shipping,
+    );
+
   const handleCheckout = async () => {
     if (!canPay || submitting) return;
     if (hasAvailabilityBlock) {
@@ -583,25 +639,15 @@ export default function CheckoutPage() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer: {
-            ...form,
-            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
-          },
-          shipping: { method: form.shippingMethod, price: shipping },
-          items: items.map((item) => ({
-            id: item.id,
-            product_id: getCartProductId(item),
-            variant_id: item.variant_id,
-            color: item.color,
-            size: item.size,
-            quantity: item.quantity,
-          })),
-        }),
+        body: JSON.stringify(buildLiveCheckoutPayload()),
       });
 
       const data = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(data?.error || "Error creating checkout");
+      if (!res.ok) {
+        const serverMessage = data?.details || data?.error || "Error creating checkout";
+        const invalidItems = Array.isArray(data?.invalidItems) ? ` ${JSON.stringify(data.invalidItems)}` : "";
+        throw new Error(`${serverMessage}${invalidItems}`);
+      }
 
       if (data?.url) {
         window.location.href = data.url;
@@ -613,10 +659,77 @@ export default function CheckoutPage() {
       }
 
       router.push(data?.orderId ? `/checkout/success?order=${data.orderId}` : "/checkout/success");
-    } catch {
-      setError("Checkout is not connected yet. Please check your /api/checkout route.");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Checkout is not connected yet. Please check your /api/checkout route.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGelatoDraftOrderTest = async () => {
+    if (!canPay || submitting || testingGelato || loading || updatingItemId || removingItemId) return;
+    if (hasAvailabilityBlock) {
+      setError("Some products are not available for this delivery country. Change country or product variant before testing Gelato.");
+      return;
+    }
+
+    const requestPayload: CheckoutRequestPayload = buildLiveCheckoutPayload();
+    const startedAt = performance.now();
+
+    setTestingGelato(true);
+    setError(null);
+    setGelatoTestResult(null);
+
+    try {
+      const res = await fetch("/api/gelato/draft-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(requestPayload),
+      });
+
+      const data = (await res.json().catch(() => null)) as GelatoDraftTestResult | null;
+      const durationMs = Math.round(performance.now() - startedAt);
+      const nextResult: GelatoDraftTestResult = data ?? { ok: false, status: res.status, durationMs };
+
+      console.log("=========================\nGELATO REQUEST\n=========================");
+      console.log(requestPayload);
+      console.log("=========================\nGELATO RESPONSE\n=========================");
+      console.log(nextResult.responsePayload ?? nextResult);
+      console.log("=========================\nHEADERS\n=========================");
+      console.log(nextResult.headers ?? {});
+      console.log("=========================\nSTATUS\n=========================");
+      console.log(nextResult.status ?? res.status);
+      console.log("=========================\nREQUEST TIME\n=========================");
+      console.log(`${nextResult.durationMs ?? durationMs}ms`);
+
+      setGelatoTestResult({ ...nextResult, durationMs: nextResult.durationMs ?? durationMs, status: nextResult.status ?? res.status });
+    } catch (cause) {
+      const durationMs = Math.round(performance.now() - startedAt);
+      const message = cause instanceof Error ? cause.message : "Gelato Draft Order request failed";
+      const nextResult: GelatoDraftTestResult = {
+        ok: false,
+        requestPayload,
+        responsePayload: { error: message },
+        headers: {},
+        status: 0,
+        durationMs,
+      };
+
+      console.log("=========================\nGELATO REQUEST\n=========================");
+      console.log(requestPayload);
+      console.log("=========================\nGELATO RESPONSE\n=========================");
+      console.log(nextResult.responsePayload);
+      console.log("=========================\nHEADERS\n=========================");
+      console.log(nextResult.headers);
+      console.log("=========================\nSTATUS\n=========================");
+      console.log(nextResult.status);
+      console.log("=========================\nREQUEST TIME\n=========================");
+      console.log(`${durationMs}ms`);
+
+      setGelatoTestResult(nextResult);
+    } finally {
+      setTestingGelato(false);
     }
   };
 
@@ -987,6 +1100,34 @@ export default function CheckoutPage() {
                       <button type="button" onClick={() => setStep("shipping")} className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-white/60 hover:bg-white/[0.05]">Edit</button>
                     </div>
                   </div>
+
+                  <button type="button" disabled={!canPay || submitting || testingGelato || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleGelatoDraftOrderTest} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                    {testingGelato ? <><Loader2 size={16} className="animate-spin" /> Testing Gelato...</> : <>Test Gelato</>}
+                  </button>
+
+                  {gelatoTestResult ? (
+                    <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 text-xs font-semibold leading-5 text-white/60">
+                      {gelatoTestResult.ok ? (
+                        <div className="space-y-2">
+                          <p className="text-sm font-black text-emerald-200">Draft Order created successfully</p>
+                          <p>Draft Order ID: {String(getObjectValue(gelatoTestResult.responsePayload, ["id", "orderId", "draftOrderId"]) ?? "Not returned")}</p>
+                          <p>Gelato Status: {String(getObjectValue(gelatoTestResult.responsePayload, ["status", "gelatoStatus"]) ?? "Not returned")}</p>
+                          <p>Fulfillment Status: {String(getObjectValue(gelatoTestResult.responsePayload, ["fulfillmentStatus", "fulfillment_status"]) ?? "Not returned")}</p>
+                          <p>Country: {form.country}</p>
+                          <p>Variant: {items.map((item) => [item.color, item.size].filter(Boolean).join(" / ") || item.variant_id || item.title).join(", ")}</p>
+                          <p>SKU: {items.map((item) => item.sku || "Not returned").join(", ")}</p>
+                          <p>Print Provider: {String(getObjectValue(gelatoTestResult.responsePayload, ["printProvider", "print_provider", "printProviderName"]) ?? "Not returned")}</p>
+                          <p>Production Country: {String(getObjectValue(gelatoTestResult.responsePayload, ["productionCountry", "production_country"]) ?? "Not returned")}</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <p className="text-sm font-black text-red-200">Gelato rejected the Draft Order</p>
+                          <p>HTTP status: {gelatoTestResult.status ?? "Unknown"}</p>
+                          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-3 text-[11px] leading-5 text-white/70">{stringifyForDisplay(gelatoTestResult.responsePayload ?? gelatoTestResult)}</pre>
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
 
                   <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}

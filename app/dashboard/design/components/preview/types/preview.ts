@@ -1,3 +1,4 @@
+import type { ProductDisplayConfig } from "../../canvas/productConfig";
 export type PreviewSide = "front" | "back";
 export type PreviewStatus = "ready" | "needs_attention" | "production_risk";
 export type PreviewRiskLevel = "low" | "medium" | "high";
@@ -64,6 +65,7 @@ export type PreviewSideData = {
   side: PreviewSide;
   elements: PreviewElement[];
   mockupUrl: string;
+  visualScale?: number;
   printBox: PreviewBox;
   safeArea: PreviewBox;
   printSize: PreviewPrintSize;
@@ -93,8 +95,12 @@ export type ProductionPreviewInput = {
   color?: string;
   printBox?: PreviewBox | null;
   safeArea?: PreviewBox | null;
+  printBoxes?: Partial<Record<PreviewSide, PreviewBox | null>>;
+  safeAreas?: Partial<Record<PreviewSide, PreviewBox | null>>;
   designImage?: string | null;
   designImages?: Partial<Record<PreviewSide, string | null>>;
   mockupMode?: "on_model_ai" | "product_flat" | string;
   modelMockup?: boolean;
+  productConfig?: ProductDisplayConfig | null;
+  designCoordinateMode?: "safe-area-local" | "mockup-absolute" | "canvas-absolute" | string;
 };

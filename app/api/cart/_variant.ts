@@ -7,7 +7,9 @@ export type ProductColor = {
   product_id: string | null;
   color: string | null;
   color_hex: string | null;
-  image: string | null;
+  image?: string | null;
+  mockup_front?: string | null;
+  thumbnail?: string | null;
   position?: number | null;
 };
 
@@ -18,6 +20,7 @@ export type ProductVariant = {
   price: number | null;
   sku: string | null;
   name?: string | null;
+  gelato_product_uid?: string | null;
   product_color_id: string | null;
 };
 
@@ -33,6 +36,10 @@ export type ResolvedVariant = {
   price: number | null;
   sku: string | null;
   name: string | null;
+  gelato_product_uid: string | null;
+  gelatoProductUid: string | null;
+  product_uid: string | null;
+  productUid: string | null;
   product_color_id: string | null;
   product_id: string | null;
   color: string | null;
@@ -87,12 +94,16 @@ export function resolveVariantRow(
     price: toNullableNumber(variant.price),
     sku: variant.sku ?? null,
     name: variant.name ?? null,
+    gelato_product_uid: variant.gelato_product_uid ?? null,
+    gelatoProductUid: variant.gelato_product_uid ?? null,
+    product_uid: variant.gelato_product_uid ?? null,
+    productUid: variant.gelato_product_uid ?? null,
     product_color_id: variant.product_color_id ?? null,
     product_id: color?.product_id ?? null,
     color: color?.color ?? null,
     color_hex: color?.color_hex ?? null,
     colorHex: color?.color_hex ?? null,
-    image: color?.image ?? null,
+    image: color?.image ?? color?.mockup_front ?? color?.thumbnail ?? null,
   };
 }
 
@@ -102,7 +113,7 @@ export async function resolveVariantById(
 ): Promise<ResolvedVariant | null> {
   const { data: variant, error: variantError } = (await supabase
     .from("product_variants")
-    .select("id, size, stock, price, sku, name, product_color_id")
+    .select("id, size, stock, price, sku, name, gelato_product_uid, product_color_id")
     .eq("id", variantId)
     .maybeSingle()) as SupabaseSingleResponse<ProductVariant>;
 
@@ -112,7 +123,7 @@ export async function resolveVariantById(
 
   const { data: color } = (await supabase
     .from("product_colors")
-    .select("id, product_id, color, color_hex, image")
+    .select("id, product_id, color, color_hex, mockup_front, thumbnail")
     .eq("id", variant.product_color_id)
     .maybeSingle()) as SupabaseSingleResponse<ProductColor>;
 
@@ -127,7 +138,7 @@ export async function getAvailableVariants(
 
   const { data: colors, error: colorsError } = (await supabase
     .from("product_colors")
-    .select("id, product_id, color, color_hex, image, position")
+    .select("id, product_id, color, color_hex, mockup_front, thumbnail, position")
     .in("product_id", productIds)
     .order("position", { ascending: true })) as SupabaseManyResponse<ProductColor>;
 
@@ -139,7 +150,7 @@ export async function getAvailableVariants(
 
   const { data: variants, error: variantsError } = (await supabase
     .from("product_variants")
-    .select("id, size, stock, price, sku, name, product_color_id")
+    .select("id, size, stock, price, sku, name, gelato_product_uid, product_color_id")
     .in("product_color_id", colorIds)
     .order("size", { ascending: true })) as SupabaseManyResponse<ProductVariant>;
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { memo, useState } from "react";
-import { MOCKUP_VISUAL_SCALE_BY_PRODUCT } from "../canvas/productConfig";
+import { memo, useEffect, useRef, useState } from "react";
+import { MOCKUP_AREA } from "../canvas/constants";
+import PreviewCleanElement from "./PreviewCleanElement";
 import type { PreviewSideData } from "./types/preview";
 
 function isDarkColor(color: string) {
@@ -36,6 +37,33 @@ function DesignImageOverlay({
   );
 }
 
+function PreviewElementOverlay({ data }: { data: PreviewSideData }) {
+  const elements = Array.isArray(data.elements) ? data.elements : [];
+  if (!elements.length) return null;
+
+  return (
+    <div
+      className="pointer-events-none absolute z-20 overflow-hidden"
+      style={{
+        left: `${(data.safeArea.x / MOCKUP_AREA.width) * 100}%`,
+        top: `${(data.safeArea.y / MOCKUP_AREA.height) * 100}%`,
+        width: `${(data.safeArea.width / MOCKUP_AREA.width) * 100}%`,
+        height: `${(data.safeArea.height / MOCKUP_AREA.height) * 100}%`,
+        clipPath: "inset(0)",
+        contain: "layout paint size",
+      }}
+    >
+      {[...elements]
+        .sort(
+          (a: any, b: any) =>
+            (Number(a?.zIndex) || 0) - (Number(b?.zIndex) || 0),
+        )
+        .map((element: any) => (
+          <PreviewCleanElement key={`${data.side}:${element.id}`} el={element} />
+        ))}
+    </div>
+  );
+}
 function PreviewMockup({
   data,
   productId,
@@ -54,9 +82,30 @@ function PreviewMockup({
   generating?: boolean;
 }) {
   const [aiImageFailed, setAiImageFailed] = useState(false);
+  const previewStageRef = useRef<HTMLDivElement | null>(null);
+  const [fitScale, setFitScale] = useState(1);
 
-  const visualScale =
-    MOCKUP_VISUAL_SCALE_BY_PRODUCT?.[productId]?.[data.side] ?? 1;
+  useEffect(() => {
+    const node = previewStageRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+
+    const updateScale = () => {
+      const rect = node.getBoundingClientRect();
+      const available = Math.max(1, Math.min(rect.width, rect.height));
+      setFitScale(Math.min(1, available / MOCKUP_AREA.width));
+    };
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    setAiImageFailed(false);
+  }, [data.side, generatedMockupUrl]);
+
+  const visualScale = Number(data.visualScale) > 0 ? Number(data.visualScale) : 1;
 
   const dark = isDarkColor(color);
   const hasAiMockup = Boolean(generatedMockupUrl) && !aiImageFailed;
@@ -89,26 +138,37 @@ function PreviewMockup({
             {!generatedIncludesDesign && generatedDesignImageUrl && (
               <DesignImageOverlay
                 src={generatedDesignImageUrl}
-                className="absolute left-1/2 top-[43%] z-20 aspect-[3/4] w-[min(28vw,205px)] -translate-x-1/2 -translate-y-1/2 opacity-100 sm:w-[min(20vw,245px)]"
+                className="absolute inset-0 z-20 opacity-100"
               />
             )}
           </div>
         ) : (
-          <div className="relative aspect-square h-auto w-[min(96vw,88dvh,900px)] max-w-full overflow-visible">
+          <div
+            ref={previewStageRef}
+            className="relative flex h-full w-full items-center justify-center overflow-visible"
+          >
             <div
-              className="absolute inset-0"
+              className="relative shrink-0 overflow-visible"
               style={{
-                transform: `scale(${visualScale})`,
-                transformOrigin: "center",
+                width: MOCKUP_AREA.width,
+                height: MOCKUP_AREA.height,
+                transform: `scale(${fitScale})`,
+                transformOrigin: "center center",
               }}
             >
               {data.mockupUrl ? (
-                <>
+                <div
+                  className="pointer-events-none absolute inset-0 z-0 select-none"
+                  style={{
+                    transform: `scale(${visualScale})`,
+                    transformOrigin: "center center",
+                  }}
+                >
                   <img
                     src={data.mockupUrl}
                     alt={`${productId} ${data.side}`}
                     draggable={false}
-                    className="absolute inset-0 h-full w-full select-none object-contain drop-shadow-[0_40px_55px_rgba(0,0,0,.30)]"
+                    className="absolute inset-0 h-full w-full select-none object-cover drop-shadow-[0_40px_55px_rgba(0,0,0,.30)]"
                   />
 
                   <div
@@ -120,33 +180,29 @@ function PreviewMockup({
                       mixBlendMode: dark ? "normal" : "multiply",
                       WebkitMaskImage: `url(${data.mockupUrl})`,
                       maskImage: `url(${data.mockupUrl})`,
-                      WebkitMaskSize: "contain",
-                      maskSize: "contain",
-                      WebkitMaskRepeat: "no-repeat",
-                      maskRepeat: "no-repeat",
+                      WebkitMaskSize: "cover",
+                      maskSize: "cover",
                       WebkitMaskPosition: "center",
                       maskPosition: "center",
                     }}
                   />
-                </>
+                </div>
               ) : (
                 <div
                   className="absolute left-1/2 top-1/2 h-[72%] w-[54%] -translate-x-1/2 -translate-y-1/2 rounded-[28%_28%_16%_16%] shadow-[0_42px_60px_rgba(0,0,0,.28),inset_0_1px_0_rgba(255,255,255,.18)]"
                   style={{ backgroundColor: color }}
                 />
               )}
-            </div>
 
-            {generatedDesignImageUrl && (
-              <div className="absolute inset-0 z-20 overflow-hidden">
-                <img
+              {generatedDesignImageUrl ? (
+                <DesignImageOverlay
                   src={generatedDesignImageUrl}
-                  alt="Design preview"
-                  draggable={false}
-                  className="block h-full w-full select-none object-contain"
+                  className="absolute inset-0 z-20 opacity-100"
                 />
-              </div>
-            )}
+              ) : (
+                <PreviewElementOverlay data={data} />
+              )}
+            </div>
           </div>
         )}
       </div>

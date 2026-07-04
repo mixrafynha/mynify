@@ -1,7 +1,6 @@
 import { toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
-import { getTextPadding } from "../../canvas/canvasMath";
-import type { PreviewElement, PreviewSideData } from "../types/preview";
+import type { PreviewSide, PreviewSideData } from "../types/preview";
 
 const CAPTURE_HIDDEN_SELECTORS = [
   "[data-element-control]",
@@ -9,24 +8,9 @@ const CAPTURE_HIDDEN_SELECTORS = [
   "[data-warning-frame]",
   "[data-editor-only]",
   "[data-selection-frame]",
+  "[data-gelato-dropzone]",
+  "[data-production-hidden]",
 ];
-
-const FONT_MAP: Record<string, string> = {
-  Anton: "var(--font-anton)",
-  "Bebas Neue": "var(--font-bebas)",
-  Orbitron: "var(--font-orbitron)",
-  "Playfair Display": "var(--font-playfair)",
-  Poppins: "var(--font-poppins)",
-  Cinzel: "var(--font-cinzel)",
-  "DM Serif Display": "var(--font-dm-serif)",
-  "Space Grotesk": "var(--font-space)",
-  "Rubik Mono One": "var(--font-rubik-mono)",
-};
-
-function resolveFontFamily(font?: string): string {
-  if (!font) return "var(--font-poppins), Arial, sans-serif";
-  return `${FONT_MAP[font] || `"${font}"`}, Arial, sans-serif`;
-}
 
 function number(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -42,6 +26,79 @@ function nextFrame() {
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+async function waitForFonts() {
+  await document.fonts?.ready?.catch?.(() => undefined);
+}
+
+const SYSTEM_FONT_FAMILIES = new Set([
+  "arial",
+  "sans-serif",
+  "serif",
+  "monospace",
+  "system-ui",
+  "inter",
+  "inherit",
+  "initial",
+]);
+
+function normalizeFontFamilyName(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function collectFontFamilies(container: HTMLElement) {
+  const families = new Set<string>();
+  const nodes = [container, ...Array.from(container.querySelectorAll("*"))];
+
+  nodes.forEach((node) => {
+    if (!(node instanceof HTMLElement)) return;
+    const family = window.getComputedStyle(node).fontFamily || "";
+    family
+      .split(",")
+      .map(normalizeFontFamilyName)
+      .filter(Boolean)
+      .forEach((name) => {
+        const key = name.toLowerCase();
+        if (!SYSTEM_FONT_FAMILIES.has(key) && !key.startsWith("var(")) {
+          families.add(name);
+        }
+      });
+  });
+
+  return Array.from(families);
+}
+
+async function ensureRuntimeGoogleFonts(container: HTMLElement) {
+  const families = collectFontFamilies(container);
+  if (!families.length) return;
+
+  await Promise.all(
+    families.map(
+      (family) =>
+        new Promise<void>((resolve) => {
+          const id = `ryfio-google-font-${family.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+          if (document.getElementById(id)) {
+            resolve();
+            return;
+          }
+
+          const link = document.createElement("link");
+          link.id = id;
+          link.rel = "stylesheet";
+          link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}&display=swap`;
+          link.onload = () => resolve();
+          link.onerror = () => resolve();
+          document.head.appendChild(link);
+        }),
+    ),
+  );
+
+  await Promise.all(
+    families.map((family) =>
+      document.fonts?.load?.(`16px "${family}"`).catch(() => undefined),
+    ),
+  );
 }
 
 function waitForImages(container: HTMLElement) {
@@ -70,9 +127,10 @@ function waitForImages(container: HTMLElement) {
   ).then(() => undefined);
 }
 
-function getEditorSafeAreaNode() {
-  const node = document.getElementById("design-safe-area");
-  return node instanceof HTMLElement ? node : null;
+function shouldCaptureNode(target: HTMLElement) {
+  return !CAPTURE_HIDDEN_SELECTORS.some(
+    (selector) => target.matches(selector) || Boolean(target.closest(selector)),
+  );
 }
 
 function prepareClonedImages(container: HTMLElement) {
@@ -88,62 +146,116 @@ function prepareClonedImages(container: HTMLElement) {
   });
 }
 
-async function captureEditorDomAsProductionPng(data: PreviewSideData) {
-  const source = getEditorSafeAreaNode();
-  if (!source) return null;
+function getPrintableCaptureLayer(side?: PreviewSide | null) {
+  const selector = side
+    ? `[data-printable-capture-layer="${side}"]`
+    : "[data-printable-capture-layer]";
+  const node = document.querySelector(selector);
+  if (node instanceof HTMLElement) return node;
 
-  const width = EXPORT_MOCKUP_AREA.width;
-  const height = EXPORT_MOCKUP_AREA.height;
-  const safeArea = data.safeArea || { x: 0, y: 0, width, height };
-  const safeX = number(safeArea.x);
-  const safeY = number(safeArea.y);
-  const safeWidth = positiveNumber(safeArea.width, width);
-  const safeHeight = positiveNumber(safeArea.height, height);
+  // Backward compatible fallback for older mounted editor DOM.
+  const legacy = document.getElementById("design-safe-area");
+  return legacy instanceof HTMLElement ? legacy : null;
+}
+
+function assertNodeMatchesSide(node: HTMLElement, side?: PreviewSide | null) {
+  if (!side) return true;
+  const mountedSide = node.dataset.printableCaptureLayer;
+  return !mountedSide || mountedSide === side;
+}
+
+function getLogicalSize(node: HTMLElement, data?: PreviewSideData | null) {
+  const fallbackRect = node.getBoundingClientRect();
+  const width = positiveNumber(
+    node.dataset.logicalWidth || data?.safeArea?.width,
+    positiveNumber(fallbackRect.width, EXPORT_MOCKUP_AREA.width),
+  );
+  const height = positiveNumber(
+    node.dataset.logicalHeight || data?.safeArea?.height,
+    positiveNumber(fallbackRect.height, EXPORT_MOCKUP_AREA.height),
+  );
+
+  return { width, height };
+}
+
+function getProductionSize(data: PreviewSideData) {
+  return {
+    width: positiveNumber(data.exportResolution?.width, EXPORT_MOCKUP_AREA.width),
+    height: positiveNumber(data.exportResolution?.height, EXPORT_MOCKUP_AREA.height),
+  };
+}
+
+async function capturePrintableLayer(args: {
+  data: PreviewSideData;
+  production: boolean;
+}) {
+  if (typeof window === "undefined") return null;
+
+  const source = getPrintableCaptureLayer(args.data.side);
+  if (!source || !assertNodeMatchesSide(source, args.data.side)) return null;
+
+  const logical = getLogicalSize(source, args.data);
+  const output = args.production ? getProductionSize(args.data) : EXPORT_MOCKUP_AREA;
+  const scaleX = args.production ? output.width / logical.width : 1;
+  const scaleY = args.production ? output.height / logical.height : 1;
+  const safeAreaOffsetX = args.production ? 0 : number(args.data.safeArea?.x, 0);
+  const safeAreaOffsetY = args.production ? 0 : number(args.data.safeArea?.y, 0);
 
   const container = document.createElement("div");
-  container.setAttribute("data-production-design-capture", "true");
+  container.setAttribute(
+    args.production
+      ? "data-production-design-capture"
+      : "data-preview-design-overlay-capture",
+    "true",
+  );
   container.style.position = "fixed";
   container.style.left = "0";
   container.style.top = "0";
-  container.style.width = `${width}px`;
-  container.style.height = `${height}px`;
+  container.style.width = `${output.width}px`;
+  container.style.height = `${output.height}px`;
   container.style.overflow = "hidden";
   container.style.background = "transparent";
   container.style.pointerEvents = "none";
   container.style.zIndex = "-2147483647";
   container.style.isolation = "isolate";
+  container.style.contain = "layout paint style size";
 
   const clone = source.cloneNode(true) as HTMLElement;
   clone.removeAttribute("id");
   clone.setAttribute("data-production-safe-area-clone", "true");
   clone.style.position = "absolute";
-  clone.style.left = `${safeX}px`;
-  clone.style.top = `${safeY}px`;
-  clone.style.width = `${safeWidth}px`;
-  clone.style.height = `${safeHeight}px`;
-  clone.style.transform = "none";
+  clone.style.left = `${safeAreaOffsetX}px`;
+  clone.style.top = `${safeAreaOffsetY}px`;
+  clone.style.width = `${logical.width}px`;
+  clone.style.height = `${logical.height}px`;
+  clone.style.transform = args.production ? `scale(${scaleX}, ${scaleY})` : "none";
   clone.style.transformOrigin = "top left";
+  clone.style.margin = "0";
   clone.style.overflow = "hidden";
-  clone.style.pointerEvents = "none";
   clone.style.background = "transparent";
+  clone.style.pointerEvents = "none";
   clone.style.contain = "layout paint style";
+  clone.style.isolation = "isolate";
 
   prepareClonedImages(clone);
   container.appendChild(clone);
   document.body.appendChild(container);
 
   try {
-    await document.fonts?.ready?.catch?.(() => undefined);
+    await ensureRuntimeGoogleFonts(container);
+    await waitForFonts();
     await nextFrame();
     await waitForImages(container);
     await nextFrame();
 
     return await toPng(container, {
       cacheBust: true,
-      pixelRatio: 1,
       backgroundColor: "transparent",
-      width,
-      height,
+      width: output.width,
+      height: output.height,
+      canvasWidth: output.width,
+      canvasHeight: output.height,
+      pixelRatio: 1,
       style: {
         margin: "0",
         transform: "none",
@@ -154,173 +266,26 @@ async function captureEditorDomAsProductionPng(data: PreviewSideData) {
         return shouldCaptureNode(target);
       },
     });
-  } catch (error) {
-    console.error("EDITOR DOM CAPTURE FAILED:", error);
+  } catch {
     return null;
   } finally {
     container.remove();
   }
 }
 
-function createExportNode(el: PreviewElement) {
-  const hasImageSource = Boolean(
-    el.src || el.meta?.src || el.meta?.image || el.meta?.url,
-  );
-
-  const isImage = el.type === "image" || hasImageSource;
-  const node = document.createElement(isImage ? "img" : "div");
-
-  const width = Math.max(1, number(el.width ?? el.meta?.width, 1));
-  const height = Math.max(1, number(el.height ?? el.meta?.height, 1));
-  const x = number(el.x);
-  const y = number(el.y);
-  const rotation = number(el.meta?.rotation);
-  const flipX = el.meta?.flipX ? -1 : 1;
-
-  node.style.position = "absolute";
-  node.style.left = "0";
-  node.style.top = "0";
-  node.style.width = `${width}px`;
-  node.style.height = `${height}px`;
-  node.style.zIndex = `${number(el.zIndex, 10)}`;
-  node.style.opacity = `${number(el.meta?.opacity, 1)}`;
-  node.style.transformOrigin = "center center";
-  node.style.transform = `translate3d(${x}px, ${y}px, 0) rotate(${rotation}deg) scale(${flipX}, 1)`;
-  node.style.boxSizing = "border-box";
-  node.style.userSelect = "none";
-  node.style.margin = "0";
-
-  if (isImage && node instanceof HTMLImageElement) {
-    node.crossOrigin = "anonymous";
-    node.referrerPolicy = "no-referrer";
-    node.decoding = "sync";
-    node.loading = "eager";
-    node.alt = "";
-    node.src = String(
-      el.src || el.meta?.src || el.meta?.image || el.meta?.url || "",
-    );
-    node.style.display = "block";
-    node.style.width = `${width}px`;
-    node.style.height = `${height}px`;
-    node.style.objectFit = String(el.meta?.objectFit || "fill");
-    node.style.filter = `brightness(${number(
-      el.meta?.brightness,
-      100,
-    )}%) contrast(${number(el.meta?.contrast, 100)}%) saturate(${number(
-      el.meta?.saturation,
-      100,
-    )}%)`;
-    return node;
-  }
-
-  if (el.type === "shape") {
-    node.style.backgroundColor = String(
-      el.meta?.color || el.meta?.fill || "#8b5cf6",
-    );
-
-    if (el.meta?.strokeWidth) {
-      node.style.border = `${number(el.meta.strokeWidth)}px solid ${
-        el.meta?.strokeColor || "#ffffff"
-      }`;
-    }
-
-    if (el.meta?.shadow) {
-      node.style.boxShadow = `0 12px 32px ${
-        el.meta?.shadowColor || "rgba(0,0,0,.32)"
-      }`;
-    }
-
-    return node;
-  }
-
-  const content = String(el.text || el.content || "")
-    .normalize("NFKC")
-    .replace(/[<>]/g, "")
-    .slice(0, 300);
-
-  const fontSize = Math.max(8, number(el.meta?.fontSize ?? el.fontSize, 40));
-
-  const lineHeight = number(el.meta?.lineHeight, 1.16);
-  const padding = getTextPadding(fontSize, el.meta || {});
-
-  node.textContent = content || "Text";
-  node.style.display = "flex";
-  node.style.alignItems = "center";
-  node.style.justifyContent = "center";
-  node.style.whiteSpace = "pre-wrap";
-  node.style.overflowWrap = "break-word";
-  node.style.wordBreak = "break-word";
-  node.style.overflow = "visible";
-  node.style.textAlign = String(el.meta?.textAlign || "center");
-  node.style.fontFamily = resolveFontFamily(
-    el.meta?.fontFamily || el.fontFamily,
-  );
-  node.style.fontSize = `${fontSize}px`;
-  node.style.fontWeight = `${el.meta?.fontWeight || 700}`;
-  node.style.lineHeight = `${lineHeight}`;
-  node.style.letterSpacing = `${el.meta?.letterSpacing ?? 0}px`;
-  node.style.color = String(el.meta?.color || "#000000");
-  node.style.padding = `${padding.y}px ${padding.x}px`;
-  node.style.background = el.meta?.gradient
-    ? `linear-gradient(90deg, ${el.meta?.gradientFrom || "#8b5cf6"}, ${
-        el.meta?.gradientTo || "#22d3ee"
-      })`
-    : "";
-  node.style.textShadow = el.meta?.shadow
-    ? `0 8px 18px ${el.meta?.shadowColor || "rgba(0,0,0,.35)"}`
-    : el.meta?.glow
-      ? `0 0 18px ${el.meta?.glowColor || el.meta?.color || "#8b5cf6"}`
-      : "";
-
-  (
-    node.style as CSSStyleDeclaration & {
-      webkitTextStroke?: string;
-      webkitFontSmoothing?: string;
-      MozOsxFontSmoothing?: string;
-      webkitBackgroundClip?: string;
-      webkitTextFillColor?: string;
-    }
-  ).webkitFontSmoothing = "antialiased";
-
-  (
-    node.style as CSSStyleDeclaration & {
-      MozOsxFontSmoothing?: string;
-    }
-  ).MozOsxFontSmoothing = "grayscale";
-
-  if (el.meta?.strokeWidth) {
-    (
-      node.style as CSSStyleDeclaration & { webkitTextStroke?: string }
-    ).webkitTextStroke = `${number(el.meta.strokeWidth)}px ${
-      el.meta?.strokeColor || "#000000"
-    }`;
-  }
-
-  if (el.meta?.gradient) {
-    (
-      node.style as CSSStyleDeclaration & {
-        webkitBackgroundClip?: string;
-        webkitTextFillColor?: string;
-      }
-    ).webkitBackgroundClip = "text";
-
-    (
-      node.style as CSSStyleDeclaration & {
-        webkitBackgroundClip?: string;
-        webkitTextFillColor?: string;
-      }
-    ).webkitTextFillColor = "transparent";
-  }
-
-  return node;
+export async function capturePreviewDesignOverlay(data: PreviewSideData) {
+  // Visual preview overlay is a 1024x1024 transparent mockup-space PNG.
+  // The safe-area DOM is cloned once and placed at the same safe-area coordinates
+  // used by the editor/mockup. It is not rebuilt from elements[].
+  return capturePrintableLayer({ data, production: false });
 }
 
-function shouldCaptureNode(target: HTMLElement) {
-  return !CAPTURE_HIDDEN_SELECTORS.some(
-    (selector) => target.matches(selector) || Boolean(target.closest(selector)),
-  );
-}
 
+export async function captureProductionDesign(data: PreviewSideData) {
+  // Production print files are high-resolution captures of the real preview DOM.
+  // There is intentionally no Canvas fallback and no elements[] fallback.
+  return capturePrintableLayer({ data, production: true });
+}
 
 export async function captureVisualMockupPreview(node: HTMLElement | null) {
   if (!node) return null;
@@ -361,7 +326,8 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
   document.body.appendChild(container);
 
   try {
-    await document.fonts?.ready?.catch?.(() => undefined);
+    await ensureRuntimeGoogleFonts(container);
+    await waitForFonts();
     await nextFrame();
     await waitForImages(container);
     await nextFrame();
@@ -372,6 +338,8 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
       backgroundColor: "transparent",
       width,
       height,
+      canvasWidth: width,
+      canvasHeight: height,
       style: {
         margin: "0",
         transform: "none",
@@ -382,19 +350,19 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
         return shouldCaptureNode(target);
       },
     });
-  } catch (error) {
-    console.error("CAPTURE VISUAL MOCKUP FAILED:", error);
+  } catch {
     return null;
   } finally {
     container.remove();
   }
 }
 
-
 export async function captureProductionPreview(node: HTMLElement | null) {
   if (!node) return null;
 
   try {
+    await ensureRuntimeGoogleFonts(node);
+    await waitForFonts();
     await nextFrame();
     await waitForImages(node);
     await nextFrame();
@@ -408,105 +376,8 @@ export async function captureProductionPreview(node: HTMLElement | null) {
         return shouldCaptureNode(target);
       },
     });
-  } catch (error) {
-    console.error("CAPTURE PREVIEW FAILED:", error);
+  } catch {
     return null;
-  }
-}
-
-export async function captureProductionDesign(
-  data: PreviewSideData,
-  options: { preferDom?: boolean } = {},
-) {
-  if (typeof window === "undefined") return null;
-
-  if (options.preferDom !== false) {
-    const domImage = await captureEditorDomAsProductionPng(data);
-    if (domImage) return domImage;
-  }
-
-  const width = EXPORT_MOCKUP_AREA.width;
-  const height = EXPORT_MOCKUP_AREA.height;
-
-  const safeArea = data.safeArea || {
-    x: 0,
-    y: 0,
-    width,
-    height,
-  };
-
-  const safeX = number(safeArea.x);
-  const safeY = number(safeArea.y);
-  const safeWidth = positiveNumber(safeArea.width, width);
-  const safeHeight = positiveNumber(safeArea.height, height);
-
-  const container = document.createElement("div");
-  container.setAttribute("data-production-design-capture", "true");
-  container.style.position = "fixed";
-  container.style.left = "0";
-  container.style.top = "0";
-  container.style.width = `${width}px`;
-  container.style.height = `${height}px`;
-  container.style.overflow = "hidden";
-  container.style.background = "transparent";
-  container.style.pointerEvents = "none";
-  container.style.zIndex = "-2147483647";
-  container.style.contain = "layout paint style";
-  container.style.isolation = "isolate";
-
-  const safeLayer = document.createElement("div");
-  safeLayer.setAttribute("data-production-safe-area", "true");
-  safeLayer.style.position = "absolute";
-  safeLayer.style.left = `${safeX}px`;
-  safeLayer.style.top = `${safeY}px`;
-  safeLayer.style.width = `${safeWidth}px`;
-  safeLayer.style.height = `${safeHeight}px`;
-  safeLayer.style.overflow = "hidden";
-  safeLayer.style.background = "transparent";
-  safeLayer.style.pointerEvents = "none";
-  safeLayer.style.contain = "layout paint style";
-  safeLayer.style.isolation = "isolate";
-
-  const sorted = [...(Array.isArray(data.elements) ? data.elements : [])]
-    .filter((el) => !el.meta?.hidden)
-    .sort((a, b) => number(a.zIndex) - number(b.zIndex));
-
-  sorted.forEach((el) => {
-    safeLayer.appendChild(
-      createExportNode({
-        ...el,
-        x: number(el.x),
-        y: number(el.y),
-      }),
-    );
-  });
-
-  container.appendChild(safeLayer);
-  document.body.appendChild(container);
-
-  try {
-    await nextFrame();
-    await waitForImages(container);
-    await nextFrame();
-
-    return await toPng(container, {
-      cacheBust: true,
-      pixelRatio: 1,
-      backgroundColor: "transparent",
-      width,
-      height,
-      style: {
-        margin: "0",
-        transform: "none",
-        transformOrigin: "top left",
-      },
-      filter: (target) => {
-        if (!(target instanceof HTMLElement)) return true;
-        return shouldCaptureNode(target);
-      },
-    });
-  } finally {
-    container.remove();
   }
 }
 

@@ -28,6 +28,36 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
+    // Keep save-design tolerant of editor versions that pass product/variant
+    // identifiers through query params instead of the JSON payload.
+    const searchParams = new URL(req.url).searchParams;
+    const queryBackfill: Record<string, string> = {};
+    [
+      "productId",
+      "product_id",
+      "baseProductId",
+      "base_product_id",
+      "variantId",
+      "variant_id",
+      "selectedVariantId",
+      "sku",
+      "size",
+      "selectedSize",
+      "gelatoProductUid",
+      "gelato_product_uid",
+      "productUid",
+      "product_uid",
+      "gelatoVariantUid",
+      "gelato_variant_uid",
+    ].forEach((key) => {
+      const value = searchParams.get(key);
+      if (value && (body[key] === undefined || body[key] === null || body[key] === "")) {
+        queryBackfill[key] = value;
+      }
+    });
+
+    Object.assign(body, queryBackfill);
+
     const baseProductId =
       body.baseProductId ||
       body.base_product_id ||

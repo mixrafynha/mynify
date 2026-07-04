@@ -1,4 +1,4 @@
-import { GELATO_PRINT_SIZE_MM_BY_PRODUCT } from "../../canvas/productConfig";
+import { getGelatoPrintSizeMm, type ProductDisplayConfig } from "../../canvas/productConfig";
 import type { EditorSide } from "../types";
 
 type Box = {
@@ -112,9 +112,8 @@ function elementOverflowsBox(element: ProductionElement, box: Box) {
   return x < 0 || y < 0 || x + width > box.width || y + height > box.height;
 }
 
-function getSidePrintSizeMm(category: string, side: EditorSide) {
-  const product = GELATO_PRINT_SIZE_MM_BY_PRODUCT[category] || GELATO_PRINT_SIZE_MM_BY_PRODUCT.tshirt;
-  return product?.[side] || product?.front || { widthMm: 300, heightMm: 400 };
+function getSidePrintSizeMm(category: string, side: EditorSide, productConfig?: ProductDisplayConfig | null) {
+  return getGelatoPrintSizeMm(category, side, productConfig);
 }
 
 function pxToMm(valuePx: number, axisPx: number, axisMm: number) {
@@ -147,9 +146,10 @@ export function buildProductionQualityReport(args: {
   elements: ProductionElement[];
   safeArea: Box;
   mockupColor?: string;
+  productConfig?: ProductDisplayConfig | null;
 }) {
   const issues: ProductionIssue[] = [];
-  const printSize = getSidePrintSizeMm(args.category, args.side);
+  const printSize = getSidePrintSizeMm(args.category, args.side, args.productConfig);
   const garmentColor = normalizeHex(args.mockupColor) || WHITE;
 
   args.elements.forEach((element) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   RotateCcw,
   FlipHorizontal,
@@ -17,7 +17,7 @@ import {
   Search,
 } from "lucide-react";
 
-import { FONT_OPTIONS, COLORS, loadEditorFont } from "../data";
+import { FONT_OPTIONS, COLORS, getEditorFontFamily, loadEditorFont, loadVisibleEditorFonts } from "../data";
 
 type EditTextPanelProps = {
   selected?: any;
@@ -30,13 +30,14 @@ export default function EditTextPanel({
 }: EditTextPanelProps) {
   const [openFonts, setOpenFonts] = useState(false);
   const [search, setSearch] = useState("");
+  const [fontRenderKey, setFontRenderKey] = useState(0);
 
   const meta = selected?.meta ?? {};
 
   const fontSize = meta.fontSize ?? 40;
   const rotation = meta.rotation ?? 0;
   const letterSpacing = meta.letterSpacing ?? 0;
-  const fontFamily = meta.fontFamily ?? "Poppins";
+  const fontFamily = meta.fontFamily ?? "Inter";
   const color = meta.color ?? "#ffffff";
   const opacity = meta.opacity ?? 1;
 
@@ -49,6 +50,21 @@ export default function EditTextPanel({
       font.toLowerCase().includes(q)
     ).slice(0, 80);
   }, [search]);
+
+  useEffect(() => {
+    loadEditorFont(fontFamily);
+  }, [fontFamily]);
+
+  useEffect(() => {
+    if (!openFonts) return;
+    let cancelled = false;
+    loadVisibleEditorFonts(filteredFonts, filteredFonts.length).finally(() => {
+      if (!cancelled) setFontRenderKey((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredFonts, openFonts]);
 
   const patch = (data: any) => {
     if (!selected) return;
@@ -72,7 +88,7 @@ export default function EditTextPanel({
           <span
             className="break-words text-center font-black"
             style={{
-              fontFamily: `"${fontFamily}", sans-serif`,
+              fontFamily: getEditorFontFamily(fontFamily),
               fontSize: Math.min(fontSize, 44),
               color,
               opacity,
@@ -83,7 +99,7 @@ export default function EditTextPanel({
               textAlign: meta.textAlign ?? "center",
             }}
           >
-            {selected?.text ?? "Preview"}
+            {selected?.text ?? "RYFIO Studio 123"}
           </span>
         </div>
       </Card>
@@ -100,7 +116,7 @@ export default function EditTextPanel({
             <span
               className="truncate font-bold"
               style={{
-                fontFamily: `"${fontFamily}", sans-serif`,
+                fontFamily: getEditorFontFamily(fontFamily),
               }}
             >
               {fontFamily}
@@ -142,14 +158,12 @@ export default function EditTextPanel({
                     }`}
                   >
                     <div className="min-w-0">
-                      <div
+                      <FontPreviewText
+                        key={`${font}-${fontRenderKey}`}
+                        family={font}
+                        text={selected?.text ?? "RYFIO Studio 123"}
                         className="truncate text-lg font-black"
-                        style={{
-                          fontFamily: `"${font}", sans-serif`,
-                        }}
-                      >
-                        {selected?.text ?? "Dream Big"}
-                      </div>
+                      />
 
                       <div className="truncate text-[11px] font-bold opacity-70">
                         {font}
@@ -437,5 +451,28 @@ function ActionButton({
       {icon}
       <span className="truncate">{label}</span>
     </button>
+  );
+}
+function FontPreviewText({ family, text, className }: { family: string; text: string; className: string }) {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadEditorFont(family).finally(() => {
+      if (!cancelled) setVersion((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [family]);
+
+  return (
+    <div
+      key={`${family}-${version}`}
+      className={className}
+      style={{ fontFamily: getEditorFontFamily(family), fontWeight: 800 }}
+    >
+      {text}
+    </div>
   );
 }

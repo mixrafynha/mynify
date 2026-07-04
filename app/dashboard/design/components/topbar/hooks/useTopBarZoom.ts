@@ -8,7 +8,7 @@ interface UseTopBarZoomArgs {
 }
 
 const ZOOM_MIN = 25;
-const ZOOM_MAX = 400;
+const ZOOM_MAX = 200;
 const ZOOM_STEP = 25;
 
 function clampZoomSafe(value: number) {

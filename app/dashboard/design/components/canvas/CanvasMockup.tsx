@@ -1,13 +1,13 @@
 "use client";
 
 import type { CanvasSide } from "./types";
-import { MOCKUP_VISUAL_SCALE_BY_PRODUCT } from "./productConfig";
 
 type Props = {
   mockup: string;
   mockupId: string;
   currentSide: CanvasSide;
   color?: string;
+  visualScale?: number;
 };
 
 export default function CanvasMockup({
@@ -15,9 +15,8 @@ export default function CanvasMockup({
   mockupId,
   currentSide,
   color = "#ffffff",
+  visualScale = 1,
 }: Props) {
-  const visualScale =
-    MOCKUP_VISUAL_SCALE_BY_PRODUCT?.[mockupId]?.[currentSide] ?? 1;
 
   return (
     // Aplicamos o transform e o transformOrigin aqui, no container pai.

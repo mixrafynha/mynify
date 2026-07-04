@@ -44,6 +44,24 @@ function isHttpUrl(value: unknown): value is string {
   return typeof value === "string" && /^https?:\/\//i.test(value);
 }
 
+function extractR2KeyFromPublicUrl(value: unknown) {
+  if (!isHttpUrl(value)) return null;
+
+  try {
+    const url = new URL(value);
+    const pathname = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+
+    // Ryfio public R2 URLs are stored as /users/{userId}/...
+    // Keep this permissive so old/new public domains both resolve to the same key.
+    const usersIndex = pathname.indexOf("users/");
+    if (usersIndex >= 0) return pathname.slice(usersIndex);
+
+    return pathname || null;
+  } catch {
+    return null;
+  }
+}
+
 function firstValue(...values: unknown[]) {
   return values.find((value) => value !== undefined && value !== null && value !== "") ?? null;
 }
@@ -71,6 +89,9 @@ function pickSideImage(args: {
 
   if (kind === "print") {
     return firstValue(
+      getNested(incomingPrintFiles, [side, "url"]),
+      getNested(incomingPrintFiles, [side, "publicUrl"]),
+      getNested(incomingPrintFiles, [side, "dataUrl"]),
       sideValue(incomingPrintFiles, side),
       body[`print${upperSide}`],
       body[`printFile${upperSide}`],
@@ -79,13 +100,20 @@ function pickSideImage(args: {
       getNested(body, ["printFiles", side]),
       getNested(body, ["print_files", side]),
       sideData.printFile,
+      sideData.printFileUrl,
       sideData.printImage,
+      sideData.productionFileUrl,
       sideData.designImage,
+      sideData.designImageUrl,
+      sideData.editorFileUrl,
     );
   }
 
   if (kind === "mockup") {
     return firstValue(
+      getNested(incomingMockups, [side, "url"]),
+      getNested(incomingMockups, [side, "publicUrl"]),
+      getNested(incomingMockups, [side, "dataUrl"]),
       sideValue(incomingMockups, side),
       body[`mockup${upperSide}`],
       body[`mockupImage${upperSide}`],
@@ -111,12 +139,64 @@ function pickSideImage(args: {
   return firstValue(
     sideData.editorImage,
     sideData.editorFile,
+    sideData.editorFileUrl,
     sideData.designImage,
+    sideData.designImageUrl,
     body[`editor${upperSide}`],
     body[`editorImage${upperSide}`],
     body[`designImage${upperSide}`],
     getNested(body, ["editor", side]),
     getNested(body, ["editorFiles", side]),
+  );
+}
+
+function pickSideKey(args: {
+  body: any;
+  incomingDesignData: any;
+  incomingSides: any;
+  incomingPrintFiles: any;
+  incomingMockups: any;
+  side: DesignSide;
+  kind: "print" | "mockup" | "editor";
+}) {
+  const { body, incomingDesignData, incomingSides, incomingPrintFiles, incomingMockups, side, kind } = args;
+  const sideData = incomingSides?.[side] || incomingDesignData?.sides?.[side] || {};
+  const upperSide = side === "front" ? "Front" : "Back";
+
+  if (kind === "print") {
+    return firstValue(
+      getNested(incomingPrintFiles, ["keys", side]),
+      getNested(incomingPrintFiles, [side, "key"]),
+      getNested(incomingPrintFiles, [side, "storageKey"]),
+      getNested(body, ["printFiles", "keys", side]),
+      getNested(body, ["print_files", "keys", side]),
+      body[`print${upperSide}Key`],
+      body[`printFile${upperSide}Key`],
+      sideData.printFileKey,
+      sideData.storageKey,
+      getNested(incomingDesignData, ["production", "fileDiagnostics", side, "storageKey"]),
+    );
+  }
+
+  if (kind === "mockup") {
+    return firstValue(
+      getNested(incomingMockups, ["keys", side]),
+      getNested(incomingMockups, [side, "key"]),
+      getNested(incomingMockups, [side, "storageKey"]),
+      getNested(body, ["mockups", "keys", side]),
+      getNested(body, ["mockupFiles", "keys", side]),
+      body[`mockup${upperSide}Key`],
+      body[`mockupImage${upperSide}Key`],
+      sideData.mockupKey,
+    );
+  }
+
+  return firstValue(
+    getNested(body, ["editorFiles", "keys", side]),
+    body[`editor${upperSide}Key`],
+    body[`editorImage${upperSide}Key`],
+    sideData.editorFileKey,
+    sideData.designImageKey,
   );
 }
 
@@ -153,7 +233,7 @@ function getSelectedColor(body: any, incomingDesignData: any) {
 }
 
 function getSelectedVariant(body: any, incomingDesignData: any) {
-  const value = firstValue(
+  const raw = firstValue(
     body.selectedVariant,
     body.selected_variant,
     body.productVariant,
@@ -162,13 +242,60 @@ function getSelectedVariant(body: any, incomingDesignData: any) {
     incomingDesignData.selectedVariant,
   );
 
-  if (value && typeof value === "object") return value;
+  const rawVariant = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
 
-  const id = firstValue(body.variantId, body.variant_id, body.productVariantId, body.product_variant_id);
-  const size = firstValue(body.size, body.selectedSize, body.variantSize);
-  const sku = firstValue(body.sku, body.variantSku);
+  const variantId = firstValue(
+    rawVariant.variantId,
+    rawVariant.id,
+    body.variantId,
+    body.variant_id,
+    body.selectedVariantId,
+    body.selected_variant_id,
+    body.productVariantId,
+    body.product_variant_id,
+  );
+  const size = firstValue(rawVariant.size, body.size, body.selectedSize, body.variantSize);
+  const sku = firstValue(rawVariant.sku, body.sku, body.variantSku);
+  const gelatoProductUid = firstValue(
+    rawVariant.gelatoProductUid,
+    rawVariant.gelato_product_uid,
+    rawVariant.productUid,
+    rawVariant.product_uid,
+    body.gelatoProductUid,
+    body.gelato_product_uid,
+    body.productUid,
+    body.product_uid,
+    incomingDesignData.gelatoProductUid,
+    incomingDesignData.gelato_product_uid,
+    incomingDesignData.productUid,
+    incomingDesignData.product_uid,
+  );
+  const gelatoVariantUid = firstValue(
+    rawVariant.gelatoVariantUid,
+    rawVariant.gelato_variant_uid,
+    body.gelatoVariantUid,
+    body.gelato_variant_uid,
+    incomingDesignData.gelatoVariantUid,
+    incomingDesignData.gelato_variant_uid,
+  );
 
-  return id || size || sku ? { id, size, sku } : null;
+  if (!variantId && !size && !sku && !gelatoProductUid && !gelatoVariantUid && !Object.keys(rawVariant).length) {
+    return null;
+  }
+
+  return {
+    ...rawVariant,
+    id: firstValue(rawVariant.id, variantId),
+    variantId,
+    size,
+    sku,
+    productUid: gelatoProductUid,
+    product_uid: gelatoProductUid,
+    gelatoProductUid,
+    gelato_product_uid: gelatoProductUid,
+    gelatoVariantUid,
+    gelato_variant_uid: gelatoVariantUid,
+  };
 }
 
 type UploadDesignImageArgs = {
@@ -177,13 +304,19 @@ type UploadDesignImageArgs = {
   side: DesignSide;
   kind: DesignAssetKind;
   dataUrl: unknown;
+  storageKey?: unknown;
 };
 
 export async function uploadDesignImageToR2(
   args: UploadDesignImageArgs,
 ): Promise<R2UploadResult> {
   if (isHttpUrl(args.dataUrl)) {
-    return { key: null, url: args.dataUrl };
+    const existingKey =
+      typeof args.storageKey === "string" && args.storageKey.trim()
+        ? args.storageKey.trim().replace(/^\/+/, "")
+        : extractR2KeyFromPublicUrl(args.dataUrl);
+
+    return { key: existingKey, url: args.dataUrl };
   }
 
   if (!isDataImage(args.dataUrl)) {
@@ -315,12 +448,68 @@ export async function buildUserProductSavePayload(args: {
     kind: "editor",
   });
 
+  const frontPrintKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "front",
+    kind: "print",
+  });
+  const backPrintKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "back",
+    kind: "print",
+  });
+  const frontMockupKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "front",
+    kind: "mockup",
+  });
+  const backMockupKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "back",
+    kind: "mockup",
+  });
+  const frontEditorKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "front",
+    kind: "editor",
+  });
+  const backEditorKey = pickSideKey({
+    body,
+    incomingDesignData,
+    incomingSides,
+    incomingPrintFiles,
+    incomingMockups,
+    side: "back",
+    kind: "editor",
+  });
+
   const printFront = await uploadDesignImageToR2({
     userId,
     designId,
     side: "front",
     kind: "print",
     dataUrl: frontPrintSource,
+    storageKey: frontPrintKey,
   });
 
   const printBack = await uploadDesignImageToR2({
@@ -329,6 +518,7 @@ export async function buildUserProductSavePayload(args: {
     side: "back",
     kind: "print",
     dataUrl: backPrintSource,
+    storageKey: backPrintKey,
   });
 
   const editorFront = await uploadDesignImageToR2({
@@ -337,6 +527,7 @@ export async function buildUserProductSavePayload(args: {
     side: "front",
     kind: "editor",
     dataUrl: frontEditorSource || frontPrintSource,
+    storageKey: frontEditorKey || frontPrintKey,
   });
 
   const editorBack = await uploadDesignImageToR2({
@@ -345,6 +536,7 @@ export async function buildUserProductSavePayload(args: {
     side: "back",
     kind: "editor",
     dataUrl: backEditorSource || backPrintSource,
+    storageKey: backEditorKey || backPrintKey,
   });
 
   const uploadedMockupFront = await uploadDesignImageToR2({
@@ -353,6 +545,7 @@ export async function buildUserProductSavePayload(args: {
     side: "front",
     kind: "mockups",
     dataUrl: frontMockupSource,
+    storageKey: frontMockupKey,
   });
 
   const uploadedMockupBack = await uploadDesignImageToR2({
@@ -361,6 +554,7 @@ export async function buildUserProductSavePayload(args: {
     side: "back",
     kind: "mockups",
     dataUrl: backMockupSource,
+    storageKey: backMockupKey,
   });
 
   // mockups must be real product mockups/previews only.
@@ -399,6 +593,12 @@ export async function buildUserProductSavePayload(args: {
     mockupColor: body.mockupColor || body.color || incomingDesignData.mockupColor || null,
     selectedColor,
     selectedVariant,
+    productUid: selectedVariant?.productUid || incomingDesignData.productUid || incomingDesignData.product_uid || null,
+    product_uid: selectedVariant?.product_uid || incomingDesignData.product_uid || incomingDesignData.productUid || null,
+    gelatoProductUid: selectedVariant?.gelatoProductUid || incomingDesignData.gelatoProductUid || incomingDesignData.gelato_product_uid || null,
+    gelato_product_uid: selectedVariant?.gelato_product_uid || incomingDesignData.gelato_product_uid || incomingDesignData.gelatoProductUid || null,
+    gelatoVariantUid: selectedVariant?.gelatoVariantUid || incomingDesignData.gelatoVariantUid || incomingDesignData.gelato_variant_uid || null,
+    gelato_variant_uid: selectedVariant?.gelato_variant_uid || incomingDesignData.gelato_variant_uid || incomingDesignData.gelatoVariantUid || null,
     status: body.status || incomingDesignData.status || "draft",
     sides: {
       front: {
@@ -410,7 +610,9 @@ export async function buildUserProductSavePayload(args: {
         designImage: null,
         designImageUrl: editorFront.url || null,
         editorFileUrl: editorFront.url || null,
+        printFileKey: printFront.key || null,
         printFileUrl: printFront.url || null,
+        mockupKey: mockupFront.key || null,
         mockupUrl: mockupFront.url || null,
       },
       back: {
@@ -422,7 +624,9 @@ export async function buildUserProductSavePayload(args: {
         designImage: null,
         designImageUrl: editorBack.url || null,
         editorFileUrl: editorBack.url || null,
+        printFileKey: printBack.key || null,
         printFileUrl: printBack.url || null,
+        mockupKey: mockupBack.key || null,
         mockupUrl: mockupBack.url || null,
       },
     },
@@ -450,15 +654,13 @@ export async function buildUserProductSavePayload(args: {
     price: basePrice,
     currency: baseProduct.currency || "USD",
     image: bestPreviewImage,
-    images: [
-      mockupFront.url,
-      mockupBack.url,
-      editorFront.url,
-      editorBack.url,
-      printFront.url,
-      printBack.url,
-      ...baseImages,
-    ].filter(Boolean),
+    images: Array.from(
+      new Set([
+        mockupFront.url,
+        mockupBack.url,
+        ...baseImages,
+      ].filter(Boolean)),
+    ),
     category: baseProduct.category || body.category || null,
     slug: `${baseProduct.slug || "product"}-${designId.slice(0, 8)}`,
     design_front: frontElements,

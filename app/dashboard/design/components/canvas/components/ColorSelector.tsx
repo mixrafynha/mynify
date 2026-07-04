@@ -36,27 +36,27 @@ function ColorSelector({
         </button>
 
         {showColors && (
-          <div className="absolute left-0 top-10 w-[210px] overflow-hidden rounded-2xl border border-white/10 bg-[#070711]/95 p-2 text-white shadow-[0_24px_70px_rgba(0,0,0,0.48)] backdrop-blur-xl">
-            <div className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.14em] text-white/42">Product color</div>
-            <div className="grid grid-cols-6 gap-1.5">
+          <div className="absolute left-0 top-9 max-h-[48vh] w-8 overflow-y-auto overflow-x-hidden rounded-xl border border-white/10 bg-[#070711]/95 p-1 text-white shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl [scrollbar-width:none] md:top-10 md:w-12 md:rounded-2xl md:p-1.5 [&::-webkit-scrollbar]:hidden">
+            <div className="flex flex-col items-center gap-1 md:gap-2">
               {(availableColors || []).map((color) => {
                 const selected = color.hex.toLowerCase() === String(mockupColor).toLowerCase();
                 return (
                   <button
                     key={`${color.name}-${color.hex}`}
                     type="button"
+                    aria-label={color.name}
                     title={color.name}
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setMockupColor?.(color.hex);
                       setShowColors(false);
                     }}
-                    className={`relative h-7 w-7 rounded-full border transition active:scale-95 ${
-                      selected ? "border-white ring-2 ring-violet-300/70" : "border-white/20 hover:border-white/60"
+                    className={`relative h-[22px] w-[22px] shrink-0 rounded-full border transition active:scale-95 md:h-8 md:w-8 ${
+                      selected ? "border-white ring-2 ring-violet-300/80" : "border-white/20 hover:border-white/60"
                     }`}
                     style={{ backgroundColor: color.hex }}
                   >
-                    {selected && <span className="absolute inset-[3px] rounded-full border border-black/20" />}
+                    {selected && <span className="absolute inset-[2px] rounded-full border border-black/25 md:inset-[4px]" />}
                   </button>
                 );
               })}

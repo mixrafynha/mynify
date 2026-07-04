@@ -17,8 +17,7 @@ export function usePreviewAction({ isBusy, onPreviewDesign, ...payload }: UsePre
       setPreviewing(true);
       await storePreviewPayload(payload);
       await onPreviewDesign();
-    } catch (error) {
-      console.error("Preview failed:", error);
+    } catch {
       alert("Error opening preview.");
     } finally {
       setPreviewing(false);

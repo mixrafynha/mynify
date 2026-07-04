@@ -31,7 +31,6 @@ export default function UploadPanel({ onUpload }: UploadPanelProps) {
     }
 
     if (typeof onUpload !== "function") {
-      console.warn("UploadPanel: onUpload não foi passado.");
       e.target.value = "";
       return;
     }
@@ -54,17 +53,17 @@ export default function UploadPanel({ onUpload }: UploadPanelProps) {
   };
 
   return (
-    <div className="space-y-4 pb-6 text-white">
-      <label className="group relative flex min-h-[190px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-[34px] bg-[radial-gradient(circle_at_25%_0%,rgba(34,211,238,0.26),transparent_34%),radial-gradient(circle_at_75%_100%,rgba(168,85,247,0.28),transparent_38%),linear-gradient(145deg,rgba(255,255,255,0.12),rgba(255,255,255,0.035))] px-5 text-center shadow-[0_22px_60px_rgba(0,0,0,0.28)] ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:ring-cyan-300/35 active:scale-[0.985]">
-        <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/80 to-transparent" />
+    <div className="space-y-3 pb-4 text-slate-950">
+      <label className="group relative flex min-h-[150px] w-full cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl bg-slate-100 px-5 text-center shadow-none ring-1 ring-slate-200 transition active:scale-[0.985]">
+        <div className="hidden" />
 
-        <div className="flex h-16 w-16 items-center justify-center rounded-[24px] bg-white text-slate-950 shadow-[0_18px_42px_rgba(34,211,238,0.22)] transition group-active:scale-95">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-950 shadow-none ring-1 ring-slate-200 transition group-active:scale-95">
           <UploadCloud size={32} />
         </div>
 
-        <div className="mt-4">
-          <div className="text-lg font-black leading-none tracking-[-0.04em]">Upload print-ready</div>
-          <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-300">
+        <div className="mt-3">
+          <div className="text-base font-black leading-none tracking-[-0.03em]">Upload print-ready</div>
+          <div className="mt-2 flex items-center justify-center gap-1.5 text-xs font-semibold text-slate-500">
             <Image size={14} /> Alta DPI sem compressão agressiva
           </div>
         </div>
@@ -72,14 +71,14 @@ export default function UploadPanel({ onUpload }: UploadPanelProps) {
         <input type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" className="hidden" onChange={handleFileChange} />
       </label>
 
-      <div className="rounded-[26px] bg-white/[0.045] p-4 ring-1 ring-white/10">
+      <div className="rounded-2xl bg-slate-100 p-3 ring-1 ring-slate-200">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-300/20">
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200">
             <ShieldCheck size={18} />
           </div>
           <div>
-            <p className="text-sm font-black">Controlo de qualidade automático</p>
-            <p className="mt-1 text-xs font-medium leading-5 text-slate-400">{status}</p>
+            <p className="text-sm font-black text-slate-950">Controlo de qualidade automático</p>
+            <p className="mt-1 text-xs font-medium leading-5 text-slate-600">{status}</p>
             <p className="mt-2 text-[11px] font-semibold leading-5 text-slate-500">Recomendado: lado menor 2400px+ para manter aspeto profissional em produtos grandes.</p>
           </div>
         </div>

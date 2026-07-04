@@ -1,5 +1,12 @@
-import { getPrintBox, getSafeArea } from "../../canvas/canvasMath";
-import { captureProductionDesign } from "../../preview/services/previewCapture";
+import { getPrintBox } from "../../canvas/canvasMath";
+import {
+  getConfiguredSafeArea,
+  getGelatoPrintSizeMm,
+  getMockupUrl,
+  getMockupVisualScale,
+  getProductionExportResolution,
+} from "../../canvas/productConfig";
+import { capturePreviewDesignOverlay } from "../../preview/services/previewCapture";
 import type { PreviewPayloadInput } from "../types";
 
 const PRODUCT_ALIASES: Record<string, string> = {
@@ -7,8 +14,8 @@ const PRODUCT_ALIASES: Record<string, string> = {
   tshirts: "tshirt",
   tee: "tshirt",
   shirt: "tshirt",
-  sweat: "hoodie",
-  sweatshirt: "hoodie",
+  sweat: "sweatshirt",
+  sweatshirt: "sweatshirt",
   hat: "cap",
   cup: "mug",
 };
@@ -21,7 +28,8 @@ function normalizeCategory(value?: string) {
     .trim()
     .replace(/\s+/g, "-");
 
-  return PRODUCT_ALIASES[raw] || raw || "tshirt";
+  const withoutUuid = /^[0-9a-f]{8}-[0-9a-f]{4}/i.test(raw) ? "tshirt" : raw;
+  return PRODUCT_ALIASES[withoutUuid] || withoutUuid || "tshirt";
 }
 
 function elementsForSide(input: PreviewPayloadInput, side: Side) {
@@ -60,30 +68,27 @@ function sanitizeElementsForStorage(elements: any[]) {
 }
 
 function sideData(input: PreviewPayloadInput, category: string, side: Side) {
+  const sidePrintBox = input.printBoxes?.[side] || null;
+  const sideSafeArea = input.safeAreas?.[side] || null;
   const printBox =
-    input.side === side && input.printBox
-      ? input.printBox
-      : getPrintBox(category, side);
+    sidePrintBox ||
+    (input.side === side && input.printBox ? input.printBox : null) ||
+    getPrintBox(category, side, input.productConfig);
   const safeArea =
-    input.side === side && input.safeArea
-      ? input.safeArea
-      : getSafeArea(printBox);
+    sideSafeArea ||
+    (input.side === side && input.safeArea ? input.safeArea : null) ||
+    getConfiguredSafeArea(category, side, input.productConfig);
   const elements = elementsForSide(input, side);
 
   return {
     side,
     elements,
-    mockupUrl: "",
+    mockupUrl: getMockupUrl(category, side, input.productConfig),
+    visualScale: getMockupVisualScale(category, side, input.productConfig),
     printBox,
     safeArea,
-    printSize: {
-      widthMm: 0,
-      heightMm: 0,
-    },
-    exportResolution: {
-      width: 1024,
-      height: 1024,
-    },
+    printSize: getGelatoPrintSizeMm(category, side, input.productConfig),
+    exportResolution: getProductionExportResolution(category, side, undefined, input.productConfig),
     validation: {
       status: "ready" as const,
       statusLabel: "Ready",
@@ -96,7 +101,7 @@ function sideData(input: PreviewPayloadInput, category: string, side: Side) {
 }
 
 export async function buildPreviewPayload(input: PreviewPayloadInput) {
-  const category = normalizeCategory(input.category);
+  const category = input.productConfig?.category || normalizeCategory(input.category);
   const productId = input.productId || category;
   const side: Side = input.side === "back" ? "back" : "front";
 
@@ -108,31 +113,18 @@ export async function buildPreviewPayload(input: PreviewPayloadInput) {
   const frontSideData = sideData(input, category, "front");
   const backSideData = sideData(input, category, "back");
 
-  console.log("PREVIEW BUILD START", {
-    productId,
-    category,
-    side,
-    frontElements: frontRawElements.length,
-    backElements: backRawElements.length,
-  });
 
-  const currentDesignImage = await captureProductionDesign(currentSideData, {
-    preferDom: true,
-  });
+  const currentDesignImage = await capturePreviewDesignOverlay(currentSideData);
 
   const frontDesignImage =
     side === "front"
       ? currentDesignImage
-      : frontRawElements.length
-        ? await captureProductionDesign(frontSideData, { preferDom: false })
-        : null;
+      : input.designImages?.front || null;
 
   const backDesignImage =
     side === "back"
       ? currentDesignImage
-      : backRawElements.length
-        ? await captureProductionDesign(backSideData, { preferDom: false })
-        : null;
+      : input.designImages?.back || null;
 
   const printBox = currentSideData.printBox;
   const safeArea = currentSideData.safeArea;
@@ -153,6 +145,14 @@ export async function buildPreviewPayload(input: PreviewPayloadInput) {
 
     printBox,
     safeArea,
+    printBoxes: {
+      front: frontSideData.printBox,
+      back: backSideData.printBox,
+    },
+    safeAreas: {
+      front: frontSideData.safeArea,
+      back: backSideData.safeArea,
+    },
 
     designImage: side === "back" ? backDesignImage : frontDesignImage,
     designImages: {
@@ -162,51 +162,63 @@ export async function buildPreviewPayload(input: PreviewPayloadInput) {
 
     designCoordinateMode: "safe-area-local",
     designImageMode: currentDesignImage
-      ? "generated-from-editor-dom"
+      ? "visual-preview-overlay-1024"
       : "missing-design-image",
 
     generateMockupAI: true,
+    productConfig: input.productConfig || null,
+    mockupSource: input.productConfig?.__source || input.productConfig?.source || "local",
+    mockupKey: input.productConfig?.mockupKey || null,
+    mockupUrls: {
+      front: frontSideData.mockupUrl,
+      back: backSideData.mockupUrl,
+    },
     updatedAt: Date.now(),
   };
 
-  console.log("FINAL PAYLOAD", {
-    side,
-    hasDesignImage: !!payload.designImage,
-    hasFrontDesignImage: !!payload.designImages.front,
-    hasBackDesignImage: !!payload.designImages.back,
-    designImageLength:
-      typeof payload.designImage === "string"
-        ? payload.designImage.length
-        : null,
-  });
+return payload;
+}
 
-  return payload;
+function makeStorageSafePayload(payload: any) {
+  return {
+    ...payload,
+    designImage: null,
+    designImages: {
+      front: null,
+      back: null,
+    },
+    designImageMode: payload?.designImageMode
+      ? `${payload.designImageMode}-memory-only`
+      : "memory-only",
+  };
+}
+
+function safeSetStorage(storage: Storage, key: string, payload: any) {
+  try {
+    storage.setItem(key, JSON.stringify(payload));
+    return true;
+  } catch {
+  }
+
+  try {
+    storage.setItem(key, JSON.stringify(makeStorageSafePayload(payload)));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function storePreviewPayload(input: PreviewPayloadInput) {
   if (typeof window === "undefined") {
-    console.error("WINDOW UNDEFINED");
     return null;
   }
 
   const payload = await buildPreviewPayload(input);
   const key = `ryfio-editor-preview:${payload.productId}`;
-  const value = JSON.stringify(payload);
 
-  sessionStorage.setItem(key, value);
+  const sessionStored = safeSetStorage(sessionStorage, key, payload);
+  const localStored = safeSetStorage(localStorage, key, payload);
 
-  try {
-    localStorage.setItem(key, value);
-  } catch (error) {
-    console.warn("PREVIEW LOCAL STORAGE SKIPPED", error);
-  }
-
-  console.log("PREVIEW STORED", {
-    key,
-    hasDesignImage: !!payload.designImage,
-    hasFrontDesignImage: !!payload.designImages.front,
-    hasBackDesignImage: !!payload.designImages.back,
-  });
 
   return payload;
 }

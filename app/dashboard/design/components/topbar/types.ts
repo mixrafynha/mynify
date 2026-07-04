@@ -1,3 +1,4 @@
+import type { ProductDisplayConfig } from "../canvas/productConfig";
 export type EditorSide = "front" | "back";
 
 export interface TopBarProps {
@@ -21,6 +22,7 @@ export interface TopBarProps {
   frontElements?: any[];
   backElements?: any[];
   mockupColor?: string;
+  productConfig?: ProductDisplayConfig | null;
 }
 
 export type SelectedProductVariant = {
@@ -35,6 +37,10 @@ export type SelectedProductVariant = {
   variantPrice?: number | string | null;
   image?: string | null;
   imageUrl?: string | null;
+  gelatoProductUid?: string | null;
+  gelato_product_uid?: string | null;
+  productUid?: string | null;
+  product_uid?: string | null;
 };
 
 export interface PreviewPayloadInput {
@@ -50,8 +56,11 @@ export interface PreviewPayloadInput {
   selectedVariant?: SelectedProductVariant | null;
   printBox?: any;
   safeArea?: any;
+  printBoxes?: Partial<Record<EditorSide, any>>;
+  safeAreas?: Partial<Record<EditorSide, any>>;
   designImage?: string | null;
   designImages?: Partial<Record<EditorSide, string | null>>;
   mockupMode?: "on_model_ai" | "product_flat" | string;
   modelMockup?: boolean;
+  productConfig?: ProductDisplayConfig | null;
 }

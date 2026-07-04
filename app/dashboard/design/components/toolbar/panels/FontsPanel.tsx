@@ -6,6 +6,7 @@ import {
   FONT_CATEGORIES,
   FONT_ITEMS,
   type FontCategory,
+  getEditorFontFamily,
   loadEditorFont,
   loadVisibleEditorFonts,
 } from "../data";
@@ -19,20 +20,24 @@ const TEXT_SHAPES = [
 const PAGE_SIZE = 36;
 const TRENDING_FONT_IDS = new Set([
   "inter",
-  "montserrat",
-  "poppins",
-  "bebas-neue",
-  "anton",
-  "oswald",
+  "geist",
+  "manrope",
+  "sora",
   "playfair-display",
-  "cinzel",
-  "orbitron",
-  "bangers",
-  "permanent-marker",
-  "black-ops-one",
+  "cormorant-garamond",
+  "bodoni-moda",
+  "gloock",
+  "bebas-neue",
+  "league-spartan",
+  "great-vibes",
+  "rubik-spray-paint",
 ]);
 const RECENT_STORAGE_KEY = "ryfio:recent-fonts";
 const FAVORITE_STORAGE_KEY = "ryfio:favorite-fonts";
+
+function previewSrc(font: { id: string; previewSvg?: string }) {
+  return font.previewSvg || `/font-previews/${font.id}.svg`;
+}
 
 type Tab = "all" | "trending" | "recent" | "favorites" | FontCategory;
 
@@ -63,11 +68,13 @@ function FontsPanel({
   const [tab, setTab] = useState<Tab>("all");
   const [recentFonts, setRecentFonts] = useState<string[]>([]);
   const [favoriteFonts, setFavoriteFonts] = useState<string[]>([]);
+  const [fontRenderKey, setFontRenderKey] = useState(0);
+  const [validFontIds, setValidFontIds] = useState<Set<string> | null>(null);
 
   const selectedFont =
     selected?.meta?.fontFamily || selected?.fontFamily || "Inter";
   const selectedShape = selected?.meta?.textShape || "straight";
-  const previewText = selected?.text || selected?.content || "Dream Big";
+  const previewText = selected?.text || selected?.content || "RYFIO Studio 123";
 
   useEffect(() => {
     setRecentFonts(readStoredFonts(RECENT_STORAGE_KEY));
@@ -75,12 +82,37 @@ function FontsPanel({
   }, []);
 
   useEffect(() => {
-    loadEditorFont(selectedFont);
+    let cancelled = false;
+    loadEditorFont(selectedFont).finally(() => {
+      if (!cancelled) setFontRenderKey((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedFont]);
+
+
+  useEffect(() => {
+    let cancelled = false;
+
+    fetch("/font-previews/manifest.json", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((manifest) => {
+        if (cancelled || !Array.isArray(manifest?.fonts)) return;
+        setValidFontIds(new Set(manifest.fonts.map(String)));
+      })
+      .catch(() => {
+        if (!cancelled) setValidFontIds(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredFonts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let source = FONT_ITEMS;
+    let source = validFontIds ? FONT_ITEMS.filter((font) => validFontIds.has(font.id)) : FONT_ITEMS;
 
     if (tab === "trending")
       source = FONT_ITEMS.filter((font) => TRENDING_FONT_IDS.has(font.id));
@@ -95,16 +127,27 @@ function FontsPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q),
     );
-  }, [favoriteFonts, query, recentFonts, tab]);
+  }, [favoriteFonts, query, recentFonts, tab, validFontIds]);
 
   const visibleFonts = filteredFonts.slice(0, limit);
 
+  const visibleFontFamilies = useMemo(
+    () => visibleFonts.map((font) => font.family).join("|"),
+    [visibleFonts],
+  );
+
   useEffect(() => {
-    loadVisibleEditorFonts(
-      visibleFonts.map((font) => font.family),
-      14,
-    );
-  }, [visibleFonts]);
+    let cancelled = false;
+    const families = visibleFonts.map((font) => font.family);
+
+    loadVisibleEditorFonts(families, Math.max(families.length, PAGE_SIZE)).finally(() => {
+      if (!cancelled) setFontRenderKey((value) => value + 1);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visibleFontFamilies]);
 
   const updateSelectedTextMeta = (patch: any) => {
     if (!selected) return;
@@ -157,13 +200,16 @@ function FontsPanel({
       <section className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.035]">
         <div className="flex min-h-[94px] items-center justify-center px-4 py-5">
           <div
+            key={`current-${selectedFont}-${fontRenderKey}`}
             className="max-w-full truncate text-center text-[32px] font-black leading-none"
             style={{
-              fontFamily: selectedFont,
+              fontFamily: getEditorFontFamily(selectedFont),
               color: selected?.meta?.color || "#ffffff",
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
             }}
           >
-            {previewText}
+            {previewText || "RYFIO Studio 123"}
           </div>
         </div>
         <div className="border-t border-white/10 px-3 py-2 text-[11px] font-bold text-white/45">
@@ -201,7 +247,7 @@ function FontsPanel({
               setQuery(e.target.value);
               setLimit(PAGE_SIZE);
             }}
-            placeholder="Search 500+ fonts..."
+            placeholder="Search fonts..."
             className="h-full flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
           />
         </label>
@@ -233,20 +279,26 @@ function FontsPanel({
             return (
               <div
                 key={font.id}
-                className={`group flex min-h-[50px] items-center gap-2 rounded-2xl border px-2.5 transition ${active ? "border-violet-300/35 bg-violet-500/90 text-white" : "border-white/10 bg-white/[0.035] text-white hover:bg-white/[0.06]"}`}
+                data-font-row
+                className={`group flex min-h-[44px] items-center gap-2 rounded-xl border px-2 transition ${active ? "border-violet-300/35 bg-violet-500/90 text-white" : "border-white/10 bg-white/[0.035] text-white hover:bg-white/[0.06]"}`}
               >
                 <button
                   type="button"
                   disabled={!selected}
                   onClick={() => selectFont(font.family)}
-                  className="min-w-0 flex-1 py-2 text-left disabled:opacity-40"
+                  className="min-w-0 flex-1 py-1.5 text-left disabled:opacity-40"
                 >
-                  <div
-                    className="truncate text-[20px] font-black leading-none"
-                    style={{ fontFamily: font.family }}
-                  >
-                    {previewText}
-                  </div>
+                  <img
+                    src={previewSrc(font)}
+                    alt={font.family}
+                    loading="lazy"
+                    decoding="async"
+                    onError={(event) => {
+                      event.currentTarget.closest("[data-font-row]")?.remove();
+                    }}
+                    className="h-6 w-full max-w-[160px] object-contain object-left"
+                    draggable={false}
+                  />
                   <div
                     className={`mt-1 flex items-center gap-2 text-[10px] font-bold ${active ? "text-white/70" : "text-slate-500"}`}
                   >
@@ -302,6 +354,34 @@ function Label({ title, count }: { title: string; count?: number }) {
       {typeof count === "number" && (
         <span className="text-[10px] font-black text-violet-300">{count}</span>
       )}
+    </div>
+  );
+}
+
+function FontPreviewText({ family, text, className }: { family: string; text: string; className: string }) {
+  const [version, setVersion] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadEditorFont(family).finally(() => {
+      if (!cancelled) setVersion((value) => value + 1);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [family]);
+
+  return (
+    <div
+      key={`${family}-${version}`}
+      className={className}
+      style={{
+        fontFamily: getEditorFontFamily(family),
+        fontWeight: 800,
+        letterSpacing: "-0.015em",
+      }}
+    >
+      {text}
     </div>
   );
 }

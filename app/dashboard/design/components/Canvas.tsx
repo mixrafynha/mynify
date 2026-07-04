@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -21,25 +14,37 @@ import { useCanvasScale } from "./canvas/hooks/useCanvasScale";
 import { useCanvasPinch } from "./canvas/hooks/useCanvasPinch";
 import { useCanvasColors } from "./canvas/hooks/useCanvasColors";
 import { useCanvasElements } from "./canvas/hooks/useCanvasElements";
-import { useCanvasStorage } from "./canvas/hooks/useCanvasStorage";
 import { useCanvasWarnings } from "./canvas/hooks/useCanvasWarnings";
-import { useHistory } from "./canvas/hooks/useHistory";
 
-import { PRODUCTS, GELATO_PRINT_SIZE_MM_BY_PRODUCT } from "./canvas/productConfig";
+import {
+  getConfiguredSafeArea,
+  getGelatoPrintSizeMm,
+  getMockupUrl,
+  getMockupVisualScale,
+  type ProductDisplayConfig,
+} from "./canvas/productConfig";
 import { MOCKUP_AREA } from "./canvas/constants";
 import {
-  centerElementInSafeArea,
   getLocalSafeArea,
   getPrintBox,
-  getSafeArea,
 } from "./canvas/canvasMath";
 import type { CanvasSide } from "./canvas/types";
 
-const ColorSelector = dynamic(() => import("./canvas/components/ColorSelector"));
-const WarningsPanel = dynamic(() => import("./canvas/components/WarningsPanel"));
-const LostElementsOverlay = dynamic(() => import("./canvas/components/LostElementsOverlay"));
-const GelatoDesignDropzone = dynamic(() => import("./canvas/components/GelatoDesignDropzone"));
-const FloatingEditToolbar = dynamic(() => import("./toolbar/FloatingEditToolbar"));
+const ColorSelector = dynamic(
+  () => import("./canvas/components/ColorSelector"),
+);
+const WarningsPanel = dynamic(
+  () => import("./canvas/components/WarningsPanel"),
+);
+const LostElementsOverlay = dynamic(
+  () => import("./canvas/components/LostElementsOverlay"),
+);
+const GelatoDesignDropzone = dynamic(
+  () => import("./canvas/components/GelatoDesignDropzone"),
+);
+const FloatingEditToolbar = dynamic(
+  () => import("./toolbar/FloatingEditToolbar"),
+);
 
 const MemoDraggableElement = memo(DraggableElement);
 
@@ -56,7 +61,8 @@ export default function Canvas({
   setMockupColor,
   mode = "edit",
   canvasRef,
-}: any) {
+  productConfig = null,
+}: any & { productConfig?: ProductDisplayConfig | null }) {
   const params = useParams();
   const searchParams = useSearchParams();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -81,22 +87,25 @@ export default function Canvas({
   const mockupId = String(params?.id || "hoodie").toLowerCase();
   const productColorKey = productId || mockupId;
   const currentSide: CanvasSide = side === "back" ? "back" : "front";
-  const isPreviewMode = mode === "preview" || searchParams.get("mode") === "preview" || searchParams.get("preview") === "1";
+  const isPreviewMode =
+    mode === "preview" ||
+    searchParams.get("mode") === "preview" ||
+    searchParams.get("preview") === "1";
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectionBox, setSelectionBox] = useState<any>(null);
-  const [zoom, setZoom] = useState(externalZoom);
+  const [internalZoom, setInternalZoom] = useState(externalZoom);
   const pendingSelectionRef = useRef<any | null>(null);
 
   const { panOffset, startPan, onPanMove, endPan, resetPan } = useCanvasPan();
-  const { state: elements, push, replace, reset } = useHistory<any[]>(externalElements || []);
+  const elements = useMemo(
+    () => (Array.isArray(externalElements) ? externalElements : []),
+    [externalElements],
+  );
+  const zoom = typeof onZoomChange === "function" ? externalZoom : internalZoom;
 
   useEffect(() => {
-    reset(externalElements || []);
-  }, [externalElements, reset]);
-
-  useEffect(() => {
-    setZoom(externalZoom);
+    setInternalZoom(externalZoom);
   }, [externalZoom]);
 
   useEffect(() => {
@@ -110,42 +119,36 @@ export default function Canvas({
   });
 
   const setElements = useCallback(
-    (updater: any, options: { record?: boolean } = {}) => {
-      if (externalSetElements) {
-        externalSetElements((prev: any[]) => {
-          const next = typeof updater === "function" ? updater(prev || []) : updater;
-          if (options.record !== false) push(next);
-          else replace(next);
-          return next;
-        });
-        return;
-      }
+    (updater: any) => {
+      if (typeof externalSetElements !== "function") return;
 
-      const next = typeof updater === "function" ? updater(elements || []) : updater;
-      if (options.record !== false) push(next);
-      else replace(next);
+      externalSetElements((prev: any[]) => {
+        const list = Array.isArray(prev) ? prev : [];
+        return typeof updater === "function" ? updater(list) : updater;
+      });
     },
-    [elements, externalSetElements, push, replace]
+    [externalSetElements],
   );
 
-  const productMockup = PRODUCTS[mockupId] || PRODUCTS.hoodie;
+  const resolvedProductId = productConfig?.category || productConfig?.productId || mockupId;
 
-const mockup = useMemo(
-  () =>
-    productMockup[currentSide] ??
-    productMockup.front ??
-    PRODUCTS.hoodie.front,
-  [currentSide, productMockup]
-);
-  const printBox = useMemo(() => getPrintBox(mockupId, currentSide), [currentSide, mockupId]);
-  const safeArea = useMemo(() => getSafeArea(printBox), [printBox]);
+  const mockup = useMemo(
+    () => getMockupUrl(resolvedProductId, currentSide, productConfig),
+    [currentSide, resolvedProductId, productConfig],
+  );
+  const printBox = useMemo(
+    () => getPrintBox(resolvedProductId, currentSide, productConfig),
+    [currentSide, resolvedProductId, productConfig],
+  );
+  const safeArea = useMemo(
+    () => getConfiguredSafeArea(resolvedProductId, currentSide, productConfig),
+    [currentSide, resolvedProductId, productConfig],
+  );
   const localSafeArea = useMemo(() => getLocalSafeArea(safeArea), [safeArea]);
 
   const gelatoPrintSize = useMemo(
-    () =>
-      GELATO_PRINT_SIZE_MM_BY_PRODUCT[mockupId]?.[currentSide] ||
-      GELATO_PRINT_SIZE_MM_BY_PRODUCT.hoodie?.front,
-    [currentSide, mockupId]
+    () => getGelatoPrintSizeMm(resolvedProductId, currentSide, productConfig),
+    [currentSide, resolvedProductId, productConfig],
   );
 
   const canvasScale = useCanvasScale(wrapperRef);
@@ -154,26 +157,24 @@ const mockup = useMemo(
   const handleZoomChange = useCallback(
     (value: number) => {
       const next = Math.min(4, Math.max(0.25, Number(value) || 1));
-      setZoom(next);
-      onZoomChange?.(Math.round(next * 100));
+      setInternalZoom(next);
+      onZoomChange?.(next);
     },
-    [onZoomChange]
+    [onZoomChange],
   );
 
-  const { updateSelectedElements, endSelectedElementsDrag } = useCanvasElements({
-    safeArea: localSafeArea,
-    setElements,
-  });
+  const { updateSelectedElements, endSelectedElementsDrag } = useCanvasElements(
+    {
+      safeArea: localSafeArea,
+      setElements,
+    },
+  );
 
-  useCanvasStorage({
-    storageKey: `canvas:${mockupId}:${currentSide}`,
+  const { warnings, warningCount, quality } = useCanvasWarnings(
     elements,
-    setElements,
-    safeArea: localSafeArea,
-    centerElementInSafeArea,
-  });
-
-  const { warnings, warningCount, quality } = useCanvasWarnings(elements, localSafeArea, gelatoPrintSize);
+    localSafeArea,
+    gelatoPrintSize,
+  );
   const { handlePinchDown, handlePinchMove, handlePinchEnd } = useCanvasPinch({
     zoom,
     onZoomChange: handleZoomChange,
@@ -181,9 +182,8 @@ const mockup = useMemo(
   const { showColors, setShowColors, availableColors } = useCanvasColors(
     productColorKey,
     mockupColor,
-    setMockupColor
+    setMockupColor,
   );
-
 
   const clearSelection = useCallback(() => {
     setSelectedIds([]);
@@ -191,95 +191,110 @@ const mockup = useMemo(
     setSelectedElement?.(null);
   }, [setSelectedElement, setSelectedId]);
 
-  const selectElement = useCallback((element: any) => {
-    if (!element?.id) return;
-    setSelectedIds([element.id]);
-    setSelectedId?.(element.id);
-    setSelectedElement?.(element);
-  }, [setSelectedElement, setSelectedId]);
+  const selectElement = useCallback(
+    (element: any) => {
+      if (!element?.id) return;
+      setSelectedIds([element.id]);
+      setSelectedId?.(element.id);
+      setSelectedElement?.(element);
+    },
+    [setSelectedElement, setSelectedId],
+  );
 
   const handleUpdateElement = useCallback(
     (id: string, patch: any) => {
       const record = patch?.__transient !== true;
-      setElements((prev: any[]) => {
-        const list = Array.isArray(prev) ? prev : [];
-        const current = list.find((item) => item.id === id);
-        if (!current) return list;
+      setElements(
+        (prev: any[]) => {
+          const list = Array.isArray(prev) ? prev : [];
+          const current = list.find((item) => item.id === id);
+          if (!current) return list;
 
-        if (patch.delete) {
-          return list.filter((item) => item.id !== id);
-        }
+          if (patch.delete) {
+            return list.filter((item) => item.id !== id);
+          }
 
-        if (patch.duplicate) {
-          const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
-          const copy = {
-            ...current,
-            id: crypto.randomUUID(),
-            x: (Number(current.x) || 0) + 24,
-            y: (Number(current.y) || 0) + 24,
-            zIndex: maxZ + 1,
-            selected: false,
-          };
+          if (patch.duplicate) {
+            const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
+            const copy = {
+              ...current,
+              id: crypto.randomUUID(),
+              x: (Number(current.x) || 0) + 24,
+              y: (Number(current.y) || 0) + 24,
+              zIndex: maxZ + 1,
+              selected: false,
+            };
 
-          pendingSelectionRef.current = copy;
-          return [...list, copy];
-        }
+            pendingSelectionRef.current = copy;
+            return [...list, copy];
+          }
 
-        if (patch.zAction === "bringForward") {
-          return list.map((item) =>
-            item.id === id ? { ...item, zIndex: (item.zIndex || 0) + 1 } : item
-          );
-        }
+          if (patch.zAction === "bringForward") {
+            return list.map((item) =>
+              item.id === id
+                ? { ...item, zIndex: (item.zIndex || 0) + 1 }
+                : item,
+            );
+          }
 
-        if (patch.zAction === "sendBackward") {
-          return list.map((item) =>
-            item.id === id ? { ...item, zIndex: Math.max(0, (item.zIndex || 0) - 1) } : item
-          );
-        }
+          if (patch.zAction === "sendBackward") {
+            return list.map((item) =>
+              item.id === id
+                ? { ...item, zIndex: Math.max(0, (item.zIndex || 0) - 1) }
+                : item,
+            );
+          }
 
-        if (patch.zAction === "bringToFront") {
-          const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
-          return list.map((item) => (item.id === id ? { ...item, zIndex: maxZ + 1 } : item));
-        }
+          if (patch.zAction === "bringToFront") {
+            const maxZ = Math.max(0, ...list.map((item) => item.zIndex || 0));
+            return list.map((item) =>
+              item.id === id ? { ...item, zIndex: maxZ + 1 } : item,
+            );
+          }
 
-        if (patch.zAction === "sendToBack") {
-          return list.map((item) =>
-            item.id === id ? { ...item, zIndex: 0 } : { ...item, zIndex: (item.zIndex || 0) + 1 }
-          );
-        }
+          if (patch.zAction === "sendToBack") {
+            return list.map((item) =>
+              item.id === id
+                ? { ...item, zIndex: 0 }
+                : { ...item, zIndex: (item.zIndex || 0) + 1 },
+            );
+          }
 
-        return list.map((item) => {
-          if (item.id !== id) return item;
+          return list.map((item) => {
+            if (item.id !== id) return item;
 
-          const next = {
-            ...item,
-            ...patch,
-            meta: {
-              ...(item.meta || {}),
-              ...(patch.meta || {}),
-            },
-          };
+            const next = {
+              ...item,
+              ...patch,
+              meta: {
+                ...(item.meta || {}),
+                ...(patch.meta || {}),
+              },
+            };
 
-          delete next.delete;
-          delete next.duplicate;
-          delete next.zAction;
-          delete next.__transient;
+            delete next.delete;
+            delete next.duplicate;
+            delete next.zAction;
+            delete next.__transient;
 
-          return next;
-        });
-      }, { record });
+            return next;
+          });
+        },
+        { record },
+      );
     },
-    [localSafeArea, setElements, setSelectedElement, setSelectedId]
+    [setElements],
   );
 
   const sortedElements = useMemo(
-    () => [...(elements || [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)),
-    [elements]
+    () =>
+      [...(elements || [])].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)),
+    [elements],
   );
 
   const selectedElements = useMemo(
     () => sortedElements.filter((item: any) => selectedIds.includes(item.id)),
-    [selectedIds, sortedElements]
+    [selectedIds, sortedElements],
   );
 
   const addImageFromFile = useCallback(
@@ -297,10 +312,19 @@ const mockup = useMemo(
           const naturalHeight = img.naturalHeight || 1000;
           const maxWidth = Math.max(80, localSafeArea.width * 0.72);
           const maxHeight = Math.max(80, localSafeArea.height * 0.72);
-          const ratio = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
+          const ratio = Math.min(
+            1,
+            maxWidth / naturalWidth,
+            maxHeight / naturalHeight,
+          );
           const width = Math.max(48, Math.round(naturalWidth * ratio));
           const height = Math.max(48, Math.round(naturalHeight * ratio));
-          const maxZ = Math.max(0, ...(Array.isArray(elements) ? elements : []).map((item: any) => item.zIndex || 0));
+          const maxZ = Math.max(
+            0,
+            ...(Array.isArray(elements) ? elements : []).map(
+              (item: any) => item.zIndex || 0,
+            ),
+          );
 
           const next = {
             id: crypto.randomUUID(),
@@ -320,7 +344,10 @@ const mockup = useMemo(
             },
           };
 
-          setElements((prev: any[]) => [...(Array.isArray(prev) ? prev : []), next]);
+          setElements((prev: any[]) => [
+            ...(Array.isArray(prev) ? prev : []),
+            next,
+          ]);
           setSelectedIds([next.id]);
           setSelectedId?.(next.id);
           setSelectedElement?.(next);
@@ -330,25 +357,34 @@ const mockup = useMemo(
 
       reader.readAsDataURL(file);
     },
-    [elements, localSafeArea.height, localSafeArea.width, setElements, setSelectedElement, setSelectedId]
+    [
+      elements,
+      localSafeArea.height,
+      localSafeArea.width,
+      setElements,
+      setSelectedElement,
+      setSelectedId,
+    ],
   );
 
   const deleteElements = useCallback(
     (ids: string[]) => {
       if (!ids.length) return;
-      setElements((prev: any[]) => (prev || []).filter((item) => !ids.includes(item.id)));
+      setElements((prev: any[]) =>
+        (prev || []).filter((item) => !ids.includes(item.id)),
+      );
       setSelectedIds((prev) => prev.filter((id) => !ids.includes(id)));
       setSelectedId?.(null);
       setSelectedElement?.(null);
     },
-    [setElements, setSelectedElement, setSelectedId]
+    [setElements, setSelectedElement, setSelectedId],
   );
 
   const duplicateElementById = useCallback(
     (id: string) => {
       handleUpdateElement(id, { duplicate: true });
     },
-    [handleUpdateElement]
+    [handleUpdateElement],
   );
 
   const handleCanvasPointerDown = useCallback(
@@ -365,7 +401,7 @@ const mockup = useMemo(
         startPan(e);
       }
     },
-    [clearSelection, startPan]
+    [clearSelection, startPan],
   );
 
   const handleWheel = useCallback(
@@ -377,7 +413,7 @@ const mockup = useMemo(
       const step = e.shiftKey ? 0.18 : 0.08;
       handleZoomChange(zoom + direction * step);
     },
-    [handleZoomChange, zoom]
+    [handleZoomChange, zoom],
   );
 
   const resetViewport = useCallback(() => {
@@ -388,7 +424,7 @@ const mockup = useMemo(
   return (
     <div
       ref={setWrapperNode}
-      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#05070d]"
+      className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden bg-[#05070d] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       onPointerDown={handleCanvasPointerDown}
       onPointerMove={onPanMove}
       onPointerUp={endPan}
@@ -398,27 +434,39 @@ const mockup = useMemo(
       onPointerUpCapture={handlePinchEnd}
       onPointerCancelCapture={handlePinchEnd}
       onWheel={handleWheel}
+      style={{ overscrollBehavior: "none" }}
     >
-      {!isPreviewMode && <ColorSelector
-        mockupColor={mockupColor}
-        setMockupColor={setMockupColor}
-        showColors={showColors}
-        setShowColors={setShowColors}
-        availableColors={availableColors}
-      />}
+      {!isPreviewMode && (
+        <ColorSelector
+          mockupColor={mockupColor}
+          setMockupColor={setMockupColor}
+          showColors={showColors}
+          setShowColors={setShowColors}
+          availableColors={availableColors}
+        />
+      )}
 
-      {!isPreviewMode && <WarningsPanel warnings={warnings} warningCount={warningCount} quality={quality} elements={elements} safeArea={localSafeArea} printSize={gelatoPrintSize} />}
+      {!isPreviewMode && (
+        <WarningsPanel
+          warnings={warnings}
+          warningCount={warningCount}
+          quality={quality}
+          elements={elements}
+          safeArea={localSafeArea}
+          printSize={gelatoPrintSize}
+        />
+      )}
 
-      {!isPreviewMode && <FloatingEditToolbar
-        selectedElements={selectedElements}
-        safeArea={localSafeArea}
-        updateElement={handleUpdateElement}
-        deleteElements={deleteElements}
-        duplicateElement={duplicateElementById}
-        clearSelection={clearSelection}
-      />}
-
-
+      {!isPreviewMode && (
+        <FloatingEditToolbar
+          selectedElements={selectedElements}
+          safeArea={localSafeArea}
+          updateElement={handleUpdateElement}
+          deleteElements={deleteElements}
+          duplicateElement={duplicateElementById}
+          clearSelection={clearSelection}
+        />
+      )}
 
       <div
         id="mockup-export-root"
@@ -432,10 +480,17 @@ const mockup = useMemo(
           willChange: "transform",
         }}
       >
-        <CanvasMockup mockup={mockup} mockupId={mockupId} currentSide={currentSide} color={mockupColor} />
+        <CanvasMockup
+          mockup={mockup}
+          mockupId={resolvedProductId}
+          currentSide={currentSide}
+          color={mockupColor}
+          visualScale={getMockupVisualScale(resolvedProductId, currentSide, productConfig)}
+        />
 
         <SafeAreaLayer
           safeArea={safeArea}
+          side={currentSide}
           finalScale={finalScale}
           elements={sortedElements}
           setSelectedIds={setSelectedIds}
@@ -462,7 +517,7 @@ const mockup = useMemo(
 
           {sortedElements.map((el: any) => (
             <MemoDraggableElement
-              key={el.id}
+              key={`${currentSide}:${el.id}`}
               el={el}
               safeArea={localSafeArea}
               zoom={finalScale}
@@ -476,13 +531,17 @@ const mockup = useMemo(
               allElements={sortedElements}
               printBox={printBox}
               gelatoPrintSize={gelatoPrintSize}
-              updateElement={(patch: any) => !isPreviewMode && handleUpdateElement(el.id, patch)}
+              updateElement={(patch: any) =>
+                !isPreviewMode && handleUpdateElement(el.id, patch)
+              }
               previewMode={isPreviewMode}
             />
           ))}
         </SafeAreaLayer>
 
-        {!isPreviewMode && <SafeArea printBox={printBox} selected={selectedIds.length > 0} />}
+        {!isPreviewMode && (
+          <SafeArea printBox={printBox} selected={selectedIds.length > 0} />
+        )}
       </div>
     </div>
   );

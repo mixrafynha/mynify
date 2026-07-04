@@ -34,7 +34,7 @@ export default function SheetHeader({
   onHandlePointerUp,
 }: Props) {
   return (
-    <div className="border-b border-white/10 bg-[#101124]/92 px-4 pb-2 pt-2">
+    <div className="border-b border-white/10 bg-[#101124] px-2.5 py-1">
       {/* HANDLE DRAG */}
       <div
         onPointerDown={onHandlePointerDown}
@@ -42,45 +42,45 @@ export default function SheetHeader({
         onPointerUp={onHandlePointerUp}
         onPointerCancel={onHandlePointerUp}
         className="
-          mx-auto mb-2
-          flex h-8 w-full max-w-[220px]
+          mx-auto mb-0.5
+          flex h-5 w-full max-w-[160px]
           touch-none select-none
           items-center justify-center
         "
       >
-        <div className="h-1.5 w-14 rounded-full bg-white/30" />
+        <div className="h-1 w-10 rounded-lg bg-white/30" />
       </div>
 
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="truncate text-[18px] font-black text-white">
+          <h2 className="truncate text-[13px] font-black text-white">
             {title}
           </h2>
 
           {subtitle && (
-            <p className="mt-1 truncate text-[11px] font-medium text-slate-400">
+            <p className="hidden text-[10px] font-medium text-slate-400">
               {subtitle}
             </p>
           )}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
             onClick={onToggle}
             className="
-              flex h-9 w-9
+              flex h-7 w-7
               items-center justify-center
-              rounded-full
+              rounded-lg
               bg-white/[0.08]
               text-white/80
               active:scale-95
             "
           >
             {expanded ? (
-              <ChevronDown size={18} />
+              <ChevronDown size={16} />
             ) : (
-              <ChevronUp size={18} />
+              <ChevronUp size={16} />
             )}
           </button>
 
@@ -88,15 +88,15 @@ export default function SheetHeader({
             type="button"
             onClick={onClose}
             className="
-              flex h-9 w-9
+              flex h-7 w-7
               items-center justify-center
-              rounded-full
+              rounded-lg
               bg-white/[0.08]
               text-white
               active:scale-95
             "
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
       </div>

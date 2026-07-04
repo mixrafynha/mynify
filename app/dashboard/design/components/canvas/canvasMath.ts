@@ -1,5 +1,5 @@
 import { SAFE_AREA_PADDING } from "./constants";
-import { getResponsivePrintBox } from "./productConfig";
+import { getResponsivePrintBox, type ProductDisplayConfig } from "./productConfig";
 import type { Box, CanvasSide } from "./types";
 
 type Side = CanvasSide;
@@ -41,8 +41,12 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(finiteNumber(value, safeMin), safeMin), safeMax);
 }
 
-export function getPrintBox(productId: string, side: Side = "front"): Box {
-  return getResponsivePrintBox(productId, side);
+export function getPrintBox(
+  productId: string,
+  side: Side = "front",
+  productConfig?: ProductDisplayConfig | null,
+): Box {
+  return getResponsivePrintBox(productId, side, undefined, productConfig);
 }
 
 export function getSafeArea(printBox: Box): Box {
