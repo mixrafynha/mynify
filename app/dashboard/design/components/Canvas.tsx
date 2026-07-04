@@ -203,7 +203,6 @@ export default function Canvas({
 
   const handleUpdateElement = useCallback(
     (id: string, patch: any) => {
-      const record = patch?.__transient !== true;
       setElements(
         (prev: any[]) => {
           const list = Array.isArray(prev) ? prev : [];
@@ -279,8 +278,7 @@ export default function Canvas({
 
             return next;
           });
-        },
-        { record },
+        }
       );
     },
     [setElements],
