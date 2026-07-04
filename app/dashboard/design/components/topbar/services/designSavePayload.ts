@@ -698,7 +698,7 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
       back: hasDataImage(backMockupImage) ? backMockupImage : undefined,
     },
 
-    mockupSource: input.productConfig?.__source || input.productConfig?.source || "local",
+    mockupSource: saveDebug.source,
     mockupUrls: {
       front: frontSideData.mockupUrl || null,
       back: backSideData.mockupUrl || null,
