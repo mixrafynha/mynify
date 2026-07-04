@@ -6,10 +6,7 @@ import {
   getMockupVisualScale,
   getProductionExportResolution,
 } from "../../canvas/productConfig";
-import {
-  captureProductionDesign,
-  captureVisualMockupPreview,
-} from "../../preview/services/previewCapture";
+import { captureProductionDesign } from "../../preview/services/previewCapture";
 import type {
   PreviewElement,
   PreviewSideData,
@@ -492,21 +489,11 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
     );
   }
 
-  let currentMockupImage: string | null = null;
-  try {
-    currentMockupImage = await captureVisualMockupPreview(getVisibleMockupRoot());
-  } catch {
-  }
-
-  const frontMockupImage =
-    currentSide === "front" && hasDataImage(currentMockupImage)
-      ? currentMockupImage
-      : null;
-
-  const backMockupImage =
-    currentSide === "back" && hasDataImage(currentMockupImage)
-      ? currentMockupImage
-      : null;
+  // Keep the save request small enough for Vercel serverless limits.
+  // Production files are still sent in printFiles.front/back; visual mockup
+  // previews are non-production data and can be rebuilt from mockupUrls + design data.
+  const frontMockupImage: string | null = null;
+  const backMockupImage: string | null = null;
 
   const frontElements = sanitizeElementsForDatabase(frontRawElements);
   const backElements = sanitizeElementsForDatabase(backRawElements);
