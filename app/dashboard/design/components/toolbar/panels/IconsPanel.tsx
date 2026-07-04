@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 
 import { SHAPE_CATEGORIES, SHAPES, type ShapePreset } from "../data";
 
-const PAGE_SIZE = 48;
+const DESKTOP_PAGE_SIZE = 48;
+const MOBILE_PAGE_SIZE = 24;
+
+function getPageSize() {
+  if (typeof window === "undefined") return DESKTOP_PAGE_SIZE;
+  return window.matchMedia?.("(max-width: 767px)").matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
+}
 
 function addShape(createElement: ((element: any) => void) | undefined, shape: ShapePreset) {
   createElement?.({
@@ -30,22 +36,23 @@ function addShape(createElement: ((element: any) => void) | undefined, shape: Sh
   });
 }
 
-export default function IconsPanel({ createElement }: { createElement?: (element: any) => void }) {
+function IconsPanel({ createElement }: { createElement?: (element: any) => void }) {
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const deferredQuery = useDeferredValue(query);
 
   const items = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = deferredQuery.trim().toLowerCase();
 
     return SHAPES.filter(
       (item) =>
         (category === "All" || item.category === category) &&
         (!term || `${item.label} ${item.category}`.toLowerCase().includes(term))
     );
-  }, [category, query]);
+  }, [category, deferredQuery]);
 
-  const visibleItems = items.slice(0, page * PAGE_SIZE);
+  const visibleItems = useMemo(() => items.slice(0, page * getPageSize()), [items, page]);
 
   return (
     <div className="space-y-3 pb-5 text-white">
@@ -88,7 +95,7 @@ export default function IconsPanel({ createElement }: { createElement?: (element
             aria-label={shape.label}
             title={shape.label}
             onClick={() => addShape(createElement, shape)}
-            className="flex min-h-[54px] items-center justify-center rounded-2xl border border-violet-300/18 bg-white/[0.09] text-[24px] font-black text-violet-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition duration-150 hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/20 active:scale-95"
+            className="flex min-h-[54px] items-center justify-center rounded-2xl border border-violet-300/18 bg-white/[0.09] text-[24px] font-black text-violet-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition duration-150 hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/20 active:scale-95 [content-visibility:auto] [contain-intrinsic-size:54px]"
           >
             <span className="drop-shadow-[0_1px_8px_rgba(196,181,253,0.28)]">{shape.value}</span>
           </button>
@@ -98,3 +105,6 @@ export default function IconsPanel({ createElement }: { createElement?: (element
     </div>
   );
 }
+
+
+export default memo(IconsPanel);

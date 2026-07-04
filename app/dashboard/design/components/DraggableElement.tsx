@@ -51,6 +51,7 @@ function DraggableElement({
   updateSelectedElements,
   endSelectedElementsDrag,
   updateElement,
+  elementId,
   allElements = [],
   previewMode = false,
 }: any) {
@@ -63,6 +64,15 @@ function DraggableElement({
 
   const isLocked = previewMode || !!el.locked || !!el.meta?.locked;
   const isText = el.type === "text";
+
+  const patchElement = useCallback(
+    (patch: any) => {
+      const id = elementId || el?.id;
+      if (!id) return;
+      updateElement?.(id, patch);
+    },
+    [elementId, el?.id, updateElement],
+  );
 
   const localSafeArea = useMemo(() => toLocalSafeArea(safeArea), [safeArea]);
 
@@ -118,7 +128,7 @@ function DraggableElement({
     allElements,
     safeArea: localSafeArea,
     zoom,
-    updateElement,
+    updateElement: patchElement,
     updateSelectedElements,
     endSelectedElementsDrag,
 
@@ -136,7 +146,7 @@ function DraggableElement({
     isLocked,
     safeArea: localSafeArea,
     zoom,
-    updateElement,
+    updateElement: patchElement,
     allowOverflow: true,
   });
 
@@ -145,7 +155,7 @@ function DraggableElement({
     elementRef,
     editing,
     isLocked,
-    updateElement,
+    updateElement: patchElement,
   });
 
   const startEdit = useCallback(() => {
@@ -177,7 +187,7 @@ function DraggableElement({
        * Não clampa posição.
        * Só normaliza width/height/font metrics.
        */
-      updateElement?.({
+      patchElement?.({
         x: finiteNumber(el.x, 0),
         y: finiteNumber(el.y, 0),
         width: normalized.width,
@@ -187,7 +197,7 @@ function DraggableElement({
         meta: normalized.meta,
       });
     },
-    [el, localSafeArea, updateElement]
+    [el, localSafeArea, patchElement]
   );
 
   const fitToBounds = useCallback(
@@ -207,7 +217,7 @@ function DraggableElement({
           localSafeArea
         );
 
-        updateElement?.({
+        patchElement?.({
           x: normalized.x,
           y: normalized.y,
           width: normalized.width,
@@ -218,9 +228,9 @@ function DraggableElement({
         return;
       }
 
-      updateElement?.(patch);
+      patchElement?.(patch);
     },
-    [el, isText, localSafeArea, updateElement]
+    [el, isText, localSafeArea, patchElement]
   );
 
   const flipElement = useCallback(
@@ -228,37 +238,37 @@ function DraggableElement({
       stopPointer(e);
       if (isLocked) return;
 
-      updateElement?.({
+      patchElement?.({
         meta: {
           ...(el.meta || {}),
           flipX: !el.meta?.flipX,
         },
       });
     },
-    [el.meta, isLocked, updateElement]
+    [el.meta, isLocked, patchElement]
   );
 
   const duplicateElement = useCallback(
     (e: React.PointerEvent) => {
       stopPointer(e);
-      updateElement?.({ duplicate: true });
+      patchElement?.({ duplicate: true });
     },
-    [updateElement]
+    [patchElement]
   );
 
   const removeElement = useCallback(
     (e: React.PointerEvent) => {
       stopPointer(e);
-      updateElement?.({ delete: true });
+      patchElement?.({ delete: true });
     },
-    [updateElement]
+    [patchElement]
   );
 
   const toggleLock = useCallback(
     (e: React.PointerEvent) => {
       stopPointer(e);
 
-      updateElement?.({
+      patchElement?.({
         locked: !isLocked,
         meta: {
           ...(el.meta || {}),
@@ -266,7 +276,7 @@ function DraggableElement({
         },
       });
     },
-    [el.meta, isLocked, updateElement]
+    [el.meta, isLocked, patchElement]
   );
 
   const style: React.CSSProperties = useMemo(
@@ -367,11 +377,41 @@ function DraggableElement({
         removeElement={removeElement}
         fitToBounds={fitToBounds}
         toggleLock={toggleLock}
-        bringForward={() => updateElement?.({ zAction: "bringForward" })}
-        sendBackward={() => updateElement?.({ zAction: "sendBackward" })}
+        bringForward={() => patchElement?.({ zAction: "bringForward" })}
+        sendBackward={() => patchElement?.({ zAction: "sendBackward" })}
       />}
     </div>
   );
 }
 
-export default memo(DraggableElement);
+function sameArrayValues(a: any[] = [], b: any[] = []) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function sameSafeArea(a: any, b: any) {
+  return (
+    a === b ||
+    (!!a &&
+      !!b &&
+      a.width === b.width &&
+      a.height === b.height &&
+      a.x === b.x &&
+      a.y === b.y)
+  );
+}
+
+export default memo(DraggableElement, (prev: any, next: any) => {
+  return (
+    prev.el === next.el &&
+    prev.isSelected === next.isSelected &&
+    prev.previewMode === next.previewMode &&
+    prev.zoom === next.zoom &&
+    sameSafeArea(prev.safeArea, next.safeArea) &&
+    sameArrayValues(prev.selectedIds, next.selectedIds)
+  );
+});

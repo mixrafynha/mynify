@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Star, Type } from "lucide-react";
 import {
   FONT_CATEGORIES,
@@ -13,9 +13,31 @@ import {
 
 const FAVORITES_KEY = "ryfio-editor-favorite-fonts";
 const RECENTS_KEY = "ryfio-editor-recent-fonts";
-const PAGE_SIZE = 12;
+const DESKTOP_PAGE_SIZE = 12;
+const MOBILE_PAGE_SIZE = 8;
 const MAX_RECENTS = 24;
 const MAX_STORED_FAVORITES = 80;
+
+function getPageSize() {
+  if (typeof window === "undefined") return DESKTOP_PAGE_SIZE;
+  return window.matchMedia?.("(max-width: 767px)").matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
+}
+
+function scheduleIdleTask(callback: () => void) {
+  if (typeof window === "undefined") return 0;
+  const requestIdle = (window as any).requestIdleCallback;
+  if (typeof requestIdle === "function") {
+    return requestIdle(callback, { timeout: 450 });
+  }
+  return window.setTimeout(callback, 32);
+}
+
+function cancelIdleTask(id: number) {
+  if (!id || typeof window === "undefined") return;
+  const cancelIdle = (window as any).cancelIdleCallback;
+  if (typeof cancelIdle === "function") cancelIdle(id);
+  else window.clearTimeout(id);
+}
 
 const PRIORITY_FONT_IDS = [
   "inter",
@@ -208,7 +230,7 @@ function buildTextElement(font: FontItem) {
   };
 }
 
-export default function TextPanel({
+function TextPanel({
   createElement,
   onAddText,
 }: {
@@ -226,7 +248,7 @@ export default function TextPanel({
   const [recents, setRecents] = useState<string[]>(() =>
     readStorage(RECENTS_KEY),
   );
-  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [limit, setLimit] = useState(() => getPageSize());
   const [loadedFontIds, setLoadedFontIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -235,8 +257,10 @@ export default function TextPanel({
     return sortFontsForDiscovery(dedupeFontsByFamily(FONT_ITEMS));
   }, []);
 
+  const deferredQuery = useDeferredValue(query);
+
   const allFilteredFonts = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = deferredQuery.trim().toLowerCase();
     let source: FontItem[] = visibleCatalogFonts;
 
     if (category === "favorites") {
@@ -254,7 +278,7 @@ export default function TextPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(term),
     );
-  }, [category, favorites, query, recents, visibleCatalogFonts]);
+  }, [category, deferredQuery, favorites, recents, visibleCatalogFonts]);
 
   const filteredFonts = useMemo(
     () => allFilteredFonts.slice(0, limit),
@@ -263,44 +287,58 @@ export default function TextPanel({
 
   useEffect(() => {
     let cancelled = false;
+    let idleId = 0;
     const fontsToLoad = filteredFonts.filter((font) => !loadedFontIds.has(font.id));
 
     if (!fontsToLoad.length) return;
 
-    Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(() => {
+    const loadNext = (index: number) => {
       if (cancelled) return;
+      const batch = fontsToLoad.slice(index, index + 3);
+      if (!batch.length) return;
 
-      setLoadedFontIds((prev) => {
-        const next = new Set(prev);
-        fontsToLoad.forEach((font) => next.add(font.id));
-        return next;
+      Promise.allSettled(batch.map((font) => loadEditorFont(font))).then(() => {
+        if (cancelled) return;
+
+        setLoadedFontIds((prev) => {
+          const next = new Set(prev);
+          batch.forEach((font) => next.add(font.id));
+          return next;
+        });
+
+        if (index + batch.length < fontsToLoad.length) {
+          idleId = scheduleIdleTask(() => loadNext(index + batch.length));
+        }
       });
-    });
+    };
+
+    idleId = scheduleIdleTask(() => loadNext(0));
 
     return () => {
       cancelled = true;
+      cancelIdleTask(idleId);
     };
   }, [filteredFonts, loadedFontIds]);
 
-  const markRecent = (family: string) => {
+  const markRecent = useCallback((family: string) => {
     const next = [family, ...recents.filter((item) => item !== family)].slice(
       0,
       MAX_RECENTS,
     );
     setRecents(next);
     writeStorage(RECENTS_KEY, next, MAX_RECENTS);
-  };
+  }, [recents]);
 
-  const toggleFavorite = (family: string) => {
+  const toggleFavorite = useCallback((family: string) => {
     const next = favorites.includes(family)
       ? favorites.filter((item) => item !== family)
       : [family, ...favorites].slice(0, MAX_STORED_FAVORITES);
 
     setFavorites(next);
     writeStorage(FAVORITES_KEY, next, MAX_STORED_FAVORITES);
-  };
+  }, [favorites]);
 
-  const addFont = async (font: FontItem) => {
+  const addFont = useCallback(async (font: FontItem) => {
     if (lockedRef.current) return;
     lockedRef.current = true;
 
@@ -318,19 +356,19 @@ export default function TextPanel({
         lockedRef.current = false;
       }, 160);
     }
-  };
+  }, [createElement, markRecent]);
 
-  const changeCategory = (
+  const changeCategory = useCallback((
     item: FontCategory | "all" | "favorites" | "recent",
   ) => {
     setCategory(item);
-    setLimit(PAGE_SIZE);
-  };
+    setLimit(getPageSize());
+  }, []);
 
-  const addDefaultText = () => {
+  const addDefaultText = useCallback(() => {
     const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
     if (first) void addFont(first);
-  };
+  }, [addFont, allFilteredFonts, filteredFonts, visibleCatalogFonts]);
 
   return (
     <div className="flex h-full min-h-0 flex-col text-white">
@@ -351,7 +389,7 @@ export default function TextPanel({
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setLimit(PAGE_SIZE);
+              setLimit(getPageSize());
             }}
             placeholder={`Search ${visibleCatalogFonts.length}+ fonts`}
             className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
@@ -401,7 +439,7 @@ export default function TextPanel({
         {limit < allFilteredFonts.length && (
           <button
             type="button"
-            onClick={() => setLimit((value) => value + PAGE_SIZE)}
+            onClick={() => setLimit((value) => value + getPageSize())}
             className="mt-3 h-11 w-full rounded-2xl bg-white/[0.055] text-xs font-black text-slate-300 ring-1 ring-white/10 active:scale-[0.98]"
           >
             Load more fonts
@@ -476,6 +514,8 @@ const FontCard = memo(function FontCard({
     </div>
   );
 });
+
+export default memo(TextPanel);
 
 function PanelLabel({ title, count }: { title: string; count?: number }) {
   return (

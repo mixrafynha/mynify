@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -46,7 +46,37 @@ const FloatingEditToolbar = dynamic(
   () => import("./toolbar/FloatingEditToolbar"),
 );
 
-const MemoDraggableElement = memo(DraggableElement);
+function sameArrayValues(a: any[] = [], b: any[] = []) {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+function sameSafeArea(a: any, b: any) {
+  return (
+    a === b ||
+    (!!a &&
+      !!b &&
+      a.width === b.width &&
+      a.height === b.height &&
+      a.x === b.x &&
+      a.y === b.y)
+  );
+}
+
+const MemoDraggableElement = memo(DraggableElement, (prev: any, next: any) => {
+  return (
+    prev.el === next.el &&
+    prev.isSelected === next.isSelected &&
+    prev.previewMode === next.previewMode &&
+    prev.zoom === next.zoom &&
+    sameSafeArea(prev.safeArea, next.safeArea) &&
+    sameArrayValues(prev.selectedIds, next.selectedIds)
+  );
+});
 
 export default function Canvas({
   side,
@@ -175,8 +205,9 @@ export default function Canvas({
     },
   );
 
+  const deferredElements = useDeferredValue(elements);
   const { warnings, warningCount, quality } = useCanvasWarnings(
-    elements,
+    deferredElements,
     localSafeArea,
     gelatoPrintSize,
   );
@@ -454,7 +485,7 @@ export default function Canvas({
           warnings={warnings}
           warningCount={warningCount}
           quality={quality}
-          elements={elements}
+          elements={deferredElements}
           safeArea={localSafeArea}
           printSize={gelatoPrintSize}
         />
@@ -534,9 +565,8 @@ export default function Canvas({
               allElements={sortedElements}
               printBox={printBox}
               gelatoPrintSize={gelatoPrintSize}
-              updateElement={(patch: any) =>
-                !isPreviewMode && handleUpdateElement(el.id, patch)
-              }
+              updateElement={handleUpdateElement}
+              elementId={el.id}
               previewMode={isPreviewMode}
             />
           ))}
