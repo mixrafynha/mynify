@@ -909,6 +909,9 @@ export default function EditorPage() {
             selectedId={selectedId}
             zoomIn={zoomIn}
             zoomOut={zoomOut}
+            mockupColor={mockupColor}
+            setMockupColor={setMockupColor}
+            productColorKey={productId || category}
           />
         }
       />

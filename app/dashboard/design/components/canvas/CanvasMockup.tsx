@@ -39,6 +39,7 @@ function CanvasMockup({
 
       {safeMockup && (
         <div
+          key={`mockup-tint-${currentSide}-${color}`}
           className="absolute inset-0 opacity-80 mix-blend-multiply"
           style={{
             backgroundColor: color,
@@ -48,6 +49,8 @@ function CanvasMockup({
             maskSize: "cover",
             WebkitMaskPosition: "center",
             maskPosition: "center",
+            WebkitMaskRepeat: "no-repeat",
+            maskRepeat: "no-repeat",
           }}
         />
       )}

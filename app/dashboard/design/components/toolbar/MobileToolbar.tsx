@@ -6,6 +6,7 @@ import {
   Type,
   Wand2,
   Star,
+  Palette,
   LayoutTemplate,
   Sparkles,
   Box,
@@ -18,6 +19,7 @@ import ToolButton from "./ToolButton";
 const tools = [
   { id: "ai", label: "AI", icon: <Wand2 size={18} />, badge: "AI" },
   { id: "templates", label: "Templates", icon: <LayoutTemplate size={18} /> },
+  { id: "color", label: "Color", icon: <Palette size={18} /> },
   { id: "text", label: "Text", icon: <Type size={18} /> },
   { id: "icons", label: "Elements", icon: <Star size={18} /> },
   { id: "images", label: "Images", icon: <Images size={18} /> },

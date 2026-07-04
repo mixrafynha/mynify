@@ -19,7 +19,7 @@ function ColorSelector({
   availableColors,
 }: ColorSelectorProps) {
   return (
-    <div className="absolute left-3 top-3 z-[72] md:left-4 md:top-4" onPointerDown={(e) => e.stopPropagation()}>
+    <div data-canvas-ui="true" className="absolute left-3 top-3 z-[72] md:left-4 md:top-4" onPointerDown={(e) => e.stopPropagation()}>
       <div className="relative">
         <button
           type="button"

@@ -33,6 +33,9 @@ export function useCanvasPinch({
     (e: React.PointerEvent) => {
       if (!isMobileTouch(e)) return;
 
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-canvas-ui="true"], [data-ryfio-mobile-sheet="true"]')) return;
+
       pointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
       if (pointersRef.current.size === 2) {
@@ -46,6 +49,8 @@ export function useCanvasPinch({
   const handlePinchMove = useCallback(
     (e: React.PointerEvent) => {
       if (!isMobileTouch(e)) return;
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.('[data-canvas-ui="true"], [data-ryfio-mobile-sheet="true"]')) return;
       if (!pointersRef.current.has(e.pointerId)) return;
 
       pointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
