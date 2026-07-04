@@ -203,7 +203,10 @@ function readStorage(key: string) {
 
 function writeStorage(key: string, value: string[], max = 40) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(uniqueFamilies(value).slice(0, max)));
+  localStorage.setItem(
+    key,
+    JSON.stringify(uniqueFamilies(value).slice(0, max)),
+  );
 }
 
 function useIsMobilePanel() {
@@ -286,14 +289,18 @@ export default function TextPanel({
   }, []);
 
   const mobileCatalogFonts = useMemo(() => {
-    const order = new Map(MOBILE_FEATURED_FONT_IDS.map((id, index) => [id, index]));
+    const order = new Map(
+      MOBILE_FEATURED_FONT_IDS.map((id, index) => [id, index]),
+    );
 
     return desktopCatalogFonts
       .filter((font) => order.has(font.id))
       .sort((a, b) => (order.get(a.id) ?? 9999) - (order.get(b.id) ?? 9999));
   }, [desktopCatalogFonts]);
 
-  const visibleCatalogFonts = isMobile ? mobileCatalogFonts : desktopCatalogFonts;
+  const visibleCatalogFonts = isMobile
+    ? mobileCatalogFonts
+    : desktopCatalogFonts;
   const pageSize = isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE;
 
   const allFilteredFonts = useMemo(() => {
@@ -305,7 +312,9 @@ export default function TextPanel({
         favorites.includes(font.family),
       );
     } else if (category === "recent") {
-      source = visibleCatalogFonts.filter((font) => recents.includes(font.family));
+      source = visibleCatalogFonts.filter((font) =>
+        recents.includes(font.family),
+      );
     } else if (category !== "all") {
       source = visibleCatalogFonts.filter((font) => font.category === category);
     }
@@ -323,21 +332,27 @@ export default function TextPanel({
   }, [allFilteredFonts, isMobile, limit]);
 
   useEffect(() => {
+    if (isMobile) return;
+
     let cancelled = false;
-    const fontsToLoad = filteredFonts.filter((font) => !loadedFontIds.has(font.id));
+    const fontsToLoad = filteredFonts.filter(
+      (font) => !loadedFontIds.has(font.id),
+    );
 
     if (!fontsToLoad.length) return;
 
     if (!isMobile) {
-      Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(() => {
-        if (cancelled) return;
+      Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(
+        () => {
+          if (cancelled) return;
 
-        setLoadedFontIds((prev) => {
-          const next = new Set(prev);
-          fontsToLoad.forEach((font) => next.add(font.id));
-          return next;
-        });
-      });
+          setLoadedFontIds((prev) => {
+            const next = new Set(prev);
+            fontsToLoad.forEach((font) => next.add(font.id));
+            return next;
+          });
+        },
+      );
 
       return () => {
         cancelled = true;
@@ -366,14 +381,20 @@ export default function TextPanel({
     };
 
     const idleApi = window as Window & {
-      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      requestIdleCallback?: (
+        callback: () => void,
+        options?: { timeout: number },
+      ) => number;
       cancelIdleCallback?: (id: number) => void;
     };
 
     const idleId = idleApi.requestIdleCallback
-      ? idleApi.requestIdleCallback(() => {
-          void loadMobilePreviews();
-        }, { timeout: 900 })
+      ? idleApi.requestIdleCallback(
+          () => {
+            void loadMobilePreviews();
+          },
+          { timeout: 900 },
+        )
       : window.setTimeout(() => {
           void loadMobilePreviews();
         }, 180);
@@ -431,7 +452,8 @@ export default function TextPanel({
   };
 
   const addDefaultText = () => {
-    const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
+    const first =
+      filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
     if (first) void addFont(first);
   };
 
@@ -439,9 +461,26 @@ export default function TextPanel({
     setLimit(pageSize);
   }, [pageSize]);
 
-  const categoryTabs = isMobile
-    ? (["all", "favorites", "recent"] as const)
-    : (["all", "favorites", "recent", ...FONT_CATEGORIES] as const);
+  const categoryTabs = [
+    "all",
+    "favorites",
+    "recent",
+    ...FONT_CATEGORIES,
+  ] as const;
+
+  if (isMobile) {
+    return (
+      <div className="flex h-full min-h-0 flex-col text-white">
+        <button
+          type="button"
+          onClick={onAddText || addDefaultText}
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white shadow-lg shadow-violet-950/25 active:scale-[0.99]"
+        >
+          <Type size={17} /> Add text
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col text-white">
@@ -454,9 +493,9 @@ export default function TextPanel({
           <Type size={17} /> Add text
         </button>
 
-        <PanelLabel title={isMobile ? "Best Fonts" : "Fonts"} count={allFilteredFonts.length} />
+        <PanelLabel title="Fonts" count={allFilteredFonts.length} />
 
-        <label className="hidden h-11 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60 md:flex">
+        <label className="flex h-11 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60">
           <Search size={15} />
           <input
             value={query}
@@ -470,22 +509,20 @@ export default function TextPanel({
         </label>
 
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {categoryTabs.map(
-            (item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => changeCategory(item)}
-                className={`shrink-0 rounded-full px-3 py-2 text-xs font-black capitalize transition-colors active:scale-95 ${
-                  category === item
-                    ? "bg-violet-500 text-white"
-                    : "bg-white/[0.045] text-slate-400 ring-1 ring-white/10"
-                }`}
-              >
-                {item}
-              </button>
-            ),
-          )}
+          {categoryTabs.map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => changeCategory(item)}
+              className={`shrink-0 rounded-full px-3 py-2 text-xs font-black capitalize transition-colors active:scale-95 ${
+                category === item
+                  ? "bg-violet-500 text-white"
+                  : "bg-white/[0.045] text-slate-400 ring-1 ring-white/10"
+              }`}
+            >
+              {item}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -499,7 +536,6 @@ export default function TextPanel({
               ready={loadedFontIds.has(font.id)}
               onAdd={() => addFont(font)}
               onToggleFavorite={() => toggleFavorite(font.family)}
-              compact={isMobile}
             />
           ))}
         </div>
@@ -510,7 +546,7 @@ export default function TextPanel({
           </div>
         )}
 
-        {!isMobile && limit < allFilteredFonts.length && (
+        {limit < allFilteredFonts.length && (
           <button
             type="button"
             onClick={() => setLimit((value) => value + pageSize)}
