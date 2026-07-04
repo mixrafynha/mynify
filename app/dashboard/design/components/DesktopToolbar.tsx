@@ -14,15 +14,15 @@ import {
   Layers,
 } from "lucide-react";
 
-import TemplatesPanel from "./panels/TemplatesPanel";
-import TextPanel from "./panels/TextPanel";
-import StickersPanel from "./panels/StickersPanel";
-import IconsPanel from "./panels/IconsPanel";
-import ImageTemplatesPanel from "./panels/ImageTemplatesPanel";
-import Assets3DPanel from "./panels/Assets3DPanel";
-import AiPanel from "./panels/AiPanel";
-import LayersPanel from "./panels/LayersPanel";
-import { PRINT_IMAGE_LIMITS, bytesToMb, validatePrintImage } from "./data";
+import TemplatesPanel from "./toolbar/panels/TemplatesPanel";
+import TextPanel from "./toolbar/panels/TextPanel";
+import StickersPanel from "./toolbar/panels/StickersPanel";
+import IconsPanel from "./toolbar/panels/IconsPanel";
+import ImageTemplatesPanel from "./toolbar/panels/ImageTemplatesPanel";
+import Assets3DPanel from "./toolbar/panels/Assets3DPanel";
+import AiPanel from "./toolbar/panels/AiPanel";
+import LayersPanel from "./toolbar/panels/LayersPanel";
+import { PRINT_IMAGE_LIMITS, bytesToMb, validatePrintImage } from "./toolbar/data";
 
 type Panel =
   | "ai"
