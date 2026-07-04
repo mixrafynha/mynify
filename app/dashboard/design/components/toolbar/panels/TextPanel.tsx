@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Star, Type } from "lucide-react";
 import {
   FONT_CATEGORIES,
@@ -13,7 +13,9 @@ import {
 
 const FAVORITES_KEY = "ryfio-editor-favorite-fonts";
 const RECENTS_KEY = "ryfio-editor-recent-fonts";
-const PAGE_SIZE = 12;
+const DESKTOP_PAGE_SIZE = 12;
+const MOBILE_PAGE_SIZE = 6;
+const MOBILE_MEDIA_QUERY = "(max-width: 767px)";
 const MAX_RECENTS = 24;
 const MAX_STORED_FAVORITES = 80;
 
@@ -174,7 +176,39 @@ function readStorage(key: string) {
 
 function writeStorage(key: string, value: string[], max = 40) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(key, JSON.stringify(uniqueFamilies(value).slice(0, max)));
+  localStorage.setItem(
+    key,
+    JSON.stringify(uniqueFamilies(value).slice(0, max)),
+  );
+}
+
+function useIsMobilePanel() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+
+    const media = window.matchMedia(MOBILE_MEDIA_QUERY);
+    const update = () => setIsMobile(media.matches);
+
+    update();
+    media.addEventListener?.("change", update);
+
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  return isMobile;
+}
+
+function getNextFrame() {
+  return new Promise<void>((resolve) => {
+    if (typeof window === "undefined") {
+      resolve();
+      return;
+    }
+
+    window.requestAnimationFrame(() => resolve());
+  });
 }
 
 function buildTextElement(font: FontItem) {
@@ -216,6 +250,8 @@ export default function TextPanel({
   onAddText?: () => void;
 }) {
   const lockedRef = useRef(false);
+  const isMobile = useIsMobilePanel();
+  const pageSize = isMobile ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<
     FontCategory | "all" | "favorites" | "recent"
@@ -226,8 +262,7 @@ export default function TextPanel({
   const [recents, setRecents] = useState<string[]>(() =>
     readStorage(RECENTS_KEY),
   );
-  const deferredQuery = useDeferredValue(query);
-  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [limit, setLimit] = useState(pageSize);
   const [loadedFontIds, setLoadedFontIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -237,7 +272,7 @@ export default function TextPanel({
   }, []);
 
   const allFilteredFonts = useMemo(() => {
-    const term = deferredQuery.trim().toLowerCase();
+    const term = isMobile ? "" : query.trim().toLowerCase();
     let source: FontItem[] = visibleCatalogFonts;
 
     if (category === "favorites") {
@@ -245,7 +280,9 @@ export default function TextPanel({
         favorites.includes(font.family),
       );
     } else if (category === "recent") {
-      source = visibleCatalogFonts.filter((font) => recents.includes(font.family));
+      source = visibleCatalogFonts.filter((font) =>
+        recents.includes(font.family),
+      );
     } else if (category !== "all") {
       source = visibleCatalogFonts.filter((font) => font.category === category);
     }
@@ -255,7 +292,7 @@ export default function TextPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(term),
     );
-  }, [category, deferredQuery, favorites, recents, visibleCatalogFonts]);
+  }, [category, favorites, isMobile, query, recents, visibleCatalogFonts]);
 
   const filteredFonts = useMemo(
     () => allFilteredFonts.slice(0, limit),
@@ -263,12 +300,36 @@ export default function TextPanel({
   );
 
   useEffect(() => {
+    setLimit(pageSize);
+  }, [category, pageSize]);
+
+  useEffect(() => {
     let cancelled = false;
-    const fontsToLoad = filteredFonts.filter((font) => !loadedFontIds.has(font.id));
+    const fontsToLoad = filteredFonts.filter(
+      (font) => !loadedFontIds.has(font.id),
+    );
 
     if (!fontsToLoad.length) return;
 
-    Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(() => {
+    const loadFonts = async () => {
+      if (isMobile) {
+        for (const font of fontsToLoad) {
+          await getNextFrame();
+          if (cancelled) return;
+
+          await loadEditorFont(font).catch(() => undefined);
+          if (cancelled) return;
+
+          setLoadedFontIds((prev) => {
+            const next = new Set(prev);
+            next.add(font.id);
+            return next;
+          });
+        }
+        return;
+      }
+
+      await Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font)));
       if (cancelled) return;
 
       setLoadedFontIds((prev) => {
@@ -276,12 +337,14 @@ export default function TextPanel({
         fontsToLoad.forEach((font) => next.add(font.id));
         return next;
       });
-    });
+    };
+
+    void loadFonts();
 
     return () => {
       cancelled = true;
     };
-  }, [filteredFonts, loadedFontIds]);
+  }, [filteredFonts, isMobile, loadedFontIds]);
 
   const markRecent = (family: string) => {
     const next = [family, ...recents.filter((item) => item !== family)].slice(
@@ -325,48 +388,49 @@ export default function TextPanel({
     item: FontCategory | "all" | "favorites" | "recent",
   ) => {
     setCategory(item);
-    setLimit(PAGE_SIZE);
+    setLimit(pageSize);
   };
 
   const addDefaultText = () => {
-    const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
+    const first =
+      filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
     if (first) void addFont(first);
   };
 
   return (
-    <div className="flex h-auto max-h-[min(68dvh,520px)] min-h-0 flex-col overflow-hidden text-white [contain:layout_paint] md:h-full md:max-h-none">
-      <div className="shrink-0 space-y-2.5 pb-2.5 md:space-y-3 md:pb-3">
+    <div className="flex h-full min-h-0 flex-col text-white">
+      <div className="shrink-0 space-y-3 pb-3">
         <button
           type="button"
           onClick={onAddText || addDefaultText}
-          className="flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white shadow-violet-950/25 active:scale-[0.99] md:min-h-11 md:shadow-lg"
+          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white shadow-lg shadow-violet-950/25 active:scale-[0.99]"
         >
           <Type size={17} /> Add text
         </button>
 
         <PanelLabel title="Fonts" count={allFilteredFonts.length} />
 
-        <label className="flex h-10 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60 md:h-11">
+        <label className="hidden h-11 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60 md:flex">
           <Search size={15} />
           <input
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setLimit(PAGE_SIZE);
+              setLimit(pageSize);
             }}
             placeholder={`Search ${visibleCatalogFonts.length}+ fonts`}
-            className="min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-white outline-none placeholder:text-slate-600 md:text-sm"
+            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
           />
         </label>
 
-        <div className="flex touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] md:gap-2 [&::-webkit-scrollbar]:hidden">
           {(["all", "favorites", "recent", ...FONT_CATEGORIES] as const).map(
             (item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => changeCategory(item)}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black capitalize transition-colors active:scale-95 md:py-2 ${
+                className={`shrink-0 rounded-full px-3 py-2 text-xs font-black capitalize transition-colors active:scale-95 ${
                   category === item
                     ? "bg-violet-500 text-white"
                     : "bg-white/[0.045] text-slate-400 ring-1 ring-white/10"
@@ -379,8 +443,8 @@ export default function TextPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="grid grid-cols-3 gap-1.5 md:gap-2">
           {filteredFonts.map((font) => (
             <FontCard
               key={font.id}
@@ -402,7 +466,7 @@ export default function TextPanel({
         {limit < allFilteredFonts.length && (
           <button
             type="button"
-            onClick={() => setLimit((value) => value + PAGE_SIZE)}
+            onClick={() => setLimit((value) => value + pageSize)}
             className="mt-3 h-11 w-full rounded-2xl bg-white/[0.055] text-xs font-black text-slate-300 ring-1 ring-white/10 active:scale-[0.98]"
           >
             Load more fonts
@@ -427,16 +491,16 @@ const FontCard = memo(function FontCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition-colors hover:bg-white/[0.065] active:scale-[0.98]">
+    <div className="group relative overflow-hidden rounded-lg bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98] md:rounded-xl">
       <button
         type="button"
         onClick={onAdd}
-        className="flex h-[54px] w-full items-center justify-center px-2 py-2 md:h-[64px]"
+        className="flex h-[48px] w-full items-center justify-center px-1.5 py-1.5 md:h-[64px] md:px-2 md:py-2"
         aria-label={`Add text with ${font.family}`}
         title={font.family}
       >
         <div
-          className={`w-full truncate text-center text-[18px] font-black leading-none text-white transition-opacity duration-150 md:text-[20px] ${
+          className={`w-full truncate text-center text-[16px] font-black leading-none text-white transition-opacity duration-150 md:text-[20px] ${
             ready ? "opacity-100" : "opacity-0"
           }`}
           style={{
@@ -461,7 +525,7 @@ const FontCard = memo(function FontCard({
           event.stopPropagation();
           onToggleFavorite();
         }}
-        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl md:backdrop-blur-md ${
+        className={`absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-lg backdrop-blur-md md:right-1.5 md:top-1.5 md:h-7 md:w-7 md:rounded-xl ${
           favorite
             ? "bg-yellow-300 text-slate-950"
             : "bg-black/25 text-slate-500 opacity-80 group-hover:opacity-100"
