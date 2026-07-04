@@ -61,6 +61,9 @@ const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2026-04-22.dahlia",
 });
 
+type CheckoutSessionCreateParams = Parameters<typeof stripe.checkout.sessions.create>[0];
+type CheckoutLineItem = NonNullable<CheckoutSessionCreateParams["line_items"]>[number];
+
 function parseMoney(value: unknown): number | null {
   if (typeof value === "number") {
     return Number.isFinite(value) && value >= 0 ? value : null;
@@ -179,7 +182,7 @@ export async function POST(req: Request) {
     const shippingPrice = moneyToCents(shipping.price);
     const baseUrl = siteUrl();
 
-    const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = validItems.map((item) => ({
+    const lineItems: CheckoutLineItem[] = validItems.map((item) => ({
       quantity: item.quantity,
       price_data: {
         currency: "eur",
