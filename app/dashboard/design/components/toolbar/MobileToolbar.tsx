@@ -6,7 +6,6 @@ import {
   Type,
   Wand2,
   Star,
-  Palette,
   LayoutTemplate,
   Sparkles,
   Box,
@@ -19,7 +18,6 @@ import ToolButton from "./ToolButton";
 const tools = [
   { id: "ai", label: "AI", icon: <Wand2 size={18} />, badge: "AI" },
   { id: "templates", label: "Templates", icon: <LayoutTemplate size={18} /> },
-  { id: "color", label: "Color", icon: <Palette size={18} /> },
   { id: "text", label: "Text", icon: <Type size={18} /> },
   { id: "icons", label: "Elements", icon: <Star size={18} /> },
   { id: "images", label: "Images", icon: <Images size={18} /> },
@@ -37,12 +35,7 @@ type MobileToolbarProps = {
   selected?: unknown;
 };
 
-function MobileToolbar({
-  open,
-  panel,
-  setOpen,
-  setPanel,
-}: MobileToolbarProps) {
+function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const dragRef = useRef({
@@ -64,7 +57,7 @@ function MobileToolbar({
       setPanel(nextPanel);
       setOpen(true);
     },
-    [open, panel, setOpen, setPanel]
+    [open, panel, setOpen, setPanel],
   );
 
   const handlePointerDown = useCallback(
@@ -81,7 +74,7 @@ function MobileToolbar({
 
       scroller.setPointerCapture?.(event.pointerId);
     },
-    []
+    [],
   );
 
   const handlePointerMove = useCallback(
@@ -98,7 +91,7 @@ function MobileToolbar({
         scroller.scrollLeft = drag.scrollLeft - deltaX;
       }
     },
-    []
+    [],
   );
 
   const stopDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -117,6 +110,7 @@ function MobileToolbar({
 
   return (
     <div
+      data-ryfio-editor-toolbar="true"
       className={`fixed inset-x-0 bottom-0 z-50 transition-[transform,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
         open
           ? "pointer-events-none translate-y-[110%] opacity-0"

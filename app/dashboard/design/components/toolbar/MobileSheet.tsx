@@ -43,9 +43,6 @@ type MobileSheetProps = {
   elements?: any[];
   updateElement?: (id: string, patch: any) => void;
   deleteElement?: (id: string) => void;
-  mockupColor?: string;
-  setMockupColor?: (color: string) => void;
-  availableColors?: { name: string; hex: string }[];
   setSelectedId?: (id: string | null) => void;
   setSelectedElement?: (el: any | null) => void;
 };
@@ -63,9 +60,6 @@ function MobileSheet({
   elements = [],
   updateElement,
   deleteElement,
-  mockupColor = "#ffffff",
-  setMockupColor,
-  availableColors = [],
 }: MobileSheetProps) {
   const [sheetSize, setSheetSize] = useState<SheetSize>("mid");
   const dragStartY = useRef(0);
@@ -171,17 +165,6 @@ function MobileSheet({
       return <UploadPanel onUpload={onUpload} />;
     }
 
-    if (panel === "color") {
-      return (
-        <MobileMockupColorPanel
-          mockupColor={mockupColor}
-          setMockupColor={setMockupColor}
-          availableColors={availableColors}
-          onDone={() => setOpen(false)}
-        />
-      );
-    }
-
     if (panel === "stickers") {
       return <StickersPanel createElement={createElement} />;
     }
@@ -219,10 +202,6 @@ function MobileSheet({
     elements,
     updateElement,
     deleteElement,
-    mockupColor,
-    setMockupColor,
-    availableColors,
-    setOpen,
   ]);
 
   if (!open) return null;
@@ -406,88 +385,9 @@ function EmptyState() {
   );
 }
 
-function isHex(value: unknown) {
-  return /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(String(value || "").trim());
-}
-
-const FALLBACK_MOBILE_COLORS = [
-  { name: "White", hex: "#ffffff" },
-  { name: "Black", hex: "#111111" },
-  { name: "Navy", hex: "#17213f" },
-  { name: "Grey", hex: "#b8b8b8" },
-  { name: "Stone", hex: "#d8d1c3" },
-];
-
-const MobileMockupColorPanel = memo(function MobileMockupColorPanel({
-  mockupColor,
-  setMockupColor,
-  availableColors,
-  onDone,
-}: {
-  mockupColor: string;
-  setMockupColor?: (color: string) => void;
-  availableColors: { name: string; hex: string }[];
-  onDone: () => void;
-}) {
-  const colors = useMemo(() => {
-    const normalized = (Array.isArray(availableColors) ? availableColors : [])
-      .map((color) => ({
-        name: String(color?.name || color?.hex || "Color"),
-        hex: String(color?.hex || "").trim(),
-      }))
-      .filter((color) => isHex(color.hex));
-
-    return normalized.length ? normalized : FALLBACK_MOBILE_COLORS;
-  }, [availableColors]);
-
-  const selected = String(mockupColor || "").toLowerCase();
-
-  return (
-    <div className="space-y-3 pb-2" onPointerDown={(event) => event.stopPropagation()}>
-      <div className="rounded-2xl border border-violet-300/15 bg-white/[0.045] p-3">
-        <p className="text-[11px] font-black uppercase tracking-[0.14em] text-violet-200/70">Mockup color</p>
-        <div className="mt-2 flex items-center gap-2">
-          <span
-            className="h-7 w-7 rounded-full border border-white/30 shadow-inner"
-            style={{ backgroundColor: isHex(mockupColor) ? mockupColor : "#ffffff" }}
-          />
-          <span className="text-xs font-bold text-white/80">{isHex(mockupColor) ? mockupColor : "#ffffff"}</span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-5 gap-2 sm:grid-cols-7">
-        {colors.map((color) => {
-          const active = color.hex.toLowerCase() === selected;
-          return (
-            <button
-              key={`${color.name}-${color.hex}`}
-              type="button"
-              aria-label={`Set mockup color ${color.name}`}
-              title={color.name}
-              onClick={() => {
-                setMockupColor?.(color.hex);
-                onDone();
-              }}
-              className={`flex h-12 items-center justify-center rounded-2xl border transition active:scale-95 ${
-                active ? "border-white ring-2 ring-violet-300/80" : "border-white/15 ring-1 ring-white/5"
-              }`}
-            >
-              <span
-                className="h-7 w-7 rounded-full border border-black/20 shadow-inner"
-                style={{ backgroundColor: color.hex }}
-              />
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-});
-
 function getTitle(panel: string) {
   const titles: Record<string, string> = {
     templates: "Templates",
-    color: "Product Color",
     text: "Text",
     upload: "Uploads",
     ai: "AI",
@@ -504,7 +404,6 @@ function getTitle(panel: string) {
 function getSubtitle(panel: string) {
   const subtitles: Record<string, string> = {
     templates: "Browse layouts",
-    color: "Change mockup color",
     text: "Text tools",
     upload: "Add image",
     ai: "Generate graphics",

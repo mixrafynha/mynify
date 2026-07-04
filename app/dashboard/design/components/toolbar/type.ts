@@ -8,5 +8,4 @@ export type Panel =
   | "icons"
   | "images"
   | "assets3d"
-  | "layers"
-  | "color";
+  | "layers";

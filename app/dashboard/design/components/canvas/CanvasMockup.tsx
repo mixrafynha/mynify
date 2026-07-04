@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import type { CanvasSide } from "./types";
 
 type Props = {
@@ -19,6 +19,24 @@ function CanvasMockup({
   visualScale = 1,
 }: Props) {
   const safeMockup = typeof mockup === "string" && mockup.trim() ? mockup : "";
+  const safeColor =
+    typeof color === "string" && color.trim() ? color.trim() : "#ffffff";
+  const tintStyle = useMemo(
+    () => ({
+      backgroundColor: safeColor,
+      WebkitMaskImage: `url(${safeMockup})`,
+      maskImage: `url(${safeMockup})`,
+      WebkitMaskSize: "cover",
+      maskSize: "cover",
+      WebkitMaskPosition: "center",
+      maskPosition: "center",
+      WebkitMaskRepeat: "no-repeat",
+      maskRepeat: "no-repeat",
+      transform: "translateZ(0)",
+      willChange: "background-color",
+    }),
+    [safeColor, safeMockup],
+  );
 
   return (
     <div
@@ -39,19 +57,9 @@ function CanvasMockup({
 
       {safeMockup && (
         <div
-          key={`mockup-tint-${currentSide}-${color}`}
           className="absolute inset-0 opacity-80 mix-blend-multiply"
-          style={{
-            backgroundColor: color,
-            WebkitMaskImage: `url(${safeMockup})`,
-            maskImage: `url(${safeMockup})`,
-            WebkitMaskSize: "cover",
-            maskSize: "cover",
-            WebkitMaskPosition: "center",
-            maskPosition: "center",
-            WebkitMaskRepeat: "no-repeat",
-            maskRepeat: "no-repeat",
-          }}
+          key={`mockup-tint-${currentSide}-${safeColor}-${safeMockup}`}
+          style={tintStyle}
         />
       )}
     </div>
