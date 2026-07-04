@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
-import dynamic from "next/dynamic";
 import {
   Image,
   Type,
@@ -15,22 +14,15 @@ import {
   Layers,
 } from "lucide-react";
 
+import TemplatesPanel from "./panels/TemplatesPanel";
+import TextPanel from "./panels/TextPanel";
+import StickersPanel from "./panels/StickersPanel";
+import IconsPanel from "./panels/IconsPanel";
+import ImageTemplatesPanel from "./panels/ImageTemplatesPanel";
+import Assets3DPanel from "./panels/Assets3DPanel";
+import AiPanel from "./panels/AiPanel";
+import LayersPanel from "./panels/LayersPanel";
 import { PRINT_IMAGE_LIMITS, bytesToMb, validatePrintImage } from "./data";
-
-const PanelLoading = () => (
-  <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-xs font-black uppercase tracking-[0.14em] text-violet-200/70">
-    Loading
-  </div>
-);
-
-const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loading: PanelLoading });
-const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
-const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
-const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
-const ImageTemplatesPanel = dynamic(() => import("./panels/ImageTemplatesPanel"), { loading: PanelLoading });
-const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), { loading: PanelLoading });
-const AiPanel = dynamic(() => import("./panels/AiPanel"), { loading: PanelLoading });
-const LayersPanel = dynamic(() => import("./panels/LayersPanel"), { loading: PanelLoading });
 
 type Panel =
   | "ai"

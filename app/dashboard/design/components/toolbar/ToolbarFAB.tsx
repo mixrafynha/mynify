@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import DesktopToolbar from "./DesktopToolbar";
 import MobileToolbar from "./MobileToolbar";
@@ -59,7 +59,7 @@ export default function ToolbarFAB({
     [elements, selectedId]
   );
 
-  const createElement = useCallback((data: unknown) => {
+  const createElement = (data: unknown) => {
     const item = data && typeof data === "object" ? (data as Partial<ElementItem>) : {};
     const width = finiteNumber(item.width, item.type === "image" ? 180 : 220);
     const height = finiteNumber(item.height, item.type === "image" ? 180 : 64);
@@ -89,9 +89,9 @@ export default function ToolbarFAB({
 
     setElements((prev) => [...prev, { ...element, ...item, meta: element.meta }]);
     setOpen(false);
-  }, [elements, panel, setElements]);
+  };
 
-  const updateSelected = useCallback((patch: Partial<ElementItem>) => {
+  const updateSelected = (patch: Partial<ElementItem>) => {
     if (!selectedId) return;
 
     setElements((prev) =>
@@ -107,14 +107,14 @@ export default function ToolbarFAB({
         };
       })
     );
-  }, [selectedId, setElements]);
+  };
 
-  const deleteSelected = useCallback(() => {
+  const deleteSelected = () => {
     if (!selectedId) return;
     setElements((prev) => prev.filter((el) => el.id !== selectedId));
     setOpen(false);
-  }, [selectedId, setElements]);
-  const updateElementById = useCallback((id: string, patch: any) => {
+  };
+  const updateElementById = (id: string, patch: any) => {
     setElements((prev) =>
       prev.map((el) => {
         if (el.id !== id) return el;
@@ -123,11 +123,11 @@ export default function ToolbarFAB({
         return { ...el, ...patch, meta: { ...(el.meta ?? {}), ...(patch.meta ?? {}) } };
       })
     );
-  }, [setElements]);
+  };
 
-  const deleteElementById = useCallback((id: string) => {
+  const deleteElementById = (id: string) => {
     setElements((prev) => prev.filter((el) => el.id !== id));
-  }, [setElements]);
+  };
 
 
   return (

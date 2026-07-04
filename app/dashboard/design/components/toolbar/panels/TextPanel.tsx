@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Star, Type } from "lucide-react";
 import {
   FONT_CATEGORIES,
@@ -13,41 +13,9 @@ import {
 
 const FAVORITES_KEY = "ryfio-editor-favorite-fonts";
 const RECENTS_KEY = "ryfio-editor-recent-fonts";
-const DESKTOP_PAGE_SIZE = 12;
-const MOBILE_PAGE_SIZE = 6;
+const PAGE_SIZE = 12;
 const MAX_RECENTS = 24;
 const MAX_STORED_FAVORITES = 80;
-const DESKTOP_PRELOAD_LIMIT = 12;
-const MOBILE_PRELOAD_LIMIT = 6;
-
-function isMobileViewport() {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia?.("(max-width: 767px)").matches ?? false;
-}
-
-function getPageSize() {
-  return isMobileViewport() ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
-}
-
-function getPreloadLimit() {
-  return isMobileViewport() ? MOBILE_PRELOAD_LIMIT : DESKTOP_PRELOAD_LIMIT;
-}
-
-function scheduleIdleTask(callback: () => void) {
-  if (typeof window === "undefined") return 0;
-  const requestIdle = (window as any).requestIdleCallback;
-  if (typeof requestIdle === "function") {
-    return requestIdle(callback, { timeout: 450 });
-  }
-  return window.setTimeout(callback, 32);
-}
-
-function cancelIdleTask(id: number) {
-  if (!id || typeof window === "undefined") return;
-  const cancelIdle = (window as any).cancelIdleCallback;
-  if (typeof cancelIdle === "function") cancelIdle(id);
-  else window.clearTimeout(id);
-}
 
 const PRIORITY_FONT_IDS = [
   "inter",
@@ -240,7 +208,7 @@ function buildTextElement(font: FontItem) {
   };
 }
 
-function TextPanel({
+export default function TextPanel({
   createElement,
   onAddText,
 }: {
@@ -248,7 +216,6 @@ function TextPanel({
   onAddText?: () => void;
 }) {
   const lockedRef = useRef(false);
-  const loadedFontIdsRef = useRef<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<
     FontCategory | "all" | "favorites" | "recent"
@@ -259,7 +226,7 @@ function TextPanel({
   const [recents, setRecents] = useState<string[]>(() =>
     readStorage(RECENTS_KEY),
   );
-  const [limit, setLimit] = useState(() => getPageSize());
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [loadedFontIds, setLoadedFontIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -268,10 +235,8 @@ function TextPanel({
     return sortFontsForDiscovery(dedupeFontsByFamily(FONT_ITEMS));
   }, []);
 
-  const deferredQuery = useDeferredValue(query);
-
   const allFilteredFonts = useMemo(() => {
-    const term = deferredQuery.trim().toLowerCase();
+    const term = query.trim().toLowerCase();
     let source: FontItem[] = visibleCatalogFonts;
 
     if (category === "favorites") {
@@ -289,7 +254,7 @@ function TextPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(term),
     );
-  }, [category, deferredQuery, favorites, recents, visibleCatalogFonts]);
+  }, [category, favorites, query, recents, visibleCatalogFonts]);
 
   const filteredFonts = useMemo(
     () => allFilteredFonts.slice(0, limit),
@@ -298,64 +263,44 @@ function TextPanel({
 
   useEffect(() => {
     let cancelled = false;
-    let idleId = 0;
-    const preloadLimit = getPreloadLimit();
-    const fontsToLoad = filteredFonts
-      .slice(0, preloadLimit)
-      .filter((font) => !loadedFontIdsRef.current.has(font.id));
+    const fontsToLoad = filteredFonts.filter((font) => !loadedFontIds.has(font.id));
 
     if (!fontsToLoad.length) return;
 
-    const loadNext = (index: number) => {
+    Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(() => {
       if (cancelled) return;
-      const batch = fontsToLoad.slice(index, index + 2);
-      if (!batch.length) return;
 
-      Promise.allSettled(batch.map((font) => loadEditorFont(font))).then(() => {
-        if (cancelled) return;
-
-        setLoadedFontIds((prev) => {
-          const next = new Set(prev);
-          batch.forEach((font) => {
-            next.add(font.id);
-            loadedFontIdsRef.current.add(font.id);
-          });
-          return next;
-        });
-
-        if (index + batch.length < fontsToLoad.length) {
-          idleId = scheduleIdleTask(() => loadNext(index + batch.length));
-        }
+      setLoadedFontIds((prev) => {
+        const next = new Set(prev);
+        fontsToLoad.forEach((font) => next.add(font.id));
+        return next;
       });
-    };
-
-    idleId = scheduleIdleTask(() => loadNext(0));
+    });
 
     return () => {
       cancelled = true;
-      cancelIdleTask(idleId);
     };
-  }, [filteredFonts]);
+  }, [filteredFonts, loadedFontIds]);
 
-  const markRecent = useCallback((family: string) => {
+  const markRecent = (family: string) => {
     const next = [family, ...recents.filter((item) => item !== family)].slice(
       0,
       MAX_RECENTS,
     );
     setRecents(next);
     writeStorage(RECENTS_KEY, next, MAX_RECENTS);
-  }, [recents]);
+  };
 
-  const toggleFavorite = useCallback((family: string) => {
+  const toggleFavorite = (family: string) => {
     const next = favorites.includes(family)
       ? favorites.filter((item) => item !== family)
       : [family, ...favorites].slice(0, MAX_STORED_FAVORITES);
 
     setFavorites(next);
     writeStorage(FAVORITES_KEY, next, MAX_STORED_FAVORITES);
-  }, [favorites]);
+  };
 
-  const addFont = useCallback(async (font: FontItem) => {
+  const addFont = async (font: FontItem) => {
     if (lockedRef.current) return;
     lockedRef.current = true;
 
@@ -364,7 +309,6 @@ function TextPanel({
       setLoadedFontIds((prev) => {
         const next = new Set(prev);
         next.add(font.id);
-        loadedFontIdsRef.current.add(font.id);
         return next;
       });
       markRecent(font.family);
@@ -374,22 +318,22 @@ function TextPanel({
         lockedRef.current = false;
       }, 160);
     }
-  }, [createElement, markRecent]);
+  };
 
-  const changeCategory = useCallback((
+  const changeCategory = (
     item: FontCategory | "all" | "favorites" | "recent",
   ) => {
     setCategory(item);
-    setLimit(getPageSize());
-  }, []);
+    setLimit(PAGE_SIZE);
+  };
 
-  const addDefaultText = useCallback(() => {
+  const addDefaultText = () => {
     const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
     if (first) void addFont(first);
-  }, [addFont, allFilteredFonts, filteredFonts, visibleCatalogFonts]);
+  };
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-white" style={{ contain: "layout paint style" }}>
+    <div className="flex h-full min-h-0 flex-col text-white">
       <div className="shrink-0 space-y-3 pb-3">
         <button
           type="button"
@@ -407,7 +351,7 @@ function TextPanel({
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setLimit(getPageSize());
+              setLimit(PAGE_SIZE);
             }}
             placeholder={`Search ${visibleCatalogFonts.length}+ fonts`}
             className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
@@ -435,7 +379,7 @@ function TextPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           {filteredFonts.map((font) => (
             <FontCard
               key={font.id}
@@ -457,7 +401,7 @@ function TextPanel({
         {limit < allFilteredFonts.length && (
           <button
             type="button"
-            onClick={() => setLimit((value) => value + getPageSize())}
+            onClick={() => setLimit((value) => value + PAGE_SIZE)}
             className="mt-3 h-11 w-full rounded-2xl bg-white/[0.055] text-xs font-black text-slate-300 ring-1 ring-white/10 active:scale-[0.98]"
           >
             Load more fonts
@@ -482,7 +426,7 @@ const FontCard = memo(function FontCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]" style={{ contain: "layout paint style" }}>
+    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]">
       <button
         type="button"
         onClick={onAdd}
@@ -532,8 +476,6 @@ const FontCard = memo(function FontCard({
     </div>
   );
 });
-
-export default memo(TextPanel);
 
 function PanelLabel({ title, count }: { title: string; count?: number }) {
   return (

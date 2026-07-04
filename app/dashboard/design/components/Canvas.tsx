@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 
@@ -46,37 +46,7 @@ const FloatingEditToolbar = dynamic(
   () => import("./toolbar/FloatingEditToolbar"),
 );
 
-function sameArrayValues(a: any[] = [], b: any[] = []) {
-  if (a === b) return true;
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
-}
-
-function sameSafeArea(a: any, b: any) {
-  return (
-    a === b ||
-    (!!a &&
-      !!b &&
-      a.width === b.width &&
-      a.height === b.height &&
-      a.x === b.x &&
-      a.y === b.y)
-  );
-}
-
-const MemoDraggableElement = memo(DraggableElement, (prev: any, next: any) => {
-  return (
-    prev.el === next.el &&
-    prev.isSelected === next.isSelected &&
-    prev.previewMode === next.previewMode &&
-    prev.zoom === next.zoom &&
-    sameSafeArea(prev.safeArea, next.safeArea) &&
-    sameArrayValues(prev.selectedIds, next.selectedIds)
-  );
-});
+const MemoDraggableElement = memo(DraggableElement);
 
 export default function Canvas({
   side,
@@ -181,11 +151,6 @@ export default function Canvas({
     [currentSide, resolvedProductId, productConfig],
   );
 
-  const visualScale = useMemo(
-    () => getMockupVisualScale(resolvedProductId, currentSide, productConfig),
-    [currentSide, resolvedProductId, productConfig],
-  );
-
   const canvasScale = useCanvasScale(wrapperRef);
   const finalScale = useMemo(() => zoom * canvasScale, [canvasScale, zoom]);
 
@@ -205,9 +170,8 @@ export default function Canvas({
     },
   );
 
-  const deferredElements = useDeferredValue(elements);
   const { warnings, warningCount, quality } = useCanvasWarnings(
-    deferredElements,
+    elements,
     localSafeArea,
     gelatoPrintSize,
   );
@@ -485,7 +449,7 @@ export default function Canvas({
           warnings={warnings}
           warningCount={warningCount}
           quality={quality}
-          elements={deferredElements}
+          elements={elements}
           safeArea={localSafeArea}
           printSize={gelatoPrintSize}
         />
@@ -519,7 +483,7 @@ export default function Canvas({
           mockupId={resolvedProductId}
           currentSide={currentSide}
           color={mockupColor}
-          visualScale={visualScale}
+          visualScale={getMockupVisualScale(resolvedProductId, currentSide, productConfig)}
         />
 
         <SafeAreaLayer
@@ -565,8 +529,9 @@ export default function Canvas({
               allElements={sortedElements}
               printBox={printBox}
               gelatoPrintSize={gelatoPrintSize}
-              updateElement={handleUpdateElement}
-              elementId={el.id}
+              updateElement={(patch: any) =>
+                !isPreviewMode && handleUpdateElement(el.id, patch)
+              }
               previewMode={isPreviewMode}
             />
           ))}

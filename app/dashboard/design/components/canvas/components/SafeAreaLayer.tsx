@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { useCallback } from "react";
 import { MOCKUP_AREA } from "../constants";
 import SelectionBox from "./SelectionBox";
 import CanvasGuides from "./CanvasGuides";
@@ -34,7 +34,7 @@ function toLocalPoint(
   };
 }
 
-function SafeAreaLayer({
+export default function SafeAreaLayer({
   safeArea,
   finalScale,
   elements,
@@ -176,5 +176,3 @@ function SafeAreaLayer({
     </>
   );
 }
-
-export default memo(SafeAreaLayer);
