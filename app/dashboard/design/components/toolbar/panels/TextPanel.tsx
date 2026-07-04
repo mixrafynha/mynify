@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Star, Type } from "lucide-react";
 import {
   FONT_CATEGORIES,
@@ -226,6 +226,7 @@ export default function TextPanel({
   const [recents, setRecents] = useState<string[]>(() =>
     readStorage(RECENTS_KEY),
   );
+  const deferredQuery = useDeferredValue(query);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [loadedFontIds, setLoadedFontIds] = useState<Set<string>>(
     () => new Set(),
@@ -236,7 +237,7 @@ export default function TextPanel({
   }, []);
 
   const allFilteredFonts = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = deferredQuery.trim().toLowerCase();
     let source: FontItem[] = visibleCatalogFonts;
 
     if (category === "favorites") {
@@ -254,7 +255,7 @@ export default function TextPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(term),
     );
-  }, [category, favorites, query, recents, visibleCatalogFonts]);
+  }, [category, deferredQuery, favorites, recents, visibleCatalogFonts]);
 
   const filteredFonts = useMemo(
     () => allFilteredFonts.slice(0, limit),
@@ -333,19 +334,19 @@ export default function TextPanel({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-white">
-      <div className="shrink-0 space-y-3 pb-3">
+    <div className="flex h-auto max-h-[min(68dvh,520px)] min-h-0 flex-col overflow-hidden text-white [contain:layout_paint] md:h-full md:max-h-none">
+      <div className="shrink-0 space-y-2.5 pb-2.5 md:space-y-3 md:pb-3">
         <button
           type="button"
           onClick={onAddText || addDefaultText}
-          className="flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white shadow-lg shadow-violet-950/25 active:scale-[0.99]"
+          className="flex min-h-10 w-full items-center justify-center gap-2 rounded-2xl bg-violet-500 px-4 text-sm font-black text-white shadow-violet-950/25 active:scale-[0.99] md:min-h-11 md:shadow-lg"
         >
           <Type size={17} /> Add text
         </button>
 
         <PanelLabel title="Fonts" count={allFilteredFonts.length} />
 
-        <label className="flex h-11 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60">
+        <label className="flex h-10 items-center gap-2 rounded-2xl bg-white/[0.055] px-3 text-slate-400 ring-1 ring-white/10 focus-within:ring-violet-400/60 md:h-11">
           <Search size={15} />
           <input
             value={query}
@@ -354,18 +355,18 @@ export default function TextPanel({
               setLimit(PAGE_SIZE);
             }}
             placeholder={`Search ${visibleCatalogFonts.length}+ fonts`}
-            className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-slate-600"
+            className="min-w-0 flex-1 bg-transparent text-[16px] font-semibold text-white outline-none placeholder:text-slate-600 md:text-sm"
           />
         </label>
 
-        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex touch-pan-x gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {(["all", "favorites", "recent", ...FONT_CATEGORIES] as const).map(
             (item) => (
               <button
                 key={item}
                 type="button"
                 onClick={() => changeCategory(item)}
-                className={`shrink-0 rounded-full px-3 py-2 text-xs font-black capitalize transition-colors active:scale-95 ${
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-black capitalize transition-colors active:scale-95 md:py-2 ${
                   category === item
                     ? "bg-violet-500 text-white"
                     : "bg-white/[0.045] text-slate-400 ring-1 ring-white/10"
@@ -378,8 +379,8 @@ export default function TextPanel({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-cols-3 gap-2">
+      <div className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain pr-0.5 [scrollbar-width:none] [-webkit-overflow-scrolling:touch] [&::-webkit-scrollbar]:hidden">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {filteredFonts.map((font) => (
             <FontCard
               key={font.id}
@@ -426,16 +427,16 @@ const FontCard = memo(function FontCard({
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]">
+    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition-colors hover:bg-white/[0.065] active:scale-[0.98]">
       <button
         type="button"
         onClick={onAdd}
-        className="flex h-[64px] w-full items-center justify-center px-2 py-2"
+        className="flex h-[54px] w-full items-center justify-center px-2 py-2 md:h-[64px]"
         aria-label={`Add text with ${font.family}`}
         title={font.family}
       >
         <div
-          className={`w-full truncate text-center text-[20px] font-black leading-none text-white transition-opacity duration-150 ${
+          className={`w-full truncate text-center text-[18px] font-black leading-none text-white transition-opacity duration-150 md:text-[20px] ${
             ready ? "opacity-100" : "opacity-0"
           }`}
           style={{
@@ -460,7 +461,7 @@ const FontCard = memo(function FontCard({
           event.stopPropagation();
           onToggleFavorite();
         }}
-        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl backdrop-blur-md ${
+        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl md:backdrop-blur-md ${
           favorite
             ? "bg-yellow-300 text-slate-950"
             : "bg-black/25 text-slate-500 opacity-80 group-hover:opacity-100"
