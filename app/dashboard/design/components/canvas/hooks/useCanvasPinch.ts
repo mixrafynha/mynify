@@ -2,10 +2,7 @@
 
 import { useCallback, useRef } from "react";
 
-function distance(
-  a: { clientX: number; clientY: number },
-  b: { clientX: number; clientY: number },
-) {
+function distance(a: { clientX: number; clientY: number }, b: { clientX: number; clientY: number }) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
@@ -25,59 +22,33 @@ export function useCanvasPinch({
   maxZoom?: number;
 }) {
   const rafRef = useRef<number | null>(null);
-  const pointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(
-    new Map(),
-  );
+  const pointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
 
   const isMobileTouch = useCallback((e: React.PointerEvent) => {
-    return (
-      e.pointerType === "touch" &&
-      typeof window !== "undefined" &&
-      window.innerWidth < 1024
-    );
+    return e.pointerType === "touch" && typeof window !== "undefined" && window.innerWidth < 1024;
   }, []);
 
   const handlePinchDown = useCallback(
     (e: React.PointerEvent) => {
       if (!isMobileTouch(e)) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target?.closest?.(
-          '[data-ryfio-canvas-ui="true"], [data-ryfio-mobile-sheet="true"], [data-ryfio-editor-toolbar="true"]',
-        )
-      )
-        return;
 
-      pointersRef.current.set(e.pointerId, {
-        clientX: e.clientX,
-        clientY: e.clientY,
-      });
+      pointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
 
       if (pointersRef.current.size === 2) {
         const [a, b] = Array.from(pointersRef.current.values());
         pinchRef.current = { distance: distance(a, b), zoom };
       }
     },
-    [isMobileTouch, zoom],
+    [isMobileTouch, zoom]
   );
 
   const handlePinchMove = useCallback(
     (e: React.PointerEvent) => {
       if (!isMobileTouch(e)) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target?.closest?.(
-          '[data-ryfio-canvas-ui="true"], [data-ryfio-mobile-sheet="true"], [data-ryfio-editor-toolbar="true"]',
-        )
-      )
-        return;
       if (!pointersRef.current.has(e.pointerId)) return;
 
-      pointersRef.current.set(e.pointerId, {
-        clientX: e.clientX,
-        clientY: e.clientY,
-      });
+      pointersRef.current.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
       if (pointersRef.current.size !== 2 || !pinchRef.current) return;
 
       e.preventDefault();
@@ -91,7 +62,7 @@ export function useCanvasPinch({
         onZoomChange(clamp(pinchRef.current.zoom * ratio, minZoom, maxZoom));
       });
     },
-    [isMobileTouch, maxZoom, minZoom, onZoomChange],
+    [isMobileTouch, maxZoom, minZoom, onZoomChange]
   );
 
   const handlePinchEnd = useCallback((e: React.PointerEvent) => {

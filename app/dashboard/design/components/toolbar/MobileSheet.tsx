@@ -26,8 +26,8 @@ type SheetSize = "peek" | "mid" | "full";
 
 const SHEET_HEIGHTS: Record<SheetSize, string> = {
   peek: "16dvh",
-  mid: "32dvh",
-  full: "54dvh",
+  mid: "30dvh",
+  full: "46dvh",
 };
 
 type MobileSheetProps = {
@@ -219,9 +219,11 @@ function MobileSheet({
         [data-ryfio-mobile-sheet="true"] * {
           -webkit-tap-highlight-color: transparent;
         }
+        [data-ryfio-mobile-sheet-content="true"] {
+          contain: layout paint style;
+        }
         [data-ryfio-mobile-sheet-content="true"] > * {
-          content-visibility: auto;
-          contain-intrinsic-size: 280px;
+          contain: layout paint style;
         }
         [data-ryfio-mobile-sheet="true"] {
           --ryfio-panel-bg: #070817;
@@ -285,12 +287,13 @@ function MobileSheet({
           border-t border-violet-300/15
           bg-[#070817] text-white
           shadow-[0_-12px_34px_rgba(0,0,0,0.34),0_0_28px_rgba(124,58,237,0.12)]
-          transition-[height] duration-150 ease-out
-          will-change-[height]
+          transition-transform duration-150 ease-out
+          will-change-transform
         "
         style={{
-          height: `min(${SHEET_HEIGHTS[sheetSize]}, 480px)`,
+          height: `min(${SHEET_HEIGHTS[sheetSize]}, 420px)`,
           paddingBottom: "env(safe-area-inset-bottom)",
+          contain: "layout paint style",
         }}
       >
         <div

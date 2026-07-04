@@ -35,7 +35,12 @@ type MobileToolbarProps = {
   selected?: unknown;
 };
 
-function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
+function MobileToolbar({
+  open,
+  panel,
+  setOpen,
+  setPanel,
+}: MobileToolbarProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const dragRef = useRef({
@@ -57,7 +62,7 @@ function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
       setPanel(nextPanel);
       setOpen(true);
     },
-    [open, panel, setOpen, setPanel],
+    [open, panel, setOpen, setPanel]
   );
 
   const handlePointerDown = useCallback(
@@ -74,7 +79,7 @@ function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
 
       scroller.setPointerCapture?.(event.pointerId);
     },
-    [],
+    []
   );
 
   const handlePointerMove = useCallback(
@@ -91,7 +96,7 @@ function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
         scroller.scrollLeft = drag.scrollLeft - deltaX;
       }
     },
-    [],
+    []
   );
 
   const stopDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
@@ -110,7 +115,6 @@ function MobileToolbar({ open, panel, setOpen, setPanel }: MobileToolbarProps) {
 
   return (
     <div
-      data-ryfio-editor-toolbar="true"
       className={`fixed inset-x-0 bottom-0 z-50 transition-[transform,opacity] duration-150 ease-[cubic-bezier(0.22,1,0.36,1)] md:hidden ${
         open
           ? "pointer-events-none translate-y-[110%] opacity-0"
