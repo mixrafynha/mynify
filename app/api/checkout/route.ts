@@ -61,7 +61,7 @@ const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2026-04-22.dahlia",
 });
 
-type CheckoutSessionCreateParams = Parameters<typeof stripe.checkout.sessions.create>[0];
+type CheckoutSessionCreateParams = NonNullable<Parameters<typeof stripe.checkout.sessions.create>[0]>;
 type CheckoutLineItem = NonNullable<CheckoutSessionCreateParams["line_items"]>[number];
 
 function parseMoney(value: unknown): number | null {
