@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
+
 import { SHAPE_CATEGORIES, SHAPES, type ShapePreset } from "../data";
+
+const PAGE_SIZE = 48;
 
 function addShape(createElement: ((element: any) => void) | undefined, shape: ShapePreset) {
   createElement?.({
@@ -30,6 +33,7 @@ function addShape(createElement: ((element: any) => void) | undefined, shape: Sh
 export default function IconsPanel({ createElement }: { createElement?: (element: any) => void }) {
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   const items = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -38,8 +42,10 @@ export default function IconsPanel({ createElement }: { createElement?: (element
       (item) =>
         (category === "All" || item.category === category) &&
         (!term || `${item.label} ${item.category}`.toLowerCase().includes(term))
-    ).slice(0, 120);
+    );
   }, [category, query]);
+
+  const visibleItems = items.slice(0, page * PAGE_SIZE);
 
   return (
     <div className="space-y-3 pb-5 text-white">
@@ -47,7 +53,7 @@ export default function IconsPanel({ createElement }: { createElement?: (element
         <Search size={15} className="shrink-0 text-violet-200/80" />
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => { setQuery(e.target.value); setPage(1); }}
           placeholder="Search shapes"
           className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-violet-100/55"
         />
@@ -61,7 +67,7 @@ export default function IconsPanel({ createElement }: { createElement?: (element
             <button
               key={item}
               type="button"
-              onClick={() => setCategory(item)}
+              onClick={() => { setCategory(item); setPage(1); }}
               className={`shrink-0 rounded-full border px-3.5 py-2 text-[12px] font-extrabold leading-none transition active:scale-95 ${
                 active
                   ? "border-violet-200/70 bg-violet-500 text-white shadow-[0_8px_22px_rgba(139,92,246,0.32)]"
@@ -75,7 +81,7 @@ export default function IconsPanel({ createElement }: { createElement?: (element
       </div>
 
       <div className="grid grid-cols-5 gap-2 sm:grid-cols-7 md:grid-cols-5 xl:grid-cols-7">
-        {items.map((shape) => (
+        {visibleItems.map((shape) => (
           <button
             key={shape.id || shape.label}
             type="button"
@@ -88,6 +94,7 @@ export default function IconsPanel({ createElement }: { createElement?: (element
           </button>
         ))}
       </div>
+      {visibleItems.length < items.length && <button type="button" onClick={() => setPage((value) => value + 1)} className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]">Load more</button>}
     </div>
   );
 }

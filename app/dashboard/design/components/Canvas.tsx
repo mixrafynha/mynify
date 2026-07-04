@@ -151,6 +151,11 @@ export default function Canvas({
     [currentSide, resolvedProductId, productConfig],
   );
 
+  const visualScale = useMemo(
+    () => getMockupVisualScale(resolvedProductId, currentSide, productConfig),
+    [currentSide, resolvedProductId, productConfig],
+  );
+
   const canvasScale = useCanvasScale(wrapperRef);
   const finalScale = useMemo(() => zoom * canvasScale, [canvasScale, zoom]);
 
@@ -483,7 +488,7 @@ export default function Canvas({
           mockupId={resolvedProductId}
           currentSide={currentSide}
           color={mockupColor}
-          visualScale={getMockupVisualScale(resolvedProductId, currentSide, productConfig)}
+          visualScale={visualScale}
         />
 
         <SafeAreaLayer

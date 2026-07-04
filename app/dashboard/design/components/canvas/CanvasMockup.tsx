@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import type { CanvasSide } from "./types";
 
 type Props = {
@@ -10,43 +11,48 @@ type Props = {
   visualScale?: number;
 };
 
-export default function CanvasMockup({
+function CanvasMockup({
   mockup,
   mockupId,
   currentSide,
   color = "#ffffff",
   visualScale = 1,
 }: Props) {
+  const safeMockup = typeof mockup === "string" && mockup.trim() ? mockup : "";
 
   return (
-    // Aplicamos o transform e o transformOrigin aqui, no container pai.
-    // Assim, tudo o que for colocado dentro dele herdará a mesma escala.
-    <div 
-      className="pointer-events-none absolute inset-0 z-0 select-none aspect-square w-full max-w-full mx-auto"
+    <div
+      className="pointer-events-none absolute inset-0 z-0 mx-auto aspect-square w-full max-w-full select-none"
       style={{
-        transform: `scale(${visualScale})`,
+        transform: `scale(${Number.isFinite(visualScale) ? visualScale : 1})`,
         transformOrigin: "center center",
       }}
     >
-      <img
-        src={mockup}
-        alt={`${mockupId}-${currentSide}`}
-        draggable={false}
-        className="absolute inset-0 h-full w-full object-cover drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
-      />
+      {safeMockup && (
+        <img
+          src={safeMockup}
+          alt={`${mockupId}-${currentSide}`}
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
+        />
+      )}
 
-      <div
-        className="absolute inset-0 mix-blend-multiply opacity-80"
-        style={{
-          backgroundColor: color,
-          WebkitMaskImage: `url(${mockup})`,
-          maskImage: `url(${mockup})`,
-          WebkitMaskSize: "cover",
-          maskSize: "cover",
-          WebkitMaskPosition: "center",
-          maskPosition: "center",
-        }}
-      />
+      {safeMockup && (
+        <div
+          className="absolute inset-0 opacity-80 mix-blend-multiply"
+          style={{
+            backgroundColor: color,
+            WebkitMaskImage: `url(${safeMockup})`,
+            maskImage: `url(${safeMockup})`,
+            WebkitMaskSize: "cover",
+            maskSize: "cover",
+            WebkitMaskPosition: "center",
+            maskPosition: "center",
+          }}
+        />
+      )}
     </div>
   );
 }
+
+export default memo(CanvasMockup);
