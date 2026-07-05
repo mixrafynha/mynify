@@ -461,15 +461,15 @@ async function signedR2Put({
     `SignedHeaders=${signedHeaders}, Signature=${signature}`;
 
   const res = await fetch(url, {
-    method: "PUT",
-    body,
-    headers: {
-      authorization,
-      "content-type": contentType,
-      "x-amz-content-sha256": payloadHash,
-      "x-amz-date": amzDate,
-    },
-  });
+  method: "PUT",
+  body: new Uint8Array(body),
+  headers: {
+    authorization,
+    "content-type": contentType,
+    "x-amz-content-sha256": payloadHash,
+    "x-amz-date": amzDate,
+  },
+});
 
   if (!res.ok) {
     throw new Error(`R2 upload failed: ${res.status} ${await res.text()}`);
