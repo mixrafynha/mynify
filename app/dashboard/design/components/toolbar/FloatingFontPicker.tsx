@@ -36,9 +36,7 @@ function hideBrokenPreview(event: SyntheticEvent<HTMLImageElement>) {
 }
 
 function normalize(value: unknown) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function FloatingFontPicker({
@@ -58,18 +56,16 @@ function FloatingFontPicker({
   );
 
   const fonts = useMemo(() => {
-    const q = normalize(query);
+    const q = mobile ? "" : normalize(query);
 
     return allFonts.filter((font) => {
-      const matchesCategory = category === "all" || font.category === category;
+      const matchesCategory = mobile || category === "all" || font.category === category;
       if (!matchesCategory) return false;
       if (!q) return true;
 
-      return `${font.family} ${font.category} ${font.id}`
-        .toLowerCase()
-        .includes(q);
+      return `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q);
     });
-  }, [allFonts, category, query]);
+  }, [allFonts, category, mobile, query]);
 
   useEffect(() => {
     if (value) void loadEditorFont(value);
@@ -118,59 +114,61 @@ function FloatingFontPicker({
               : "mt-2 w-full overflow-hidden rounded-[22px] border border-white/10 bg-[#080916]/98 p-2 shadow-[0_18px_50px_rgba(0,0,0,.42)]"
           }
         >
-          <div className="mb-2 grid grid-cols-[1fr_auto] gap-2">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              autoFocus
-              placeholder="Search fonts..."
-              className="h-10 min-w-0 rounded-[16px] border border-white/10 bg-white/[0.06] px-3 text-xs font-bold text-white outline-none placeholder:text-white/35 focus:border-violet-300/50"
-            />
-            {!mobile && (
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="h-10 rounded-[16px] border border-white/10 bg-white/[0.055] px-3 text-[10px] font-black uppercase tracking-[0.12em] text-white/62 hover:bg-white/[0.09]"
-              >
-                X
-              </button>
-            )}
-          </div>
-
           {!mobile && (
-            <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
-              {(["all", ...FONT_CATEGORIES] as CategoryFilter[]).map((item) => (
+            <>
+              <div className="mb-2 grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  autoFocus
+                  placeholder="Search fonts..."
+                  className="h-10 min-w-0 rounded-[16px] border border-white/10 bg-white/[0.06] px-3 text-xs font-bold text-white outline-none placeholder:text-white/35 focus:border-violet-300/50"
+                />
+
                 <button
-                  key={item}
                   type="button"
-                  onClick={() => setCategory(item)}
-                  className={`h-7 shrink-0 rounded-xl px-2.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
-                    category === item
-                      ? "bg-violet-500 text-white"
-                      : "bg-white/[0.055] text-white/50 hover:bg-white/[0.09] hover:text-white/78"
-                  }`}
+                  onClick={() => setOpen(false)}
+                  className="h-10 rounded-[16px] border border-white/10 bg-white/[0.055] px-3 text-[10px] font-black uppercase tracking-[0.12em] text-white/62 hover:bg-white/[0.09]"
                 >
-                  {item}
+                  X
                 </button>
-              ))}
-            </div>
+              </div>
+
+              <div className="mb-2 flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+                {(["all", ...FONT_CATEGORIES] as CategoryFilter[]).map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setCategory(item)}
+                    className={`h-7 shrink-0 rounded-xl px-2.5 text-[9px] font-black uppercase tracking-[0.10em] transition ${
+                      category === item
+                        ? "bg-violet-500 text-white"
+                        : "bg-white/[0.055] text-white/50 hover:bg-white/[0.09] hover:text-white/78"
+                    }`}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           <div
             className="overflow-y-auto pr-1 [scrollbar-color:rgba(168,85,247,.55)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-violet-400/45 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-violet-300/70"
-            style={{ maxHeight: mobile ? "calc(46dvh - 82px)" : "260px" }}
+            style={{ maxHeight: mobile ? "46dvh" : "260px" }}
           >
             {fonts.map((font) => {
               const active = font.family === value;
+
               return (
                 <button
                   key={font.id || font.family}
                   type="button"
                   onClick={() => selectFont(font.family)}
-                  className={`grid h-10 w-full grid-cols-[1fr_auto] items-center gap-2 rounded-[16px] px-2.5 text-left text-xs font-black transition ${
-                    active
-                      ? "bg-violet-500 text-white"
-                      : "text-white/82 hover:bg-white/[0.085]"
+                  className={`grid w-full items-center rounded-[16px] text-left text-xs font-black transition ${
+                    mobile
+                      ? `h-[58px] px-3 ${active ? "bg-violet-500/25 ring-1 ring-violet-300/60" : "text-white/82 active:bg-white/[0.085]"}`
+                      : `h-10 grid-cols-[1fr_auto] gap-2 px-2.5 ${active ? "bg-violet-500 text-white" : "text-white/82 hover:bg-white/[0.085]"}`
                   }`}
                 >
                   <span className="min-w-0">
@@ -181,16 +179,23 @@ function FloatingFontPicker({
                         loading="lazy"
                         decoding="async"
                         onError={hideBrokenPreview}
-                        className="h-5 w-full max-w-[150px] object-contain object-left"
+                        className={
+                          mobile
+                            ? "h-9 w-full object-contain"
+                            : "h-5 w-full max-w-[150px] object-contain object-left"
+                        }
                         draggable={false}
                       />
                     ) : (
                       <span className="block truncate text-xs font-black">{font.family}</span>
                     )}
                   </span>
-                  <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.10em] text-white/38">
-                    {font.category}
-                  </span>
+
+                  {!mobile && (
+                    <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.10em] text-white/38">
+                      {font.category}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -202,9 +207,11 @@ function FloatingFontPicker({
             )}
           </div>
 
-          <div className="mt-2 border-t border-white/10 pt-2 text-center text-[10px] font-black uppercase tracking-[0.12em] text-white/35">
-            {fonts.length} / {allFonts.length} fonts
-          </div>
+          {!mobile && (
+            <div className="mt-2 border-t border-white/10 pt-2 text-center text-[10px] font-black uppercase tracking-[0.12em] text-white/35">
+              {fonts.length} / {allFonts.length} fonts
+            </div>
+          )}
         </div>
       )}
     </div>
