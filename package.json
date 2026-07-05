@@ -3,12 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "generate-font-previews": "node scripts/generate-font-previews.js"
-  },
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+  "lint": "eslint",
+  "generate-font-previews": "node scripts/generate-font-previews.js",
+  "trigger:dev": "trigger.dev dev",
+  "trigger:deploy": "trigger.dev deploy"
+},
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1049.0",
     "@marsidev/react-turnstile": "^1.5.0",
