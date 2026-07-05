@@ -144,48 +144,45 @@ export default function DesktopToolbar({
     fileInputRef.current.click();
   }, []);
 
-  const handleUploadChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+const handleUploadChange = useCallback(
+  async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-      const isValidType =
-        ALLOWED_TYPES.includes(file.type) ||
-        /\.(png|jpg|jpeg|webp)$/i.test(file.name);
+    const isValidType =
+      ALLOWED_TYPES.includes(file.type) ||
+      /\.(png|jpg|jpeg|webp)$/i.test(file.name);
 
-      if (!isValidType) {
-        alert("Apenas PNG, JPG ou WEBP.");
+    if (!isValidType) {
+      alert("Apenas PNG, JPG ou WEBP.");
+      e.target.value = "";
+      return;
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      alert(`Image should be under ${bytesToMb(MAX_FILE_SIZE)}MB.`);
+      e.target.value = "";
+      return;
+    }
+
+    try {
+      const quality = await validatePrintImage(file);
+
+      if (!quality.ok) {
+        alert(quality.error ?? "Imagem inválida.");
         e.target.value = "";
         return;
       }
 
-      if (file.size > MAX_FILE_SIZE) {
-        alert(`Image should be under ${bytesToMb(MAX_FILE_SIZE)}MB.`);
-        e.target.value = "";
-        return;
-      }
-
-      try {
-        const quality = await validatePrintImage(file);
-
-        if (!quality.ok) {
-          alert(quality.message);
-          e.target.value = "";
-          return;
-        }
-
-        if (quality.label !== "PRO") {
-        }
-
-        onUpload?.(file);
-      } catch {
-        alert("Não foi possível validar esta imagem. Usa PNG, JPG ou WEBP em alta resolução.");
-      } finally {
-        e.target.value = "";
-      }
-    },
-    [onUpload]
-  );
+      onUpload?.(file);
+    } catch {
+      alert("Não foi possível validar esta imagem. Usa PNG, JPG ou WEBP em alta resolução.");
+    } finally {
+      e.target.value = "";
+    }
+  },
+  [onUpload]
+);
 
   const safeOnAddText = useCallback(() => {
     if (!onAddText) return;
