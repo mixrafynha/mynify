@@ -24,8 +24,8 @@ export default function UploadPanel({ onUpload }: UploadPanelProps) {
       return;
     }
 
-    if (file.size > PRINT_IMAGE_LIMITS.maxFileSize) {
-      setStatus(`Imagem demasiado pesada. Máximo ${bytesToMb(PRINT_IMAGE_LIMITS.maxFileSize)}MB.`);
+    if (file.size > PRINT_IMAGE_LIMITS.maxBytes) {
+      setStatus(`Imagem demasiado pesada. Máximo ${bytesToMb(PRINT_IMAGE_LIMITS.maxBytes)}MB.`);
       e.target.value = "";
       return;
     }

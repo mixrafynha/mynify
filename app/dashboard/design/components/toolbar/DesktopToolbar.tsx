@@ -65,7 +65,7 @@ type DesktopToolbarProps = {
 };
 
 const PANEL_WIDTH = 420;
-const MAX_FILE_SIZE = PRINT_IMAGE_LIMITS.maxFileSize;
+const MAX_FILE_SIZE = PRINT_IMAGE_LIMITS.maxBytes;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const TEXT_INSERT_LOCK_MS = 450;
 const TEXT_Y_OFFSET = 20;
