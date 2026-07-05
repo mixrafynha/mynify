@@ -13,12 +13,12 @@ import {
 
 const FAVORITES_KEY = "ryfio-editor-favorite-fonts";
 const RECENTS_KEY = "ryfio-editor-recent-fonts";
-const DESKTOP_PAGE_SIZE = 12;
+const DESKTOP_PAGE_SIZE = 24;
 const MOBILE_PAGE_SIZE = 6;
 const MAX_RECENTS = 24;
 const MAX_STORED_FAVORITES = 80;
-const DESKTOP_PRELOAD_LIMIT = 12;
-const MOBILE_PRELOAD_LIMIT = 6;
+const DESKTOP_PRELOAD_LIMIT = 8;
+const MOBILE_PRELOAD_LIMIT = 0;
 
 function isMobileViewport() {
   if (typeof window === "undefined") return false;
@@ -355,25 +355,25 @@ function TextPanel({
     writeStorage(FAVORITES_KEY, next, MAX_STORED_FAVORITES);
   }, [favorites]);
 
-  const addFont = useCallback(async (font: FontItem) => {
+  const addFont = useCallback((font: FontItem) => {
     if (lockedRef.current) return;
     lockedRef.current = true;
 
-    try {
-      await loadEditorFont(font);
+    markRecent(font.family);
+    createElement?.(buildTextElement(font));
+
+    void loadEditorFont(font).then(() => {
       setLoadedFontIds((prev) => {
         const next = new Set(prev);
         next.add(font.id);
         loadedFontIdsRef.current.add(font.id);
         return next;
       });
-      markRecent(font.family);
-      createElement?.(buildTextElement(font));
-    } finally {
-      window.setTimeout(() => {
-        lockedRef.current = false;
-      }, 160);
-    }
+    });
+
+    window.setTimeout(() => {
+      lockedRef.current = false;
+    }, 160);
   }, [createElement, markRecent]);
 
   const changeCategory = useCallback((
@@ -385,7 +385,7 @@ function TextPanel({
 
   const addDefaultText = useCallback(() => {
     const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
-    if (first) void addFont(first);
+    if (first) addFont(first);
   }, [addFont, allFilteredFonts, filteredFonts, visibleCatalogFonts]);
 
   return (
@@ -441,7 +441,6 @@ function TextPanel({
               key={font.id}
               font={font}
               favorite={favorites.includes(font.family)}
-              ready={loadedFontIds.has(font.id)}
               onAdd={() => addFont(font)}
               onToggleFavorite={() => toggleFavorite(font.family)}
             />
@@ -471,13 +470,11 @@ function TextPanel({
 const FontCard = memo(function FontCard({
   font,
   favorite,
-  ready,
   onAdd,
   onToggleFavorite,
 }: {
   font: FontItem;
   favorite: boolean;
-  ready: boolean;
   onAdd: () => void;
   onToggleFavorite: () => void;
 }) {
@@ -491,9 +488,7 @@ const FontCard = memo(function FontCard({
         title={font.family}
       >
         <div
-          className={`w-full truncate text-center text-[20px] font-black leading-none text-white transition-opacity duration-150 ${
-            ready ? "opacity-100" : "opacity-0"
-          }`}
+          className="w-full truncate text-center text-[20px] font-black leading-none text-white"
           style={{
             fontFamily: getEditorFontFamily(font.family),
             fontWeight: 800,
@@ -503,12 +498,6 @@ const FontCard = memo(function FontCard({
           RYFIO
         </div>
       </button>
-
-      {!ready && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-4 w-16 animate-pulse rounded-full bg-white/10" />
-        </div>
-      )}
 
       <button
         type="button"

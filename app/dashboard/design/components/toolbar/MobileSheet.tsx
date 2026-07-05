@@ -12,6 +12,7 @@ const PanelLoading = () => (
 
 const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loading: PanelLoading });
 const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
+const MobileTextPanel = dynamic(() => import("./panels/MobileTextPanel"), { loading: PanelLoading });
 const UploadPanel = dynamic(() => import("./panels/UploadPanel"), { loading: PanelLoading });
 const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
 const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
@@ -26,8 +27,8 @@ type SheetSize = "peek" | "mid" | "full";
 
 const SHEET_HEIGHTS: Record<SheetSize, string> = {
   peek: "16dvh",
-  mid: "30dvh",
-  full: "46dvh",
+  mid: "28dvh",
+  full: "42dvh",
 };
 
 type MobileSheetProps = {
@@ -158,7 +159,7 @@ function MobileSheet({
     }
 
     if (panel === "text") {
-      return <TextPanel createElement={createElement} onAddText={onAddText} />;
+      return <MobileTextPanel onAddText={onAddText} />;
     }
 
     if (panel === "upload") {
@@ -276,7 +277,7 @@ function MobileSheet({
         type="button"
         aria-label="Close mobile sheet overlay"
         onClick={close}
-        className="fixed inset-0 z-30 bg-black/30 md:hidden"
+        className="fixed inset-0 z-30 bg-black/20 md:hidden"
       />
 
       <section
