@@ -1,15 +1,22 @@
-
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type SyntheticEvent,
+} from "react";
 import {
   FONT_CATEGORIES,
   FONT_ITEMS,
   getEditorFontFamily,
+  getFontPreviewUrl,
   loadEditorFont,
-  loadVisibleEditorFonts,
+  useEditorFontCatalog,
   type FontCategory,
-} from "../data";
+} from "./data";
 import { stopEvent } from "./floating-toolbar-utils";
 
 type FloatingFontPickerProps = {
@@ -20,18 +27,35 @@ type FloatingFontPickerProps = {
 
 type CategoryFilter = "all" | FontCategory;
 
+function fontPreviewSrc(font: any) {
+  return getFontPreviewUrl(font);
+}
+
+function hideBrokenPreview(event: SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.style.display = "none";
+}
+
 function normalize(value: unknown) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
 }
 
-function FloatingFontPicker({ value, onChange, mobile = false }: FloatingFontPickerProps) {
+function FloatingFontPicker({
+  value,
+  onChange,
+  mobile = false,
+}: FloatingFontPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("all");
 
-  const allFonts = useMemo(() => (Array.isArray(FONT_ITEMS) ? FONT_ITEMS : []), []);
+  const { fonts: liveFonts } = useEditorFontCatalog();
+
+  const allFonts = useMemo(
+    () => (liveFonts.length ? liveFonts : Array.isArray(FONT_ITEMS) ? FONT_ITEMS : []),
+    [liveFonts],
+  );
 
   const fonts = useMemo(() => {
     const q = normalize(query);
@@ -41,22 +65,15 @@ function FloatingFontPicker({ value, onChange, mobile = false }: FloatingFontPic
       if (!matchesCategory) return false;
       if (!q) return true;
 
-      return `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q);
+      return `${font.family} ${font.category} ${font.id}`
+        .toLowerCase()
+        .includes(q);
     });
   }, [allFonts, category, query]);
 
   useEffect(() => {
     if (value) void loadEditorFont(value);
   }, [value]);
-
-  useEffect(() => {
-    if (!open) return;
-
-    void loadVisibleEditorFonts(
-      fonts.slice(0, 16).map((font) => font.family),
-      16,
-    );
-  }, [fonts, open]);
 
   const selectFont = useCallback(
     (family: string) => {
@@ -80,7 +97,10 @@ function FloatingFontPicker({ value, onChange, mobile = false }: FloatingFontPic
         }
         title="Font family"
       >
-        <span className="truncate" style={{ fontFamily: getEditorFontFamily(value || "Inter") }}>
+        <span
+          className="truncate"
+          style={{ fontFamily: getEditorFontFamily(value || "Inter") }}
+        >
           {value || "Inter"}
         </span>
         <span className="rounded-xl bg-violet-500/15 px-2.5 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-violet-100">
@@ -146,15 +166,27 @@ function FloatingFontPicker({ value, onChange, mobile = false }: FloatingFontPic
                 <button
                   key={font.id || font.family}
                   type="button"
-                  onMouseEnter={() => void loadEditorFont(font.family)}
-                  onFocus={() => void loadEditorFont(font.family)}
                   onClick={() => selectFont(font.family)}
                   className={`grid h-10 w-full grid-cols-[1fr_auto] items-center gap-2 rounded-[16px] px-2.5 text-left text-xs font-black transition ${
-                    active ? "bg-violet-500 text-white" : "text-white/82 hover:bg-white/[0.085]"
+                    active
+                      ? "bg-violet-500 text-white"
+                      : "text-white/82 hover:bg-white/[0.085]"
                   }`}
                 >
-                  <span className="truncate" style={{ fontFamily: getEditorFontFamily(font.family) }}>
-                    {font.family}
+                  <span className="min-w-0">
+                    {fontPreviewSrc(font) ? (
+                      <img
+                        src={fontPreviewSrc(font) ?? undefined}
+                        alt={font.family}
+                        loading="lazy"
+                        decoding="async"
+                        onError={hideBrokenPreview}
+                        className="h-5 w-full max-w-[150px] object-contain object-left"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="block truncate text-xs font-black">{font.family}</span>
+                    )}
                   </span>
                   <span className="shrink-0 text-[9px] font-black uppercase tracking-[0.10em] text-white/38">
                     {font.category}

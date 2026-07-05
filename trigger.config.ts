@@ -1,9 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID ?? "ryfio",
-
+  project: "proj_hbgmuokflilebytpwhkm",
   dirs: ["./trigger"],
-
   maxDuration: 300,
 });

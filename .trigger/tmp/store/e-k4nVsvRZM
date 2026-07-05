@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../trigger/generate-template-preview.ts"],
+  "sourcesContent": ["import { task } from \"@trigger.dev/sdk/v3\";\n\nexport const generateTemplatePreview = task({\n  id: \"generate-template-preview\",\n  run: async (payload: { templateId: string; label?: string | null; category?: string | null }) => {\n    // Left intentionally minimal for now.\n    // Font previews are implemented in generate-font-preview.ts.\n    // Template preview rendering should use the app's real template/canvas renderer,\n    // otherwise it risks generating thumbnails that do not match production export.\n    return { ok: true, templateId: payload.templateId };\n  },\n});\n"],
+  "mappings": ";;;;;;;;;AAAA;AAEO,IAAM,0BAA0B,KAAK;AAAA,EAC1C,IAAI;AAAA,EACJ,KAAK,8BAAO,YAAqF;AAK/F,WAAO,EAAE,IAAI,MAAM,YAAY,QAAQ,WAAW;AAAA,EACpD,GANK;AAOP,CAAC;",
+  "names": []
+}

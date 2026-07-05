@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../AppData/Local/npm-cache/_npx/f51a09bd0abf5f10/node_modules/@opentelemetry/resources/src/detectors/platform/node/machine-id/execAsync.ts"],
+  "sourcesContent": ["/*\n * Copyright The OpenTelemetry Authors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport * as child_process from 'child_process';\nimport * as util from 'util';\n\nexport const execAsync = util.promisify(child_process.exec);\n"],
+  "mappings": ";;;;;;;;;;;;;AAKA,QAAA,gBAAA,UAAA,eAAA;AACA,QAAA,OAAA,UAAA,MAAA;AAEa,YAAA,YAAY,KAAK,UAAU,cAAc,IAAI;;;",
+  "names": []
+}

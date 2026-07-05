@@ -1,12 +1,11 @@
 "use client";
 
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState } from "react";
 import { Crown, Search } from "lucide-react";
 import {
   TEMPLATE_CATEGORIES,
   TEMPLATES,
   loadEditorFont,
-  loadVisibleEditorFonts,
   type TemplatePreset,
 } from "../data";
 
@@ -86,13 +85,6 @@ function TemplatesPanel({
     () => items.slice(0, page * getTemplatePageSize()),
     [items, page],
   );
-
-  useEffect(() => {
-    void loadVisibleEditorFonts(
-      Array.from(new Set(visible.map((template) => template.fontFamily))),
-      typeof window !== "undefined" && window.innerWidth < 768 ? 8 : 18,
-    );
-  }, [visible]);
 
   return (
     <div className="space-y-2 pb-3 text-white">

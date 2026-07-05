@@ -20,7 +20,7 @@ import {
   Unlock,
   X,
 } from "lucide-react";
-import { FONT_ITEMS, getEditorFontFamily, loadEditorFont, type FontItem } from "../data";
+import { FONT_ITEMS, getEditorFontFamily, getFontPreviewUrl, loadEditorFont, useEditorFontCatalog, type FontItem } from "../data";
 
 type FloatingEditToolbarProps = {
   selectedElements: any[];
@@ -75,7 +75,11 @@ function stopEvent(e: React.PointerEvent | React.MouseEvent | React.TouchEvent) 
 }
 
 function previewSrc(font: FontItem) {
-  return font.previewSvg || `/font-previews/${font.id}.svg`;
+  return getFontPreviewUrl(font);
+}
+
+function hideBrokenPreview(event: React.SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.style.display = "none";
 }
 
 function FloatingEditToolbar({
@@ -347,25 +351,28 @@ const FontPicker = memo(function FontPicker({ value, onChange, mobile = false }:
   const [query, setQuery] = useState("");
   const [limit, setLimit] = useState(FLOATING_FONT_PAGE_SIZE);
 
+  const { fonts: liveFonts } = useEditorFontCatalog();
+  const catalogFonts = useMemo(() => (liveFonts.length ? liveFonts : Array.isArray(FONT_ITEMS) ? FONT_ITEMS : []), [liveFonts]);
+
   const fonts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const source = Array.isArray(FONT_ITEMS) ? FONT_ITEMS : [];
+    const source = catalogFonts;
 
     if (!q) return source.slice(0, limit);
 
     return source
       .filter((font) => `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q))
       .slice(0, limit);
-  }, [limit, query]);
+  }, [catalogFonts, limit, query]);
 
   const totalMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const source = Array.isArray(FONT_ITEMS) ? FONT_ITEMS : [];
+    const source = catalogFonts;
     if (!q) return source.length;
     return source.filter((font) => `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q)).length;
-  }, [query]);
+  }, [catalogFonts, query]);
 
-  const activeFont = useMemo(() => FONT_ITEMS.find((font) => font.family === value) || FONT_ITEMS[0], [value]);
+  const activeFont = useMemo(() => catalogFonts.find((font) => font.family === value) || catalogFonts[0], [catalogFonts, value]);
 
   const selectFont = useCallback((family: string) => {
     void loadEditorFont(family);
@@ -386,12 +393,13 @@ const FontPicker = memo(function FontPicker({ value, onChange, mobile = false }:
         title="Font family"
       >
         <span className="flex min-w-0 flex-1 items-center">
-          {activeFont?.previewSvg ? (
+          {previewSrc(activeFont) ? (
             <img
-              src={previewSrc(activeFont)}
+              src={previewSrc(activeFont) ?? undefined}
               alt={activeFont.family}
               loading="eager"
               decoding="async"
+              onError={hideBrokenPreview}
               className="h-5 w-full min-w-0 object-contain object-left"
               draggable={false}
             />
@@ -433,14 +441,19 @@ const FontPicker = memo(function FontPicker({ value, onChange, mobile = false }:
                     className={`relative flex h-[72px] items-center justify-center rounded-2xl px-3 py-2 text-left transition active:scale-[0.98] ${active ? "bg-violet-500/22 ring-1 ring-violet-300/60" : "bg-white/[0.045] ring-1 ring-white/10 hover:bg-white/[0.075]"}`}
                     title={font.family}
                   >
-                    <img
-                      src={previewSrc(font)}
-                      alt={font.family}
-                      loading={index < 8 ? "eager" : "lazy"}
-                      decoding="async"
-                      className="pointer-events-none h-full max-h-[54px] w-full select-none object-contain"
-                      draggable={false}
-                    />
+                    {previewSrc(font) ? (
+                      <img
+                        src={previewSrc(font) ?? undefined}
+                        alt={font.family}
+                        loading={index < 8 ? "eager" : "lazy"}
+                        decoding="async"
+                        onError={hideBrokenPreview}
+                        className="pointer-events-none h-full max-h-[54px] w-full select-none object-contain"
+                        draggable={false}
+                      />
+                    ) : (
+                      <span className="truncate text-xs font-black text-white/80">{font.family}</span>
+                    )}
                   </button>
                 );
               })}

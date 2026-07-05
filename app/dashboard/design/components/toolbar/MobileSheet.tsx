@@ -10,16 +10,34 @@ const PanelLoading = () => (
   </div>
 );
 
-const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loading: PanelLoading });
-const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
-const MobileTextPanel = dynamic(() => import("./panels/MobileTextPanel"), { loading: PanelLoading });
-const UploadPanel = dynamic(() => import("./panels/UploadPanel"), { loading: PanelLoading });
-const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
-const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
-const ImageTemplatesPanel = dynamic(() => import("./panels/ImageTemplatesPanel"), { loading: PanelLoading });
-const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), { loading: PanelLoading });
-const AiPanel = dynamic(() => import("./panels/AiPanel"), { loading: PanelLoading });
-const LayersPanel = dynamic(() => import("./panels/LayersPanel"), { loading: PanelLoading });
+const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), {
+  loading: PanelLoading,
+});
+const MobileTextPanel = dynamic(() => import("./panels/MobileTextPanel"), {
+  loading: PanelLoading,
+});
+const UploadPanel = dynamic(() => import("./panels/UploadPanel"), {
+  loading: PanelLoading,
+});
+const StickersPanel = dynamic(() => import("./panels/StickersPanel"), {
+  loading: PanelLoading,
+});
+const IconsPanel = dynamic(() => import("./panels/IconsPanel"), {
+  loading: PanelLoading,
+});
+const ImageTemplatesPanel = dynamic(
+  () => import("./panels/ImageTemplatesPanel"),
+  { loading: PanelLoading },
+);
+const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), {
+  loading: PanelLoading,
+});
+const AiPanel = dynamic(() => import("./panels/AiPanel"), {
+  loading: PanelLoading,
+});
+const LayersPanel = dynamic(() => import("./panels/LayersPanel"), {
+  loading: PanelLoading,
+});
 
 const TOOLBAR_HEIGHT = 58;
 
@@ -27,8 +45,8 @@ type SheetSize = "peek" | "mid" | "full";
 
 const SHEET_HEIGHTS: Record<SheetSize, string> = {
   peek: "16dvh",
-  mid: "28dvh",
-  full: "42dvh",
+  mid: "30dvh",
+  full: "46dvh",
 };
 
 type MobileSheetProps = {
@@ -89,7 +107,7 @@ function MobileSheet({
       createElement?.(element);
       setOpen(false);
     },
-    [createElement, setOpen]
+    [createElement, setOpen],
   );
 
   const expandSheet = useCallback(() => {
@@ -141,7 +159,7 @@ function MobileSheet({
         dragStartY.current = event.clientY;
       }
     },
-    [expandSheet, shrinkSheet]
+    [expandSheet, shrinkSheet],
   );
 
   const onHandlePointerUp = useCallback((event: React.PointerEvent) => {
@@ -159,7 +177,7 @@ function MobileSheet({
     }
 
     if (panel === "text") {
-      return <MobileTextPanel onAddText={onAddText} />;
+      return <MobileTextPanel onAddText={onAddText} createElement={createElement} />;
     }
 
     if (panel === "upload") {
@@ -187,7 +205,14 @@ function MobileSheet({
     }
 
     if (panel === "layers") {
-      return <LayersPanel elements={elements} selected={selected} updateElement={updateElement} deleteElement={deleteElement} />;
+      return (
+        <LayersPanel
+          elements={elements}
+          selected={selected}
+          updateElement={updateElement}
+          deleteElement={deleteElement}
+        />
+      );
     }
 
     return <EmptyState />;
@@ -210,7 +235,8 @@ function MobileSheet({
   return (
     <>
       <style jsx global>{`
-        body[data-ryfio-mobile-sheet-open="true"] [class*="z-[10000]"][class*="bottom-0"][class*="md:hidden"] {
+        body[data-ryfio-mobile-sheet-open="true"]
+          [class*="z-[10000]"][class*="bottom-0"][class*="md:hidden"] {
           display: none !important;
           pointer-events: none !important;
         }
@@ -228,11 +254,11 @@ function MobileSheet({
         }
         [data-ryfio-mobile-sheet="true"] {
           --ryfio-panel-bg: #070817;
-          --ryfio-panel-card: rgba(255,255,255,0.055);
-          --ryfio-panel-card-strong: rgba(139,92,246,0.14);
-          --ryfio-panel-border: rgba(196,181,253,0.16);
-          --ryfio-panel-text: rgba(255,255,255,0.94);
-          --ryfio-panel-muted: rgba(216,180,254,0.68);
+          --ryfio-panel-card: rgba(255, 255, 255, 0.055);
+          --ryfio-panel-card-strong: rgba(139, 92, 246, 0.14);
+          --ryfio-panel-border: rgba(196, 181, 253, 0.16);
+          --ryfio-panel-text: rgba(255, 255, 255, 0.94);
+          --ryfio-panel-muted: rgba(216, 180, 254, 0.68);
         }
         [data-ryfio-mobile-sheet="true"] [class*="bg-white"],
         [data-ryfio-mobile-sheet="true"] [class*="bg-slate-100"],
@@ -267,9 +293,9 @@ function MobileSheet({
         [data-ryfio-mobile-sheet="true"] input,
         [data-ryfio-mobile-sheet="true"] textarea,
         [data-ryfio-mobile-sheet="true"] select {
-          background: rgba(255,255,255,0.055) !important;
-          color: rgba(255,255,255,0.94) !important;
-          border-color: rgba(196,181,253,0.16) !important;
+          background: rgba(255, 255, 255, 0.055) !important;
+          color: rgba(255, 255, 255, 0.94) !important;
+          border-color: rgba(196, 181, 253, 0.16) !important;
         }
       `}</style>
 
@@ -277,7 +303,7 @@ function MobileSheet({
         type="button"
         aria-label="Close mobile sheet overlay"
         onClick={close}
-        className="fixed inset-0 z-30 bg-black/20 md:hidden"
+        className="fixed inset-0 z-30 bg-black/30 md:hidden"
       />
 
       <section
@@ -315,9 +341,7 @@ function MobileSheet({
                   {getTitle(panel)}
                 </h2>
 
-                <p className="hidden">
-                  {getSubtitle(panel)}
-                </p>
+                <p className="hidden">{getSubtitle(panel)}</p>
               </div>
             </div>
 
@@ -329,7 +353,11 @@ function MobileSheet({
                 aria-label="Expand panel"
                 className="flex h-6 w-6 items-center justify-center rounded-lg bg-violet-500/12 text-violet-100 ring-1 ring-violet-300/20 active:scale-95"
               >
-                {sheetSize === "full" ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+                {sheetSize === "full" ? (
+                  <ChevronDown size={14} />
+                ) : (
+                  <ChevronUp size={14} />
+                )}
               </button>
 
               <button
@@ -362,7 +390,10 @@ function MobileSheet({
             paddingBottom: `calc(${TOOLBAR_HEIGHT}px + env(safe-area-inset-bottom))`,
           }}
         >
-          <div data-ryfio-mobile-sheet-content="true" className="mx-auto w-full max-w-[720px]">
+          <div
+            data-ryfio-mobile-sheet-content="true"
+            className="mx-auto w-full max-w-[720px]"
+          >
             {content}
           </div>
         </div>

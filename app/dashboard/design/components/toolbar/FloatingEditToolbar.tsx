@@ -20,7 +20,7 @@ import {
   Unlock,
   X,
 } from "lucide-react";
-import { loadEditorFont } from "../data";
+import { loadEditorFont } from "./data";
 import FloatingFontPicker from "./FloatingFontPicker";
 import {
   MAX_ELEMENT_SIZE,

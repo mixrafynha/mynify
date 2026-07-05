@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../../../../AppData/Local/npm-cache/_npx/f51a09bd0abf5f10/node_modules/@opentelemetry/resources/src/detectors/platform/node/machine-id/getMachineId-unsupported.ts"],
+  "sourcesContent": ["/*\n * Copyright The OpenTelemetry Authors\n * SPDX-License-Identifier: Apache-2.0\n */\n\nimport { diag } from '@opentelemetry/api';\n\nexport async function getMachineId(): Promise<string | undefined> {\n  diag.debug('could not read machine-id: unsupported platform');\n  return undefined;\n}\n"],
+  "mappings": ";;;;;;;;;;;;;;;;;AAKA,QAAA,QAAA;AAEO,mBAAe,eAAY;AAChC,YAAA,KAAK,MAAM,iDAAiD;AAC5D,aAAO;IACT;AAHsB;AAAtB,YAAA,eAAA;;;",
+  "names": []
+}

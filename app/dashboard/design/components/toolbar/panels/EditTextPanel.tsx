@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type SyntheticEvent } from "react";
 import {
   RotateCcw,
   FlipHorizontal,
@@ -17,7 +17,23 @@ import {
   Search,
 } from "lucide-react";
 
-import { FONT_OPTIONS, COLORS, getEditorFontFamily, loadEditorFont, loadVisibleEditorFonts } from "../data";
+import {
+  FONT_ITEMS,
+  COLORS,
+  getEditorFontFamily,
+  getFontPreviewUrl,
+  loadEditorFont,
+  useEditorFontCatalog,
+} from "../data";
+
+function getFontPreviewSrc(family: string, fonts: typeof FONT_ITEMS) {
+  const font = fonts.find((item) => item.family === family);
+  return getFontPreviewUrl(font);
+}
+
+function hideBrokenPreview(event: SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.style.display = "none";
+}
 
 type EditTextPanelProps = {
   selected?: any;
@@ -30,7 +46,8 @@ export default function EditTextPanel({
 }: EditTextPanelProps) {
   const [openFonts, setOpenFonts] = useState(false);
   const [search, setSearch] = useState("");
-  const [fontRenderKey, setFontRenderKey] = useState(0);
+  const { fonts: liveFonts } = useEditorFontCatalog();
+  const fontCatalog = liveFonts.length ? liveFonts : FONT_ITEMS;
 
   const meta = selected?.meta ?? {};
 
@@ -44,27 +61,19 @@ export default function EditTextPanel({
   const filteredFonts = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    if (!q) return FONT_OPTIONS.slice(0, 80);
+    const options = fontCatalog.map((font) => font.family);
 
-    return FONT_OPTIONS.filter((font) =>
-      font.toLowerCase().includes(q)
-    ).slice(0, 80);
-  }, [search]);
+    if (!q) return options.slice(0, 80);
+
+    return options.filter((font) => font.toLowerCase().includes(q)).slice(
+      0,
+      80,
+    );
+  }, [fontCatalog, search]);
 
   useEffect(() => {
     loadEditorFont(fontFamily);
   }, [fontFamily]);
-
-  useEffect(() => {
-    if (!openFonts) return;
-    let cancelled = false;
-    loadVisibleEditorFonts(filteredFonts, filteredFonts.length).finally(() => {
-      if (!cancelled) setFontRenderKey((value) => value + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [filteredFonts, openFonts]);
 
   const patch = (data: any) => {
     if (!selected) return;
@@ -150,7 +159,10 @@ export default function EditTextPanel({
                   <button
                     key={font}
                     type="button"
-                    onClick={() => { loadEditorFont(font); patch({ fontFamily: font }); }}
+                    onClick={() => {
+                      loadEditorFont(font);
+                      patch({ fontFamily: font });
+                    }}
                     className={`flex min-h-[56px] w-full items-center justify-between rounded-[18px] px-4 text-left transition active:scale-[0.98] ${
                       active
                         ? "bg-cyan-500 text-[#06111d]"
@@ -158,12 +170,21 @@ export default function EditTextPanel({
                     }`}
                   >
                     <div className="min-w-0">
-                      <FontPreviewText
-                        key={`${font}-${fontRenderKey}`}
-                        family={font}
-                        text={selected?.text ?? "RYFIO Studio 123"}
-                        className="truncate text-lg font-black"
-                      />
+                      {getFontPreviewSrc(font, fontCatalog) ? (
+                        <img
+                          src={getFontPreviewSrc(font, fontCatalog) ?? undefined}
+                          alt={font}
+                          loading="lazy"
+                          decoding="async"
+                          onError={hideBrokenPreview}
+                          className="h-7 w-full max-w-[180px] object-contain object-left"
+                          draggable={false}
+                        />
+                      ) : (
+                        <div className="truncate text-lg font-black">
+                          {font}
+                        </div>
+                      )}
 
                       <div className="truncate text-[11px] font-bold opacity-70">
                         {font}
@@ -194,8 +215,7 @@ export default function EditTextPanel({
             active={meta.fontStyle === "italic"}
             onClick={() =>
               patch({
-                fontStyle:
-                  meta.fontStyle === "italic" ? "normal" : "italic",
+                fontStyle: meta.fontStyle === "italic" ? "normal" : "italic",
               })
             }
           >
@@ -451,28 +471,5 @@ function ActionButton({
       {icon}
       <span className="truncate">{label}</span>
     </button>
-  );
-}
-function FontPreviewText({ family, text, className }: { family: string; text: string; className: string }) {
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadEditorFont(family).finally(() => {
-      if (!cancelled) setVersion((value) => value + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [family]);
-
-  return (
-    <div
-      key={`${family}-${version}`}
-      className={className}
-      style={{ fontFamily: getEditorFontFamily(family), fontWeight: 800 }}
-    >
-      {text}
-    </div>
   );
 }

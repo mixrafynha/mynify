@@ -1,14 +1,22 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+  type SyntheticEvent,
+} from "react";
 import { Check, Search, Sparkles, Star, Clock3 } from "lucide-react";
 import {
   FONT_CATEGORIES,
   FONT_ITEMS,
   type FontCategory,
   getEditorFontFamily,
+  getFontPreviewUrl,
   loadEditorFont,
-  loadVisibleEditorFonts,
+  useEditorFontCatalog,
 } from "../data";
 
 const TEXT_SHAPES = [
@@ -35,8 +43,12 @@ const TRENDING_FONT_IDS = new Set([
 const RECENT_STORAGE_KEY = "ryfio:recent-fonts";
 const FAVORITE_STORAGE_KEY = "ryfio:favorite-fonts";
 
-function previewSrc(font: { id: string; previewSvg?: string }) {
-  return font.previewSvg || `/font-previews/${font.id}.svg`;
+function previewSrc(font: any) {
+  return getFontPreviewUrl(font);
+}
+
+function hideBrokenPreview(event: SyntheticEvent<HTMLImageElement>) {
+  event.currentTarget.style.display = "none";
 }
 
 type Tab = "all" | "trending" | "recent" | "favorites" | FontCategory;
@@ -69,7 +81,7 @@ function FontsPanel({
   const [recentFonts, setRecentFonts] = useState<string[]>([]);
   const [favoriteFonts, setFavoriteFonts] = useState<string[]>([]);
   const [fontRenderKey, setFontRenderKey] = useState(0);
-  const [validFontIds, setValidFontIds] = useState<Set<string> | null>(null);
+  const { fonts: liveFonts } = useEditorFontCatalog();
 
   const selectedFont =
     selected?.meta?.fontFamily || selected?.fontFamily || "Inter";
@@ -92,62 +104,29 @@ function FontsPanel({
   }, [selectedFont]);
 
 
-  useEffect(() => {
-    let cancelled = false;
 
-    fetch("/font-previews/manifest.json", { cache: "no-store" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((manifest) => {
-        if (cancelled || !Array.isArray(manifest?.fonts)) return;
-        setValidFontIds(new Set(manifest.fonts.map(String)));
-      })
-      .catch(() => {
-        if (!cancelled) setValidFontIds(null);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const catalogFonts = useMemo(() => (liveFonts.length ? liveFonts : FONT_ITEMS), [liveFonts]);
 
   const filteredFonts = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let source = validFontIds ? FONT_ITEMS.filter((font) => validFontIds.has(font.id)) : FONT_ITEMS;
+    let source = catalogFonts;
 
     if (tab === "trending")
-      source = FONT_ITEMS.filter((font) => TRENDING_FONT_IDS.has(font.id));
+      source = catalogFonts.filter((font) => TRENDING_FONT_IDS.has(font.id));
     else if (tab === "recent")
-      source = FONT_ITEMS.filter((font) => recentFonts.includes(font.family));
+      source = catalogFonts.filter((font) => recentFonts.includes(font.family));
     else if (tab === "favorites")
-      source = FONT_ITEMS.filter((font) => favoriteFonts.includes(font.family));
+      source = catalogFonts.filter((font) => favoriteFonts.includes(font.family));
     else if (tab !== "all")
-      source = FONT_ITEMS.filter((font) => font.category === tab);
+      source = catalogFonts.filter((font) => font.category === tab);
 
     if (!q) return source;
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(q),
     );
-  }, [favoriteFonts, query, recentFonts, tab, validFontIds]);
+  }, [catalogFonts, favoriteFonts, query, recentFonts, tab]);
 
   const visibleFonts = filteredFonts.slice(0, limit);
-
-  const visibleFontFamilies = useMemo(
-    () => visibleFonts.map((font) => font.family).join("|"),
-    [visibleFonts],
-  );
-
-  useEffect(() => {
-    let cancelled = false;
-    const families = visibleFonts.map((font) => font.family);
-
-    loadVisibleEditorFonts(families, Math.max(families.length, PAGE_SIZE)).finally(() => {
-      if (!cancelled) setFontRenderKey((value) => value + 1);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [visibleFontFamilies]);
 
   const updateSelectedTextMeta = (patch: any) => {
     if (!selected) return;
@@ -288,17 +267,19 @@ function FontsPanel({
                   onClick={() => selectFont(font.family)}
                   className="min-w-0 flex-1 py-1.5 text-left disabled:opacity-40"
                 >
-                  <img
-                    src={previewSrc(font)}
-                    alt={font.family}
-                    loading="lazy"
-                    decoding="async"
-                    onError={(event) => {
-                      event.currentTarget.closest("[data-font-row]")?.remove();
-                    }}
-                    className="h-6 w-full max-w-[160px] object-contain object-left"
-                    draggable={false}
-                  />
+                  {previewSrc(font) ? (
+                    <img
+                      src={previewSrc(font) ?? undefined}
+                      alt={font.family}
+                      loading="lazy"
+                      decoding="async"
+                      onError={hideBrokenPreview}
+                      className="h-6 w-full max-w-[160px] object-contain object-left"
+                      draggable={false}
+                    />
+                  ) : (
+                    <span className="block truncate text-sm font-black">{font.family}</span>
+                  )}
                   <div
                     className={`mt-1 flex items-center gap-2 text-[10px] font-bold ${active ? "text-white/70" : "text-slate-500"}`}
                   >
@@ -354,34 +335,6 @@ function Label({ title, count }: { title: string; count?: number }) {
       {typeof count === "number" && (
         <span className="text-[10px] font-black text-violet-300">{count}</span>
       )}
-    </div>
-  );
-}
-
-function FontPreviewText({ family, text, className }: { family: string; text: string; className: string }) {
-  const [version, setVersion] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    loadEditorFont(family).finally(() => {
-      if (!cancelled) setVersion((value) => value + 1);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [family]);
-
-  return (
-    <div
-      key={`${family}-${version}`}
-      className={className}
-      style={{
-        fontFamily: getEditorFontFamily(family),
-        fontWeight: 800,
-        letterSpacing: "-0.015em",
-      }}
-    >
-      {text}
     </div>
   );
 }
