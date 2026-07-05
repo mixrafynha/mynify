@@ -327,10 +327,10 @@ async function renderFontPreviewWebp({
       { waitUntil: "networkidle" },
     );
 
-    await page.evaluate(async (fontFamily) => {
-      await document.fonts.load(`400 96px "${fontFamily}"`);
-      await document.fonts.ready;
-    }, cleanFamily(family));
+   await page.evaluate(async (fontFamily: string) => {
+  await document.fonts.load(`400 96px "${fontFamily}"`);
+  await document.fonts.ready;
+}, cleanFamily(family));
 
     const element = await page.$("#preview");
     if (!element) {
