@@ -1,11 +1,10 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Search, Star, Type } from "lucide-react";
 import {
   FONT_CATEGORIES,
   FONT_ITEMS,
-  getEditorFontFamily,
   loadEditorFont,
   type FontCategory,
   type FontItem,
@@ -177,6 +176,36 @@ function writeStorage(key: string, value: string[], max = 40) {
   localStorage.setItem(key, JSON.stringify(uniqueFamilies(value).slice(0, max)));
 }
 
+function getPreviewUrl(item: unknown) {
+  const value = item as Record<string, any>;
+  return String(
+    value.previewUrl ??
+      value.preview_url ??
+      value.previewImageUrl ??
+      value.preview_image_url ??
+      value.fontPreviewUrl ??
+      value.font_preview_url ??
+      value.meta?.previewUrl ??
+      value.meta?.preview_url ??
+      "",
+  );
+}
+
+function triggerFontPreview(font: FontItem) {
+  if (typeof window === "undefined") return;
+
+  void fetch("/api/font-previews/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fontId: font.id,
+      family: font.family,
+      category: font.category,
+    }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 function buildTextElement(font: FontItem) {
   const text = "RYFIO";
   const fontSize = 42;
@@ -208,7 +237,7 @@ function buildTextElement(font: FontItem) {
   };
 }
 
-export default function DesktopTextPanel({
+function TextPanel({
   createElement,
   onAddText,
 }: {
@@ -216,6 +245,7 @@ export default function DesktopTextPanel({
   onAddText?: () => void;
 }) {
   const lockedRef = useRef(false);
+  const requestedPreviewsRef = useRef<Set<string>>(new Set());
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<
     FontCategory | "all" | "favorites" | "recent"
@@ -227,16 +257,14 @@ export default function DesktopTextPanel({
     readStorage(RECENTS_KEY),
   );
   const [limit, setLimit] = useState(PAGE_SIZE);
-  const [loadedFontIds, setLoadedFontIds] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const deferredQuery = useDeferredValue(query);
 
   const visibleCatalogFonts = useMemo(() => {
     return sortFontsForDiscovery(dedupeFontsByFamily(FONT_ITEMS));
   }, []);
 
   const allFilteredFonts = useMemo(() => {
-    const term = query.trim().toLowerCase();
+    const term = deferredQuery.trim().toLowerCase();
     let source: FontItem[] = visibleCatalogFonts;
 
     if (category === "favorites") {
@@ -254,7 +282,7 @@ export default function DesktopTextPanel({
     return source.filter((font) =>
       `${font.family} ${font.category} ${font.id}`.toLowerCase().includes(term),
     );
-  }, [category, favorites, query, recents, visibleCatalogFonts]);
+  }, [category, deferredQuery, favorites, recents, visibleCatalogFonts]);
 
   const filteredFonts = useMemo(
     () => allFilteredFonts.slice(0, limit),
@@ -262,55 +290,47 @@ export default function DesktopTextPanel({
   );
 
   useEffect(() => {
-    let cancelled = false;
-    const fontsToLoad = filteredFonts.filter((font) => !loadedFontIds.has(font.id));
+    if (typeof window === "undefined") return;
 
-    if (!fontsToLoad.length) return;
+    const idle = (window as any).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 120));
+    const cancelIdle = (window as any).cancelIdleCallback ?? window.clearTimeout;
 
-    Promise.allSettled(fontsToLoad.map((font) => loadEditorFont(font))).then(() => {
-      if (cancelled) return;
-
-      setLoadedFontIds((prev) => {
-        const next = new Set(prev);
-        fontsToLoad.forEach((font) => next.add(font.id));
-        return next;
+    const id = idle(() => {
+      filteredFonts.slice(0, 18).forEach((font) => {
+        if (getPreviewUrl(font)) return;
+        if (requestedPreviewsRef.current.has(font.id)) return;
+        requestedPreviewsRef.current.add(font.id);
+        triggerFontPreview(font);
       });
     });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [filteredFonts, loadedFontIds]);
+    return () => cancelIdle(id as number);
+  }, [filteredFonts]);
 
-  const markRecent = (family: string) => {
+  const markRecent = useCallback((family: string) => {
     const next = [family, ...recents.filter((item) => item !== family)].slice(
       0,
       MAX_RECENTS,
     );
     setRecents(next);
     writeStorage(RECENTS_KEY, next, MAX_RECENTS);
-  };
+  }, [recents]);
 
-  const toggleFavorite = (family: string) => {
+  const toggleFavorite = useCallback((family: string) => {
     const next = favorites.includes(family)
       ? favorites.filter((item) => item !== family)
       : [family, ...favorites].slice(0, MAX_STORED_FAVORITES);
 
     setFavorites(next);
     writeStorage(FAVORITES_KEY, next, MAX_STORED_FAVORITES);
-  };
+  }, [favorites]);
 
-  const addFont = async (font: FontItem) => {
+  const addFont = useCallback(async (font: FontItem) => {
     if (lockedRef.current) return;
     lockedRef.current = true;
 
     try {
       await loadEditorFont(font);
-      setLoadedFontIds((prev) => {
-        const next = new Set(prev);
-        next.add(font.id);
-        return next;
-      });
       markRecent(font.family);
       createElement?.(buildTextElement(font));
     } finally {
@@ -318,22 +338,22 @@ export default function DesktopTextPanel({
         lockedRef.current = false;
       }, 160);
     }
-  };
+  }, [createElement, markRecent]);
 
-  const changeCategory = (
+  const changeCategory = useCallback((
     item: FontCategory | "all" | "favorites" | "recent",
   ) => {
     setCategory(item);
     setLimit(PAGE_SIZE);
-  };
+  }, []);
 
-  const addDefaultText = () => {
+  const addDefaultText = useCallback(() => {
     const first = filteredFonts[0] || allFilteredFonts[0] || visibleCatalogFonts[0];
     if (first) void addFont(first);
-  };
+  }, [addFont, allFilteredFonts, filteredFonts, visibleCatalogFonts]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col text-white">
+    <div className="flex h-full min-h-0 flex-col text-white" style={{ contain: "layout paint style" }}>
       <div className="shrink-0 space-y-3 pb-3">
         <button
           type="button"
@@ -379,13 +399,13 @@ export default function DesktopTextPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
           {filteredFonts.map((font) => (
             <FontCard
               key={font.id}
               font={font}
+              previewUrl={getPreviewUrl(font)}
               favorite={favorites.includes(font.family)}
-              ready={loadedFontIds.has(font.id)}
               onAdd={() => addFont(font)}
               onToggleFavorite={() => toggleFavorite(font.family)}
             />
@@ -414,19 +434,19 @@ export default function DesktopTextPanel({
 
 const FontCard = memo(function FontCard({
   font,
+  previewUrl,
   favorite,
-  ready,
   onAdd,
   onToggleFavorite,
 }: {
   font: FontItem;
+  previewUrl: string;
   favorite: boolean;
-  ready: boolean;
   onAdd: () => void;
   onToggleFavorite: () => void;
 }) {
   return (
-    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]">
+    <div className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]" style={{ contain: "layout paint style" }}>
       <button
         type="button"
         onClick={onAdd}
@@ -434,23 +454,25 @@ const FontCard = memo(function FontCard({
         aria-label={`Add text with ${font.family}`}
         title={font.family}
       >
-        <div
-          className={`w-full truncate text-center text-[20px] font-black leading-none text-white transition-opacity duration-150 ${
-            ready ? "opacity-100" : "opacity-0"
-          }`}
-          style={{
-            fontFamily: getEditorFontFamily(font.family),
-            fontWeight: 800,
-            letterSpacing: "0.01em",
-          }}
-        >
-          RYFIO
-        </div>
+        {previewUrl ? (
+          <img
+            src={previewUrl}
+            alt={font.family}
+            loading="lazy"
+            decoding="async"
+            className="max-h-[38px] max-w-full object-contain"
+            draggable={false}
+          />
+        ) : (
+          <div className="w-full truncate text-center text-[20px] font-black leading-none text-white/88">
+            RYFIO
+          </div>
+        )}
       </button>
 
-      {!ready && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-4 w-16 animate-pulse rounded-full bg-white/10" />
+      {!previewUrl && (
+        <div className="pointer-events-none absolute inset-x-3 bottom-2 h-1 rounded-full bg-white/10">
+          <div className="h-full w-1/2 rounded-full bg-violet-300/40" />
         </div>
       )}
 
@@ -460,10 +482,8 @@ const FontCard = memo(function FontCard({
           event.stopPropagation();
           onToggleFavorite();
         }}
-        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl backdrop-blur-md ${
-          favorite
-            ? "bg-yellow-300 text-slate-950"
-            : "bg-black/25 text-slate-500 opacity-80 group-hover:opacity-100"
+        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl bg-black/30 ${
+          favorite ? "text-yellow-300" : "text-slate-500 opacity-80 group-hover:opacity-100"
         }`}
         aria-label={
           favorite
@@ -476,6 +496,8 @@ const FontCard = memo(function FontCard({
     </div>
   );
 });
+
+export default memo(TextPanel);
 
 function PanelLabel({ title, count }: { title: string; count?: number }) {
   return (

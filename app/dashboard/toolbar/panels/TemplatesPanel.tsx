@@ -1,17 +1,46 @@
 "use client";
 
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { memo, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Crown, Search } from "lucide-react";
 import {
   TEMPLATE_CATEGORIES,
   TEMPLATES,
   loadEditorFont,
-  loadVisibleEditorFonts,
   type TemplatePreset,
 } from "../data";
 
 const MOBILE_TEMPLATE_PAGE_SIZE = 12;
 const DESKTOP_TEMPLATE_PAGE_SIZE = 30;
+
+function getPreviewUrl(item: unknown) {
+  const value = item as Record<string, any>;
+  return String(
+    value.previewUrl ??
+      value.preview_url ??
+      value.thumbnailUrl ??
+      value.thumbnail_url ??
+      value.templatePreviewUrl ??
+      value.template_preview_url ??
+      value.meta?.previewUrl ??
+      value.meta?.preview_url ??
+      "",
+  );
+}
+
+function triggerTemplatePreview(template: TemplatePreset) {
+  if (typeof window === "undefined") return;
+
+  void fetch("/api/template-previews/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      templateId: template.id,
+      label: template.label,
+      category: template.category,
+    }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
 
 function getTemplatePageSize() {
   if (typeof window === "undefined") return DESKTOP_TEMPLATE_PAGE_SIZE;
@@ -66,6 +95,7 @@ function TemplatesPanel({
 }) {
   const [category, setCategory] = useState<string>("all");
   const [query, setQuery] = useState("");
+  const requestedPreviewsRef = useRef<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const deferredQuery = useDeferredValue(query);
 
@@ -88,10 +118,21 @@ function TemplatesPanel({
   );
 
   useEffect(() => {
-    void loadVisibleEditorFonts(
-      Array.from(new Set(visible.map((template) => template.fontFamily))),
-      typeof window !== "undefined" && window.innerWidth < 768 ? 8 : 18,
-    );
+    if (typeof window === "undefined") return;
+
+    const idle = (window as any).requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 120));
+    const cancelIdle = (window as any).cancelIdleCallback ?? window.clearTimeout;
+
+    const id = idle(() => {
+      visible.slice(0, 24).forEach((template) => {
+        if (getPreviewUrl(template)) return;
+        if (requestedPreviewsRef.current.has(template.id)) return;
+        requestedPreviewsRef.current.add(template.id);
+        triggerTemplatePreview(template);
+      });
+    });
+
+    return () => cancelIdle(id as number);
   }, [visible]);
 
   return (
@@ -140,6 +181,7 @@ function TemplatesPanel({
           <TemplateCard
             key={template.id}
             template={template}
+            previewUrl={getPreviewUrl(template)}
             createElement={createElement}
           />
         ))}
@@ -166,9 +208,11 @@ function TemplatesPanel({
 
 const TemplateCard = memo(function TemplateCard({
   template,
+  previewUrl,
   createElement,
 }: {
   template: TemplatePreset;
+  previewUrl: string;
   createElement?: (element: any) => void;
 }) {
   return (
@@ -178,6 +222,16 @@ const TemplateCard = memo(function TemplateCard({
       className="group relative h-[136px] overflow-hidden rounded-[1.35rem] border border-white/10 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,.06)] transition will-change-transform hover:-translate-y-0.5 hover:border-violet-300/35 hover:shadow-[0_16px_36px_rgba(0,0,0,.32),0_0_26px_rgba(139,92,246,.12)] active:scale-[0.985]"
       style={{ background: template.background }}
     >
+      {previewUrl ? (
+        <img
+          src={previewUrl}
+          alt={template.label}
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+          draggable={false}
+        />
+      ) : null}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,.08),transparent_36%,rgba(255,255,255,.025)_72%,transparent)] opacity-70" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/58 to-transparent" />
       <div className="relative flex h-full flex-col justify-between">
@@ -199,16 +253,17 @@ const TemplateCard = memo(function TemplateCard({
         </div>
 
         <div>
-          <p
-            className="whitespace-pre-line text-[1.72rem] font-black uppercase leading-[0.84] tracking-[-0.055em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.55)]"
-            style={{
-              fontFamily: template.fontFamily,
-              color: template.color,
-              letterSpacing: template.letterSpacing ?? undefined,
-            }}
-          >
-            {template.preview}
-          </p>
+          {!previewUrl && (
+            <p
+              className="whitespace-pre-line text-[1.72rem] font-black uppercase leading-[0.84] tracking-[-0.055em] text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.55)]"
+              style={{
+                color: template.color,
+                letterSpacing: template.letterSpacing ?? undefined,
+              }}
+            >
+              {template.preview}
+            </p>
+          )}
           <div className="mt-2 flex items-center justify-between gap-2">
             <p className="min-w-0 truncate text-[10px] font-extrabold text-white/68">
               {template.subtitle ?? template.label}

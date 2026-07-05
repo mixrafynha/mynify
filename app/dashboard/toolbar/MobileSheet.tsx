@@ -10,8 +10,8 @@ const PanelLoading = () => (
   </div>
 );
 
-const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loading: PanelLoading });
-const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
+const TemplatesPanel = dynamic(() => import("./panels/MobileTemplatesPanel"), { loading: PanelLoading });
+const TextPanel = dynamic(() => import("./panels/MobileTextPanel"), { loading: PanelLoading });
 const UploadPanel = dynamic(() => import("./panels/UploadPanel"), { loading: PanelLoading });
 const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
 const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
@@ -158,7 +158,7 @@ function MobileSheet({
     }
 
     if (panel === "text") {
-      return <TextPanel createElement={createElement} onAddText={onAddText} />;
+      return <TextPanel onAddText={onAddText} />;
     }
 
     if (panel === "upload") {
