@@ -23,9 +23,10 @@ import {
 const FAVORITES_KEY = "ryfio-editor-favorite-fonts";
 const RECENTS_KEY = "ryfio-editor-recent-fonts";
 const DESKTOP_PAGE_SIZE = 12;
-const MOBILE_PAGE_SIZE = 6;
+const MOBILE_PAGE_SIZE = 8;
 const MAX_RECENTS = 24;
 const MAX_STORED_FAVORITES = 80;
+
 function isMobileViewport() {
   if (typeof window === "undefined") return false;
   return window.matchMedia?.("(max-width: 767px)").matches ?? false;
@@ -37,55 +38,25 @@ function getPageSize() {
 
 const PRIORITY_FONT_IDS = [
   "inter",
-  "playfair-display",
   "bebas-neue",
-  "great-vibes",
-  "orbitron",
-  "poppins",
   "anton",
-  "lora",
-  "black-ops-one",
-  "pacifico",
-  "montserrat",
-  "cinzel",
-  "archivo-black",
+  "great-vibes",
   "dancing-script",
-  "rubik",
-  "abril-fatface",
-  "righteous",
+  "playfair-display",
+  "pacifico",
+  "orbitron",
+  "black-ops-one",
+  "archivo-black",
+  "montserrat",
+  "lora",
+  "cinzel",
   "caveat",
   "oswald",
-  "cormorant-garamond",
   "space-grotesk",
-  "prata",
-  "league-spartan",
-  "allura",
   "manrope",
-  "gloock",
-  "bangers",
-  "kalam",
-  "dm-sans",
-  "yeseva-one",
-  "rubik-spray-paint",
-  "lobster",
   "sora",
-  "dm-serif-display",
-  "luckiest-guy",
-  "patrick-hand",
-  "raleway",
-  "bodoni-moda",
-  "special-elite",
-  "kaushan-script",
-  "urbanist",
-  "abril-fatface",
-  "fredoka",
-  "sacramento",
-  "archivo",
-  "playball",
-  "teko",
-  "shrikhand",
-  "quicksand",
-  "baloo-2",
+  "rubik",
+  "league-spartan",
 ];
 
 const CATEGORY_ORDER: FontCategory[] = [
@@ -129,7 +100,6 @@ function dedupeFontsByFamily(fonts: FontItem[]) {
 
 function mixFontsByCategory(fonts: FontItem[]) {
   const buckets = new Map<FontCategory, FontItem[]>();
-
   CATEGORY_ORDER.forEach((category) => buckets.set(category, []));
 
   fonts.forEach((font) => {
@@ -172,9 +142,7 @@ function sortFontsForDiscovery(fonts: FontItem[]) {
     return (priority.get(a.id) ?? 9999) - (priority.get(b.id) ?? 9999);
   });
 
-  const mixedRemaining = mixFontsByCategory(remainingFonts);
-
-  return dedupeFontsByFamily([...priorityFonts, ...mixedRemaining]);
+  return dedupeFontsByFamily([...priorityFonts, ...mixFontsByCategory(remainingFonts)]);
 }
 
 function readStorage(key: string) {
@@ -192,10 +160,7 @@ function readStorage(key: string) {
 
 function writeStorage(key: string, value: string[], max = 40) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(
-    key,
-    JSON.stringify(uniqueFamilies(value).slice(0, max)),
-  );
+  localStorage.setItem(key, JSON.stringify(uniqueFamilies(value).slice(0, max)));
 }
 
 function getFontPreviewSrc(font: FontItem) {
@@ -260,7 +225,9 @@ function TextPanel({
   const { fonts: liveFonts } = useEditorFontCatalog();
 
   const visibleCatalogFonts = useMemo(() => {
-    return sortFontsForDiscovery(dedupeFontsByFamily(liveFonts.length ? liveFonts : FONT_ITEMS));
+    return sortFontsForDiscovery(
+      dedupeFontsByFamily(liveFonts.length ? liveFonts : FONT_ITEMS),
+    );
   }, [liveFonts]);
 
   const deferredQuery = useDeferredValue(query);
@@ -399,7 +366,7 @@ function TextPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
+        <div className="flex flex-col gap-2">
           {filteredFonts.map((font) => (
             <FontCard
               key={font.id}
@@ -442,30 +409,34 @@ const FontCard = memo(function FontCard({
   onAdd: () => void;
   onToggleFavorite: () => void;
 }) {
+  const previewSrc = getFontPreviewSrc(font);
+
   return (
     <div
-      className="group relative overflow-hidden rounded-xl bg-white/[0.045] ring-1 ring-white/10 transition hover:bg-white/[0.065] active:scale-[0.98]"
+      className="group relative overflow-hidden rounded-2xl bg-[#171722] ring-1 ring-white/10 transition active:scale-[0.985]"
       style={{ contain: "layout paint style" }}
     >
       <button
         type="button"
         onClick={onAdd}
-        className="flex h-[64px] w-full items-center justify-center px-2 py-2"
+        className="flex h-[88px] w-full items-center justify-center px-5 py-3"
         aria-label={`Add text with ${font.family}`}
         title={font.family}
       >
-        {getFontPreviewSrc(font) ? (
+        {previewSrc ? (
           <img
-            src={getFontPreviewSrc(font) ?? undefined}
+            src={previewSrc}
             alt={font.family}
             loading="lazy"
             decoding="async"
             onError={hideBrokenPreview}
-            className="h-8 w-full object-contain"
+            className="max-h-[62px] w-full object-contain"
             draggable={false}
           />
         ) : (
-          <span className="truncate text-sm font-black text-white/80">{font.family}</span>
+          <span className="truncate text-base font-black text-white/80">
+            {font.family}
+          </span>
         )}
       </button>
 
@@ -475,10 +446,10 @@ const FontCard = memo(function FontCard({
           event.stopPropagation();
           onToggleFavorite();
         }}
-        className={`absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-xl backdrop-blur-md ${
+        className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-xl backdrop-blur-md ${
           favorite
             ? "bg-yellow-300 text-slate-950"
-            : "bg-black/25 text-slate-500 opacity-80 group-hover:opacity-100"
+            : "bg-black/25 text-slate-500"
         }`}
         aria-label={
           favorite
@@ -486,7 +457,7 @@ const FontCard = memo(function FontCard({
             : `Favorite ${font.family}`
         }
       >
-        <Star size={13} fill={favorite ? "currentColor" : "none"} />
+        <Star size={14} fill={favorite ? "currentColor" : "none"} />
       </button>
     </div>
   );

@@ -2,9 +2,8 @@ import { task } from "@trigger.dev/sdk/v3";
 import { createHash, createHmac } from "node:crypto";
 
 const FONT_TABLE = process.env.FONT_TABLE_NAME ?? "editor_fonts";
-const SUPABASE_FONT_PREVIEW_BUCKET = process.env.SUPABASE_FONT_PREVIEW_BUCKET ?? "font-previews";
-const R2_FONT_PREVIEW_PREFIX = process.env.R2_FONT_PREVIEW_PREFIX ?? "font-previews";
 const R2_FONT_FILE_PREFIX = process.env.R2_FONT_FILE_PREFIX ?? "font-files";
+const R2_FONT_PREVIEW_PREFIX = process.env.R2_FONT_PREVIEW_PREFIX ?? "font-previews";
 
 type FontPreviewPayload = {
   fontId: string;
@@ -18,7 +17,7 @@ type FontRow = Record<string, any>;
 type UploadResult = {
   url: string;
   key: string;
-  provider: "r2" | "supabase";
+  provider: "r2";
 };
 
 export const generateFontPreview = task({
@@ -27,6 +26,8 @@ export const generateFontPreview = task({
     if (!payload.fontId) {
       throw new Error("generate-font-preview requires payload.fontId");
     }
+
+    assertR2Config();
 
     const supabase = await createSupabaseAdmin();
     const fontRow = await readFontRow(supabase, payload.fontId);
@@ -55,11 +56,10 @@ export const generateFontPreview = task({
     const fontBuffer = await fetchBinary(sourceFontFileUrl);
 
     const fontKey = `${R2_FONT_FILE_PREFIX}/${slugify(payload.fontId)}.woff2`;
-    const fontUpload = await uploadBinary({
+    const fontUpload = await uploadToR2({
       key: fontKey,
       body: fontBuffer,
       contentType: "font/woff2",
-      supabaseBucket: process.env.SUPABASE_FONT_FILE_BUCKET ?? "font-files",
     });
 
     const webpBuffer = await renderFontPreviewWebp({
@@ -69,14 +69,13 @@ export const generateFontPreview = task({
     });
 
     const previewKey = `${R2_FONT_PREVIEW_PREFIX}/${slugify(payload.fontId)}.webp`;
-    const previewUpload = await uploadBinary({
+    const previewUpload = await uploadToR2({
       key: previewKey,
       body: webpBuffer,
       contentType: "image/webp",
-      supabaseBucket: SUPABASE_FONT_PREVIEW_BUCKET,
     });
 
-    await updateFontAssets(supabase, payload.fontId, {
+    await updateFontUrls(supabase, payload.fontId, {
       fontUrl: fontUpload.url,
       previewUrl: previewUpload.url,
     });
@@ -89,7 +88,7 @@ export const generateFontPreview = task({
       previewUrl: previewUpload.url,
       fontStorageKey: fontUpload.key,
       previewStorageKey: previewUpload.key,
-      provider: previewUpload.provider,
+      provider: "r2",
       sourceFontFileUrl,
     };
   },
@@ -119,10 +118,7 @@ async function readFontRow(supabase: any, fontId: string): Promise<FontRow | nul
     .eq("id", fontId)
     .maybeSingle();
 
-  if (error) {
-    return null;
-  }
-
+  if (error) return null;
   return data ?? null;
 }
 
@@ -132,7 +128,6 @@ async function markFontPreviewStatus(
   status: "processing" | "ready" | "failed",
   errorMessage: string | null,
 ) {
-  // Optional columns. If they do not exist, this safely does nothing.
   await supabase
     .from(FONT_TABLE)
     .update({
@@ -143,82 +138,47 @@ async function markFontPreviewStatus(
     .eq("id", fontId);
 }
 
-async function updateFontAssets(
+async function updateFontUrls(
   supabase: any,
   fontId: string,
-  {
-    fontUrl,
-    previewUrl,
-  }: {
-    fontUrl: string;
-    previewUrl: string;
-  },
+  urls: { fontUrl: string; previewUrl: string },
 ) {
-  // Your current table already has font_url and preview_webp_url.
-  // Keep the candidate fallbacks so older schemas still work.
-  const previewColumns = ["preview_webp_url", "preview_url", "previewUrl", "font_preview_url"];
-  const fontColumns = ["font_url", "font_file_url", "fontUrl", "file_url", "woff2_url"];
+  const { error } = await supabase
+    .from(FONT_TABLE)
+    .update({
+      font_url: urls.fontUrl,
+      preview_webp_url: urls.previewUrl,
+      preview_status: "ready",
+      preview_error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", fontId);
 
-  let lastError: any = null;
+  if (!error) return;
 
-  for (const previewColumn of previewColumns) {
-    for (const fontColumn of fontColumns) {
-      const { error } = await supabase
-        .from(FONT_TABLE)
-        .update({
-          [previewColumn]: previewUrl,
-          [fontColumn]: fontUrl,
-          preview_status: "ready",
-          preview_error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", fontId);
+  // If optional status columns do not exist, retry only the required columns from your schema.
+  const retry = await supabase
+    .from(FONT_TABLE)
+    .update({
+      font_url: urls.fontUrl,
+      preview_webp_url: urls.previewUrl,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", fontId);
 
-      if (!error) return;
-      lastError = error;
-    }
-  }
-
-  if (lastError) {
-    throw new Error(`Unable to update font assets in ${FONT_TABLE}: ${lastError.message ?? String(lastError)}`);
+  if (retry.error) {
+    throw new Error(`Unable to update ${FONT_TABLE}: ${retry.error.message ?? String(retry.error)}`);
   }
 }
 
-async function resolveFontFileUrl(row: FontRow | null, family: string, previewText: string): Promise<string> {
-  const directUrl =
-    row?.font_file_url ??
-    row?.font_url ??
-    row?.fontUrl ??
-    row?.file_url ??
-    row?.fileUrl ??
-    row?.woff2_url ??
-    row?.woff2Url ??
-    row?.ttf_url ??
-    row?.ttfUrl;
-
-  if (typeof directUrl === "string" && directUrl.startsWith("http")) {
-    return directUrl;
-  }
-
-  const directCssUrl =
-    row?.css_url ??
-    row?.cssUrl ??
-    row?.google_fonts_css_url ??
-    row?.googleFontsCssUrl;
-
-  if (typeof directCssUrl === "string" && directCssUrl.startsWith("http")) {
-    return resolveFontUrlFromCss(directCssUrl);
-  }
-
-  const encodedFamily = encodeURIComponent(family).replace(/%20/g, "+");
+async function resolveFontFileUrl(_row: FontRow | null, family: string, previewText: string): Promise<string> {
+  const encodedFamily = encodeGoogleFontsFamily(family);
   const encodedText = encodeURIComponent(previewText || "RYFIO");
 
-  // Some Google fonts are single-weight only. A weighted CSS request can fail for those,
-  // so try a small ordered list and stop at the first CSS response with a font URL.
   const cssCandidates = [
-    `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400;500;600;700;800;900&text=${encodedText}&display=swap`,
-    `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400;700&text=${encodedText}&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400&text=${encodedText}&display=swap`,
     `https://fonts.googleapis.com/css2?family=${encodedFamily}&text=${encodedText}&display=swap`,
+    `https://fonts.googleapis.com/css2?family=${encodedFamily}:wght@400&display=swap`,
     `https://fonts.googleapis.com/css2?family=${encodedFamily}&display=swap`,
   ];
 
@@ -226,135 +186,207 @@ async function resolveFontFileUrl(row: FontRow | null, family: string, previewTe
 
   for (const cssUrl of cssCandidates) {
     try {
-      return await resolveFontUrlFromCss(cssUrl);
+      return await resolveFontUrlFromGoogleCss(cssUrl, family);
     } catch (error) {
       lastError = error;
     }
   }
 
-  throw new Error(`Unable to resolve Google Font file for "${family}": ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+  throw new Error(
+    `Unable to resolve Google Fonts WOFF2 for "${family}": ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
 }
 
-async function resolveFontUrlFromCss(cssUrl: string): Promise<string> {
+async function resolveFontUrlFromGoogleCss(cssUrl: string, family: string): Promise<string> {
   const res = await fetch(cssUrl, {
     headers: {
+      // Google Fonts serves modern WOFF2 only when the request looks like a modern browser.
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+      accept: "text/css,*/*;q=0.1",
     },
   });
 
   if (!res.ok) {
-    throw new Error(`Unable to fetch font CSS: ${res.status} ${res.statusText}`);
+    throw new Error(`Unable to fetch Google Fonts CSS: ${res.status} ${res.statusText} | URL: ${cssUrl}`);
   }
 
   const css = await res.text();
-  const urls = [...css.matchAll(/url\((https:\/\/[^)]+)\)/g)].map((match) => match[1]);
+  const urls = [...css.matchAll(/url\((https:\/\/fonts\.gstatic\.com\/[^)]+?\.woff2)\)/g)].map(
+    (match) => match[1],
+  );
 
   if (!urls.length) {
-    throw new Error(`No font file URL found inside Google Fonts CSS: ${css.slice(0, 220)}`);
+    throw new Error(
+      `No Google Fonts WOFF2 URL found for "${family}" inside CSS: ${css.slice(0, 300)}`,
+    );
   }
 
-  const latinBlock = css.match(/\/\*\s*latin\s*\*\/[\s\S]*?src:\s*url\((https:\/\/[^)]+)\)/i);
-  const latinExtBlock = css.match(/\/\*\s*latin-ext\s*\*\/[\s\S]*?src:\s*url\((https:\/\/[^)]+)\)/i);
-
-  return latinBlock?.[1] ?? latinExtBlock?.[1] ?? urls[urls.length - 1];
+  // Google Fonts emits the most specific/latest usable WOFF2 for the request in the last matching block.
+  // With normal Google CSS ordering, this is the latin subset when unicode ranges are split.
+  return urls[urls.length - 1];
 }
 
 async function fetchBinary(url: string): Promise<Buffer> {
   const res = await fetch(url);
-
   if (!res.ok) {
-    throw new Error(`Unable to fetch font file: ${res.status} ${res.statusText}`);
+    throw new Error(`Unable to fetch binary file: ${res.status} ${res.statusText} | URL: ${url}`);
   }
-
   return Buffer.from(await res.arrayBuffer());
 }
 
 async function renderFontPreviewWebp({
   family,
   previewText,
-  fontBuffer,
 }: {
   family: string;
   previewText: string;
   fontBuffer: Buffer;
 }): Promise<Buffer> {
   const sharp = await loadSharp();
-  const { Resvg } = await loadResvg();
+  const { chromium } = await loadPlaywright();
 
-  const safeFamily = escapeCssString(family);
-  const safeText = escapeXml(previewText || "RYFIO");
+  const cleanPreviewText = previewText || "RYFIO";
+  const encodedFamily = encodeGoogleFontsFamily(family);
+  const encodedText = encodeURIComponent(cleanPreviewText);
+  const cssUrl = `https://fonts.googleapis.com/css2?family=${encodedFamily}&text=${encodedText}&display=swap`;
 
-  const svg = `
-    <svg width="900" height="220" viewBox="0 0 900 220" xmlns="http://www.w3.org/2000/svg">
-      <rect width="900" height="220" rx="34" fill="#11111f"/>
-      <text
-        x="450"
-        y="123"
-        fill="#f8fafc"
-        font-family="${safeFamily}"
-        font-size="96"
-        font-weight="700"
-        text-anchor="middle"
-        dominant-baseline="middle"
-        letter-spacing="-2"
-      >${safeText}</text>
-    </svg>`;
-
-  // Sharp/librsvg often ignores @font-face data URLs inside SVG. Resvg supports explicit
-  // font buffers, so the preview is rendered with the real downloaded Google Font.
-  const resvg = new Resvg(svg, {
-    fitTo: {
-      mode: "width",
-      value: 900,
-    },
-    font: {
-      loadSystemFonts: false,
-      fontBuffers: [fontBuffer],
-      defaultFontFamily: family,
-    },
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
-  const pngBuffer = resvg.render().asPng();
+  try {
+    const page = await browser.newPage({
+      viewport: {
+        width: 900,
+        height: 220,
+      },
+      deviceScaleFactor: 2,
+    });
 
-  return sharp(pngBuffer)
-    .webp({ quality: 95, effort: 6 })
-    .toBuffer();
+    const safeFamily = escapeHtml(cleanFamily(family));
+    const safeText = escapeHtml(cleanPreviewText);
+
+    await page.setContent(
+      `<!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <link rel="preconnect" href="https://fonts.googleapis.com">
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+          <link href="${cssUrl}" rel="stylesheet">
+          <style>
+            * {
+              box-sizing: border-box;
+            }
+
+            html,
+            body {
+              width: 900px;
+              height: 220px;
+              margin: 0;
+              padding: 0;
+              overflow: hidden;
+              background: transparent;
+            }
+
+            #preview {
+              width: 900px;
+              height: 220px;
+              border-radius: 34px;
+              background: #11111f;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+            }
+
+            #label {
+              max-width: 820px;
+              color: #f8fafc;
+              font-family: "${safeFamily}", sans-serif;
+              font-size: 96px;
+              font-weight: 400;
+              line-height: 1;
+              letter-spacing: -2px;
+              white-space: nowrap;
+              text-rendering: geometricPrecision;
+              -webkit-font-smoothing: antialiased;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="preview">
+            <div id="label">${safeText}</div>
+          </div>
+        </body>
+      </html>`,
+      { waitUntil: "networkidle" },
+    );
+
+    await page.evaluate(async (fontFamily) => {
+      await document.fonts.load(`400 96px "${fontFamily}"`);
+      await document.fonts.ready;
+    }, cleanFamily(family));
+
+    const element = await page.$("#preview");
+    if (!element) {
+      throw new Error("Unable to find font preview element");
+    }
+
+    const pngBuffer = await element.screenshot({
+      type: "png",
+      omitBackground: true,
+    });
+
+    return sharp(pngBuffer)
+      .resize(900, 220, { fit: "fill" })
+      .webp({ quality: 95, effort: 6 })
+      .toBuffer();
+  } finally {
+    await browser.close();
+  }
 }
 
-async function uploadBinary({
+
+function assertR2Config() {
+  const bucket = process.env.R2_BUCKET ?? process.env.R2_BUCKET_NAME;
+  const publicUrl = process.env.R2_PUBLIC_URL ?? process.env.CLOUDFLARE_R2_PUBLIC_URL;
+
+  const missing = [
+    !process.env.R2_ACCOUNT_ID && "R2_ACCOUNT_ID",
+    !process.env.R2_ACCESS_KEY_ID && "R2_ACCESS_KEY_ID",
+    !process.env.R2_SECRET_ACCESS_KEY && "R2_SECRET_ACCESS_KEY",
+    !bucket && "R2_BUCKET or R2_BUCKET_NAME",
+    !publicUrl && "R2_PUBLIC_URL",
+  ].filter(Boolean);
+
+  if (missing.length) {
+    throw new Error(`Missing R2 environment variables: ${missing.join(", ")}`);
+  }
+}
+
+async function uploadToR2({
   key,
   body,
   contentType,
-  supabaseBucket,
 }: {
   key: string;
   body: Buffer;
   contentType: string;
-  supabaseBucket: string;
 }): Promise<UploadResult> {
-  if (hasR2Config()) {
-    return uploadToR2({ key, body, contentType });
-  }
+  assertR2Config();
 
-  return uploadToSupabaseStorage({ key, body, contentType, bucket: supabaseBucket });
-}
-
-function hasR2Config() {
-  return Boolean(
-    process.env.R2_ACCOUNT_ID &&
-      process.env.R2_ACCESS_KEY_ID &&
-      process.env.R2_SECRET_ACCESS_KEY &&
-      process.env.R2_BUCKET &&
-      (process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL),
-  );
-}
-
-async function uploadToR2({ key, body, contentType }: { key: string; body: Buffer; contentType: string }): Promise<UploadResult> {
   const accountId = requiredEnv("R2_ACCOUNT_ID");
   const accessKeyId = requiredEnv("R2_ACCESS_KEY_ID");
   const secretAccessKey = requiredEnv("R2_SECRET_ACCESS_KEY");
-  const bucket = requiredEnv("R2_BUCKET");
+  const bucket = process.env.R2_BUCKET ?? process.env.R2_BUCKET_NAME;
+  if (!bucket) {
+    throw new Error("Missing environment variable: R2_BUCKET or R2_BUCKET_NAME");
+  }
   const publicBaseUrl = stripTrailingSlash(
     process.env.R2_PUBLIC_URL ?? process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "",
   );
@@ -444,39 +476,6 @@ async function signedR2Put({
   }
 }
 
-async function uploadToSupabaseStorage({
-  key,
-  body,
-  contentType,
-  bucket,
-}: {
-  key: string;
-  body: Buffer;
-  contentType: string;
-  bucket: string;
-}): Promise<UploadResult> {
-  const supabase = await createSupabaseAdmin();
-  const path = key.replace(/^font-previews\//, "").replace(/^font-files\//, "");
-
-  const { error } = await supabase.storage.from(bucket).upload(path, body, {
-    contentType,
-    upsert: true,
-    cacheControl: "31536000",
-  });
-
-  if (error) {
-    throw new Error(`Supabase Storage upload failed: ${error.message}`);
-  }
-
-  const { data } = supabase.storage.from(bucket).getPublicUrl(path);
-
-  return {
-    url: data.publicUrl,
-    key: path,
-    provider: "supabase",
-  };
-}
-
 async function loadSharp(): Promise<any> {
   try {
     const mod = await dynamicImport("sharp");
@@ -486,13 +485,14 @@ async function loadSharp(): Promise<any> {
   }
 }
 
-async function loadResvg(): Promise<any> {
+async function loadPlaywright(): Promise<any> {
   try {
-    return await dynamicImport("@resvg/resvg-js");
+    return await dynamicImport("playwright");
   } catch {
-    throw new Error("Missing dependency: install @resvg/resvg-js to render real font previews");
+    throw new Error("Missing dependency: install playwright and run: npx playwright install chromium");
   }
 }
+
 
 function dynamicImport(moduleName: string): Promise<any> {
   return new Function("moduleName", "return import(moduleName)")(moduleName);
@@ -500,6 +500,10 @@ function dynamicImport(moduleName: string): Promise<any> {
 
 function cleanFamily(value: string) {
   return String(value).trim().replace(/['"]/g, "");
+}
+
+function encodeGoogleFontsFamily(value: string) {
+  return encodeURIComponent(cleanFamily(value)).replace(/%20/g, "+");
 }
 
 function slugify(value: string) {
@@ -510,6 +514,15 @@ function slugify(value: string) {
     .replace(/^-+|-+$/g, "") || "font";
 }
 
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function escapeXml(value: string) {
   return String(value)
     .replace(/&/g, "&amp;")
@@ -518,9 +531,6 @@ function escapeXml(value: string) {
     .replace(/"/g, "&quot;");
 }
 
-function escapeCssString(value: string) {
-  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
 
 function stripTrailingSlash(value: string) {
   return value.replace(/\/+$/, "");
