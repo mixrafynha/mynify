@@ -13,16 +13,7 @@ import { queueDesignAssetJobs } from "./queue-design-assets";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function containsInlineImageData(value: unknown) {
-  const serialized = JSON.stringify(value).toLowerCase();
-
-  return (
-    serialized.includes("data:image") ||
-    serialized.includes("base64,") ||
-    serialized.includes("blob:") ||
-    /[a-z0-9+/=]{200000,}/i.test(serialized)
-  );
-}
+const INLINE_SAVE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
 
 async function createCookieSupabaseServer() {
   const cookieStore = await cookies();
@@ -123,21 +114,22 @@ async function getAuthenticatedSupabase(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-
-    if (containsInlineImageData(body)) {
-      return NextResponse.json(
-        { error: "Invalid save payload: inline image data is not allowed." },
-        { status: 400 },
-      );
-    }
-
     const { supabase, user } = await getAuthenticatedSupabase(req);
 
     if (!user) {
       return NextResponse.json(
         { error: "User not authenticated" },
         { status: 401 },
+      );
+    }
+
+    const body = await req.json();
+    const serializedBody = JSON.stringify(body);
+
+    if (INLINE_SAVE_IMAGE_RE.test(serializedBody)) {
+      return NextResponse.json(
+        { error: "Invalid save payload: inline image data is not allowed." },
+        { status: 400 },
       );
     }
 

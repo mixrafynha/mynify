@@ -9,11 +9,7 @@ import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
 import { captureProductionPreview } from "@/app/dashboard/design/components/preview/services/previewCapture";
-import {
-  assertSavePayloadIsJsonOnly,
-  buildDesignSavePayload,
-  getSavePayloadBytes,
-} from "@/app/dashboard/design/components/topbar/services/designSavePayload";
+import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
 import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
 import ProductionCaptureLayers from "@/app/dashboard/design/components/capture/ProductionCaptureLayers";
 import type { ProductDisplayConfig } from "@/app/dashboard/design/components/canvas/productConfig";
@@ -74,6 +70,22 @@ type StoredEditorDraft = {
   selectedVariant?: EditorVariantSelection | null;
   updatedAt?: number;
 };
+
+function assertSavePayloadIsJsonOnly(payload: unknown) {
+  const json = JSON.stringify(payload);
+
+  if (/(?:data:image\/|base64,|blob:)/i.test(json) || /[A-Za-z0-9+/=]{500000,}/.test(json)) {
+    throw new Error(
+      "Save payload contains inline image data. Save Design must be JSON-only.",
+    );
+  }
+
+  if (process.env.NODE_ENV === "development") {
+    console.info("[save-design] payload bytes", new TextEncoder().encode(json).length);
+  }
+
+  return json;
+}
 
 function readSearchParam(params: SearchParamReader, keys: string[]) {
   for (const key of keys) {
@@ -662,17 +674,13 @@ export default function EditorPage() {
         productConfig,
       });
 
-      const savePayloadJson = assertSavePayloadIsJsonOnly(designPayload);
-
-      if (process.env.NODE_ENV === "development") {
-        console.info("[save-design] payload bytes", getSavePayloadBytes(savePayloadJson));
-      }
+      const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
 
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: savePayloadJson,
+        body: designPayloadJson,
       });
 
       const rawResponseText = await response.text().catch(() => "");
