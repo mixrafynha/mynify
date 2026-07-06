@@ -140,7 +140,7 @@ function renderElementHtml(el: RenderElement, scaleX: number, scaleY: number) {
   const height = getElementHeight(el) * scaleY;
   const left = n(el.x, 0) * scaleX;
   const top = n(el.y, 0) * scaleY;
-  const rotation = n(el.rotation, 0);
+  const rotation = n(el.meta?.rotation ?? el.rotation, 0);
   const opacity = Math.max(0, Math.min(1, n(el.opacity ?? el.meta?.opacity, 1)));
   const flipX = !!(el.flipX || el.meta?.flipX);
   const flipY = !!(el.flipY || el.meta?.flipY);
@@ -186,8 +186,8 @@ function renderElementHtml(el: RenderElement, scaleX: number, scaleY: number) {
     const letterSpacing = n(el.meta?.letterSpacing, 0) * scaleX;
     const color = el.meta?.color || el.color || "#000000";
     const textAlign = el.meta?.textAlign || el.textAlign || "center";
-    const paddingX = Math.max(0, n(el.meta?.paddingX, fontSize * 0.28));
-    const paddingY = Math.max(0, n(el.meta?.paddingY, fontSize * 0.26));
+    const paddingX = Math.max(4 * Math.min(scaleX, scaleY), n(el.meta?.paddingX, Math.ceil(fontSize * 0.28)));
+    const paddingY = Math.max(4 * Math.min(scaleX, scaleY), n(el.meta?.paddingY, Math.ceil(fontSize * 0.26)));
     const strokeWidth = n(el.meta?.strokeWidth, 0) * Math.min(scaleX, scaleY);
     const strokeColor = el.meta?.strokeColor || "#000000";
     const shadow = el.meta?.shadow ? `text-shadow:0 ${8 * scaleY}px ${18 * scaleY}px ${escapeHtml(el.meta?.shadowColor || "rgba(0,0,0,.35)")};` : "";
@@ -211,25 +211,43 @@ async function renderHtmlPng(args: {
   overlayTop?: number;
   overlayWidth?: number;
   overlayHeight?: number;
+  /**
+   * Production print files must match the editor DOM exactly.
+   * The editor renders a logical safe-area layer first, then scales that whole
+   * layer to the production bitmap. Scaling each element independently changes
+   * transform order, sub-pixel layout, rotated objects, text metrics and font
+   * wrapping. Keep false for checkout thumbnails/mockups.
+   */
+  scaleWholeLayer?: boolean;
 }) {
   const elements = normalizeElements(args.elements);
-  const scaleX = args.outputWidth / args.sourceWidth;
-  const scaleY = args.outputHeight / args.sourceHeight;
-  const htmlElements = elements.map((el) => renderElementHtml(el, scaleX, scaleY)).join("\n");
+  const outputScaleX = args.outputWidth / args.sourceWidth;
+  const outputScaleY = args.outputHeight / args.sourceHeight;
+  const elementScaleX = args.scaleWholeLayer ? 1 : outputScaleX;
+  const elementScaleY = args.scaleWholeLayer ? 1 : outputScaleY;
+  const htmlElements = elements.map((el) => renderElementHtml(el, elementScaleX, elementScaleY)).join("\n");
   const background = args.transparent ? "transparent" : (args.mockupColor || "transparent");
 
   const mockupHtml = args.mockupUrl
     ? `<img src="${escapeHtml(args.mockupUrl)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />`
     : "";
 
+  const overlayWidth = args.scaleWholeLayer ? args.sourceWidth : positive(args.overlayWidth, args.outputWidth);
+  const overlayHeight = args.scaleWholeLayer ? args.sourceHeight : positive(args.overlayHeight, args.outputHeight);
+  const overlayTransform = args.scaleWholeLayer
+    ? `transform:scale(${outputScaleX}, ${outputScaleY});transform-origin:top left;`
+    : "";
+
   const overlayStyle = [
     "position:absolute",
     `left:${n(args.overlayLeft, 0)}px`,
     `top:${n(args.overlayTop, 0)}px`,
-    `width:${positive(args.overlayWidth, args.outputWidth)}px`,
-    `height:${positive(args.overlayHeight, args.outputHeight)}px`,
+    `width:${overlayWidth}px`,
+    `height:${overlayHeight}px`,
+    overlayTransform,
     "overflow:hidden",
-  ].join(";");
+    "clip-path:inset(0)",
+  ].filter(Boolean).join(";");
 
   const html = `<!doctype html>
 <html>
@@ -296,6 +314,7 @@ export async function renderPrintFilePng(args: { designData: DesignData; side: D
     overlayTop: 0,
     overlayWidth: output.width,
     overlayHeight: output.height,
+    scaleWholeLayer: true,
   });
 }
 

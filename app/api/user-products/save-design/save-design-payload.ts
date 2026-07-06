@@ -200,6 +200,60 @@ function pickSideKey(args: {
   );
 }
 
+
+function boxAspectRatio(value: unknown) {
+  const box = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+  const width = Number(box?.width);
+  const height = Number(box?.height);
+
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return width / height;
+}
+
+function normalizePrintSizeToSafeAreaAspect(size: unknown, safeArea: unknown) {
+  const raw = size && typeof size === "object" ? (size as Record<string, unknown>) : {};
+  const widthMm = Number(raw.widthMm ?? raw.width_mm ?? raw.width);
+  const heightMm = Number(raw.heightMm ?? raw.height_mm ?? raw.height);
+  const aspect = boxAspectRatio(safeArea);
+
+  if (!aspect || !Number.isFinite(widthMm) || widthMm <= 0) {
+    if (Number.isFinite(widthMm) && Number.isFinite(heightMm) && widthMm > 0 && heightMm > 0) {
+      return { widthMm, heightMm };
+    }
+    return size ?? null;
+  }
+
+  const normalizedHeightMm = widthMm / aspect;
+
+  return {
+    ...raw,
+    widthMm,
+    heightMm: normalizedHeightMm,
+    sourceHeightMm: Number.isFinite(heightMm) && heightMm > 0 ? heightMm : null,
+    aspectSource: "safe-area",
+  };
+}
+
+function normalizeProductionForSafeAreaAspect(production: unknown, safeArea: Record<DesignSide, unknown>) {
+  const raw = production && typeof production === "object" ? (production as Record<string, any>) : {};
+  const rawPrintSizeMm = raw.printSizeMm && typeof raw.printSizeMm === "object" ? raw.printSizeMm : {};
+
+  return {
+    ...raw,
+    coordinateMode: raw.coordinateMode || "safe-area-local",
+    exportArea: raw.exportArea || "transparent-print-box-only",
+    aspectLock: "safe-area",
+    printSizeMm: {
+      ...(rawPrintSizeMm || {}),
+      front: normalizePrintSizeToSafeAreaAspect(rawPrintSizeMm.front, safeArea.front),
+      back: normalizePrintSizeToSafeAreaAspect(rawPrintSizeMm.back, safeArea.back),
+    },
+  };
+}
+
 function getSelectedColor(body: any, incomingDesignData: any) {
   const value = firstValue(
     body.selectedColor,
@@ -584,6 +638,10 @@ export async function buildUserProductSavePayload(args: {
 
   const selectedColor = getSelectedColor(body, incomingDesignData);
   const selectedVariant = getSelectedVariant(body, incomingDesignData);
+  const normalizedProduction = normalizeProductionForSafeAreaAspect(
+    incomingDesignData.production || body.production || {},
+    safeArea as Record<DesignSide, unknown>,
+  );
 
   const designData = cleanDataUrls({
     schemaVersion: body.schemaVersion || incomingDesignData.schemaVersion || 4,
@@ -630,7 +688,7 @@ export async function buildUserProductSavePayload(args: {
         mockupUrl: mockupBack.url || null,
       },
     },
-    production: incomingDesignData.production || body.production || null,
+    production: normalizedProduction,
   }) as any;
 
   const bestPreviewImage =
