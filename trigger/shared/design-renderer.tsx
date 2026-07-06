@@ -76,6 +76,50 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#39;");
 }
 
+function normalizeElements(value: unknown): RenderElement[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((el): el is RenderElement => Boolean(el) && typeof el === "object")
+    .filter((el) => !el.meta?.hidden)
+    .map((el, index) => {
+      const meta = el.meta && typeof el.meta === "object" ? el.meta : {};
+      const width = positive(el.width, el.type === "shape" ? 120 : 140);
+      const height = positive(el.height, el.type === "shape" ? 120 : 140);
+
+      return {
+        ...el,
+        id: el.id || `${el.type || "element"}-${index}`,
+        type: String(el.type || ""),
+        x: n(el.x, 0),
+        y: n(el.y, 0),
+        width,
+        height,
+        meta,
+      };
+    })
+    .sort((a, b) => n(a.zIndex, 0) - n(b.zIndex, 0));
+}
+
+function getPrintPixelSize(designData: DesignData, side: DesignSide, sideData: SideData) {
+  const printSize = designData.production?.printSizeMm?.[side];
+  const widthMm = n(printSize?.widthMm, 0);
+  const heightMm = n(printSize?.heightMm, 0);
+
+  if (widthMm > 0 && heightMm > 0) {
+    return {
+      width: Math.max(1, Math.round((widthMm / 25.4) * DEFAULT_PRINT_DPI)),
+      height: Math.max(1, Math.round((heightMm / 25.4) * DEFAULT_PRINT_DPI)),
+    };
+  }
+
+  const source = sideData.safeArea || sideData.printBox || {};
+  return {
+    width: positive(source.width, CHECKOUT_SIZE),
+    height: positive(source.height, CHECKOUT_SIZE),
+  };
+}
+
 async function renderHtmlPng(args: {
   elements: RenderElement[];
   sourceWidth: number;
