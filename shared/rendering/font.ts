@@ -11,9 +11,31 @@ const FONT_MAP: Record<string, string> = {
   "Black Ops One": "var(--font-black-ops)",
 };
 
+const SYSTEM_FONT_FAMILY_RE =
+  /^(arial|helvetica|sans-serif|serif|monospace|system-ui|-apple-system|blinkmacsystemfont|ui-sans-serif|ui-serif|ui-monospace|inherit|initial|unset|inter)$/i;
+
 export function resolveFontFamily(font?: string): string {
   if (!font) return "var(--font-poppins), Arial, sans-serif";
   return `${FONT_MAP[font] || `"${font}"`}, Arial, sans-serif`;
+}
+
+function stripCssQuotes(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, "");
+}
+
+export function normalizeGoogleFontFamilyName(value: unknown): string | null {
+  const family = stripCssQuotes(String(value || ""));
+  if (!family) return null;
+
+  const lower = family.toLowerCase();
+
+  if (family.startsWith("__")) return null;
+  if (lower.includes("fallback")) return null;
+  if (lower.startsWith("var(")) return null;
+  if (family.includes(",")) return null;
+  if (SYSTEM_FONT_FAMILY_RE.test(family)) return null;
+
+  return family.replace(/["']/g, "");
 }
 
 export function collectGoogleFontFamilies(elements: Array<Record<string, any>>) {
@@ -21,10 +43,12 @@ export function collectGoogleFontFamilies(elements: Array<Record<string, any>>) 
 
   for (const el of elements) {
     if (el?.type !== "text") continue;
-    const family = String(el.meta?.fontFamily || el.fontFamily || "").trim();
-    if (!family) continue;
-    if (/^(arial|sans-serif|serif|monospace|system-ui)$/i.test(family)) continue;
-    families.add(family.replace(/["']/g, ""));
+
+    const family = normalizeGoogleFontFamilyName(
+      el.meta?.fontFamily || el.fontFamily,
+    );
+
+    if (family) families.add(family);
   }
 
   return Array.from(families);

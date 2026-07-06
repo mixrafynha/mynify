@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo } from "react";
 import { resolveFontFamily } from "./font";
+import { resolveElementImageSrc } from "./imageSource";
 import { getTextPadding } from "./textLayout";
 import type { ElementRendererProps, RenderElement } from "./types";
 
@@ -9,9 +10,6 @@ function sanitizeTextInput(value: string): string {
   return value.normalize("NFKC").replace(/[<>]/g, "").slice(0, 200);
 }
 
-function imageSource(el: RenderElement): string {
-  return String(el.src || el.meta?.src || el.meta?.url || el.meta?.imageUrl || el.meta?.image || "");
-}
 
 const fill: React.CSSProperties = {
   position: "relative",
@@ -24,7 +22,7 @@ const fill: React.CSSProperties = {
 };
 
 const ImageElement = memo(function ImageElement({ el }: { el: RenderElement }) {
-  const src = imageSource(el);
+  const src = resolveElementImageSrc(el);
   if (!src) return null;
 
   return (
