@@ -351,11 +351,16 @@ export async function POST(
             "base64"
           );
 
+        const dataUrl = `data:image/png;base64,${base64}`;
+
         return NextResponse.json(
           {
             success: true,
 
-            imageUrl: `data:image/png;base64,${base64}`,
+            imageUrl: dataUrl,
+            src: dataUrl,
+            url: dataUrl,
+            image: dataUrl,
 
             originalImageUrl:
               imageUrl,
