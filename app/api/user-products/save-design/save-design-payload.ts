@@ -667,12 +667,13 @@ export async function buildUserProductSavePayload(args: {
     design_back: backElements,
     design_data: designData,
     print_files: {
-      front: printFront.url,
-      back: printBack.url,
+      front: null,
+      back: null,
       keys: {
-        front: printFront.key,
-        back: printBack.key,
+        front: null,
+        back: null,
       },
+      status: "pending",
     },
     mockups: {
       front: mockupFront.url,
@@ -684,7 +685,7 @@ export async function buildUserProductSavePayload(args: {
     },
     print_box: printBox,
     safe_area: safeArea,
-    design_image_url: editorFront.url || editorBack.url || null,
+    design_image_url: null,
     ai_mockup_url: mockupFront.url || mockupBack.url || null,
     ai_mockup_images: [mockupFront.url, mockupBack.url].filter(Boolean),
     markup: productMarkup,

@@ -13,6 +13,17 @@ import { queueDesignAssetJobs } from "./queue-design-assets";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function containsInlineImageData(value: unknown) {
+  const serialized = JSON.stringify(value).toLowerCase();
+
+  return (
+    serialized.includes("data:image") ||
+    serialized.includes("base64,") ||
+    serialized.includes("blob:") ||
+    /[a-z0-9+/=]{200000,}/i.test(serialized)
+  );
+}
+
 async function createCookieSupabaseServer() {
   const cookieStore = await cookies();
 
@@ -112,6 +123,15 @@ async function getAuthenticatedSupabase(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const body = await req.json();
+
+    if (containsInlineImageData(body)) {
+      return NextResponse.json(
+        { error: "Invalid save payload: inline image data is not allowed." },
+        { status: 400 },
+      );
+    }
+
     const { supabase, user } = await getAuthenticatedSupabase(req);
 
     if (!user) {
@@ -120,8 +140,6 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
-
-    const body = await req.json();
 
     // Keep save-design tolerant of editor versions that pass product/variant
     // identifiers through query params instead of the JSON payload.

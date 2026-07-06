@@ -6,7 +6,6 @@ import {
   getMockupVisualScale,
   getProductionExportResolution,
 } from "../../canvas/productConfig";
-import { captureProductionDesign } from "../../preview/services/previewCapture";
 import type {
   PreviewElement,
   PreviewSideData,
@@ -34,21 +33,21 @@ const PRODUCT_ALIASES: Record<string, string> = {
 
 const DEFAULT_PRODUCT_CATEGORY = "tshirt";
 const UUID_LIKE_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const DATA_IMAGE_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i;
-const MAX_INLINE_DATABASE_IMAGE_BYTES = 180_000;
-const MAX_INLINE_PRINT_FILE_BYTES = 4_500_000;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const INLINE_IMAGE_MARKERS = ["data:image", "base64,", "blob:"];
+const LARGE_IMAGE_STRING_RE = /[A-Za-z0-9+/=]{200000,}/;
 
-type ProductionFileUploadResult = {
-  url: string | null;
-  uploaded: boolean;
-  omitted: boolean;
-  reason: string | null;
-  sizeBytes: number;
+const PRINT_FILES_PENDING = {
+  front: null,
+  back: null,
+  keys: {
+    front: null,
+    back: null,
+  },
+  status: "pending" as const,
 };
 
 type DesignSide = EditorSide;
-
 type CleanElement = Record<string, unknown>;
 
 type RawElement = Record<string, unknown> & {
@@ -74,6 +73,11 @@ type RawElement = Record<string, unknown> & {
   lineHeight?: unknown;
   letterSpacing?: unknown;
   borderRadius?: unknown;
+  crop?: unknown;
+  transform?: unknown;
+  r2Key?: unknown;
+  storageKey?: unknown;
+  imageKey?: unknown;
   meta?: Record<string, unknown>;
 };
 
@@ -154,7 +158,7 @@ function normalizeCategory(value?: string) {
   if (!raw || UUID_LIKE_RE.test(raw)) return DEFAULT_PRODUCT_CATEGORY;
 
   const normalized = PRODUCT_ALIASES[raw] || raw;
-  if (!["tshirt", "hoodie", "cap", "mug"].includes(normalized)) {
+  if (!["tshirt", "hoodie", "cap", "mug", "sweatshirt"].includes(normalized)) {
     return DEFAULT_PRODUCT_CATEGORY;
   }
 
@@ -165,10 +169,6 @@ function elementsForSide(input: PreviewPayloadInput, side: DesignSide) {
   const sideElements =
     side === "back" ? input.backElements : input.frontElements;
 
-  // Prefer the explicit per-side array only when it actually contains artwork.
-  // Some parents pass [] for frontElements/backElements while the live side data
-  // is still in input.elements. Returning the empty side array drops the design
-  // from save, Trigger print generation and checkout thumbnails.
   if (Array.isArray(sideElements) && sideElements.length > 0) return sideElements;
 
   if (input.side === side && Array.isArray(input.elements) && input.elements.length > 0) {
@@ -184,33 +184,65 @@ function finiteNumber(value: unknown, fallback?: number) {
   return fallback;
 }
 
-function estimateDataUrlBytes(value: unknown) {
-  if (typeof value !== "string") return 0;
-  if (!DATA_IMAGE_PREFIX_RE.test(value)) return 0;
-
-  const commaIndex = value.indexOf(",");
-  if (commaIndex < 0) return 0;
-
-  const base64Length = value.length - commaIndex - 1;
-  return Math.ceil((base64Length * 3) / 4);
+function isInlineImageString(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const normalized = value.toLowerCase();
+  return normalized.includes("data:image") || normalized.includes("base64,") || normalized.startsWith("blob:");
 }
 
-function isDataImage(value: unknown): value is string {
-  return typeof value === "string" && DATA_IMAGE_PREFIX_RE.test(value);
-}
-
-function shouldInlineDataImage(
-  value: unknown,
-  maxBytes = MAX_INLINE_DATABASE_IMAGE_BYTES,
-) {
-  if (!isDataImage(value)) return true;
-  return estimateDataUrlBytes(value) <= maxBytes;
-}
-
-function sanitizeImageSourceForDatabase(value: unknown) {
+function sanitizeStringReference(value: unknown) {
   if (typeof value !== "string") return undefined;
-  if (!isDataImage(value)) return value;
-  if (shouldInlineDataImage(value)) return value;
+  const trimmed = value.trim();
+  if (!trimmed || isInlineImageString(trimmed)) return undefined;
+  return trimmed;
+}
+
+function sanitizeJsonValue(value: unknown, depth = 0): unknown {
+  if (depth > 8) return undefined;
+  if (typeof value === "string") return sanitizeStringReference(value);
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "boolean") return value;
+  if (value === null || value === undefined) return undefined;
+
+  if (Array.isArray(value)) {
+    const arr = value
+      .map((item) => sanitizeJsonValue(item, depth + 1))
+      .filter((item) => item !== undefined);
+    return arr.length ? arr : undefined;
+  }
+
+  if (typeof value === "object") {
+    const objectValue = value as Record<string, unknown>;
+    const clean: Record<string, unknown> = {};
+
+    for (const [key, nestedValue] of Object.entries(objectValue)) {
+      if (
+        [
+          "src",
+          "image",
+          "imageData",
+          "dataUrl",
+          "base64",
+          "blob",
+          "file",
+          "arrayBuffer",
+          "preview",
+          "previewImage",
+          "designImage",
+          "printImage",
+          "canvasScreenshot",
+        ].includes(key)
+      ) {
+        continue;
+      }
+
+      const sanitized = sanitizeJsonValue(nestedValue, depth + 1);
+      if (sanitized !== undefined) clean[key] = sanitized;
+    }
+
+    return Object.keys(clean).length ? clean : undefined;
+  }
+
   return undefined;
 }
 
@@ -218,7 +250,9 @@ function sanitizeElementForDatabase(element: unknown): CleanElement | null {
   if (!element || typeof element !== "object") return null;
 
   const raw = element as RawElement;
-  const meta = raw.meta && typeof raw.meta === "object" ? { ...raw.meta } : {};
+  const meta = raw.meta && typeof raw.meta === "object"
+    ? (sanitizeJsonValue(raw.meta) as Record<string, unknown> | undefined) || {}
+    : {};
 
   delete meta.selected;
   delete meta.hovered;
@@ -229,13 +263,6 @@ function sanitizeElementForDatabase(element: unknown): CleanElement | null {
   delete meta.previewOnly;
   delete meta.domNode;
   delete meta.elementRef;
-
-  if (isDataImage(raw.src) && !shouldInlineDataImage(raw.src)) {
-    meta.sourceType = "data-image";
-    meta.sourceOmittedFromDatabase = true;
-    meta.sourceOmittedReason = "data-url-too-large";
-    meta.sourceSizeBytes = estimateDataUrlBytes(raw.src);
-  }
 
   const clean: CleanElement = {
     id: raw.id,
@@ -249,7 +276,12 @@ function sanitizeElementForDatabase(element: unknown): CleanElement | null {
     opacity: finiteNumber(raw.opacity),
     text: typeof raw.text === "string" ? raw.text : undefined,
     content: typeof raw.content === "string" ? raw.content : undefined,
-    src: sanitizeImageSourceForDatabase(raw.src),
+    src: sanitizeStringReference(raw.src),
+    r2Key: sanitizeStringReference(raw.r2Key),
+    storageKey: sanitizeStringReference(raw.storageKey),
+    imageKey: sanitizeStringReference(raw.imageKey),
+    crop: sanitizeJsonValue(raw.crop),
+    transform: sanitizeJsonValue(raw.transform),
     fill: typeof raw.fill === "string" ? raw.fill : undefined,
     color: typeof raw.color === "string" ? raw.color : undefined,
     fontFamily: typeof raw.fontFamily === "string" ? raw.fontFamily : undefined,
@@ -312,16 +344,6 @@ function makeSideData(
   };
 }
 
-function getVisibleMockupRoot() {
-  if (typeof document === "undefined") return null;
-  const node = document.getElementById("mockup-export-root");
-  return node instanceof HTMLElement ? node : null;
-}
-
-function hasDataImage(value: unknown): value is string {
-  return isDataImage(value);
-}
-
 function hasPrintableElements(elements: unknown[]) {
   return (Array.isArray(elements) ? elements : []).some((element) => {
     if (!element || typeof element !== "object") return false;
@@ -331,62 +353,22 @@ function hasPrintableElements(elements: unknown[]) {
   });
 }
 
-async function uploadProductionFile(args: {
-  dataUrl: string | null;
-  side: DesignSide;
-  productId: string;
-  category: string;
-  variantId: string | null;
-}): Promise<ProductionFileUploadResult> {
-  const sizeBytes = estimateDataUrlBytes(args.dataUrl);
-
-  if (!hasDataImage(args.dataUrl)) {
-    return {
-      url: null,
-      uploaded: false,
-      omitted: false,
-      reason: "not-generated",
-      sizeBytes,
-    };
-  }
-
-  // Do not call /api/user-products/save-design/upload-production-file here.
-  // That route is not part of the backend package. The canonical backend
-  // already receives printFiles.front/back as data URLs in /api/user-products/save-design
-  // and uploads them to R2 there, returning stable R2 URLs and keys.
-  // Returning the data URL here keeps the frontend payload compatible with
-  // the existing save-design backend and removes the 404 pre-upload request.
-  return {
-    url: args.dataUrl,
-    uploaded: false,
-    omitted: false,
-    reason:
-      sizeBytes > MAX_INLINE_PRINT_FILE_BYTES
-        ? "backend-upload-on-save-large-data-url"
-        : "backend-upload-on-save",
-    sizeBytes,
-  };
-}
-
 function buildFileDiagnostics(args: {
   side: DesignSide;
   hasArtwork: boolean;
-  dataUrl: string | null;
-  uploadedFile?: ProductionFileUploadResult;
   printSize: { widthMm: number; heightMm: number };
   exportResolution: { width: number; height: number; dpi?: number };
 }) {
-  const upload = args.uploadedFile;
   return {
     side: args.side,
     hasArtwork: args.hasArtwork,
-    generated: hasDataImage(args.dataUrl),
-    format: hasDataImage(args.dataUrl) ? "png-rgba" : null,
-    sizeBytes: estimateDataUrlBytes(args.dataUrl),
-    storedAsUrl: Boolean(upload?.uploaded),
-    uploadedToStorage: Boolean(upload?.uploaded),
-    omittedFromSavePayload: Boolean(upload?.omitted),
-    storageReason: upload?.reason || null,
+    generated: false,
+    format: null,
+    sizeBytes: 0,
+    storedAsUrl: false,
+    uploadedToStorage: false,
+    omittedFromSavePayload: true,
+    storageReason: "generated-by-trigger-after-save",
     expectedPrintSizeMm: args.printSize,
     exportResolution: args.exportResolution,
     expectedDpi: args.exportResolution.dpi || 300,
@@ -417,10 +399,28 @@ function buildSideDatabaseData(args: {
   };
 }
 
+export function assertSavePayloadIsJsonOnly(payload: unknown) {
+  const json = JSON.stringify(payload);
+
+  if (
+    INLINE_IMAGE_MARKERS.some((marker) => json.toLowerCase().includes(marker)) ||
+    LARGE_IMAGE_STRING_RE.test(json)
+  ) {
+    throw new Error(
+      "Save payload contains inline image data. Save Design must be JSON-only.",
+    );
+  }
+
+  return json;
+}
+
+export function getSavePayloadBytes(json: string) {
+  return new TextEncoder().encode(json).length;
+}
+
 export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   const category = input.productConfig?.category || normalizeCategory(input.category);
   const productId = input.productId || category;
-  const currentSide: DesignSide = input.side === "back" ? "back" : "front";
   const selectedVariant = normalizeSelectedVariant(input);
   const selectedVariantId = selectedVariant?.variantId || null;
   const selectedColor =
@@ -431,75 +431,8 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   const frontHasArtwork = hasPrintableElements(frontRawElements);
   const backHasArtwork = hasPrintableElements(backRawElements);
 
-  const frontSideData = makeSideData(
-    input,
-    category,
-    "front",
-    frontRawElements,
-  );
+  const frontSideData = makeSideData(input, category, "front", frontRawElements);
   const backSideData = makeSideData(input, category, "back", backRawElements);
-  const currentSideData = currentSide === "back" ? backSideData : frontSideData;
-
-  const currentDesignImage = hasPrintableElements(currentSideData.elements)
-    ? await captureProductionDesign(currentSideData)
-    : null;
-
-  if (hasPrintableElements(currentSideData.elements) && !hasDataImage(currentDesignImage)) {
-    throw new Error(
-      `Production capture failed for ${currentSide}. Save blocked to prevent a non-printable Gelato file.`,
-    );
-  }
-
-  const frontDesignImage =
-    currentSide === "front"
-      ? currentDesignImage
-      : input.designImages?.front || null;
-
-  const backDesignImage =
-    currentSide === "back"
-      ? currentDesignImage
-      : input.designImages?.back || null;
-
-
-  // Only the currently mounted side can be captured from the real preview DOM.
-  // Do not block save because the opposite side is not mounted; that caused false
-  // Saving Design failures when designs had cached/legacy data for another side.
-  // The current side is still strictly protected above: if it has artwork and DOM
-  // capture fails, save is blocked to avoid sending a bad Gelato file.
-
-  const frontProductionFile = await uploadProductionFile({
-    dataUrl: hasDataImage(frontDesignImage) ? frontDesignImage : null,
-    side: "front",
-    productId,
-    category,
-    variantId: selectedVariantId,
-  });
-
-  const backProductionFile = await uploadProductionFile({
-    dataUrl: hasDataImage(backDesignImage) ? backDesignImage : null,
-    side: "back",
-    productId,
-    category,
-    variantId: selectedVariantId,
-  });
-
-  if (frontHasArtwork && frontProductionFile.omitted) {
-    throw new Error(
-      `Front production print file is too large for JSON and could not be uploaded to storage: ${frontProductionFile.reason}`,
-    );
-  }
-
-  if (backHasArtwork && backProductionFile.omitted) {
-    throw new Error(
-      `Back production print file is too large for JSON and could not be uploaded to storage: ${backProductionFile.reason}`,
-    );
-  }
-
-  // Keep the save request small enough for Vercel serverless limits.
-  // Production files are still sent in printFiles.front/back; visual mockup
-  // previews are non-production data and can be rebuilt from mockupUrls + design data.
-  const frontMockupImage: string | null = null;
-  const backMockupImage: string | null = null;
 
   const frontElements = sanitizeElementsForDatabase(frontRawElements);
   const backElements = sanitizeElementsForDatabase(backRawElements);
@@ -528,14 +461,22 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   const hasReviewSide =
     frontQuality.status === "review" || backQuality.status === "review";
 
+  const mockupKey = input.productConfig?.mockupKey || null;
+  const mockupUrls = {
+    front: frontSideData.mockupUrl || null,
+    back: backSideData.mockupUrl || null,
+  };
+
   const designData = {
-    schemaVersion: 3,
+    schemaVersion: 4,
+    editorVersion: "json-only-save-v1",
     productId,
     category,
-    mockupKey: input.productConfig?.mockupKey || null,
+    mockupKey,
     gelatoProductUidFromProduct: input.productConfig?.gelatoProductUid || null,
     variantId: selectedVariantId,
     selectedVariant,
+    selectedColor,
     productColorId:
       selectedVariant?.productColorId || selectedVariant?.colorId || null,
     size: selectedVariant?.size || null,
@@ -563,7 +504,7 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
         elements: frontElements,
         printBox: frontSideData.printBox,
         safeArea: frontSideData.safeArea,
-        mockupUrl: frontSideData.mockupUrl || null,
+        mockupUrl: mockupUrls.front,
         quality: frontQuality,
       }),
       back: buildSideDatabaseData({
@@ -571,15 +512,12 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
         elements: backElements,
         printBox: backSideData.printBox,
         safeArea: backSideData.safeArea,
-        mockupUrl: backSideData.mockupUrl || null,
+        mockupUrl: mockupUrls.back,
         quality: backQuality,
       }),
     },
     mockupSource: input.productConfig?.__source || input.productConfig?.source || "local",
-    mockupUrls: {
-      front: frontSideData.mockupUrl || null,
-      back: backSideData.mockupUrl || null,
-    },
+    mockupUrls,
     runtimeProductConfig: input.productConfig || null,
     production: {
       coordinateMode: "safe-area-local",
@@ -593,24 +531,21 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
         back: backSideData.printSize,
       },
       provider: "gelato",
-      flattenOnSave: true,
-      flattenOnlyOnOrder: false,
+      flattenOnSave: false,
+      flattenOnlyOnOrder: true,
       previewIsNotProductionFile: true,
       transparentBackgroundRequired: true,
+      assetGeneration: "trigger-after-save",
       fileDiagnostics: {
         front: buildFileDiagnostics({
           side: "front",
           hasArtwork: frontHasArtwork,
-          dataUrl: hasDataImage(frontDesignImage) ? frontDesignImage : null,
-          uploadedFile: frontProductionFile,
           printSize: frontSideData.printSize,
           exportResolution: frontSideData.exportResolution,
         }),
         back: buildFileDiagnostics({
           side: "back",
           hasArtwork: backHasArtwork,
-          dataUrl: hasDataImage(backDesignImage) ? backDesignImage : null,
-          uploadedFile: backProductionFile,
           printSize: backSideData.printSize,
           exportResolution: backSideData.exportResolution,
         }),
@@ -625,15 +560,18 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
     },
   };
 
-  return {
-    schemaVersion: 3,
+  const payload = {
+    schemaVersion: 4,
+    editorVersion: "json-only-save-v1",
+    updatedAt: new Date().toISOString(),
     baseProductId: productId,
     productId,
     category,
-    mockupKey: input.productConfig?.mockupKey || null,
+    mockupKey,
     gelatoProductUidFromProduct: input.productConfig?.gelatoProductUid || null,
     variantId: selectedVariantId,
     selectedVariant,
+    selectedColor,
     productColorId:
       selectedVariant?.productColorId || selectedVariant?.colorId || null,
     colorId:
@@ -665,6 +603,7 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
 
     designFront: frontElements,
     designBack: backElements,
+    designData,
     design_data: designData,
 
     printBox: {
@@ -676,28 +615,17 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
       back: backSideData.safeArea,
     },
 
-    printFiles: {
-      front: frontProductionFile.url,
-      back: backProductionFile.url,
-    },
+    printFiles: PRINT_FILES_PENDING,
+    checkout_thumbnail_url: null,
+    checkout_thumbnail_status: "pending" as const,
 
-    printFileDiagnostics: {
-      front: frontProductionFile,
-      back: backProductionFile,
-    },
-
-    mockups: {
-      front: hasDataImage(frontMockupImage) ? frontMockupImage : undefined,
-      back: hasDataImage(backMockupImage) ? backMockupImage : undefined,
-    },
-
+    mockups: mockupUrls,
     mockupSource: input.productConfig?.__source || input.productConfig?.source || "local",
-    mockupUrls: {
-      front: frontSideData.mockupUrl || null,
-      back: backSideData.mockupUrl || null,
-    },
+    mockupUrls,
     runtimeProductConfig: input.productConfig || null,
-
     production: designData.production,
   };
+
+  assertSavePayloadIsJsonOnly(payload);
+  return payload;
 }

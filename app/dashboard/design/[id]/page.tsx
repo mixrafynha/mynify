@@ -9,7 +9,11 @@ import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
 import { captureProductionPreview } from "@/app/dashboard/design/components/preview/services/previewCapture";
-import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
+import {
+  assertSavePayloadIsJsonOnly,
+  buildDesignSavePayload,
+  getSavePayloadBytes,
+} from "@/app/dashboard/design/components/topbar/services/designSavePayload";
 import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
 import ProductionCaptureLayers from "@/app/dashboard/design/components/capture/ProductionCaptureLayers";
 import type { ProductDisplayConfig } from "@/app/dashboard/design/components/canvas/productConfig";
@@ -658,11 +662,17 @@ export default function EditorPage() {
         productConfig,
       });
 
+      const savePayloadJson = assertSavePayloadIsJsonOnly(designPayload);
+
+      if (process.env.NODE_ENV === "development") {
+        console.info("[save-design] payload bytes", getSavePayloadBytes(savePayloadJson));
+      }
+
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(designPayload),
+        body: savePayloadJson,
       });
 
       const rawResponseText = await response.text().catch(() => "");
