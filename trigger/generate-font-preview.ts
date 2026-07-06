@@ -1,5 +1,8 @@
 import { task } from "@trigger.dev/sdk/v3";
 import { createHash, createHmac } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
+import sharp from "sharp";
+import { chromium } from "playwright";
 
 const FONT_TABLE = process.env.FONT_TABLE_NAME ?? "editor_fonts";
 const R2_FONT_FILE_PREFIX = process.env.R2_FONT_FILE_PREFIX ?? "font-files";
@@ -102,8 +105,7 @@ async function createSupabaseAdmin(): Promise<any> {
     throw new Error("Missing SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   }
 
-  const mod = await dynamicImport("@supabase/supabase-js");
-  return mod.createClient(url, key, {
+  return createClient(url, key, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -245,10 +247,7 @@ async function renderFontPreviewWebp({
   previewText: string;
   fontBuffer: Buffer;
 }): Promise<Buffer> {
-  const sharp = await loadSharp();
-  const { chromium } = await loadPlaywright();
-
-  const cleanPreviewText = previewText || "RYFIO";
+   const cleanPreviewText = previewText || "RYFIO";
   const encodedFamily = encodeGoogleFontsFamily(family);
   const encodedText = encodeURIComponent(cleanPreviewText);
   const cssUrl = `https://fonts.googleapis.com/css2?family=${encodedFamily}&text=${encodedText}&display=swap`;
@@ -474,28 +473,6 @@ async function signedR2Put({
   if (!res.ok) {
     throw new Error(`R2 upload failed: ${res.status} ${await res.text()}`);
   }
-}
-
-async function loadSharp(): Promise<any> {
-  try {
-    const mod = await dynamicImport("sharp");
-    return mod.default ?? mod;
-  } catch {
-    throw new Error("Missing dependency: install sharp to generate WebP font previews");
-  }
-}
-
-async function loadPlaywright(): Promise<any> {
-  try {
-    return await dynamicImport("playwright");
-  } catch {
-    throw new Error("Missing dependency: install playwright and run: npx playwright install chromium");
-  }
-}
-
-
-function dynamicImport(moduleName: string): Promise<any> {
-  return new Function("moduleName", "return import(moduleName)")(moduleName);
 }
 
 function cleanFamily(value: string) {

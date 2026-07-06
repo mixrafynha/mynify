@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { chromium } from "playwright";
 
 export type DesignSide = "front" | "back";
 
@@ -197,10 +198,6 @@ function renderElementHtml(el: RenderElement, scaleX: number, scaleY: number) {
   return "";
 }
 
-function dynamicImport(moduleName: string): Promise<any> {
-  return new Function("moduleName", "return import(moduleName)")(moduleName);
-}
-
 async function renderHtmlPng(args: {
   elements: RenderElement[];
   sourceWidth: number;
@@ -215,8 +212,6 @@ async function renderHtmlPng(args: {
   overlayWidth?: number;
   overlayHeight?: number;
 }) {
-  const { chromium } = await dynamicImport("playwright");
-
   const elements = normalizeElements(args.elements);
   const scaleX = args.outputWidth / args.sourceWidth;
   const scaleY = args.outputHeight / args.sourceHeight;

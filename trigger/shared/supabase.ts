@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 
 function requireEnv(name: string, value: string | undefined) {
   if (!value) throw new Error(`Missing required env var: ${name}`);
@@ -14,8 +15,12 @@ export function getServiceSupabase() {
         persistSession: false,
         autoRefreshToken: false,
       },
+      realtime: {
+        transport: WebSocket,
+      },
     },
   );
 }
 
-export const USER_PRODUCTS_TABLE = process.env.SUPABASE_USER_PRODUCTS_TABLE || "user_products";
+export const USER_PRODUCTS_TABLE =
+  process.env.SUPABASE_USER_PRODUCTS_TABLE || "user_products";
