@@ -16,7 +16,7 @@ export function getServiceSupabase() {
         autoRefreshToken: false,
       },
       realtime: {
-        transport: WebSocket,
+        transport: WebSocket as unknown as WebSocket,
       },
     },
   );
