@@ -1,5 +1,8 @@
 import sharp from "sharp";
 import { chromium } from "playwright";
+import { renderToStaticMarkup } from "react-dom/server";
+import PrintCanvas from "../../shared/rendering/PrintCanvas";
+import { googleFontsLinks } from "../../shared/rendering/font";
 
 export type DesignSide = "front" | "back";
 
@@ -73,131 +76,6 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#39;");
 }
 
-function cssString(value: unknown, fallback = "") {
-  return String(value ?? fallback).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-}
-
-function getElementWidth(el: RenderElement) {
-  return positive(el.width, el.type === "shape" ? 120 : 140);
-}
-
-function getElementHeight(el: RenderElement) {
-  return positive(el.height, el.type === "shape" ? 120 : 140);
-}
-
-function getPrintPixelSize(design: DesignData, side: DesignSide, sideData: SideData) {
-  const configured = design.production?.printSizeMm?.[side];
-  const widthMm = n(configured?.widthMm, 0);
-  const heightMm = n(configured?.heightMm, 0);
-
-  if (widthMm > 0 && heightMm > 0) {
-    return {
-      width: Math.max(1, round((widthMm / 25.4) * DEFAULT_PRINT_DPI)),
-      height: Math.max(1, round((heightMm / 25.4) * DEFAULT_PRINT_DPI)),
-    };
-  }
-
-  const safeArea = sideData.safeArea || sideData.printBox || {};
-  return {
-    width: round(positive(safeArea.width, 3000)),
-    height: round(positive(safeArea.height, 3000)),
-  };
-}
-
-function normalizeElements(elements: unknown): RenderElement[] {
-  return (Array.isArray(elements) ? elements : [])
-    .filter((el: any) => el && typeof el === "object" && !el.meta?.hidden)
-    .sort((a: any, b: any) => n(a.zIndex, 0) - n(b.zIndex, 0));
-}
-
-function collectGoogleFontFamilies(elements: RenderElement[]) {
-  const families = new Set<string>();
-  for (const el of elements) {
-    if (el.type !== "text") continue;
-    const family = String(el.meta?.fontFamily || el.fontFamily || "").trim();
-    if (!family) continue;
-    if (/^(arial|sans-serif|serif|monospace|system-ui)$/i.test(family)) continue;
-    families.add(family.replace(/["']/g, ""));
-  }
-  return Array.from(families);
-}
-
-function googleFontsLinks(elements: RenderElement[]) {
-  const families = collectGoogleFontFamilies(elements);
-  if (!families.length) return "";
-
-  return families
-    .map((family) => {
-      const encoded = encodeURIComponent(family).replace(/%20/g, "+");
-      return `<link href="https://fonts.googleapis.com/css2?family=${encoded}:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">`;
-    })
-    .join("\n");
-}
-
-function renderElementHtml(el: RenderElement, scaleX: number, scaleY: number) {
-  const type = String(el.type || "");
-  const width = getElementWidth(el) * scaleX;
-  const height = getElementHeight(el) * scaleY;
-  const left = n(el.x, 0) * scaleX;
-  const top = n(el.y, 0) * scaleY;
-  const rotation = n(el.meta?.rotation ?? el.rotation, 0);
-  const opacity = Math.max(0, Math.min(1, n(el.opacity ?? el.meta?.opacity, 1)));
-  const flipX = !!(el.flipX || el.meta?.flipX);
-  const flipY = !!(el.flipY || el.meta?.flipY);
-  const transform = `rotate(${rotation}deg) scale(${flipX ? -1 : 1}, ${flipY ? -1 : 1})`;
-
-  const baseStyle = [
-    "position:absolute",
-    `left:${left}px`,
-    `top:${top}px`,
-    `width:${width}px`,
-    `height:${height}px`,
-    `opacity:${opacity}`,
-    `transform:${transform}`,
-    "transform-origin:center center",
-    "box-sizing:border-box",
-    "overflow:visible",
-  ].join(";");
-
-  if (type === "image") {
-    const src = typeof el.src === "string" ? el.src : "";
-    if (!src) return "";
-    const brightness = n(el.meta?.brightness, 100);
-    const contrast = n(el.meta?.contrast, 100);
-    const saturation = n(el.meta?.saturation, 100);
-    return `<div style="${baseStyle}"><img src="${escapeHtml(src)}" style="display:block;width:100%;height:100%;object-fit:fill;filter:brightness(${brightness}%) contrast(${contrast}%) saturate(${saturation}%);" /></div>`;
-  }
-
-  if (type === "shape") {
-    const fill = el.meta?.color || el.meta?.fill || el.fill || el.color || "#8b5cf6";
-    const strokeWidth = n(el.meta?.strokeWidth, 0) * Math.min(scaleX, scaleY);
-    const strokeColor = el.meta?.strokeColor || "#ffffff";
-    const borderRadius = n(el.borderRadius ?? el.meta?.borderRadius, 0) * Math.min(scaleX, scaleY);
-    return `<div style="${baseStyle};background:${escapeHtml(fill)};border-radius:${borderRadius}px;${strokeWidth ? `border:${strokeWidth}px solid ${escapeHtml(strokeColor)};` : ""}"></div>`;
-  }
-
-  if (type === "text") {
-    const text = escapeHtml(el.text ?? el.content ?? "Text").replace(/\n/g, "<br />");
-    const fontSize = Math.max(8, n(el.meta?.fontSize ?? el.fontSize, 40) * Math.min(scaleX, scaleY));
-    const fontFamily = cssString(el.meta?.fontFamily || el.fontFamily || "Arial");
-    const fontWeight = el.meta?.fontWeight || el.fontWeight || 700;
-    const fontStyle = el.meta?.fontStyle || el.fontStyle || "normal";
-    const lineHeight = n(el.meta?.lineHeight, 1.16);
-    const letterSpacing = n(el.meta?.letterSpacing, 0) * scaleX;
-    const color = el.meta?.color || el.color || "#000000";
-    const textAlign = el.meta?.textAlign || el.textAlign || "center";
-    const paddingX = Math.max(4 * Math.min(scaleX, scaleY), n(el.meta?.paddingX, Math.ceil(fontSize * 0.28)));
-    const paddingY = Math.max(4 * Math.min(scaleX, scaleY), n(el.meta?.paddingY, Math.ceil(fontSize * 0.26)));
-    const strokeWidth = n(el.meta?.strokeWidth, 0) * Math.min(scaleX, scaleY);
-    const strokeColor = el.meta?.strokeColor || "#000000";
-    const shadow = el.meta?.shadow ? `text-shadow:0 ${8 * scaleY}px ${18 * scaleY}px ${escapeHtml(el.meta?.shadowColor || "rgba(0,0,0,.35)")};` : "";
-
-    return `<div style="${baseStyle};display:flex;align-items:center;justify-content:center;white-space:pre-wrap;word-break:break-word;text-align:${escapeHtml(textAlign)};font-family:&quot;${fontFamily}&quot;, Arial, sans-serif;font-size:${fontSize}px;font-weight:${escapeHtml(fontWeight)};font-style:${escapeHtml(fontStyle)};line-height:${lineHeight};letter-spacing:${letterSpacing}px;color:${escapeHtml(color)};padding:${paddingY}px ${paddingX}px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;${strokeWidth ? `-webkit-text-stroke:${strokeWidth}px ${escapeHtml(strokeColor)};paint-order:stroke;` : ""}${shadow}">${text}</div>`;
-  }
-
-  return "";
-}
-
 async function renderHtmlPng(args: {
   elements: RenderElement[];
   sourceWidth: number;
@@ -225,7 +103,16 @@ async function renderHtmlPng(args: {
   const outputScaleY = args.outputHeight / args.sourceHeight;
   const elementScaleX = args.scaleWholeLayer ? 1 : outputScaleX;
   const elementScaleY = args.scaleWholeLayer ? 1 : outputScaleY;
-  const htmlElements = elements.map((el) => renderElementHtml(el, elementScaleX, elementScaleY)).join("\n");
+  const logicalWidth = args.scaleWholeLayer ? args.sourceWidth : positive(args.overlayWidth, args.outputWidth);
+  const logicalHeight = args.scaleWholeLayer ? args.sourceHeight : positive(args.overlayHeight, args.outputHeight);
+  const htmlElements = renderToStaticMarkup(
+    <PrintCanvas
+      elements={elements}
+      safeArea={{ width: logicalWidth, height: logicalHeight }}
+      scaleX={elementScaleX}
+      scaleY={elementScaleY}
+    />,
+  );
   const background = args.transparent ? "transparent" : (args.mockupColor || "transparent");
 
   const mockupHtml = args.mockupUrl

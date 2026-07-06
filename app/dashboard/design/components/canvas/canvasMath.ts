@@ -1,6 +1,8 @@
 import { SAFE_AREA_PADDING } from "./constants";
 import { getResponsivePrintBox, type ProductDisplayConfig } from "./productConfig";
 import type { Box, CanvasSide } from "./types";
+import { getTextPadding } from "@/shared/rendering/textLayout";
+export { getTextPadding } from "@/shared/rendering/textLayout";
 
 type Side = CanvasSide;
 
@@ -25,8 +27,6 @@ const DEFAULT_SHAPE_SIZE = 120;
 const DEFAULT_TEXT_FONT_SIZE = 42;
 const MIN_ELEMENT_SIZE = 10;
 const MIN_TEXT_WIDTH = 42;
-const TEXT_SAFE_PADDING_X_RATIO = 0.28;
-const TEXT_SAFE_PADDING_Y_RATIO = 0.26;
 const TEXT_AVERAGE_CHAR_RATIO = 0.58;
 const TEXT_CAP_HEIGHT_RATIO = 0.34;
 
@@ -73,15 +73,6 @@ export function getProductionSafeArea(printBox: Box): Box {
     y: 0,
     width: Math.max(0, finiteNumber(printBox.width, 0)),
     height: Math.max(0, finiteNumber(printBox.height, 0)),
-  };
-}
-
-export function getTextPadding(fontSize: number, meta: Record<string, any> = {}) {
-  const paddingX = finiteNumber(meta.paddingX, Math.ceil(fontSize * TEXT_SAFE_PADDING_X_RATIO));
-  const paddingY = finiteNumber(meta.paddingY, Math.ceil(fontSize * TEXT_SAFE_PADDING_Y_RATIO));
-  return {
-    x: Math.max(4, Math.round(paddingX)),
-    y: Math.max(4, Math.round(paddingY)),
   };
 }
 

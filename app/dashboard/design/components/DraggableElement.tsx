@@ -1,7 +1,8 @@
 "use client";
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
-import ElementRenderer from "./element/ElementRenderer";
+import ElementRenderer from "@/shared/rendering/ElementRenderer";
+import { getElementBoxStyle } from "@/shared/rendering/elementBox";
 import SelectionFrame from "./element/SelectionFrame";
 import { finiteNumber, getElementSize } from "./canvas/canvasMath";
 import {
@@ -270,37 +271,23 @@ function DraggableElement({
   );
 
   const style: React.CSSProperties = useMemo(
-    () => ({
-      position: "absolute",
-      left: 0,
-      top: 0,
-      width: rect.width,
-      height: rect.height,
-      transform: `translate3d(${rect.x}px, ${rect.y}px, 0) rotate(${
-        Number(el.meta?.rotation) || 0
-      }deg) scale(${el.meta?.flipX ? -1 : 1}, 1)`,
-      transformOrigin: "center center",
-      cursor: previewMode ? "default" : isLocked ? "not-allowed" : isSelected ? "move" : "grab",
-      zIndex: el.zIndex ?? (isSelected ? 50 : 10),
-      opacity: el.meta?.opacity ?? 1,
-      touchAction: previewMode ? "auto" : "none",
-      userSelect: "none",
-      pointerEvents: previewMode ? "none" : "auto",
-      willChange: isSelected ? "transform,width,height" : "auto",
-    }),
-    [
-      el.meta?.flipX,
-      el.meta?.opacity,
-      el.meta?.rotation,
-      el.zIndex,
-      isLocked,
-      isSelected,
-      previewMode,
-      rect.height,
-      rect.width,
-      rect.x,
-      rect.y,
-    ]
+    () =>
+      getElementBoxStyle(
+        {
+          ...el,
+          x: rect.x,
+          y: rect.y,
+          width: rect.width,
+          height: rect.height,
+        },
+        {
+          selected: isSelected,
+          previewMode,
+          locked: isLocked,
+          interactive: !previewMode,
+        },
+      ),
+    [el, isLocked, isSelected, previewMode, rect.height, rect.width, rect.x, rect.y],
   );
 
   const rendererElement = useMemo(
