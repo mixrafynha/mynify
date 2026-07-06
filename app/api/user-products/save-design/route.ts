@@ -223,6 +223,8 @@ export async function POST(req: Request) {
       backgroundJobs = await queueDesignAssetJobs({
         userProductId: userProduct.id,
         designData: userProduct.design_data,
+        designFront: userProduct.design_front,
+        designBack: userProduct.design_back,
       });
     } catch (queueError) {
       // Save must remain JSON-only and must never fail because Trigger.dev/R2 is down.
