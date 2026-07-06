@@ -28,6 +28,12 @@ export type ElementRendererProps = {
   startEditing?: () => void;
   updateText?: (value: string) => void;
   setEditing?: (value: boolean) => void;
+  /**
+   * Browser/html-to-image capture needs CORS-aware image loading.
+   * Server-side Playwright screenshots do not; forcing crossorigin from an
+   * about:blank/null origin can make R2 reject otherwise public images.
+   */
+  imageCrossOrigin?: "anonymous" | false;
 };
 
 export type Box = {

@@ -7,11 +7,13 @@ export default function PrintCanvas({
   safeArea,
   scaleX = 1,
   scaleY = 1,
+  imageCrossOrigin = "anonymous",
 }: {
   elements: RenderElement[];
   safeArea: Box;
   scaleX?: number;
   scaleY?: number;
+  imageCrossOrigin?: "anonymous" | false;
 }) {
   const width = Math.max(1, Number(safeArea?.width || 1));
   const height = Math.max(1, Number(safeArea?.height || 1));
@@ -34,7 +36,7 @@ export default function PrintCanvas({
           data-print-element
           style={getElementBoxStyle(el, { scaleX, scaleY, interactive: false })}
         >
-          <ElementRenderer el={el} editing={false} />
+          <ElementRenderer el={el} editing={false} imageCrossOrigin={imageCrossOrigin} />
         </div>
       ))}
     </div>

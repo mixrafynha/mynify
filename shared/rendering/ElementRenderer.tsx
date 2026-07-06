@@ -21,14 +21,20 @@ const fill: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
-const ImageElement = memo(function ImageElement({ el }: { el: RenderElement }) {
+const ImageElement = memo(function ImageElement({
+  el,
+  imageCrossOrigin = "anonymous",
+}: {
+  el: RenderElement;
+  imageCrossOrigin?: "anonymous" | false;
+}) {
   const src = resolveElementImageSrc(el);
   if (!src) return null;
 
   return (
     <div style={fill}>
       <img
-        crossOrigin="anonymous"
+        crossOrigin={imageCrossOrigin || undefined}
         referrerPolicy="no-referrer"
         src={src}
         draggable={false}
@@ -190,7 +196,7 @@ const ShapeElement = memo(function ShapeElement({ el }: { el: RenderElement }) {
 const ElementRenderer = memo(function ElementRenderer(props: ElementRendererProps) {
   return (
     <div style={{ width: "100%", height: "100%", boxSizing: "border-box" }}>
-      {props.el.type === "image" && <ImageElement el={props.el} />}
+      {props.el.type === "image" && <ImageElement el={props.el} imageCrossOrigin={props.imageCrossOrigin} />}
       {props.el.type === "text" && <TextElement {...props} />}
       {props.el.type === "shape" && <ShapeElement el={props.el} />}
     </div>

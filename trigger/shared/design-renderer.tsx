@@ -160,7 +160,7 @@ async function renderHtmlPng(args: {
   const background = args.transparent ? "transparent" : (args.mockupColor || "transparent");
 
   const mockupHtml = args.mockupUrl
-    ? `<img src="${escapeHtml(args.mockupUrl)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />`
+    ? `<img referrerpolicy="no-referrer" src="${escapeHtml(args.mockupUrl)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />`
     : "";
 
   const overlayWidth = args.scaleWholeLayer ? args.sourceWidth : positive(args.overlayWidth, args.outputWidth);
