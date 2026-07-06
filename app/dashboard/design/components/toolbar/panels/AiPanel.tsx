@@ -11,6 +11,55 @@ function safePrompt(value: string) {
   return value.replace(/[<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 180);
 }
 
+
+function firstString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (Array.isArray(value)) {
+      const found = firstString(...value);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function normalizeGeneratedImageResponse(data: any) {
+  const src = firstString(
+    data?.url,
+    data?.imageUrl,
+    data?.src,
+    data?.image,
+    data?.output,
+    data?.images,
+    data?.imageUrls,
+    data?.urls,
+    data?.data?.url,
+    data?.data?.imageUrl,
+    data?.data?.images,
+  );
+
+  if (!src) return null;
+
+  return {
+    src,
+    printUrl: firstString(data?.printUrl, data?.print_url, data?.assetUrl, data?.asset_url) || src,
+    id: data?.id || data?.generationId || data?.generation_id,
+    width: Number(data?.width || data?.naturalWidth || data?.metadata?.width) || AI_IMAGE_QUALITY.targetOutputPixels,
+    height: Number(data?.height || data?.naturalHeight || data?.metadata?.height) || AI_IMAGE_QUALITY.targetOutputPixels,
+    dpi: Number(data?.dpi || data?.metadata?.dpi) || AI_IMAGE_QUALITY.dpi,
+  };
+}
+
+function fitWithinBox(width: unknown, height: unknown, max = 300) {
+  const naturalWidth = Math.max(1, Number(width) || max);
+  const naturalHeight = Math.max(1, Number(height) || max);
+  const ratio = Math.min(1, max / naturalWidth, max / naturalHeight);
+  return {
+    width: Math.max(48, Math.round(naturalWidth * ratio)),
+    height: Math.max(48, Math.round(naturalHeight * ratio)),
+  };
+}
+
 function buildFinalPrompt(prompt: string) {
   return `${prompt}
 
@@ -59,11 +108,13 @@ export default function AiPanel({ createElement }: { createElement?: (data: any)
       const src = item.printUrl || item.src;
       if (!src) return;
 
+      const size = fitWithinBox(item.width, item.height, 300);
+
       createElement?.({
         type: "image",
         src,
-        width: 300,
-        height: 300,
+        width: size.width,
+        height: size.height,
         meta: {
           prompt: item.prompt || item.title,
           transparent: true,
@@ -73,6 +124,8 @@ export default function AiPanel({ createElement }: { createElement?: (data: any)
           dpi: item.dpi || AI_IMAGE_QUALITY.dpi,
           metadataDpi: AI_IMAGE_QUALITY.metadataDpi,
           qualityMode: item.qualityMode || "ultra-print",
+          objectFit: "fill",
+          opacity: 1,
         },
       });
 
@@ -117,19 +170,20 @@ export default function AiPanel({ createElement }: { createElement?: (data: any)
       if (!response.ok) throw new Error("AI generation failed");
 
       const data = await response.json();
-      const src = data.url || data.imageUrl || data.src;
-      if (!src) throw new Error("Missing image");
+      const image = normalizeGeneratedImageResponse(data);
+      if (!image?.src) throw new Error("Missing image");
 
       setGeneratedImages((prev) =>
         [
           {
             title: cleanPrompt,
             prompt: cleanPrompt,
-            src,
-            generationId: data.id,
-            width: data.width || AI_IMAGE_QUALITY.targetOutputPixels,
-            height: data.height || AI_IMAGE_QUALITY.targetOutputPixels,
-            dpi: data.dpi || AI_IMAGE_QUALITY.dpi,
+            src: image.src,
+            printUrl: image.printUrl,
+            generationId: image.id,
+            width: image.width,
+            height: image.height,
+            dpi: image.dpi,
             transparent: true,
             qualityMode: AI_IMAGE_QUALITY.mode,
           },

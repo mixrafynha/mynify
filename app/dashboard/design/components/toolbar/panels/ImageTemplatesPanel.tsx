@@ -14,12 +14,24 @@ function getPrint(item: any) {
   return item.printUrl || item.src || getPreview(item);
 }
 
+function fitWithinBox(width: unknown, height: unknown, max = 360) {
+  const naturalWidth = Math.max(1, Number(width) || 300);
+  const naturalHeight = Math.max(1, Number(height) || 300);
+  const ratio = Math.min(1, max / naturalWidth, max / naturalHeight);
+  return {
+    width: Math.max(48, Math.round(naturalWidth * ratio)),
+    height: Math.max(48, Math.round(naturalHeight * ratio)),
+  };
+}
+
 function addAsset(createElement: ((element: any) => void) | undefined, item: any) {
+  const size = fitWithinBox(item.width, item.height, 360);
+
   createElement?.({
     type: "image",
     src: getPrint(item),
-    width: Math.min(360, item.width || 300),
-    height: Math.min(360, item.height || 300),
+    width: size.width,
+    height: size.height,
     meta: {
       source: "image-template",
       title: item.title || item.label,
@@ -29,6 +41,7 @@ function addAsset(createElement: ((element: any) => void) | undefined, item: any
       transparent: item.transparent ?? true,
       qualityMode: "print-asset",
       opacity: 1,
+      objectFit: "fill",
     },
   });
 }

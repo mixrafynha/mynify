@@ -6,6 +6,7 @@ type ImageItem = {
   title: string;
   prompt: string;
   src: string;
+  printUrl?: string;
   generationId?: string;
   width?: number;
   height?: number;

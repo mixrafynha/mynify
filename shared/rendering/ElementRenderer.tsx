@@ -9,6 +9,10 @@ function sanitizeTextInput(value: string): string {
   return value.normalize("NFKC").replace(/[<>]/g, "").slice(0, 200);
 }
 
+function imageSource(el: RenderElement): string {
+  return String(el.src || el.meta?.src || el.meta?.url || el.meta?.imageUrl || el.meta?.image || "");
+}
+
 const fill: React.CSSProperties = {
   position: "relative",
   width: "100%",
@@ -16,15 +20,19 @@ const fill: React.CSSProperties = {
   overflow: "visible",
   touchAction: "none",
   userSelect: "none",
+  boxSizing: "border-box",
 };
 
 const ImageElement = memo(function ImageElement({ el }: { el: RenderElement }) {
+  const src = imageSource(el);
+  if (!src) return null;
+
   return (
     <div style={fill}>
       <img
         crossOrigin="anonymous"
         referrerPolicy="no-referrer"
-        src={el.src}
+        src={src}
         draggable={false}
         alt=""
         decoding="sync"
@@ -34,9 +42,9 @@ const ImageElement = memo(function ImageElement({ el }: { el: RenderElement }) {
           display: "block",
           width: "100%",
           height: "100%",
-          objectFit: "fill",
+          objectFit: el.meta?.objectFit || "fill",
           userSelect: "none",
-          opacity: el.meta?.opacity ?? 1,
+          opacity: el.meta?.imageOpacity ?? 1,
           filter: `brightness(${el.meta?.brightness ?? 100}%) contrast(${el.meta?.contrast ?? 100}%) saturate(${el.meta?.saturation ?? 100}%)`,
         }}
       />
@@ -64,13 +72,13 @@ const TextElement = memo(function TextElement({
       height: "100%",
       fontFamily: resolveFontFamily(el.meta?.fontFamily || el.fontFamily),
       fontSize,
-      fontWeight: el.meta?.fontWeight || 700,
-      fontStyle: el.meta?.fontStyle || "normal",
+      fontWeight: el.meta?.fontWeight || el.fontWeight || 700,
+      fontStyle: el.meta?.fontStyle || el.fontStyle || "normal",
       color: el.meta?.color || el.color || "#000000",
       letterSpacing: `${el.meta?.letterSpacing ?? 0}px`,
       lineHeight,
       textAlign: el.meta?.textAlign || el.textAlign || "center",
-      opacity: el.meta?.opacity ?? 1,
+      opacity: el.meta?.textOpacity ?? 1,
       padding: `${padding.y}px ${padding.x}px`,
       WebkitFontSmoothing: "antialiased",
       MozOsxFontSmoothing: "grayscale",
@@ -90,7 +98,7 @@ const TextElement = memo(function TextElement({
       WebkitTextFillColor: el.meta?.gradient ? "transparent" : undefined,
       overflow: "visible",
     }),
-    [el.color, el.fontFamily, el.meta, el.textAlign, fontSize, lineHeight, padding.x, padding.y],
+    [el.color, el.fontFamily, el.fontWeight, el.fontSize, el.meta, el.textAlign, fontSize, lineHeight, padding.x, padding.y],
   );
 
   const handleDoubleClick = useCallback(
@@ -175,7 +183,7 @@ const ShapeElement = memo(function ShapeElement({ el }: { el: RenderElement }) {
         boxShadow: el.meta?.shadow
           ? `0 12px 32px ${el.meta?.shadowColor || "rgba(0,0,0,.32)"}`
           : undefined,
-        opacity: el.meta?.opacity ?? 1,
+        opacity: el.meta?.shapeOpacity ?? 1,
       }}
     />
   );
@@ -183,7 +191,7 @@ const ShapeElement = memo(function ShapeElement({ el }: { el: RenderElement }) {
 
 const ElementRenderer = memo(function ElementRenderer(props: ElementRendererProps) {
   return (
-    <div style={{ width: "100%", height: "100%" }}>
+    <div style={{ width: "100%", height: "100%", boxSizing: "border-box" }}>
       {props.el.type === "image" && <ImageElement el={props.el} />}
       {props.el.type === "text" && <TextElement {...props} />}
       {props.el.type === "shape" && <ShapeElement el={props.el} />}

@@ -18,7 +18,7 @@ export default function PrintCanvas({
 
   return (
     <div
-      id="design-layer"
+      id="print-canvas"
       style={{
         position: "relative",
         width,
