@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { uploadR2Object } from "../../../trigger/shared/r2";
 
 export const runtime = "nodejs";
 
@@ -344,23 +345,72 @@ export async function POST(
         const arrayBuffer =
           await removeBgResponse.arrayBuffer();
 
-        const base64 =
+        const pngBuffer =
           Buffer.from(
             arrayBuffer
-          ).toString(
-            "base64"
           );
 
-        const dataUrl = `data:image/png;base64,${base64}`;
+        const objectKey = [
+          "ai-images",
+          user.id,
+          `${generationId}-${Date.now()}.png`,
+        ].join("/");
+
+        let publicImageUrl: string;
+
+        try {
+          publicImageUrl =
+            await uploadR2Object({
+              key: objectKey,
+              body: pngBuffer,
+              contentType: "image/png",
+              cacheControl:
+                "public, max-age=31536000, immutable",
+            });
+        } catch (uploadError: any) {
+          await refundCredit();
+
+          console.error(
+            "AI IMAGE R2 UPLOAD ERROR:",
+            uploadError
+          );
+
+          return NextResponse.json(
+            {
+              error:
+                "Image generated but R2 upload failed",
+
+              originalImageUrl:
+                imageUrl,
+
+              details:
+                uploadError?.message ||
+                "Unknown R2 upload error",
+            },
+            {
+              status: 500,
+            }
+          );
+        }
 
         return NextResponse.json(
           {
             success: true,
 
-            imageUrl: dataUrl,
-            src: dataUrl,
-            url: dataUrl,
-            image: dataUrl,
+            imageUrl:
+              publicImageUrl,
+
+            src:
+              publicImageUrl,
+
+            url:
+              publicImageUrl,
+
+            image:
+              publicImageUrl,
+
+            r2Key:
+              objectKey,
 
             originalImageUrl:
               imageUrl,
