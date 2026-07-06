@@ -165,11 +165,17 @@ function elementsForSide(input: PreviewPayloadInput, side: DesignSide) {
   const sideElements =
     side === "back" ? input.backElements : input.frontElements;
 
-  if (Array.isArray(sideElements)) return sideElements;
-  if (input.side === side && Array.isArray(input.elements))
-    return input.elements;
+  // Prefer the explicit per-side array only when it actually contains artwork.
+  // Some parents pass [] for frontElements/backElements while the live side data
+  // is still in input.elements. Returning the empty side array drops the design
+  // from save, Trigger print generation and checkout thumbnails.
+  if (Array.isArray(sideElements) && sideElements.length > 0) return sideElements;
 
-  return [];
+  if (input.side === side && Array.isArray(input.elements) && input.elements.length > 0) {
+    return input.elements;
+  }
+
+  return Array.isArray(sideElements) ? sideElements : [];
 }
 
 function finiteNumber(value: unknown, fallback?: number) {

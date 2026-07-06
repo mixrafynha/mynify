@@ -49,19 +49,39 @@ function TopBar({
   });
 
   const previewPayload = useMemo<PreviewPayloadInput>(
-    () => ({
-      productId,
-      category,
-      side,
-      elements: elements || [],
-      frontElements: frontElements || (side === "front" ? elements || [] : []),
-      backElements: backElements || (side === "back" ? elements || [] : []),
-      mockupColor,
-      color: mockupColor,
-      mockupMode: "on_model_ai",
-      modelMockup: true,
-      productConfig,
-    }),
+    () => {
+      const liveElements = Array.isArray(elements) ? elements : [];
+      const resolvedFrontElements =
+        Array.isArray(frontElements) && frontElements.length > 0
+          ? frontElements
+          : side === "front"
+            ? liveElements
+            : Array.isArray(frontElements)
+              ? frontElements
+              : [];
+      const resolvedBackElements =
+        Array.isArray(backElements) && backElements.length > 0
+          ? backElements
+          : side === "back"
+            ? liveElements
+            : Array.isArray(backElements)
+              ? backElements
+              : [];
+
+      return {
+        productId,
+        category,
+        side,
+        elements: liveElements,
+        frontElements: resolvedFrontElements,
+        backElements: resolvedBackElements,
+        mockupColor,
+        color: mockupColor,
+        mockupMode: "on_model_ai",
+        modelMockup: true,
+        productConfig,
+      };
+    },
     [
       productId,
       category,

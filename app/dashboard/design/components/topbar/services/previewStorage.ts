@@ -36,15 +36,18 @@ function elementsForSide(input: PreviewPayloadInput, side: Side) {
   const sideElements =
     side === "back" ? input.backElements : input.frontElements;
 
-  if (Array.isArray(sideElements) && sideElements.length) {
+  // Prefer the explicit side array only when it is populated. If it is an empty
+  // placeholder, fall back to the currently mounted editor elements for the
+  // active side so preview/save never lose the actual design.
+  if (Array.isArray(sideElements) && sideElements.length > 0) {
     return sideElements;
   }
 
-  if (input.side === side && Array.isArray(input.elements)) {
+  if (input.side === side && Array.isArray(input.elements) && input.elements.length > 0) {
     return input.elements;
   }
 
-  return [];
+  return Array.isArray(sideElements) ? sideElements : [];
 }
 
 function sanitizeElementsForStorage(elements: any[]) {

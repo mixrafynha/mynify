@@ -1,4 +1,6 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { addSavedDesignToCart } from "./cart";
 import {
@@ -6,20 +8,113 @@ import {
   getBaseProduct,
   isUuid,
 } from "./save-design-payload";
+import { queueDesignAssetJobs } from "./queue-design-assets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+async function createCookieSupabaseServer() {
+  const cookieStore = await cookies();
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value, ...options });
+        } catch {
+          // Ignore cookie writes in contexts where Next exposes read-only cookies.
+        }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+        } catch {
+          // Ignore cookie writes in contexts where Next exposes read-only cookies.
+        }
+      },
+    },
+  });
+}
+
+async function getAuthenticatedSupabase(req: Request) {
+  // First keep the existing project helper path. If it is already correct in a
+  // deployment, this preserves the current behavior.
+  const projectSupabase = createSupabaseServer();
+  const projectAuth = await projectSupabase.auth.getUser();
+
+  if (!projectAuth.error && projectAuth.data.user) {
+    return { supabase: projectSupabase, user: projectAuth.data.user };
+  }
+
+  // In this route the observed failure is 401 even after browser login. That
+  // usually means the API helper is not reading Next cookies correctly. Build a
+  // request-scoped Supabase client from the actual route cookies.
+  const cookieSupabase = await createCookieSupabaseServer();
+  const cookieAuth = await cookieSupabase.auth.getUser();
+
+  if (!cookieAuth.error && cookieAuth.data.user) {
+    return { supabase: cookieSupabase, user: cookieAuth.data.user };
+  }
+
+  // Optional fallback for clients that explicitly send Authorization: Bearer.
+  const authHeader = req.headers.get("authorization");
+  const bearerToken = authHeader?.match(/^Bearer\s+(.+)$/i)?.[1];
+
+  if (bearerToken) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+    }
+
+    const bearerSupabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${bearerToken}`,
+        },
+      },
+      cookies: {
+        get() {
+          return undefined;
+        },
+        set() {},
+        remove() {},
+      },
+    });
+    const bearerAuth = await bearerSupabase.auth.getUser();
+
+    if (!bearerAuth.error && bearerAuth.data.user) {
+      return { supabase: bearerSupabase, user: bearerAuth.data.user };
+    }
+  }
+
+  console.error("SAVE_DESIGN_AUTH_ERROR", {
+    projectAuthError: projectAuth.error?.message ?? null,
+    cookieAuthError: cookieAuth.error?.message ?? null,
+    hasCookieHeader: Boolean(req.headers.get("cookie")),
+    hasAuthorizationHeader: Boolean(authHeader),
+  });
+
+  return { supabase: cookieSupabase, user: null };
+}
+
+
 export async function POST(req: Request) {
   try {
-    const supabase = createSupabaseServer();
+    const { supabase, user } = await getAuthenticatedSupabase(req);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json(
         { error: "User not authenticated" },
         { status: 401 },
@@ -113,6 +208,18 @@ export async function POST(req: Request) {
       );
     }
 
+    let backgroundJobs: Awaited<ReturnType<typeof queueDesignAssetJobs>> | null = null;
+    try {
+      backgroundJobs = await queueDesignAssetJobs({
+        userProductId: userProduct.id,
+        designData: userProduct.design_data,
+      });
+    } catch (queueError) {
+      // Save must remain JSON-only and must never fail because Trigger.dev/R2 is down.
+      // The product row is already persisted with pending asset status.
+      console.error("DESIGN_ASSET_QUEUE_ERROR", queueError);
+    }
+
     const shouldAddToCart = body.addToCart !== false;
     let cartItem = null;
     let cartMode: "extended" | "basic" | null = null;
@@ -148,6 +255,7 @@ export async function POST(req: Request) {
       product: userProduct,
       cartItem,
       cartMode,
+      backgroundJobs,
       redirectTo: "/cart",
     });
   } catch (error) {
