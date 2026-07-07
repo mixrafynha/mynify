@@ -87,13 +87,27 @@ function isFetchableImageSrc(src: string) {
 function resolveElementImageSrc(el: RenderElement) {
   return String(
     el.src ||
-      el.url ||
+      el.printUrl ||
+      el.print_url ||
       el.imageUrl ||
       el.image_url ||
+      el.assetUrl ||
+      el.asset_url ||
+      el.publicImageUrl ||
+      el.public_image_url ||
+      el.url ||
+      el.image ||
       el.meta?.src ||
-      el.meta?.url ||
+      el.meta?.printUrl ||
+      el.meta?.print_url ||
       el.meta?.imageUrl ||
       el.meta?.image_url ||
+      el.meta?.assetUrl ||
+      el.meta?.asset_url ||
+      el.meta?.publicImageUrl ||
+      el.meta?.public_image_url ||
+      el.meta?.url ||
+      el.meta?.image ||
       "",
   ).trim();
 }

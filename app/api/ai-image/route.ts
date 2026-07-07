@@ -9,16 +9,19 @@ export const runtime = "nodejs";
 function firstString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
+
     if (Array.isArray(value)) {
       const found = firstString(...value);
       if (found) return found;
     }
+
     if (value && typeof value === "object" && !(value instanceof ReadableStream)) {
       const record = value as Record<string, unknown>;
       const found = firstString(record.url, record.image, record.src, record.output);
       if (found) return found;
     }
   }
+
   return null;
 }
 
@@ -59,8 +62,12 @@ async function getSupabase() {
         },
         setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
-          } catch {}
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // Server Components can ignore cookie set failures.
+          }
         },
       },
     },
@@ -70,7 +77,18 @@ async function getSupabase() {
 function getBaseUrl(req: Request) {
   if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
   return new URL(req.url).origin;
+}
+
+function buildQualityPrompt(prompt: string) {
+  return `${prompt}
+
+Create one premium print-ready apparel design asset.
+It must look like a professional Leonardo-style streetwear graphic with rich details, strong shape language, readable composition, and high commercial quality.
+If text/lettering is requested, make it clean, bold, readable, and integrated into the artwork.
+Do not generate a t-shirt, hoodie, product mockup, person, model, room, wall, hanger, frame, watermark, logo mockup, or product photo.
+Generate only the isolated printable artwork, centered, fully visible, sharp, detailed, high contrast, vibrant, DTG/DTF ready.`;
 }
 
 export async function POST(req: Request) {
@@ -79,6 +97,7 @@ export async function POST(req: Request) {
 
   async function refundCredit() {
     if (!supabase || !creditConsumed) return;
+
     try {
       await supabase.rpc("refund_ai_credit");
       creditConsumed = false;
@@ -89,7 +108,7 @@ export async function POST(req: Request) {
 
   try {
     const replicateToken = process.env.REPLICATE_API_TOKEN;
-    const fluxModel = process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-schnell";
+    const fluxModel = process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-dev";
 
     if (!replicateToken) {
       return NextResponse.json({ success: false, error: "Missing REPLICATE_API_TOKEN" }, { status: 500 });
@@ -137,16 +156,20 @@ export async function POST(req: Request) {
 
     const replicate = new Replicate({ auth: replicateToken });
 
+    console.log("AI IMAGE: Starting FLUX DEV generation", {
+      model: fluxModel,
+      userId: user.id,
+    });
+
     const fluxOutput = await replicate.run(fluxModel as any, {
       input: {
-        prompt,
-        go_fast: true,
-        megapixels: "1",
-        num_outputs: 1,
+        prompt: buildQualityPrompt(prompt),
         aspect_ratio: "1:1",
+        num_outputs: 1,
         output_format: "png",
         output_quality: 100,
-        num_inference_steps: 4,
+        num_inference_steps: 32,
+        guidance_scale: 3.5,
       },
     });
 
