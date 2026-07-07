@@ -81,60 +81,61 @@ function getBaseUrl(req: Request) {
   return new URL(req.url).origin;
 }
 
-function buildQualityPrompt(prompt: string) {
-  return `${prompt}
+function buildQualityPrompt(userPrompt: string) {
+  return `${userPrompt}
 
 Create ONE premium apparel graphic only.
 
-Professional streetwear illustration.
+Professional luxury streetwear illustration.
 Tattoo-quality artwork.
-Leonardo-style premium merch graphic.
 Extremely detailed.
-Bold composition.
-Clean silhouette.
-Strong focal point.
+Fill approximately 90% of the canvas.
+Large central composition.
+No empty transparent borders.
+Leave only a tiny safety margin around the artwork.
+Aggressive high-impact composition.
 Rich textures.
-Dynamic lighting.
-Highly readable.
-Commercial clothing print.
-Vector-inspired illustration.
-Professional DTG artwork.
-Professional DTF artwork.
-Premium screen-print design.
+Layered details.
+Deep shadows.
+Cinematic lighting.
+Ultra sharp edges.
+Bold clean outlines.
+Crisp line art.
 High contrast.
 Vibrant colors.
-Sharp outlines.
-Crisp edges.
-Balanced composition.
-Large centered artwork.
-Fill most of the canvas.
-Leave only a small transparent safety margin around the artwork.
+Highly readable silhouette.
+Vector-inspired professional illustration.
+Premium commercial apparel artwork.
+Professional DTG print.
+Professional DTF print.
+Screen-print friendly design.
+Award-winning merch illustration.
 
-If text or lettering is requested, make it clean, bold, readable, and integrated into the artwork.
+If text or lettering is requested, make it clean, bold, readable, correctly spelled, and integrated into the artwork.
 
-STRICT NEGATIVES:
+STRICT NEGATIVE RULES:
 No t-shirt.
 No hoodie.
-No clothing product.
-No mockup.
+No sweatshirt.
+No clothing.
+No product mockup.
 No person.
 No model.
 No mannequin.
-No body.
 No hands.
+No body.
 No room.
 No wall.
+No table.
 No hanger.
 No frame.
 No watermark.
 No logo mockup.
 No product photo.
-No cropped artwork.
-No blurry details.
-No low-quality output.
+No background scene.
+No huge empty transparent border.
 
-Output must be an isolated printable design asset, centered, fully visible, sharp, detailed, high contrast, vibrant, DTG/DTF ready.
-Award-winning apparel design quality.`;
+Generate only the isolated printable artwork, centered, fully visible, sharp, detailed, high contrast, vibrant, and print-ready.`;
 }
 
 export async function POST(req: Request) {
@@ -202,7 +203,7 @@ export async function POST(req: Request) {
 
     const replicate = new Replicate({ auth: replicateToken });
 
-    console.log("AI IMAGE: Starting FLUX DEV quality generation", {
+    console.log("AI IMAGE: Starting FLUX DEV max quality generation", {
       model: fluxModel,
       userId: user.id,
     });
