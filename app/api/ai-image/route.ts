@@ -84,11 +84,57 @@ function getBaseUrl(req: Request) {
 function buildQualityPrompt(prompt: string) {
   return `${prompt}
 
-Create one premium print-ready apparel design asset.
-It must look like a professional Leonardo-style streetwear graphic with rich details, strong shape language, readable composition, and high commercial quality.
-If text/lettering is requested, make it clean, bold, readable, and integrated into the artwork.
-Do not generate a t-shirt, hoodie, product mockup, person, model, room, wall, hanger, frame, watermark, logo mockup, or product photo.
-Generate only the isolated printable artwork, centered, fully visible, sharp, detailed, high contrast, vibrant, DTG/DTF ready.`;
+Create ONE premium apparel graphic only.
+
+Professional streetwear illustration.
+Tattoo-quality artwork.
+Leonardo-style premium merch graphic.
+Extremely detailed.
+Bold composition.
+Clean silhouette.
+Strong focal point.
+Rich textures.
+Dynamic lighting.
+Highly readable.
+Commercial clothing print.
+Vector-inspired illustration.
+Professional DTG artwork.
+Professional DTF artwork.
+Premium screen-print design.
+High contrast.
+Vibrant colors.
+Sharp outlines.
+Crisp edges.
+Balanced composition.
+Large centered artwork.
+Fill most of the canvas.
+Leave only a small transparent safety margin around the artwork.
+
+If text or lettering is requested, make it clean, bold, readable, and integrated into the artwork.
+
+STRICT NEGATIVES:
+No t-shirt.
+No hoodie.
+No clothing product.
+No mockup.
+No person.
+No model.
+No mannequin.
+No body.
+No hands.
+No room.
+No wall.
+No hanger.
+No frame.
+No watermark.
+No logo mockup.
+No product photo.
+No cropped artwork.
+No blurry details.
+No low-quality output.
+
+Output must be an isolated printable design asset, centered, fully visible, sharp, detailed, high contrast, vibrant, DTG/DTF ready.
+Award-winning apparel design quality.`;
 }
 
 export async function POST(req: Request) {
@@ -156,7 +202,7 @@ export async function POST(req: Request) {
 
     const replicate = new Replicate({ auth: replicateToken });
 
-    console.log("AI IMAGE: Starting FLUX DEV generation", {
+    console.log("AI IMAGE: Starting FLUX DEV quality generation", {
       model: fluxModel,
       userId: user.id,
     });
@@ -168,8 +214,8 @@ export async function POST(req: Request) {
         num_outputs: 1,
         output_format: "png",
         output_quality: 100,
-        num_inference_steps: 32,
-        guidance_scale: 3.5,
+        num_inference_steps: 40,
+        guidance_scale: 5,
       },
     });
 
