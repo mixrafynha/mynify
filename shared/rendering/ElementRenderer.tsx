@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 import { resolveFontFamily } from "./font";
 import { resolveElementImageSrc } from "./imageSource";
 import { getTextPadding } from "./textLayout";
@@ -21,6 +21,18 @@ const fill: React.CSSProperties = {
   boxSizing: "border-box",
 };
 
+function withRetryToken(src: string, retry: number) {
+  if (!retry) return src;
+
+  try {
+    const url = new URL(src);
+    url.searchParams.set("ryfio_retry", String(retry));
+    return url.toString();
+  } catch {
+    return src;
+  }
+}
+
 const ImageElement = memo(function ImageElement({
   el,
   imageCrossOrigin = "anonymous",
@@ -29,18 +41,30 @@ const ImageElement = memo(function ImageElement({
   imageCrossOrigin?: "anonymous" | false;
 }) {
   const src = resolveElementImageSrc(el);
-  if (!src) return null;
+  const [retry, setRetry] = useState(0);
+
+  if (!src) {
+    console.error("RYFIO IMAGE RENDER ERROR: missing image src", { el });
+    return null;
+  }
+
+  const displaySrc = withRetryToken(src, retry);
 
   return (
     <div style={fill}>
       <img
+        key={displaySrc}
         crossOrigin={imageCrossOrigin || undefined}
         referrerPolicy="no-referrer"
-        src={src}
+        src={displaySrc}
         draggable={false}
         alt=""
         decoding="sync"
         loading="eager"
+        onError={() => {
+          console.error("RYFIO IMAGE RENDER ERROR: failed to load image", { src, displaySrc, el });
+          if (retry < 2) window.setTimeout(() => setRetry((value) => value + 1), 250);
+        }}
         style={{
           pointerEvents: "none",
           display: "block",
@@ -48,7 +72,7 @@ const ImageElement = memo(function ImageElement({
           height: "100%",
           objectFit: el.meta?.objectFit || "fill",
           userSelect: "none",
-          opacity: el.meta?.imageOpacity ?? 1,
+          opacity: el.meta?.imageOpacity ?? el.meta?.opacity ?? 1,
           filter: `brightness(${el.meta?.brightness ?? 100}%) contrast(${el.meta?.contrast ?? 100}%) saturate(${el.meta?.saturation ?? 100}%)`,
         }}
       />

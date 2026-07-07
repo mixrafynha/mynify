@@ -14,13 +14,26 @@ export function resolveElementImageSrc(el: RenderElement | Record<string, any> |
 
   return firstString(
     el.src,
-    el.url,
+    el.printUrl,
+    el.print_url,
     el.imageUrl,
     el.image_url,
+    el.assetUrl,
+    el.asset_url,
+    el.publicImageUrl,
+    el.public_image_url,
+    el.url,
+    el.image,
     meta.src,
-    meta.url,
+    meta.printUrl,
+    meta.print_url,
     meta.imageUrl,
     meta.image_url,
+    meta.assetUrl,
+    meta.asset_url,
+    meta.publicImageUrl,
+    meta.public_image_url,
+    meta.url,
     meta.image,
   );
 }

@@ -60,15 +60,95 @@ function fitWithinBox(width: unknown, height: unknown, max = 300) {
   };
 }
 
-function buildFinalPrompt(prompt: string) {
-  return `${prompt}
 
-Print-ready apparel graphic.
-Transparent background.
-No mockup. No shirt. No person. No watermark. No copyrighted logo. No brand name.
-Centered PNG alpha. Sharp edges. High detail. 4096px to 8192px output.`;
+function withCacheBust(value: unknown) {
+  const src = String(value || "").trim();
+  if (!src) return "";
+
+  try {
+    const url = new URL(src);
+    url.searchParams.set("ryfio_canvas", String(Date.now()));
+    return url.toString();
+  } catch {
+    return src;
+  }
 }
 
+function preloadImage(src: string) {
+  return new Promise<{ width: number; height: number }>((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      resolve({
+        width: img.naturalWidth || AI_IMAGE_QUALITY.targetOutputPixels,
+        height: img.naturalHeight || AI_IMAGE_QUALITY.targetOutputPixels,
+      });
+    };
+    img.onerror = () => reject(new Error(`Failed to preload image: ${src}`));
+    img.src = src;
+  });
+}
+
+function buildFinalPrompt(userPrompt: string) {
+  return `
+You are an elite apparel graphic designer creating premium print-ready artwork.
+
+User idea:
+"${userPrompt}"
+
+Create ONE standalone printable design asset only.
+
+STRICT OUTPUT RULES:
+- isolated artwork only
+- transparent background
+- alpha transparency PNG
+- centered composition
+- full artwork visible
+- no cropping
+- no mockup
+- no t-shirt
+- no shirt
+- no hoodie
+- no sweatshirt
+- no clothing
+- no person
+- no model
+- no mannequin
+- no hands
+- no body
+- no room
+- no wall
+- no table
+- no hanger
+- no product photo
+- no background scene
+- no frame
+- no border
+- no watermark
+- no signature
+- no copyrighted logo
+- no brand name
+
+STYLE DIRECTION:
+- premium streetwear apparel graphic
+- bold central composition
+- high-impact design
+- professional illustration
+- vector-like clean edges
+- sharp lines
+- vibrant colors
+- strong contrast
+- detailed but readable
+- DTG ready
+- DTF ready
+- screen print style
+- commercial clothing print quality
+- unique, modern, creative
+
+Return ONLY the printable artwork.
+Never generate a t-shirt, mockup, clothing item, person, scene, or product presentation.
+`;
+}
 export default function AiPanel({ createElement }: { createElement?: (data: any) => void }) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -94,43 +174,76 @@ export default function AiPanel({ createElement }: { createElement?: (data: any)
     []
   );
 
-  const randomPrompt = useCallback(() => {
-    const item: any = previewImages[Math.floor(Math.random() * previewImages.length)];
-    if (!item) return;
+ const randomPrompt = useCallback(() => {
+  const prompts = [
+    "angry tiger head, streetwear mascot logo, bold flames, aggressive eyes",
+    "vintage skull with roses, gothic tattoo style, premium blackwork illustration",
+    "gym wolf mascot, heavy barbell, aggressive sports logo, high contrast",
+    "cyberpunk dragon emblem, neon energy, sharp vector style, futuristic streetwear",
+    "samurai skeleton, red sun, Japanese ink style, detailed apparel graphic",
+    "racing panther, speed lines, motorsport streetwear badge, bold composition",
+    "retro eagle with lightning, vintage biker style, distressed print design",
+    "dark angel wings with sword, gothic streetwear emblem, dramatic contrast",
+    "graffiti gorilla face, urban street art logo, bold colors",
+    "phoenix rising from flames, premium fantasy apparel graphic, sharp edges",
+    "snake wrapped around dagger, tattoo flash style, clean vector illustration",
+    "skull astronaut helmet, cosmic streetwear design, detailed central emblem",
+  ];
 
-    setPrompt(item.prompt);
-    setError("");
-    setNotice("Prompt ready. You can generate now.");
-  }, [previewImages]);
-
+  const item = prompts[Math.floor(Math.random() * prompts.length)];
+  setPrompt(item);
+  setError("");
+  setNotice("Prompt ready. You can generate now.");
+}, []);
   const addImageToCanvas = useCallback(
-    (item: any) => {
-      const src = item.printUrl || item.src;
-      if (!src) return;
+    async (item: any) => {
+      const rawSrc = String(item.printUrl || item.src || item.imageUrl || item.url || "").trim();
 
-      const size = fitWithinBox(item.width, item.height, 300);
+      if (!rawSrc || !rawSrc.startsWith("http")) {
+        console.error("RYFIO AI IMAGE ADD ERROR: invalid image src", { rawSrc, item });
+        setError("Invalid generated image URL. Please generate again.");
+        return;
+      }
 
-      createElement?.({
-        type: "image",
-        src,
-        width: size.width,
-        height: size.height,
-        meta: {
-          prompt: item.prompt || item.title,
-          transparent: true,
-          source: item.generationId ? "ai-generated-print" : "print-reference",
-          naturalWidth: item.width || AI_IMAGE_QUALITY.targetOutputPixels,
-          naturalHeight: item.height || AI_IMAGE_QUALITY.targetOutputPixels,
-          dpi: item.dpi || AI_IMAGE_QUALITY.dpi,
-          metadataDpi: AI_IMAGE_QUALITY.metadataDpi,
-          qualityMode: item.qualityMode || "ultra-print",
-          objectFit: "fill",
-          opacity: 1,
-        },
-      });
+      const src = withCacheBust(rawSrc);
 
-      setLastAddedSrc(item.src || src);
-      setNotice("Added to canvas. Ready for print preview.");
+      try {
+        setNotice("Loading image into canvas...");
+
+        const natural = await preloadImage(src);
+        const size = fitWithinBox(item.width || natural.width, item.height || natural.height, 300);
+
+        createElement?.({
+          type: "image",
+          src,
+          printUrl: src,
+          imageUrl: src,
+          url: src,
+          crossOrigin: "anonymous",
+          width: size.width,
+          height: size.height,
+          meta: {
+            prompt: item.prompt || item.title,
+            transparent: true,
+            source: item.generationId ? "ai-generated-print" : "print-reference",
+            naturalWidth: item.width || natural.width || AI_IMAGE_QUALITY.targetOutputPixels,
+            naturalHeight: item.height || natural.height || AI_IMAGE_QUALITY.targetOutputPixels,
+            dpi: item.dpi || AI_IMAGE_QUALITY.dpi,
+            metadataDpi: AI_IMAGE_QUALITY.metadataDpi,
+            qualityMode: item.qualityMode || "ultra-print",
+            objectFit: "fill",
+            opacity: 1,
+            printUrl: src,
+            imageUrl: src,
+          },
+        });
+
+        setLastAddedSrc(item.src || rawSrc);
+        setNotice("Added to canvas. Ready for print preview.");
+      } catch (error) {
+        console.error("RYFIO AI IMAGE ADD ERROR: preload failed", { src, item, error });
+        setError("Image created but failed to load in canvas. Try adding it again.");
+      }
     },
     [createElement]
   );
