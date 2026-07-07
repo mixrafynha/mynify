@@ -76,6 +76,87 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#39;");
 }
 
+function isInlineImageSrc(src: string) {
+  return src.startsWith("data:");
+}
+
+function isFetchableImageSrc(src: string) {
+  return /^https?:\/\//i.test(src);
+}
+
+function resolveElementImageSrc(el: RenderElement) {
+  return String(
+    el.src ||
+      el.url ||
+      el.imageUrl ||
+      el.image_url ||
+      el.meta?.src ||
+      el.meta?.url ||
+      el.meta?.imageUrl ||
+      el.meta?.image_url ||
+      "",
+  ).trim();
+}
+
+async function imageUrlToDataUrl(src: string) {
+  const cleanSrc = String(src || "").trim();
+  if (!cleanSrc || isInlineImageSrc(cleanSrc)) return cleanSrc;
+
+  if (!isFetchableImageSrc(cleanSrc)) {
+    throw new Error(`Unsupported image source for server render: ${cleanSrc.slice(0, 180)}`);
+  }
+
+  const response = await fetch(cleanSrc, {
+    headers: {
+      accept: "image/avif,image/webp,image/png,image/jpeg,image/svg+xml,image/*,*/*;q=0.8",
+      "user-agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch image for server render: ${response.status} ${response.statusText} | ${cleanSrc}`);
+  }
+
+  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim() || "image/png";
+  if (!contentType.startsWith("image/")) {
+    throw new Error(`Invalid image content-type for server render: ${contentType} | ${cleanSrc}`);
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) {
+    throw new Error(`Empty image response for server render: ${cleanSrc}`);
+  }
+
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
+async function inlineRenderImages(elements: RenderElement[]) {
+  return Promise.all(
+    elements.map(async (el) => {
+      if (String(el.type || "") !== "image") return el;
+
+      const src = resolveElementImageSrc(el);
+      if (!src) return el;
+
+      const inlinedSrc = await imageUrlToDataUrl(src);
+      return {
+        ...el,
+        src: inlinedSrc,
+        imageUrl: inlinedSrc,
+        url: inlinedSrc,
+        meta: {
+          ...(el.meta || {}),
+          src: inlinedSrc,
+          imageUrl: inlinedSrc,
+          url: inlinedSrc,
+          originalSrc: el.meta?.originalSrc || src,
+        },
+      };
+    }),
+  );
+}
+
 function normalizeElements(value: unknown): RenderElement[] {
   if (!Array.isArray(value)) return [];
 
@@ -142,7 +223,7 @@ async function renderHtmlPng(args: {
    */
   scaleWholeLayer?: boolean;
 }) {
-  const elements = normalizeElements(args.elements);
+  const elements = await inlineRenderImages(normalizeElements(args.elements));
   const outputScaleX = args.outputWidth / args.sourceWidth;
   const outputScaleY = args.outputHeight / args.sourceHeight;
   const elementScaleX = args.scaleWholeLayer ? 1 : outputScaleX;
@@ -158,9 +239,10 @@ async function renderHtmlPng(args: {
     />,
   );
   const background = args.transparent ? "transparent" : (args.mockupColor || "transparent");
+  const mockupSrc = args.mockupUrl ? await imageUrlToDataUrl(args.mockupUrl) : null;
 
-  const mockupHtml = args.mockupUrl
-    ? `<img referrerpolicy="no-referrer" src="${escapeHtml(args.mockupUrl)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />`
+  const mockupHtml = mockupSrc
+    ? `<img src="${escapeHtml(mockupSrc)}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;" />`
     : "";
 
   const overlayWidth = args.scaleWholeLayer ? args.sourceWidth : positive(args.overlayWidth, args.outputWidth);
@@ -211,10 +293,25 @@ ${googleFontsLinks(elements)}
     await page.evaluate(async () => {
       await document.fonts?.ready;
       const images = Array.from(document.images);
-      await Promise.all(images.map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
-        img.onload = resolve;
-        img.onerror = resolve;
-      })));
+
+      await Promise.all(
+        images.map((img) => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+
+          return new Promise<void>((resolve, reject) => {
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error(`Image failed to load: ${img.src.slice(0, 240)}`));
+          });
+        }),
+      );
+
+      const failed = images
+        .filter((img) => !img.complete || img.naturalWidth === 0)
+        .map((img) => img.src.slice(0, 240));
+
+      if (failed.length) {
+        throw new Error(`Render image load failed: ${failed.join(" | ")}`);
+      }
     });
     return Buffer.from(await page.screenshot({ type: "png", omitBackground: !!args.transparent }));
   } finally {
