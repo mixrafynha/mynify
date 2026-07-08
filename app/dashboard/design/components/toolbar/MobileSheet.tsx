@@ -171,7 +171,7 @@ function MobileSheet({
     event.currentTarget.releasePointerCapture?.(event.pointerId);
   }, []);
 
-  const content = useMemo(() => {
+  const nonAiContent = useMemo(() => {
     if (panel === "templates") {
       return <TemplatesPanel createElement={createElement} />;
     }
@@ -200,10 +200,6 @@ function MobileSheet({
       return <Assets3DPanel createElement={createElement} />;
     }
 
-    if (panel === "ai") {
-      return <AiPanel createElement={createAiElement} />;
-    }
-
     if (panel === "layers") {
       return (
         <LayersPanel
@@ -215,6 +211,8 @@ function MobileSheet({
       );
     }
 
+    if (panel === "ai") return null;
+
     return <EmptyState />;
   }, [
     panel,
@@ -222,7 +220,6 @@ function MobileSheet({
     onUpload,
     onAddText,
     createElement,
-    createAiElement,
     updateSelected,
     deleteSelected,
     elements,
@@ -230,7 +227,6 @@ function MobileSheet({
     deleteElement,
   ]);
 
-  if (!open) return null;
 
   return (
     <>
@@ -299,24 +295,26 @@ function MobileSheet({
         }
       `}</style>
 
-      <button
-        type="button"
-        aria-label="Close mobile sheet overlay"
-        onClick={close}
-        className="fixed inset-0 z-30 bg-black/30 md:hidden"
-      />
+      {open && (
+        <button
+          type="button"
+          aria-label="Close mobile sheet overlay"
+          onClick={close}
+          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+        />
+      )}
 
       <section
         data-ryfio-mobile-sheet="true"
-        className="
-          fixed inset-x-0 bottom-0 z-40 md:hidden
+        className={`
+          ${open ? "fixed" : "hidden"} inset-x-0 bottom-0 z-40 md:hidden
           overflow-hidden rounded-t-[18px]
           border-t border-violet-300/15
           bg-[#070817] text-white
           shadow-[0_-12px_34px_rgba(0,0,0,0.34),0_0_28px_rgba(124,58,237,0.12)]
           transition-transform duration-150 ease-out
           will-change-transform
-        "
+        `}
         style={{
           height: `min(${SHEET_HEIGHTS[sheetSize]}, 420px)`,
           paddingBottom: "env(safe-area-inset-bottom)",
@@ -394,7 +392,10 @@ function MobileSheet({
             data-ryfio-mobile-sheet-content="true"
             className="mx-auto w-full max-w-[720px]"
           >
-            {content}
+            <div className={panel === "ai" ? "block" : "hidden"}>
+              <AiPanel createElement={createAiElement} />
+            </div>
+            {panel !== "ai" && nonAiContent}
           </div>
         </div>
       </section>

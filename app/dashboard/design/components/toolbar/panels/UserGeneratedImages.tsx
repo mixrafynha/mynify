@@ -1,51 +1,144 @@
 "use client";
 
-import { Plus } from "lucide-react";
+import { Check, ImagePlus, Trash2 } from "lucide-react";
 
 type ImageItem = {
-  title: string;
-  prompt: string;
-  src: string;
-  printUrl?: string;
+  id?: string;
   generationId?: string;
+  generation_id?: string;
+  title?: string;
+  prompt?: string;
+  src?: string;
+  imageUrl?: string;
+  image_url?: string;
+  printUrl?: string;
+  url?: string;
+  r2Key?: string;
+  storage_key?: string;
+  originalImageUrl?: string | null;
+  original_image_url?: string | null;
   width?: number;
   height?: number;
   dpi?: number;
-  qualityMode?: string;
+  saved?: boolean;
 };
 
 type Props = {
   images: ImageItem[];
-  lastAddedSrc: string | null;
+  lastAddedSrc?: string | null;
+  limit?: number;
+  savedCount?: number;
   onAdd: (item: ImageItem) => void;
+  onSave?: (item: ImageItem) => void;
+  onDelete?: (item: ImageItem) => void;
 };
 
-export default function UserGeneratedImages({ images, lastAddedSrc, onAdd }: Props) {
-  if (!images.length) return null;
+function getImageSrc(item: ImageItem) {
+  return String(item.imageUrl || item.image_url || item.printUrl || item.src || item.url || "").trim();
+}
+
+function isValidImageSrc(src: string) {
+  return src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:image/");
+}
+
+export default function UserGeneratedImages({
+  images,
+  lastAddedSrc,
+  limit = 5,
+  savedCount = 0,
+  onAdd,
+  onSave,
+  onDelete,
+}: Props) {
+  const validImages = images.filter((item) => isValidImageSrc(getImageSrc(item)));
+
+  if (!validImages.length) {
+    return (
+      <div className="rounded-3xl bg-white/[0.035] p-4 text-center ring-1 ring-white/10">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-white/45">Your AI Designs</p>
+        <p className="mt-2 text-xs font-semibold leading-relaxed text-slate-500">
+          Generate an image and save up to {limit} AI designs.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-2">
-      <div className="px-1">
-        <p className="text-sm font-black">AI criadas</p>
-        <p className="text-[11px] font-medium text-slate-500">Últimas imagens geradas</p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 px-1">
+        <p className="text-xs font-black uppercase tracking-[0.14em] text-violet-200/80">Your AI Designs</p>
+        <p className="text-[11px] font-bold text-white/40">
+          {savedCount}/{limit} saved
+        </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {images.slice(0, 8).map((item, index) => {
-          const added = lastAddedSrc === item.src;
+      <div className="grid grid-cols-2 gap-2">
+        {validImages.slice(0, 5).map((item, index) => {
+          const src = getImageSrc(item);
+          const saved = Boolean(item.saved || item.id);
+          const isLastAdded = Boolean(lastAddedSrc && src === lastAddedSrc);
+
           return (
-            <button key={`${item.src}-${item.generationId ?? index}`} type="button" onClick={() => onAdd(item)} className="group relative overflow-hidden rounded-2xl bg-white/[0.045] ring-1 ring-violet-400/20 active:scale-[0.98]">
-              <div className="aspect-square overflow-hidden">
-                <img src={item.src} alt={item.title} loading="lazy" decoding="async" className="h-full w-full object-cover" draggable={false} />
+            <div
+              key={item.id || item.generationId || item.generation_id || src || index}
+              data-ai-image-card
+              className="group overflow-hidden rounded-3xl bg-white/[0.045] ring-1 ring-white/10"
+            >
+              <button
+                type="button"
+                onClick={() => onAdd(item)}
+                className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-black/20"
+              >
+                {src ? (
+                  <img
+                    src={src}
+                    crossOrigin="anonymous"
+                    alt="AI generated design"
+                    className="h-full w-full object-contain p-2"
+                    draggable={false}
+                    onError={(event) => {
+                      event.currentTarget.closest("[data-ai-image-card]")?.classList.add("hidden");
+                    }}
+                  />
+                ) : (
+                  <div className="text-xs font-bold text-red-300">Missing image</div>
+                )}
+
+                {isLastAdded && (
+                  <div className="absolute right-2 top-2 rounded-full bg-emerald-400 px-2 py-1 text-[10px] font-black text-black">
+                    Added
+                  </div>
+                )}
+              </button>
+
+              <div className="grid grid-cols-3 gap-1 p-2">
+                <button
+                  type="button"
+                  onClick={() => onAdd(item)}
+                  className="flex h-9 items-center justify-center gap-1 rounded-xl bg-violet-500 text-[11px] font-black text-white active:scale-[0.98]"
+                >
+                  <ImagePlus size={13} /> Add
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onSave?.(item)}
+                  disabled={saved}
+                  className="flex h-9 items-center justify-center gap-1 rounded-xl bg-white/[0.07] text-[11px] font-black text-slate-200 ring-1 ring-white/10 active:scale-[0.98] disabled:opacity-40"
+                >
+                  <Check size={13} /> {saved ? "Saved" : "Save"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onDelete?.(item)}
+                  disabled={!saved}
+                  className="flex h-9 items-center justify-center rounded-xl bg-red-500/10 text-red-200 ring-1 ring-red-500/20 active:scale-[0.98] disabled:opacity-30"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 text-left">
-                <p className="line-clamp-1 text-[10px] font-black text-white">{item.title}</p>
-                <p className="text-[9px] font-bold text-white/60">{added ? "Added" : "AI"}</p>
-              </div>
-              <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-violet-500 text-white opacity-0 transition group-hover:opacity-100">
-                <Plus size={14} />
-              </span>
-            </button>
+            </div>
           );
         })}
       </div>

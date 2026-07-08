@@ -74,3 +74,12 @@ body {
   animation: ryfioGlow 2.5s ease-in-out infinite;
   will-change: transform;
 }
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-180%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(380%) skewX(-18deg);
+  }
+}
