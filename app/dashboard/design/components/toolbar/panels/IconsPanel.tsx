@@ -7,7 +7,6 @@ import { SHAPE_CATEGORIES, SHAPES, type ShapePreset } from "../data";
 
 const DESKTOP_PAGE_SIZE = 48;
 const MOBILE_PAGE_SIZE = 24;
-const SHAPE_BOX_SIZE = 88;
 
 function getPageSize() {
   if (typeof window === "undefined") return DESKTOP_PAGE_SIZE;
@@ -19,8 +18,8 @@ function addShape(createElement: ((element: any) => void) | undefined, shape: Sh
     type: "text",
     text: shape.value,
     content: shape.value,
-    width: SHAPE_BOX_SIZE,
-    height: SHAPE_BOX_SIZE,
+    width: 88,
+    height: 88,
     fontFamily: shape.fontFamily,
     fontSize: shape.fontSize,
     fontWeight: "900",
@@ -29,7 +28,6 @@ function addShape(createElement: ((element: any) => void) | undefined, shape: Sh
       fontSize: shape.fontSize,
       fontFamily: shape.fontFamily,
       color: shape.color,
-      fontWeight: "900",
       textAlign: "center",
       textShape: "straight",
       shape: shape.label,
@@ -62,10 +60,7 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
         <Search size={15} className="shrink-0 text-violet-200/80" />
         <input
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => { setQuery(e.target.value); setPage(1); }}
           placeholder="Search shapes"
           className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-white outline-none placeholder:text-violet-100/55"
         />
@@ -79,10 +74,7 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
             <button
               key={item}
               type="button"
-              onClick={() => {
-                setCategory(item);
-                setPage(1);
-              }}
+              onClick={() => { setCategory(item); setPage(1); }}
               className={`shrink-0 rounded-full border px-3.5 py-2 text-[12px] font-extrabold leading-none transition active:scale-95 ${
                 active
                   ? "border-violet-200/70 bg-violet-500 text-white shadow-[0_8px_22px_rgba(139,92,246,0.32)]"
@@ -103,34 +95,16 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
             aria-label={shape.label}
             title={shape.label}
             onClick={() => addShape(createElement, shape)}
-            className="flex min-h-[54px] items-center justify-center rounded-2xl border border-violet-300/18 bg-white/[0.09] shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition duration-150 hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/20 active:scale-95 [content-visibility:auto] [contain-intrinsic-size:54px]"
+            className="flex min-h-[54px] items-center justify-center rounded-2xl border border-violet-300/18 bg-white/[0.09] text-[24px] font-black text-violet-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition duration-150 hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/20 active:scale-95 [content-visibility:auto] [contain-intrinsic-size:54px]"
           >
-            <span
-              aria-hidden="true"
-              className="leading-none"
-              style={{
-                color: shape.color,
-                fontFamily: shape.fontFamily,
-                fontSize: Math.min(34, Math.max(22, shape.fontSize * 0.42)),
-                fontWeight: 900,
-              }}
-            >
-              {shape.value}
-            </span>
+            <span className="drop-shadow-[0_1px_8px_rgba(196,181,253,0.28)]">{shape.value}</span>
           </button>
         ))}
       </div>
-      {visibleItems.length < items.length && (
-        <button
-          type="button"
-          onClick={() => setPage((value) => value + 1)}
-          className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]"
-        >
-          Load more
-        </button>
-      )}
+      {visibleItems.length < items.length && <button type="button" onClick={() => setPage((value) => value + 1)} className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]">Load more</button>}
     </div>
   );
 }
+
 
 export default memo(IconsPanel);
