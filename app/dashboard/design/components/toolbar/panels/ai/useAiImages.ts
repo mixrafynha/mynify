@@ -136,8 +136,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           : [];
 
       const saved = rows
-        .map(normalizeSavedImage)
-        .filter((item) => isValidImageUrl(getImageSrc(item)));
+      .map(normalizeSavedImage)
+      .filter((item: AiImageItem) => isValidImageUrl(getImageSrc(item)));
 
       const nextLimit = readSavedLimit(data, FREE_SAVED_IMAGE_LIMIT);
 
