@@ -26,7 +26,7 @@ function BrandSection() {
     >
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/[0.10] bg-white text-black shadow-[0_8px_22px_rgba(0,0,0,.22)] sm:h-8 sm:w-8 sm:rounded-xl">
         <img
-          src="/icon-192.png"
+          src="/favicon.ico"
           alt="RYFIO"
           className="h-full w-full object-contain p-0.5"
           draggable={false}
