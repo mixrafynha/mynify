@@ -57,6 +57,18 @@ export default function CreditsModal({
     return [...packs].sort((a, b) => getPricePerCredit(a) - getPricePerCredit(b))[0]?.id ?? null;
   }, [packs]);
 
+  console.group("STRIPE EMBEDDED DEBUG");
+  console.log("Publishable key:", stripePublishableKey);
+  console.log("Has stripePromise:", Boolean(stripePromise));
+  console.log("Client Secret:", checkoutClientSecret);
+  console.log("Embedded Options:", embeddedOptions);
+
+  if (checkoutClientSecret) {
+    console.log("Client Secret Prefix:", checkoutClientSecret.substring(0, 25));
+  }
+
+  console.groupEnd();
+
   if (!open) return null;
 
   return (
@@ -125,12 +137,15 @@ export default function CreditsModal({
                 Stripe publishable key is missing. Add NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY and restart Next.js.
               </div>
             ) : (
-            <div className="max-h-[72dvh] overflow-y-auto rounded-3xl bg-white p-2 text-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              <EmbeddedCheckoutProvider stripe={stripePromise} options={embeddedOptions}>
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
-            </div>
-
+              <div className="max-h-[72dvh] min-h-[520px] overflow-y-auto rounded-3xl bg-white p-2 text-black [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <EmbeddedCheckoutProvider
+                  key={checkoutClientSecret}
+                  stripe={stripePromise}
+                  options={embeddedOptions}
+                >
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
+              </div>
             )}
 
             <button

@@ -74,9 +74,9 @@ type StoredEditorDraft = {
 function assertSavePayloadIsJsonOnly(payload: unknown) {
   const json = JSON.stringify(payload);
 
-  if (/(?:data:image\/|base64,|blob:)/i.test(json) || /[A-Za-z0-9+/=]{500000,}/.test(json)) {
+  if (/(?:data:image\/(?!svg\+xml)|base64,|blob:)/i.test(json) || /[A-Za-z0-9+/=]{500000,}/.test(json)) {
     throw new Error(
-      "Save payload contains inline image data. Save Design must be JSON-only.",
+      "Save payload contains inline raster image data. Save Design must stay JSON-safe.",
     );
   }
 

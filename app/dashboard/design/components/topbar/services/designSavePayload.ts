@@ -34,7 +34,9 @@ const PRODUCT_ALIASES: Record<string, string> = {
 const DEFAULT_PRODUCT_CATEGORY = "tshirt";
 const UUID_LIKE_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const INLINE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
+const INLINE_IMAGE_RE = /(?:data:image\/(?!svg\+xml)|base64,|blob:)/i;
+const INLINE_SVG_IMAGE_RE = /^data:image\/svg\+xml(?:;[^,]*)?,/i;
+const MAX_INLINE_SVG_CHARS = 120_000;
 const LARGE_IMAGE_STRING_RE = /[A-Za-z0-9+/=]{500000,}/;
 
 type DesignSide = EditorSide;
@@ -174,7 +176,21 @@ function finiteNumber(value: unknown, fallback?: number) {
   return fallback;
 }
 
+function isPersistableInlineSvg(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+
+  return (
+    trimmed.length > 0 &&
+    trimmed.length <= MAX_INLINE_SVG_CHARS &&
+    INLINE_SVG_IMAGE_RE.test(trimmed) &&
+    !/base64,/i.test(trimmed) &&
+    !/blob:/i.test(trimmed)
+  );
+}
+
 function isInlineImageReference(value: unknown): value is string {
+  if (isPersistableInlineSvg(value)) return false;
   return typeof value === "string" && INLINE_IMAGE_RE.test(value);
 }
 
@@ -182,7 +198,9 @@ function sanitizeImageSourceForDatabase(value: unknown) {
   if (typeof value !== "string") return undefined;
 
   const trimmed = value.trim();
-  if (!trimmed || INLINE_IMAGE_RE.test(trimmed)) return undefined;
+  if (!trimmed) return undefined;
+  if (isPersistableInlineSvg(trimmed)) return trimmed;
+  if (INLINE_IMAGE_RE.test(trimmed)) return undefined;
 
   return trimmed;
 }

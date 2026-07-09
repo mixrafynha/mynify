@@ -50,6 +50,22 @@ function elementsForSide(input: PreviewPayloadInput, side: Side) {
   return Array.isArray(sideElements) ? sideElements : [];
 }
 
+const INLINE_SVG_IMAGE_RE = /^data:image\/svg\+xml(?:;[^,]*)?,/i;
+const MAX_INLINE_SVG_CHARS = 120_000;
+
+function isPersistableInlineSvg(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+
+  return (
+    trimmed.length > 0 &&
+    trimmed.length <= MAX_INLINE_SVG_CHARS &&
+    INLINE_SVG_IMAGE_RE.test(trimmed) &&
+    !/base64,/i.test(trimmed) &&
+    !/blob:/i.test(trimmed)
+  );
+}
+
 function sanitizeElementsForStorage(elements: any[]) {
   return (Array.isArray(elements) ? elements : []).map((element) => {
     const meta = { ...(element?.meta || {}) };
@@ -58,13 +74,14 @@ function sanitizeElementsForStorage(elements: any[]) {
     delete meta.image;
     delete meta.url;
 
+    const src = typeof element?.src === "string" ? element.src.trim() : element?.src;
+
     return {
       ...element,
       src:
-        typeof element?.src === "string" &&
-        element.src.startsWith("data:image/")
+        typeof src === "string" && src.startsWith("data:image/") && !isPersistableInlineSvg(src)
           ? undefined
-          : element?.src,
+          : src,
       meta,
     };
   });
