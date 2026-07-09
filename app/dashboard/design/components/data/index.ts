@@ -3,8 +3,6 @@ export * from "./presets";
 export * from "./templates";
 export * from "./shapes";
 export * from "./stickers";
-export * from "./assets";
-export * from "./assets3d";
 export * from "./panels";
 export * from "./imageQuality";
 

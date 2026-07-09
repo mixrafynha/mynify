@@ -10,8 +10,6 @@ import {
   LayoutTemplate,
   ChevronLeft,
   Shapes,
-  Box,
-  Images,
   Layers,
 } from "lucide-react";
 
@@ -27,8 +25,6 @@ const TemplatesPanel = dynamic(() => import("./panels/TemplatesPanel"), { loadin
 const TextPanel = dynamic(() => import("./panels/TextPanel"), { loading: PanelLoading });
 const StickersPanel = dynamic(() => import("./panels/StickersPanel"), { loading: PanelLoading });
 const IconsPanel = dynamic(() => import("./panels/IconsPanel"), { loading: PanelLoading });
-const ImageTemplatesPanel = dynamic(() => import("./panels/ImageTemplatesPanel"), { loading: PanelLoading });
-const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), { loading: PanelLoading });
 const AiPanel = dynamic(() => import("./panels/AiPanel"), { loading: PanelLoading });
 const LayersPanel = dynamic(() => import("./panels/LayersPanel"), { loading: PanelLoading });
 
@@ -37,8 +33,6 @@ type Panel =
   | "templates"
   | "stickers"
   | "icons"
-  | "images"
-  | "assets3d"
   | "text"
   | "layers"
   | null;
@@ -89,14 +83,6 @@ const PANEL_TITLES: Record<
   icons: {
     title: "Elements",
     subtitle: "Symbols and shapes",
-  },
-  images: {
-    title: "Images",
-    subtitle: "HD print SVG graphics",
-  },
-  assets3d: {
-    title: "3D Assets",
-    subtitle: "High-DPI lightweight SVG",
   },
   text: {
     title: "Text",
@@ -246,8 +232,6 @@ const handleUploadChange = useCallback(
               <SideItem icon={<LayoutTemplate size={22} />} label="Templates" active={activePanel === "templates"} onClick={() => openPanel("templates")} />
               <SideItem icon={<Type size={23} />} label="Text" active={activePanel === "text"} onClick={() => openPanel("text")} />
               <SideItem icon={<Shapes size={23} />} label="Elements" active={activePanel === "icons"} onClick={() => openPanel("icons")} />
-              <SideItem icon={<Images size={22} />} label="Images" active={activePanel === "images"} onClick={() => openPanel("images")} />
-              <SideItem icon={<Box size={22} />} label="3D" active={activePanel === "assets3d"} onClick={() => openPanel("assets3d")} />
               <SideItem icon={<Sparkles size={22} />} label="Stickers" active={activePanel === "stickers"} onClick={() => openPanel("stickers")} />
               <SideItem icon={<Layers size={22} />} label="Layers" active={activePanel === "layers"} onClick={() => openPanel("layers")} />
             </NavGroup>
@@ -279,8 +263,6 @@ const handleUploadChange = useCallback(
               {activePanel === "text" && <TextPanel createElement={safeCreateElement} onAddText={safeOnAddText} />}
               {activePanel === "stickers" && <StickersPanel createElement={safeCreateElement} />}
               {activePanel === "icons" && <IconsPanel createElement={safeCreateElement} />}
-              {activePanel === "images" && <ImageTemplatesPanel createElement={safeCreateElement} />}
-              {activePanel === "assets3d" && <Assets3DPanel createElement={safeCreateElement} />}
               {activePanel === "layers" && <LayersPanel elements={elements} selected={selected} setSelectedId={setSelectedId} setSelectedElement={setSelectedElement} updateElement={updateElement} deleteElement={deleteElement} />}
             </div>
           </div>

@@ -8,8 +8,6 @@ import {
   Star,
   LayoutTemplate,
   Sparkles,
-  Box,
-  Images,
   Layers,
 } from "lucide-react";
 
@@ -20,8 +18,6 @@ const tools = [
   { id: "templates", label: "Templates", icon: <LayoutTemplate size={18} /> },
   { id: "text", label: "Text", icon: <Type size={18} /> },
   { id: "icons", label: "Elements", icon: <Star size={18} /> },
-  { id: "images", label: "Images", icon: <Images size={18} /> },
-  { id: "assets3d", label: "3D", icon: <Box size={18} /> },
   { id: "stickers", label: "Stickers", icon: <Sparkles size={18} /> },
   { id: "layers", label: "Layers", icon: <Layers size={18} /> },
   { id: "upload", label: "Upload", icon: <Image size={18} /> },

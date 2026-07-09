@@ -6,6 +6,4 @@ export type Panel =
   | "ai"
   | "stickers"
   | "icons"
-  | "images"
-  | "assets3d"
   | "layers";

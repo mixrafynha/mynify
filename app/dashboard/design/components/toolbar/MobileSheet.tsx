@@ -25,13 +25,6 @@ const StickersPanel = dynamic(() => import("./panels/StickersPanel"), {
 const IconsPanel = dynamic(() => import("./panels/IconsPanel"), {
   loading: PanelLoading,
 });
-const ImageTemplatesPanel = dynamic(
-  () => import("./panels/ImageTemplatesPanel"),
-  { loading: PanelLoading },
-);
-const Assets3DPanel = dynamic(() => import("./panels/Assets3DPanel"), {
-  loading: PanelLoading,
-});
 const AiPanel = dynamic(() => import("./panels/AiPanel"), {
   loading: PanelLoading,
 });
@@ -190,14 +183,6 @@ function MobileSheet({
 
     if (panel === "icons") {
       return <IconsPanel createElement={createElement} />;
-    }
-
-    if (panel === "images") {
-      return <ImageTemplatesPanel createElement={createElement} />;
-    }
-
-    if (panel === "assets3d") {
-      return <Assets3DPanel createElement={createElement} />;
     }
 
     if (panel === "layers") {
@@ -429,8 +414,6 @@ function getTitle(panel: string) {
     ai: "AI",
     stickers: "Stickers",
     icons: "Elements",
-    images: "Images",
-    assets3d: "3D Assets",
     layers: "Layers",
   };
 
@@ -445,8 +428,6 @@ function getSubtitle(panel: string) {
     ai: "Generate graphics",
     stickers: "Browse stickers",
     icons: "Browse elements",
-    images: "Image templates",
-    assets3d: "3D graphics",
   };
 
   return subtitles[panel] || "Premium editor";

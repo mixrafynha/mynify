@@ -7,30 +7,65 @@ import { SHAPE_CATEGORIES, SHAPES, type ShapePreset } from "../data";
 
 const DESKTOP_PAGE_SIZE = 48;
 const MOBILE_PAGE_SIZE = 24;
+const SHAPE_CANVAS_SIZE = 512;
+const SHAPE_INSERT_SIZE = 88;
 
 function getPageSize() {
   if (typeof window === "undefined") return DESKTOP_PAGE_SIZE;
   return window.matchMedia?.("(max-width: 767px)").matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
 }
 
+function escapeXml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function svgDataUrl(svg: string) {
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function buildShapeSvg(shape: ShapePreset) {
+  const value = escapeXml(shape.value);
+  const color = escapeXml(shape.color || "#111111");
+  const fontFamily = escapeXml(shape.fontFamily || "Arial");
+  const fontSize = Number(shape.fontSize) || 320;
+
+  return svgDataUrl(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SHAPE_CANVAS_SIZE}" height="${SHAPE_CANVAS_SIZE}" viewBox="0 0 ${SHAPE_CANVAS_SIZE} ${SHAPE_CANVAS_SIZE}">
+      <rect width="100%" height="100%" fill="none"/>
+      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="${fontFamily}" font-size="${fontSize}" font-weight="900" fill="${color}">${value}</text>
+    </svg>`,
+  );
+}
+
 function addShape(createElement: ((element: any) => void) | undefined, shape: ShapePreset) {
+  const src = buildShapeSvg(shape);
+
   createElement?.({
-    type: "text",
-    text: shape.value,
-    content: shape.value,
-    width: 88,
-    height: 88,
-    fontFamily: shape.fontFamily,
-    fontSize: shape.fontSize,
-    fontWeight: "900",
-    color: shape.color,
+    type: "image",
+    src,
+    imageUrl: src,
+    url: src,
+    printUrl: src,
+    width: SHAPE_INSERT_SIZE,
+    height: SHAPE_INSERT_SIZE,
+    crossOrigin: "anonymous",
     meta: {
+      title: shape.label,
+      shape: shape.label,
+      source: "shape-svg",
+      vector: true,
+      naturalWidth: SHAPE_CANVAS_SIZE,
+      naturalHeight: SHAPE_CANVAS_SIZE,
+      originalWidth: SHAPE_CANVAS_SIZE,
+      originalHeight: SHAPE_CANVAS_SIZE,
+      color: shape.color,
       fontSize: shape.fontSize,
       fontFamily: shape.fontFamily,
-      color: shape.color,
-      textAlign: "center",
-      textShape: "straight",
-      shape: shape.label,
       opacity: 1,
     },
   });
