@@ -895,11 +895,12 @@ export default function EditorPage() {
             backElements={backElements}
             mockupColor={mockupColor}
             productConfig={productConfig}
+            selectedVariant={selectedVariant}
           />
         }
         canvas={
           <Canvas
-            key={`editor-canvas-${category}-${side}`}
+            key={`editor-canvas-${productId || category}`}
             side={side}
             elements={elements}
             setElements={setElements}

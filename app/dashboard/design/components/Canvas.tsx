@@ -66,6 +66,7 @@ export default function Canvas({
   const params = useParams();
   const searchParams = useSearchParams();
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const mockupRootRef = useRef<HTMLDivElement | null>(null);
 
   const setWrapperNode = useCallback(
     (node: HTMLDivElement | null) => {
@@ -107,6 +108,13 @@ export default function Canvas({
   useEffect(() => {
     setInternalZoom(externalZoom);
   }, [externalZoom]);
+
+  useEffect(() => {
+    // The canvas now stays mounted across side switches. Clear its local
+    // selection while preserving the shared garment colour and image cache.
+    setSelectedIds([]);
+    setSelectionBox(null);
+  }, [currentSide]);
 
   useEffect(() => {
     const next = pendingSelectionRef.current;
@@ -165,11 +173,19 @@ export default function Canvas({
   );
 
   const handlePinchZoom = useCallback((value: number) => {
-    setInternalZoom(Math.min(6, Math.max(0.25, Number(value) || 1)));
-  }, []);
+    const next = Math.min(6, Math.max(0.25, Number(value) || 1));
+    const root = mockupRootRef.current;
+    if (!root) return;
+
+    // Mobile pinch is previewed directly on the compositor. Avoiding React
+    // state here prevents every design element from rerendering each frame.
+    root.style.transform = `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${next * canvasScale})`;
+  }, [canvasScale, panOffset.x, panOffset.y]);
 
   const commitPinchZoom = useCallback((value: number) => {
-    onZoomChange?.(Math.min(6, Math.max(0.25, Number(value) || 1)));
+    const next = Math.min(6, Math.max(0.25, Number(value) || 1));
+    setInternalZoom(next);
+    onZoomChange?.(next);
   }, [onZoomChange]);
 
   const { updateSelectedElements, endSelectedElementsDrag } = useCanvasElements(
@@ -489,6 +505,7 @@ export default function Canvas({
       )}
 
       <div
+        ref={mockupRootRef}
         id="mockup-export-root"
         className="relative shrink-0"
         style={{

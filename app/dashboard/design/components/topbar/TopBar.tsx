@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BrandSection from "./components/BrandSection";
 import HistorySection from "./components/HistorySection";
 import PreviewButton from "./components/PreviewButton";
@@ -8,10 +8,11 @@ import SaveButton from "./components/SaveButton";
 import SaveConfirmModal from "./components/SaveConfirmModal";
 import SideSwitcher from "./components/SideSwitcher";
 import ZoomSection from "./components/ZoomSection";
-import ProductionPreviewDrawer from "../preview/ProductionPreviewDrawer";
+import ProductionPreviewDrawer, { preloadProductionPreview } from "../preview/ProductionPreviewDrawer";
 import { storePreviewPayload } from "./services/previewStorage";
 import { useTopBarZoom } from "./hooks/useTopBarZoom";
 import type { PreviewPayloadInput, TopBarProps } from "./types";
+import ProductInfoButton from "./components/ProductInfoButton";
 
 function TopBar({
   productId,
@@ -35,11 +36,26 @@ function TopBar({
   backElements,
   mockupColor = "#ffffff",
   productConfig = null,
+  selectedVariant = null,
 }: TopBarProps) {
   const [confirmSave, setConfirmSave] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [drawerInput, setDrawerInput] = useState<PreviewPayloadInput | null>(null);
+  const previewRequestRef = useRef(0);
+
+  useEffect(() => {
+    const win = window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    if (win.requestIdleCallback) {
+      const id = win.requestIdleCallback(preloadProductionPreview, { timeout: 1800 });
+      return () => win.cancelIdleCallback?.(id);
+    }
+    const id = window.setTimeout(preloadProductionPreview, 700);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const { zoom: safeZoom, setZoom } = useTopBarZoom({
     zoom,
@@ -80,6 +96,8 @@ function TopBar({
         mockupMode: "on_model_ai",
         modelMockup: true,
         productConfig,
+        variantId: selectedVariant?.variantId || null,
+        selectedVariant,
       };
     },
     [
@@ -91,31 +109,35 @@ function TopBar({
       backElements,
       mockupColor,
       productConfig,
+      selectedVariant,
     ],
   );
 
   const isBusy = saving || previewing;
 
-  const openPreview = useCallback(async () => {
+  const openPreview = useCallback(() => {
     if (isBusy) return;
 
-    try {
-      setPreviewing(true);
+    const requestId = ++previewRequestRef.current;
+    setDrawerInput(previewPayload);
+    setPreviewOpen(true);
+    setPreviewing(true);
+    void onPreviewDesign?.();
 
-      // The drawer receives the generated payload directly in memory. Keep the
-      // legacy callback non-blocking so a failed full-mockup capture cannot stop
-      // the production preview from opening.
-      void onPreviewDesign?.();
-
-      const payload = await storePreviewPayload(previewPayload);
-
-      setDrawerInput((payload || previewPayload) as PreviewPayloadInput);
-      setPreviewOpen(true);
-    } catch {
-      alert("Error opening preview.");
-    } finally {
-      setPreviewing(false);
-    }
+    // Open immediately with the live vectors. The heavier high-resolution
+    // capture is swapped in only when ready, without blocking the drawer.
+    void storePreviewPayload(previewPayload)
+      .then((payload) => {
+        if (previewRequestRef.current === requestId && payload) {
+          setDrawerInput(payload as PreviewPayloadInput);
+        }
+      })
+      .catch(() => {
+        // The immediate vector preview remains usable if the optional capture fails.
+      })
+      .finally(() => {
+        if (previewRequestRef.current === requestId) setPreviewing(false);
+      });
   }, [isBusy, onPreviewDesign, previewPayload]);
 
   const openSaveConfirm = useCallback(() => {
@@ -174,6 +196,16 @@ function TopBar({
               compact
             />
 
+            <ProductInfoButton
+              productId={productId}
+              category={category}
+              mockupColor={mockupColor}
+              productConfig={productConfig}
+              selectedVariant={selectedVariant}
+              frontElements={previewPayload.frontElements}
+              backElements={previewPayload.backElements}
+            />
+
             <SaveButton
               saving={saving}
               onClick={openSaveConfirm}
@@ -194,7 +226,11 @@ function TopBar({
       <ProductionPreviewDrawer
         open={previewOpen}
         input={(drawerInput || previewPayload) as PreviewPayloadInput}
-        onClose={() => setPreviewOpen(false)}
+        onClose={() => {
+          previewRequestRef.current += 1;
+          setPreviewing(false);
+          setPreviewOpen(false);
+        }}
         onSaveDesign={onSaveDesign}
       />
     </>

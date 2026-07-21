@@ -401,8 +401,10 @@ export async function buildDesignSavePayload(
   const productId = input.productId || category;
   const selectedVariant = normalizeSelectedVariant(input);
   const selectedVariantId = selectedVariant?.variantId || null;
+  // The live editor colour is authoritative. The selected variant is only a
+  // fallback; otherwise changing the mockup colour could save the old colour.
   const selectedColor =
-    selectedVariant?.colorHex || input.color || input.mockupColor || "#ffffff";
+    input.mockupColor || input.color || selectedVariant?.colorHex || "#ffffff";
 
   const frontUnprocessed = elementsForSide(input, "front");
   const backUnprocessed = elementsForSide(input, "back");

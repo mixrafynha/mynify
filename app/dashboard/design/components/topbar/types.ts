@@ -23,6 +23,7 @@ export interface TopBarProps {
   backElements?: any[];
   mockupColor?: string;
   productConfig?: ProductDisplayConfig | null;
+  selectedVariant?: SelectedProductVariant | null;
 }
 
 export type SelectedProductVariant = {

@@ -6,11 +6,18 @@ import { createPortal } from "react-dom";
 import type { ProductionPreviewInput } from "./types/preview";
 import "./styles/preview-global.css";
 
-const ProductionPreview = dynamic(() => import("./ProductionPreview"), {
+const loadProductionPreview = () => import("./ProductionPreview");
+
+export function preloadProductionPreview() {
+  void loadProductionPreview();
+}
+
+const ProductionPreview = dynamic(loadProductionPreview, {
   ssr: false,
   loading: () => (
-    <div className="fixed inset-0 z-[2147483647] flex h-[100svh] w-screen items-center justify-center bg-[#f4f1ec] text-sm font-black text-black/50">
-      Preparing preview...
+    <div className="fixed inset-0 z-[2147483647] flex h-[100svh] w-screen flex-col items-center justify-center gap-4 bg-[#f4f1ec] text-sm font-black text-black/50">
+      <span className="h-9 w-9 animate-spin rounded-full border-[3px] border-black/10 border-t-black/70" />
+      Preparing preview…
     </div>
   ),
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 function distance(a: { clientX: number; clientY: number }, b: { clientX: number; clientY: number }) {
   return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
@@ -27,6 +27,16 @@ export function useCanvasPinch({
   const pointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
   const lastZoomRef = useRef(zoom);
+
+  useEffect(() => {
+    if (!pinchRef.current) lastZoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => () => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    pointersRef.current.clear();
+    pinchRef.current = null;
+  }, []);
 
   const isMobileTouch = useCallback((e: React.PointerEvent) => {
     return e.pointerType === "touch" && typeof window !== "undefined" && window.innerWidth < 1024;
