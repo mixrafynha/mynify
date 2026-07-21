@@ -59,6 +59,8 @@ export default function Canvas({
   setSelectedElement,
   mockupColor = "#ffffff",
   setMockupColor,
+  onProductColorChange,
+  selectedVariant,
   mode = "edit",
   canvasRef,
   productConfig = null,
@@ -97,6 +99,7 @@ export default function Canvas({
   const [selectionBox, setSelectionBox] = useState<any>(null);
   const [internalZoom, setInternalZoom] = useState(externalZoom);
   const pendingSelectionRef = useRef<any | null>(null);
+  const appliedVariantMockupRef = useRef<string>("");
 
   const { panOffset, startPan, onPanMove, endPan, resetPan } = useCanvasPan();
   const elements = useMemo(
@@ -221,7 +224,21 @@ export default function Canvas({
     productColorKey,
     mockupColor,
     setMockupColor,
+    selectedVariant?.size,
   );
+
+  useEffect(() => {
+    if (!availableColors.length || typeof onProductColorChange !== "function") return;
+    const target = availableColors.find((color) =>
+      (selectedVariant?.variantId && color.variantId === selectedVariant.variantId) ||
+      (selectedVariant?.productColorId && color.productColorId === selectedVariant.productColorId),
+    ) || availableColors.find((color) => color.hex.toLowerCase() === String(mockupColor).toLowerCase());
+    if (!target) return;
+    const signature = `${target.variantId || target.productColorId || target.hex}:${target.frontUrl || ""}:${target.backUrl || ""}`;
+    if (appliedVariantMockupRef.current === signature) return;
+    appliedVariantMockupRef.current = signature;
+    onProductColorChange(target);
+  }, [availableColors, mockupColor, onProductColorChange, selectedVariant?.productColorId, selectedVariant?.variantId]);
 
   const clearSelection = useCallback(() => {
     setSelectedIds([]);
@@ -479,6 +496,7 @@ export default function Canvas({
           showColors={showColors}
           setShowColors={setShowColors}
           availableColors={availableColors}
+          onSelectColor={onProductColorChange}
         />
       )}
 
@@ -514,15 +532,16 @@ export default function Canvas({
           transform: `translate3d(${panOffset.x + desktopPrintCenterOffset.x}px, ${panOffset.y + desktopPrintCenterOffset.y}px, 0) scale(${finalScale})`,
           transformOrigin: "center center",
           touchAction: "none",
-          backfaceVisibility: "hidden",
         }}
       >
         <CanvasMockup
+          key={`${currentSide}:${mockup}:${mockupColor}:${productConfig?.useVariantMockups ? "variant" : "tint"}`}
           mockup={mockup}
           mockupId={resolvedProductId}
           currentSide={currentSide}
           color={mockupColor}
           visualScale={getMockupVisualScale(resolvedProductId, currentSide, productConfig)}
+          tint={!productConfig?.useVariantMockups}
         />
 
         <SafeAreaLayer

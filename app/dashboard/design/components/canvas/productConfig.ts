@@ -22,6 +22,7 @@ export type ProductDisplayConfig = {
   gelatoProductName?: string | null;
   mockupKey?: string | null;
   mockups?: Partial<Record<Side, string | null>>;
+  useVariantMockups?: boolean;
   printAreas?: Partial<Record<Side, Box | null>>;
   safeAreas?: Partial<Record<Side, Box | null>>;
   printSizesMm?: Partial<Record<Side, PrintSizeMm | null>>;

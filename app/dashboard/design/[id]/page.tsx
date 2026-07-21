@@ -13,6 +13,7 @@ import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar
 import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
 import ProductionCaptureLayers from "@/app/dashboard/design/components/capture/ProductionCaptureLayers";
 import type { ProductDisplayConfig } from "@/app/dashboard/design/components/canvas/productConfig";
+import type { CanvasColorOption } from "@/app/dashboard/design/components/canvas/hooks/useCanvasColors";
 import { supabase } from "@/lib/supabase";
 
 import { useElements } from "@/features/elements/useElements";
@@ -265,10 +266,11 @@ export default function EditorPage() {
   const productId =
     searchParams.get("productId") || searchParams.get("baseProductId");
   const category = String(params?.id || "tshirt").toLowerCase();
-  const selectedVariant = useMemo(
+  const initialSelectedVariant = useMemo(
     () => buildVariantSelection(searchParams),
     [searchParams],
   );
+  const [selectedVariant, setSelectedVariant] = useState<EditorVariantSelection | null>(initialSelectedVariant);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLDivElement>(null);
@@ -276,11 +278,16 @@ export default function EditorPage() {
   const lastSavedSerializedRef = useRef<string | null>(null);
   const isHistoryAction = useRef(false);
   const pendingSaveAfterAuthRef = useRef(false);
+  const baseMockupsRef = useRef<ProductDisplayConfig["mockups"]>({});
+
+  useEffect(() => {
+    setSelectedVariant(initialSelectedVariant);
+  }, [initialSelectedVariant]);
 
   const editorStorageKey = useMemo(
     () =>
-      `editor-design:${productId || category || "draft"}:${selectedVariant?.variantId || "default"}`,
-    [productId, category, selectedVariant?.variantId],
+      `editor-design:${productId || category || "draft"}:${initialSelectedVariant?.variantId || "default"}`,
+    [productId, category, initialSelectedVariant?.variantId],
   );
 
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -396,6 +403,7 @@ export default function EditorPage() {
             runtimeConfig,
           });
 
+          baseMockupsRef.current = runtimeConfig?.mockups || {};
           setProductConfig(runtimeConfig);
         }
       } catch (error) {
@@ -860,6 +868,54 @@ export default function EditorPage() {
     });
   }, []);
 
+  const handleProductColorChange = useCallback((option: CanvasColorOption) => {
+    setMockupColor(option.hex);
+    setSelectedVariant((current) => ({
+      variantId: option.variantId || current?.variantId || null,
+      productColorId: option.productColorId || current?.productColorId || null,
+      colorId: option.productColorId || current?.colorId || null,
+      size: option.size || current?.size || null,
+      colorName: option.name,
+      colorHex: option.hex,
+      sku: option.sku || current?.sku || null,
+      price: option.price == null ? current?.price || null : String(option.price),
+      variantPrice: option.price == null ? current?.variantPrice || null : String(option.price),
+      image: option.imageUrl || current?.image || null,
+      imageUrl: option.imageUrl || current?.imageUrl || null,
+    }));
+
+    const frontUrl = option.frontUrl;
+    const backUrl = option.backUrl;
+    if (!frontUrl || !backUrl) {
+      setProductConfig((current) => current ? {
+        ...current,
+        mockups: baseMockupsRef.current,
+        useVariantMockups: false,
+      } : current);
+      return;
+    }
+
+    setProductConfig((current) => current ? {
+      ...current,
+      mockups: {
+        ...(current.mockups || {}),
+        front: frontUrl,
+        back: backUrl,
+      },
+      useVariantMockups: true,
+    } : current);
+
+    // Warm both browser caches, but never block the visible variant switch on
+    // remote image load events (some CDNs leave those events pending).
+    const preload = (url: string) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = url;
+    };
+    preload(frontUrl);
+    preload(backUrl);
+  }, []);
+
   if (!productConfigLoaded) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-[#05070d] text-sm font-semibold text-white/70">
@@ -911,6 +967,8 @@ export default function EditorPage() {
             setSelectedElement={setSelectedElement}
             mockupColor={mockupColor}
             setMockupColor={setMockupColor}
+            onProductColorChange={handleProductColorChange}
+            selectedVariant={selectedVariant}
             canvasRef={previewCanvasRef}
             productConfig={productConfig}
           />

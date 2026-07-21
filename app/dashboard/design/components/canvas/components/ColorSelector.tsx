@@ -2,13 +2,15 @@
 
 import { memo } from "react";
 import { Palette } from "lucide-react";
+import type { CanvasColorOption } from "../hooks/useCanvasColors";
 
 interface ColorSelectorProps {
   mockupColor: string;
   setMockupColor?: (color: string) => void;
   showColors: boolean;
   setShowColors: (show: boolean) => void;
-  availableColors: { name: string; hex: string }[];
+  availableColors: CanvasColorOption[];
+  onSelectColor?: (color: CanvasColorOption) => void;
 }
 
 function ColorSelector({
@@ -17,6 +19,7 @@ function ColorSelector({
   showColors,
   setShowColors,
   availableColors,
+  onSelectColor,
 }: ColorSelectorProps) {
   return (
     <div className="absolute left-3 top-3 z-[72] md:left-4 md:top-4" onPointerDown={(e) => e.stopPropagation()}>
@@ -49,6 +52,7 @@ function ColorSelector({
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={() => {
                       setMockupColor?.(color.hex);
+                      onSelectColor?.(color);
                       setShowColors(false);
                     }}
                     className={`relative h-[22px] w-[22px] shrink-0 rounded-full border transition active:scale-95 md:h-8 md:w-8 ${
