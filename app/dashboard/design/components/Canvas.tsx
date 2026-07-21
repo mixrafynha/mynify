@@ -85,7 +85,7 @@ export default function Canvas({
 
   const productId = searchParams.get("productId");
   const mockupId = String(params?.id || "hoodie").toLowerCase();
-  const productColorKey = productId || mockupId;
+  const productColorKey = productConfig?.productId || productId || mockupId;
   const currentSide: CanvasSide = side === "back" ? "back" : "front";
   const isPreviewMode =
     mode === "preview" ||
@@ -102,7 +102,7 @@ export default function Canvas({
     () => (Array.isArray(externalElements) ? externalElements : []),
     [externalElements],
   );
-  const zoom = typeof onZoomChange === "function" ? externalZoom : internalZoom;
+  const zoom = internalZoom;
 
   useEffect(() => {
     setInternalZoom(externalZoom);
@@ -156,12 +156,21 @@ export default function Canvas({
 
   const handleZoomChange = useCallback(
     (value: number) => {
-      const next = Math.min(4, Math.max(0.25, Number(value) || 1));
+      const next = Math.min(6, Math.max(0.25, Number(value) || 1));
       setInternalZoom(next);
       onZoomChange?.(next);
+      if (typeof window !== "undefined" && window.innerWidth >= 1024) resetPan();
     },
-    [onZoomChange],
+    [onZoomChange, resetPan],
   );
+
+  const handlePinchZoom = useCallback((value: number) => {
+    setInternalZoom(Math.min(6, Math.max(0.25, Number(value) || 1)));
+  }, []);
+
+  const commitPinchZoom = useCallback((value: number) => {
+    onZoomChange?.(Math.min(6, Math.max(0.25, Number(value) || 1)));
+  }, [onZoomChange]);
 
   const { updateSelectedElements, endSelectedElementsDrag } = useCanvasElements(
     {
@@ -177,8 +186,21 @@ export default function Canvas({
   );
   const { handlePinchDown, handlePinchMove, handlePinchEnd } = useCanvasPinch({
     zoom,
-    onZoomChange: handleZoomChange,
+    onZoomChange: handlePinchZoom,
+    onZoomEnd: commitPinchZoom,
+    minZoom: 0.25,
+    maxZoom: 6,
   });
+
+  const desktopPrintCenterOffset = useMemo(() => {
+    if (typeof window === "undefined" || window.innerWidth < 1024) return { x: 0, y: 0 };
+    const printCenterX = printBox.x + printBox.width / 2;
+    const printCenterY = printBox.y + printBox.height / 2;
+    return {
+      x: (MOCKUP_AREA.width / 2 - printCenterX) * finalScale,
+      y: (MOCKUP_AREA.height / 2 - printCenterY) * finalScale,
+    };
+  }, [finalScale, printBox.height, printBox.width, printBox.x, printBox.y]);
   const { showColors, setShowColors, availableColors } = useCanvasColors(
     productColorKey,
     mockupColor,
@@ -472,10 +494,10 @@ export default function Canvas({
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,
-          transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${finalScale})`,
+          transform: `translate3d(${panOffset.x + desktopPrintCenterOffset.x}px, ${panOffset.y + desktopPrintCenterOffset.y}px, 0) scale(${finalScale})`,
           transformOrigin: "center center",
           touchAction: "none",
-          willChange: "transform",
+          backfaceVisibility: "hidden",
         }}
       >
         <CanvasMockup

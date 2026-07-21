@@ -109,7 +109,8 @@ function normalizeHexColor(value: string | null) {
 
 function clampEditorZoom(value: unknown, fallback = 1) {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-  return Math.min(2, Math.max(0.4, value));
+  const maxZoom = typeof window !== "undefined" && window.innerWidth < 1024 ? 6 : 4;
+  return Math.min(maxZoom, Math.max(0.25, value));
 }
 
 function cloneElementsForStorage(elements: ElementType[]) {
@@ -490,11 +491,11 @@ export default function EditorPage() {
   );
 
   const zoomIn = useCallback(() => {
-    setZoom((z) => Math.min(2, z + 0.1));
+    setZoom((z) => clampEditorZoom(z + (z >= 2 ? 0.25 : 0.1), z));
   }, [setZoom]);
 
   const zoomOut = useCallback(() => {
-    setZoom((z) => Math.max(0.4, z - 0.1));
+    setZoom((z) => clampEditorZoom(z - (z > 2 ? 0.25 : 0.1), z));
   }, [setZoom]);
 
   const handleCanvasZoomChange = useCallback(

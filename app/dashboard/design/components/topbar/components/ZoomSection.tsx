@@ -13,11 +13,12 @@ interface ZoomSectionProps {
 
 function ZoomSection({ zoom, setZoom, disabled, mobile }: ZoomSectionProps) {
   if (mobile) {
+    const mobileStep = zoom >= 200 ? 50 : ZOOM_STEP;
     return (
       <div className="flex h-12 items-center gap-1 rounded-[20px] border border-white/[0.08] bg-white/[0.055] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]">
         <button
           type="button"
-          onClick={() => setZoom(zoom - ZOOM_STEP)}
+          onClick={() => setZoom(zoom - mobileStep)}
           disabled={disabled}
           className="flex h-10 w-10 touch-manipulation items-center justify-center rounded-2xl text-white/72 transition hover:bg-white/[0.08] active:scale-[0.96] disabled:opacity-35"
           aria-label="Zoom out"
@@ -37,7 +38,7 @@ function ZoomSection({ zoom, setZoom, disabled, mobile }: ZoomSectionProps) {
 
         <button
           type="button"
-          onClick={() => setZoom(zoom + ZOOM_STEP)}
+          onClick={() => setZoom(zoom + mobileStep)}
           disabled={disabled}
           className="flex h-10 w-10 touch-manipulation items-center justify-center rounded-2xl text-white/72 transition hover:bg-white/[0.08] active:scale-[0.96] disabled:opacity-35"
           aria-label="Zoom in"

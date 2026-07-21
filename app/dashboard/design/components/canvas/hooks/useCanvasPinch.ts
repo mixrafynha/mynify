@@ -15,15 +15,18 @@ export function useCanvasPinch({
   onZoomChange,
   minZoom = 0.4,
   maxZoom = 2,
+  onZoomEnd,
 }: {
   zoom: number;
   onZoomChange: (zoom: number) => void;
   minZoom?: number;
   maxZoom?: number;
+  onZoomEnd?: (zoom: number) => void;
 }) {
   const rafRef = useRef<number | null>(null);
   const pointersRef = useRef<Map<number, { clientX: number; clientY: number }>>(new Map());
   const pinchRef = useRef<{ distance: number; zoom: number } | null>(null);
+  const lastZoomRef = useRef(zoom);
 
   const isMobileTouch = useCallback((e: React.PointerEvent) => {
     return e.pointerType === "touch" && typeof window !== "undefined" && window.innerWidth < 1024;
@@ -59,7 +62,9 @@ export function useCanvasPinch({
         if (!pinchRef.current || pointersRef.current.size !== 2) return;
         const [a, b] = Array.from(pointersRef.current.values());
         const ratio = distance(a, b) / Math.max(1, pinchRef.current.distance);
-        onZoomChange(clamp(pinchRef.current.zoom * ratio, minZoom, maxZoom));
+        const nextZoom = clamp(pinchRef.current.zoom * ratio, minZoom, maxZoom);
+        lastZoomRef.current = nextZoom;
+        onZoomChange(nextZoom);
       });
     },
     [isMobileTouch, maxZoom, minZoom, onZoomChange]
@@ -67,8 +72,11 @@ export function useCanvasPinch({
 
   const handlePinchEnd = useCallback((e: React.PointerEvent) => {
     pointersRef.current.delete(e.pointerId);
-    if (pointersRef.current.size < 2) pinchRef.current = null;
-  }, []);
+    if (pointersRef.current.size < 2 && pinchRef.current) {
+      pinchRef.current = null;
+      onZoomEnd?.(lastZoomRef.current);
+    }
+  }, [onZoomEnd]);
 
   return { handlePinchDown, handlePinchMove, handlePinchEnd };
 }

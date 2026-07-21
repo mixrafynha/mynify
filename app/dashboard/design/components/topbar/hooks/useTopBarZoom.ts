@@ -12,8 +12,9 @@ const ZOOM_MAX = 200;
 const ZOOM_STEP = 25;
 
 function clampZoomSafe(value: number) {
+  const maxZoom = typeof window !== "undefined" && window.innerWidth < 1024 ? 600 : ZOOM_MAX;
   return Math.min(
-    ZOOM_MAX,
+    maxZoom,
     Math.max(ZOOM_MIN, Math.round(Number(value) || 100))
   );
 }

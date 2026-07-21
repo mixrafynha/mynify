@@ -23,7 +23,7 @@ function normalizeColors(input: any): { name: string; hex: string }[] {
   return source
     .map((color: any) => ({
       name: String(color?.name || color?.label || color?.hex || "Color"),
-      hex: String(color?.hex || color?.value || color?.color || "").trim(),
+      hex: String(color?.hex || color?.hexCode || color?.hex_code || color?.colorHex || color?.color_hex || color?.value || color?.color || "").trim(),
     }))
     .filter((color) => isValidHexColor(color.hex));
 }

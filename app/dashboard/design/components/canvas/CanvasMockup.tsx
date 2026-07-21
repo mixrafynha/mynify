@@ -33,18 +33,22 @@ export default function CanvasMockup({
         alt={`${mockupId}-${currentSide}`}
         draggable={false}
         className="absolute inset-0 h-full w-full object-cover drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
+        style={{ imageRendering: "auto" }}
       />
 
       <div
-        className="absolute inset-0 mix-blend-multiply opacity-80"
+        className="absolute inset-0"
         style={{
           backgroundColor: color,
+          mixBlendMode: "multiply",
           WebkitMaskImage: `url(${mockup})`,
           maskImage: `url(${mockup})`,
           WebkitMaskSize: "cover",
           maskSize: "cover",
           WebkitMaskPosition: "center",
           maskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          maskRepeat: "no-repeat",
         }}
       />
     </div>
