@@ -69,6 +69,11 @@ type RawElement = Record<string, unknown> & {
   meta?: Record<string, unknown>;
 };
 
+export type InlineImageUploader = (
+  base64OrBlob: string,
+  elementId?: string
+) => Promise<string>;
+
 function cleanString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -82,7 +87,7 @@ function cleanPrice(value: unknown): number | null {
 }
 
 function normalizeSelectedVariant(
-  input: PreviewPayloadInput,
+  input: PreviewPayloadInput
 ): SelectedProductVariant | null {
   const raw =
     input.selectedVariant && typeof input.selectedVariant === "object"
@@ -157,10 +162,6 @@ function elementsForSide(input: PreviewPayloadInput, side: DesignSide) {
   const sideElements =
     side === "back" ? input.backElements : input.frontElements;
 
-  // Prefer the explicit per-side array only when it actually contains artwork.
-  // Some parents pass [] for frontElements/backElements while the live side data
-  // is still in input.elements. Returning the empty side array drops the design
-  // from save, Trigger print generation and checkout thumbnails.
   if (Array.isArray(sideElements) && sideElements.length > 0) return sideElements;
 
   if (input.side === side && Array.isArray(input.elements) && input.elements.length > 0) {
@@ -213,16 +214,52 @@ function assertJsonOnlySavePayload(payload: unknown) {
     LARGE_IMAGE_STRING_RE.test(json)
   ) {
     throw new Error(
-      "Save payload contains inline image data. Save Design must be JSON-only.",
+      "Save payload contains inline image data. Save Design must be JSON-only."
     );
   }
 
   if (process.env.NODE_ENV === "development") {
     console.info(
       "[save-design] payload bytes",
-      new TextEncoder().encode(json).length,
+      new TextEncoder().encode(json).length
     );
   }
+}
+
+async function processAndUploadElementImages(
+  rawElements: unknown[],
+  onUploadInlineImage?: InlineImageUploader
+): Promise<unknown[]> {
+  const elements = Array.isArray(rawElements) ? [...rawElements] : [];
+
+  return Promise.all(
+    elements.map(async (element) => {
+      if (!element || typeof element !== "object") return element;
+
+      const raw = { ...(element as RawElement) };
+      const rawSource = typeof raw.src === "string" ? raw.src : (typeof raw.content === "string" ? raw.content : undefined);
+
+      if (rawSource && isInlineImageReference(rawSource)) {
+        if (onUploadInlineImage) {
+          try {
+            const uploadedUrl = await onUploadInlineImage(
+              rawSource,
+              typeof raw.id === "string" ? raw.id : undefined
+            );
+            if (uploadedUrl) {
+              raw.src = uploadedUrl;
+              raw.content = uploadedUrl;
+              return raw;
+            }
+          } catch (err) {
+            console.error("[save-design] Failed to upload inline element image:", err);
+          }
+        }
+      }
+
+      return raw;
+    })
+  );
 }
 
 function sanitizeElementForDatabase(element: unknown): CleanElement | null {
@@ -241,11 +278,16 @@ function sanitizeElementForDatabase(element: unknown): CleanElement | null {
   delete meta.domNode;
   delete meta.elementRef;
 
-  if (isInlineImageReference(raw.src)) {
+  const rawSrc = typeof raw.src === "string" ? raw.src : undefined;
+  const rawContent = typeof raw.content === "string" ? raw.content : undefined;
+
+  if (isInlineImageReference(rawSrc) || isInlineImageReference(rawContent)) {
     meta.sourceType = "inline-image";
     meta.sourceOmittedFromDatabase = true;
     meta.sourceOmittedReason = "inline-image-not-allowed-in-save-payload";
   }
+
+  const cleanSrc = sanitizeImageSourceForDatabase(rawSrc) || sanitizeImageSourceForDatabase(rawContent);
 
   const clean: CleanElement = {
     id: raw.id,
@@ -258,8 +300,8 @@ function sanitizeElementForDatabase(element: unknown): CleanElement | null {
     zIndex: finiteNumber(raw.zIndex),
     opacity: finiteNumber(raw.opacity),
     text: typeof raw.text === "string" ? raw.text : undefined,
-    content: typeof raw.content === "string" ? raw.content : undefined,
-    src: sanitizeImageSourceForDatabase(raw.src),
+    content: cleanSrc || (typeof raw.content === "string" && !isInlineImageReference(raw.content) ? raw.content : undefined),
+    src: cleanSrc,
     fill: typeof raw.fill === "string" ? raw.fill : undefined,
     color: typeof raw.color === "string" ? raw.color : undefined,
     fontFamily: typeof raw.fontFamily === "string" ? raw.fontFamily : undefined,
@@ -290,7 +332,7 @@ function makeSideData(
   input: PreviewPayloadInput,
   category: string,
   side: DesignSide,
-  rawElements: unknown[],
+  rawElements: unknown[]
 ): PreviewSideData {
   const printBox =
     input.side === side && input.printBox
@@ -331,7 +373,6 @@ function hasPrintableElements(elements: unknown[]) {
   });
 }
 
-
 function buildSideDatabaseData(args: {
   side: DesignSide;
   elements: CleanElement[];
@@ -353,7 +394,9 @@ function buildSideDatabaseData(args: {
   };
 }
 
-export async function buildDesignSavePayload(input: PreviewPayloadInput) {
+export async function buildDesignSavePayload(
+  input: PreviewPayloadInput & { onUploadInlineImage?: InlineImageUploader }
+) {
   const category = input.productConfig?.category || normalizeCategory(input.category);
   const productId = input.productId || category;
   const selectedVariant = normalizeSelectedVariant(input);
@@ -361,8 +404,18 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
   const selectedColor =
     selectedVariant?.colorHex || input.color || input.mockupColor || "#ffffff";
 
-  const frontRawElements = elementsForSide(input, "front");
-  const backRawElements = elementsForSide(input, "back");
+  const frontUnprocessed = elementsForSide(input, "front");
+  const backUnprocessed = elementsForSide(input, "back");
+
+  const frontRawElements = await processAndUploadElementImages(
+    frontUnprocessed,
+    input.onUploadInlineImage
+  );
+  const backRawElements = await processAndUploadElementImages(
+    backUnprocessed,
+    input.onUploadInlineImage
+  );
+
   const frontHasArtwork = hasPrintableElements(frontRawElements);
   const backHasArtwork = hasPrintableElements(backRawElements);
 
@@ -560,7 +613,7 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
     variantPrice:
       selectedVariant?.variantPrice ?? selectedVariant?.price ?? null,
     variantImage: sanitizeImageSourceForDatabase(
-      selectedVariant?.imageUrl || selectedVariant?.image,
+      selectedVariant?.imageUrl || selectedVariant?.image
     ) || null,
     markup: 0,
     cartStatus: "in_cart",
@@ -607,4 +660,3 @@ export async function buildDesignSavePayload(input: PreviewPayloadInput) {
 
   return payload;
 }
-

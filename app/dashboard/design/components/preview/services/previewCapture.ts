@@ -1,6 +1,7 @@
 import { toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
+import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
 
 const CAPTURE_HIDDEN_SELECTORS = [
   "[data-element-control]",
@@ -101,22 +102,30 @@ async function ensureRuntimeGoogleFonts(container: HTMLElement) {
   );
 }
 
-function waitForImages(container: HTMLElement) {
+function waitForImages(container: HTMLElement, strict = false) {
   const images = Array.from(container.querySelectorAll("img"));
   if (!images.length) return Promise.resolve();
 
   return Promise.all(
     images.map(
       (img) =>
-        new Promise<void>((resolve) => {
+        new Promise<void>((resolve, reject) => {
           if (img.complete && img.naturalWidth > 0) {
             resolve();
             return;
           }
+          if (img.complete && strict) {
+            reject(new Error(`Production asset failed to load: ${img.currentSrc || img.src}`));
+            return;
+          }
 
-          const done = () => {
+          const done = (event?: Event) => {
             img.removeEventListener("load", done);
             img.removeEventListener("error", done);
+            if (strict && event?.type === "error") {
+              reject(new Error(`Production asset failed to load: ${img.currentSrc || img.src}`));
+              return;
+            }
             resolve();
           };
 
@@ -179,6 +188,14 @@ function getLogicalSize(node: HTMLElement, data?: PreviewSideData | null) {
 }
 
 function getProductionSize(data: PreviewSideData) {
+  const widthMm = positiveNumber(data.printSize?.widthMm, 0);
+  const heightMm = positiveNumber(data.printSize?.heightMm, 0);
+  if (widthMm && heightMm) {
+    return {
+      width: Math.round((widthMm / 25.4) * TARGET_PRINT_DPI),
+      height: Math.round((heightMm / 25.4) * TARGET_PRINT_DPI),
+    };
+  }
   return {
     width: positiveNumber(data.exportResolution?.width, EXPORT_MOCKUP_AREA.width),
     height: positiveNumber(data.exportResolution?.height, EXPORT_MOCKUP_AREA.height),
@@ -245,7 +262,7 @@ async function capturePrintableLayer(args: {
     await ensureRuntimeGoogleFonts(container);
     await waitForFonts();
     await nextFrame();
-    await waitForImages(container);
+    await waitForImages(container, args.production);
     await nextFrame();
 
     return await toPng(container, {

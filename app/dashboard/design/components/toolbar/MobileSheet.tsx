@@ -32,14 +32,12 @@ const LayersPanel = dynamic(() => import("./panels/LayersPanel"), {
   loading: PanelLoading,
 });
 
-const TOOLBAR_HEIGHT = 58;
-
 type SheetSize = "peek" | "mid" | "full";
 
 const SHEET_HEIGHTS: Record<SheetSize, string> = {
-  peek: "16dvh",
-  mid: "30dvh",
-  full: "46dvh",
+  peek: "30dvh",
+  mid: "50dvh",
+  full: "78dvh",
 };
 
 type MobileSheetProps = {
@@ -72,10 +70,16 @@ function MobileSheet({
   elements = [],
   updateElement,
   deleteElement,
+  setSelectedId,
+  setSelectedElement,
 }: MobileSheetProps) {
   const [sheetSize, setSheetSize] = useState<SheetSize>("mid");
   const dragStartY = useRef(0);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    if (open) setSheetSize("mid");
+  }, [open, panel]);
 
   useEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -190,6 +194,8 @@ function MobileSheet({
         <LayersPanel
           elements={elements}
           selected={selected}
+          setSelectedId={setSelectedId}
+          setSelectedElement={setSelectedElement}
           updateElement={updateElement}
           deleteElement={deleteElement}
         />
@@ -210,17 +216,14 @@ function MobileSheet({
     elements,
     updateElement,
     deleteElement,
+    setSelectedId,
+    setSelectedElement,
   ]);
 
 
   return (
     <>
       <style jsx global>{`
-        body[data-ryfio-mobile-sheet-open="true"]
-          [class*="z-[10000]"][class*="bottom-0"][class*="md:hidden"] {
-          display: none !important;
-          pointer-events: none !important;
-        }
         body[data-ryfio-mobile-sheet-open="true"] {
           overscroll-behavior: none;
         }
@@ -228,80 +231,31 @@ function MobileSheet({
           -webkit-tap-highlight-color: transparent;
         }
         [data-ryfio-mobile-sheet-content="true"] {
-          contain: layout paint style;
-        }
-        [data-ryfio-mobile-sheet-content="true"] > * {
-          contain: layout paint style;
-        }
-        [data-ryfio-mobile-sheet="true"] {
-          --ryfio-panel-bg: #070817;
-          --ryfio-panel-card: rgba(255, 255, 255, 0.055);
-          --ryfio-panel-card-strong: rgba(139, 92, 246, 0.14);
-          --ryfio-panel-border: rgba(196, 181, 253, 0.16);
-          --ryfio-panel-text: rgba(255, 255, 255, 0.94);
-          --ryfio-panel-muted: rgba(216, 180, 254, 0.68);
-        }
-        [data-ryfio-mobile-sheet="true"] [class*="bg-white"],
-        [data-ryfio-mobile-sheet="true"] [class*="bg-slate-100"],
-        [data-ryfio-mobile-sheet="true"] [class*="bg-gray-"],
-        [data-ryfio-mobile-sheet="true"] [class*="bg-zinc-"] {
-          background-color: var(--ryfio-panel-card) !important;
-        }
-        [data-ryfio-mobile-sheet="true"] [class*="text-white"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-slate-900"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-gray-"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-zinc-"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-black"] {
-          color: var(--ryfio-panel-text) !important;
-        }
-        [data-ryfio-mobile-sheet="true"] [class*="text-slate-400"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-slate-500"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-slate-600"],
-        [data-ryfio-mobile-sheet="true"] [class*="text-white/"] {
-          color: var(--ryfio-panel-muted) !important;
-        }
-        [data-ryfio-mobile-sheet="true"] [class*="border-white"],
-        [data-ryfio-mobile-sheet="true"] [class*="border-slate"],
-        [data-ryfio-mobile-sheet="true"] [class*="border-gray"],
-        [data-ryfio-mobile-sheet="true"] [class*="border-zinc"] {
-          border-color: var(--ryfio-panel-border) !important;
-        }
-        [data-ryfio-mobile-sheet="true"] [class*="ring-white"],
-        [data-ryfio-mobile-sheet="true"] [class*="ring-slate"],
-        [data-ryfio-mobile-sheet="true"] [class*="ring-gray"] {
-          --tw-ring-color: var(--ryfio-panel-border) !important;
-        }
-        [data-ryfio-mobile-sheet="true"] input,
-        [data-ryfio-mobile-sheet="true"] textarea,
-        [data-ryfio-mobile-sheet="true"] select {
-          background: rgba(255, 255, 255, 0.055) !important;
-          color: rgba(255, 255, 255, 0.94) !important;
-          border-color: rgba(196, 181, 253, 0.16) !important;
+          contain: layout paint;
         }
       `}</style>
 
-      {open && (
-        <button
+      <button
           type="button"
           aria-label="Close mobile sheet overlay"
           onClick={close}
-          className="fixed inset-0 z-30 bg-black/30 md:hidden"
+          className={`fixed inset-0 z-30 bg-black/30 transition-opacity duration-150 md:hidden ${open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"}`}
         />
-      )}
 
       <section
         data-ryfio-mobile-sheet="true"
         className={`
-          ${open ? "fixed" : "hidden"} inset-x-0 bottom-0 z-40 md:hidden
-          overflow-hidden rounded-t-[18px]
+          fixed inset-x-0 bottom-0 z-40 md:hidden
+          overflow-hidden rounded-t-[22px]
           border-t border-violet-300/15
           bg-[#070817] text-white
-          shadow-[0_-12px_34px_rgba(0,0,0,0.34),0_0_28px_rgba(124,58,237,0.12)]
-          transition-transform duration-150 ease-out
+          shadow-[0_-10px_28px_rgba(0,0,0,0.32),0_0_18px_rgba(124,58,237,0.08)]
+          transition-transform duration-[220ms] ease-[cubic-bezier(.2,.9,.2,1)]
           will-change-transform
+          ${open ? "translate-y-0" : "pointer-events-none translate-y-full"}
         `}
         style={{
-          height: `min(${SHEET_HEIGHTS[sheetSize]}, 420px)`,
+          height: `min(${SHEET_HEIGHTS[sheetSize]}, 720px)`,
           paddingBottom: "env(safe-area-inset-bottom)",
           contain: "layout paint style",
         }}
@@ -367,10 +321,10 @@ function MobileSheet({
             [&::-webkit-scrollbar]:hidden
           "
           style={{
-            height: "calc(100% - 34px)",
+            height: "calc(100% - 42px)",
             paddingTop: "6px",
             WebkitOverflowScrolling: "touch",
-            paddingBottom: `calc(${TOOLBAR_HEIGHT}px + env(safe-area-inset-bottom))`,
+            paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
           }}
         >
           <div

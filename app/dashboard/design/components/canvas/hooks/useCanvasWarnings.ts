@@ -18,6 +18,7 @@ type PrintSize = { widthMm: number; heightMm: number };
 
 function imageDpiForElement(element: any, safeArea: SafeArea, printSize?: PrintSize) {
   if (element?.type !== "image") return null;
+  if (element?.meta?.isVector || String(element?.src || "").startsWith("data:image/svg") || String(element?.src || "").endsWith(".svg")) return null;
 
   const size = getElementSize(element);
   const naturalWidth = Number(element?.meta?.naturalWidth || element?.naturalWidth || 0);

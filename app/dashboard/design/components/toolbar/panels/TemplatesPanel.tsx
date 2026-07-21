@@ -5,9 +5,9 @@ import { Crown, Search } from "lucide-react";
 import {
   TEMPLATE_CATEGORIES,
   TEMPLATES,
-  loadEditorFont,
   type TemplatePreset,
 } from "../data";
+import { insertTemplate } from "./templateInsert";
 
 const MOBILE_TEMPLATE_PAGE_SIZE = 12;
 const DESKTOP_TEMPLATE_PAGE_SIZE = 30;
@@ -17,45 +17,6 @@ function getTemplatePageSize() {
   return window.matchMedia?.("(max-width: 767px)").matches
     ? MOBILE_TEMPLATE_PAGE_SIZE
     : DESKTOP_TEMPLATE_PAGE_SIZE;
-}
-
-function addTemplate(
-  createElement: ((element: any) => void) | undefined,
-  template: TemplatePreset,
-) {
-  void loadEditorFont(template.fontFamily);
-  const width = Math.max(
-    150,
-    Math.round(template.text.length * template.fontSize * 0.52),
-  );
-  const height = Math.round(
-    template.fontSize * (template.text.includes(" ") ? 1.45 : 1.25),
-  );
-
-  createElement?.({
-    type: "text",
-    text: template.text,
-    content: template.text,
-    width,
-    height,
-    fontFamily: template.fontFamily,
-    fontSize: template.fontSize,
-    fontWeight: template.fontWeight,
-    color: template.color,
-    meta: {
-      fontFamily: template.fontFamily,
-      color: template.color,
-      fontSize: template.fontSize,
-      fontWeight: template.fontWeight,
-      letterSpacing: template.letterSpacing ?? 0,
-      lineHeight: template.lineHeight ?? 0.92,
-      opacity: 1,
-      rotation: 0,
-      textAlign: "center",
-      textShape: "straight",
-      template: template.label,
-    },
-  });
 }
 
 function TemplatesPanel({
@@ -166,7 +127,7 @@ const TemplateCard = memo(function TemplateCard({
   return (
     <button
       type="button"
-      onClick={() => addTemplate(createElement, template)}
+      onClick={() => insertTemplate(createElement, template)}
       className="group relative h-[136px] overflow-hidden rounded-[1.35rem] border border-white/10 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,.06)] transition will-change-transform hover:-translate-y-0.5 hover:border-violet-300/35 hover:shadow-[0_16px_36px_rgba(0,0,0,.32),0_0_26px_rgba(139,92,246,.12)] active:scale-[0.985]"
       style={{ background: template.background }}
     >

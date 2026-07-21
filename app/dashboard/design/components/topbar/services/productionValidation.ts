@@ -94,6 +94,11 @@ function getNaturalImageSize(element: ProductionElement) {
   };
 }
 
+function isVectorImage(element: ProductionElement) {
+  const src = String(element.src || "").toLowerCase();
+  return Boolean(element.meta?.isVector || src.startsWith("data:image/svg") || src.endsWith(".svg"));
+}
+
 function elementIntersectsBox(element: ProductionElement, box: Box) {
   const x = asNumber(element.x);
   const y = asNumber(element.y);
@@ -216,7 +221,7 @@ export function buildProductionQualityReport(args: {
       });
     }
 
-    if (type === "image") {
+    if (type === "image" && !isVectorImage(element)) {
       const dpi = calculateImageDpi(element, args.safeArea, printSize);
 
       if (dpi !== null && dpi < MIN_IMAGE_DPI) {

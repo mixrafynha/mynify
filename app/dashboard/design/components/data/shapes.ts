@@ -1,5 +1,23 @@
-export type ShapePreset = { id?: string; label: string; value: string; fontFamily: string; fontSize: number; color: string; category: string; };
+
+export interface ShapePreset {
+    id?: string;
+    category: string;
+    label: string;
+    
+    // legado
+    value: string;
+    
+    // novo sistema de assets (opcional)
+    svg?: string;
+    preview?: string;
+    
+    color?: string;
+    fontFamily?: string;
+    fontSize?: number;
+}
+
 export const SHAPE_CATEGORIES = ["Basic","Arrows","Banners","Badges","Speech","Geometric","Organic","Frames","Stars","Decorative"] as const;
+
 export const SHAPES: ShapePreset[] = [
   {
     "id": "shape-1",

@@ -33,8 +33,14 @@ function sourcePixels(el: PreviewElement) {
   return { width, height };
 }
 
+function isVector(el: PreviewElement) {
+  const src = String(el.src || "").toLowerCase();
+  return Boolean(el.meta?.isVector || src.startsWith("data:image/svg") || src.endsWith(".svg"));
+}
+
 export function calculateElementDpi(el: PreviewElement, safeArea: PreviewBox, printSize: PreviewPrintSize) {
   if (el.type !== "image") return null;
+  if (isVector(el)) return null;
 
   const source = sourcePixels(el);
   if (!source.width || !source.height) return null;
@@ -97,7 +103,7 @@ export function validatePreviewSide(args: {
       });
     }
 
-    if (el.type === "image") {
+    if (el.type === "image" && !isVector(el)) {
       const source = sourcePixels(el);
       const dpi = calculateElementDpi(el, args.safeArea, args.printSize);
       if (dpi !== null) minDpi = minDpi === null ? dpi : Math.min(minDpi, dpi);

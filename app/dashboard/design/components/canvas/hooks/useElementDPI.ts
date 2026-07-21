@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { calculateDPI, getQualityLevel, getRecommendedPrintSize } from "../engine/dpi";
 
 export interface DPIInfo {
-  dpi: number;
+  dpi: number | null;
+  isVector?: boolean;
   quality: "excellent" | "good" | "poor" | "unknown";
   recommendedWidthCm: number;
   recommendedHeightCm: number;
@@ -14,33 +15,46 @@ export function useElementDPI(element: any) {
   const [dpiInfo, setDpiInfo] = useState<DPIInfo | null>(null);
 
   useEffect(() => {
-    // Verifica se é imagem
-    if (!element || element.type !== "image") {
+    const vector = Boolean(
+      element?.meta?.isVector ||
+      element?.meta?.svg ||
+      (element?.type === "sticker-element" && (element?.svg || element?.value)),
+    );
+
+    if (vector) {
+      setDpiInfo({
+        dpi: null,
+        isVector: true,
+        quality: "excellent",
+        recommendedWidthCm: 0,
+        recommendedHeightCm: 0,
+      });
+      return;
+    }
+
+    if (!element || (element.type !== "image" && element.type !== "sticker-element")) {
       setDpiInfo(null);
       return;
     }
 
-    // Pega as dimensões naturais do meta (já salvas pelo useUpload)
-    const naturalWidth = element.meta?.naturalWidth;
-    const naturalHeight = element.meta?.naturalHeight;
-    const currentWidth = element.width;
+    const naturalWidth = Number(element.meta?.naturalWidth || 0);
+    const naturalHeight = Number(element.meta?.naturalHeight || 0);
+    const currentWidth = Number(element.width || 0);
 
-
-    if (naturalWidth && naturalHeight && currentWidth) {
+    if (currentWidth > 0 && naturalWidth > 0 && naturalHeight > 0) {
       const dpi = calculateDPI(naturalWidth, currentWidth);
-      const quality = getQualityLevel(dpi);
       const recommended = getRecommendedPrintSize(naturalWidth, naturalHeight);
-
-
       setDpiInfo({
         dpi,
-        quality,
+        isVector: false,
+        quality: getQualityLevel(dpi),
         recommendedWidthCm: Math.round(recommended.widthCm * 10) / 10,
         recommendedHeightCm: Math.round(recommended.heightCm * 10) / 10,
       });
-    } else {
-      setDpiInfo(null);
+      return;
     }
+
+    setDpiInfo(null);
   }, [element]);
 
   return dpiInfo;

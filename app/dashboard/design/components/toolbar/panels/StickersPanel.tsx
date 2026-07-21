@@ -1,91 +1,147 @@
 "use client";
 
-import { memo, useDeferredValue, useMemo, useState } from "react";
+import { memo, useDeferredValue, useMemo, useState, useCallback, useRef } from "react";
 import { Search } from "lucide-react";
 
-import { STICKER_CATEGORIES, STICKER_ITEMS } from "../data";
+import { EXTRA_STICKER_ITEMS, STICKER_CATEGORIES, STICKER_ITEMS, StickerPreset } from "../data";
+import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
+import { createStickerAsset, loadStickerAsset } from "../../element/renderAsset";
 
 const DESKTOP_PAGE_SIZE = 48;
 const MOBILE_PAGE_SIZE = 24;
-const STICKER_CANVAS_SIZE = 512;
-const STICKER_INSERT_SIZE = 64;
+const STICKER_INSERT_SIZE = 150;
+const ALL_STICKER_ITEMS = [...STICKER_ITEMS, ...EXTRA_STICKER_ITEMS];
 
 function getPageSize() {
   if (typeof window === "undefined") return DESKTOP_PAGE_SIZE;
   return window.matchMedia?.("(max-width: 767px)").matches ? MOBILE_PAGE_SIZE : DESKTOP_PAGE_SIZE;
 }
 
-function escapeXml(value: string) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function svgDataUrl(svg: string) {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function buildStickerSvg(value: string) {
-  const sticker = escapeXml(value);
-
-  return svgDataUrl(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${STICKER_CANVAS_SIZE}" height="${STICKER_CANVAS_SIZE}" viewBox="0 0 ${STICKER_CANVAS_SIZE} ${STICKER_CANVAS_SIZE}">
-      <rect width="100%" height="100%" fill="none"/>
-      <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="Apple Color Emoji, Segoe UI Emoji, Noto Color Emoji, sans-serif" font-size="360">${sticker}</text>
-    </svg>`,
-  );
-}
-
-function addSticker(createElement: ((element: any) => void) | undefined, item: any) {
-  const src = buildStickerSvg(item.value);
-
+/**
+ * Otimização: A função addSticker não processa mais Canvas ou DataURLs pesadas.
+ * Ela apenas envia metadados. O motor do Canvas decidirá como desenhar
+ * em alta qualidade apenas no momento da exportação.
+ */
+async function addSticker(createElement: ((element: any) => void) | undefined, item: StickerPreset) {
+  const svg = await loadStickerAsset(item.value, item.svg);
+  if (!svg) throw new Error(`Sticker asset unavailable: ${item.label}`);
   createElement?.({
-    type: "image",
-    src,
-    imageUrl: src,
-    url: src,
-    printUrl: src,
+    type: "sticker-element",
+    value: item.value,
+    svg,
     width: STICKER_INSERT_SIZE,
     height: STICKER_INSERT_SIZE,
-    crossOrigin: "anonymous",
     meta: {
       title: item.label,
       sticker: item.label,
-      source: "sticker-svg",
-      vector: true,
-      naturalWidth: STICKER_CANVAS_SIZE,
-      naturalHeight: STICKER_CANVAS_SIZE,
-      originalWidth: STICKER_CANVAS_SIZE,
-      originalHeight: STICKER_CANVAS_SIZE,
-      opacity: 1,
+      targetDpi: TARGET_PRINT_DPI,
+      isVector: true,
+      // Se não for SVG, o motor de renderização usará o value para desenhar o emoji
+      source: item.svg ? "svg" : "emoji", 
     },
   });
 }
+
+const StickerPreview = memo(({ item }: { item: StickerPreset }) => {
+  // Preview leve usando apenas imagem estática ou texto (sem canvas)
+  const previewSrc = item.preview || createStickerAsset(item.value, item.svg);
+  if (previewSrc) {
+    return (
+      <img 
+        src={previewSrc}
+        alt={item.label}
+        loading="lazy"
+        decoding="async"
+        className="w-full h-full object-contain"
+        style={{ imageRendering: 'auto' }}
+      />
+    );
+  }
+
+  return (
+    <span 
+      className="flex items-center justify-center w-full h-full"
+      style={{ fontSize: 'clamp(20px, 4vw, 40px)' }}
+    >
+      {item.value}
+    </span>
+  );
+});
+
+StickerPreview.displayName = 'StickerPreview';
 
 function StickersPanel({ createElement }: { createElement?: (element: any) => void }) {
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [assetError, setAssetError] = useState("");
   const deferredQuery = useDeferredValue(query);
+  
   const items = useMemo(() => {
     const term = deferredQuery.trim().toLowerCase();
-    return STICKER_ITEMS.filter((item) => (category === "All" || item.category === category) && (!term || `${item.label} ${item.category}`.toLowerCase().includes(term)));
+    return ALL_STICKER_ITEMS.filter((item) => 
+      (category === "All" || item.category === category) && 
+      (!term || `${item.label} ${item.category}`.toLowerCase().includes(term))
+    );
   }, [category, deferredQuery]);
 
-  const visibleItems = useMemo(() => items.slice(0, page * getPageSize()), [items, page]);
+  const pageSize = useMemo(() => getPageSize(), []);
+  const visibleItems = useMemo(() => items.slice(0, page * pageSize), [items, page, pageSize]);
 
   return (
-    <div className="space-y-4 pb-6">
-      <label className="flex h-11 items-center gap-2 rounded-2xl border border-white/10 bg-[#070711] px-3 text-slate-400"><Search size={15} /><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search stickers" className="min-w-0 flex-1 bg-transparent text-sm font-bold text-white outline-none placeholder:text-slate-600" /></label>
-      <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">{["All", ...STICKER_CATEGORIES].map((item) => <button key={item} type="button" onClick={() => { setCategory(item); setPage(1); }} className={`shrink-0 rounded-full border px-3 py-2 text-xs font-black transition active:scale-95 ${category === item ? "border-pink-300/50 bg-pink-400 text-slate-950" : "border-white/10 bg-white/[0.045] text-slate-400"}`}>{item}</button>)}</div>
-      <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 md:grid-cols-6 xl:grid-cols-8">{visibleItems.map((item) => <button key={item.id} type="button" onClick={() => addSticker(createElement, item)} className="flex min-h-[52px] items-center justify-center rounded-[17px] border border-white/10 bg-white text-2xl shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 active:scale-95 [content-visibility:auto] [contain-intrinsic-size:52px]">{item.value}</button>)}</div>
-      {visibleItems.length < items.length && <button type="button" onClick={() => setPage((value) => value + 1)} className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]">Load more</button>}
+    <div className="space-y-3 pb-4">
+      <label className="flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-[#070711] px-3 text-slate-400">
+        <Search size={14} />
+        <input 
+          value={query} 
+          onChange={(e) => { setQuery(e.target.value); setPage(1); }} 
+          placeholder="Buscar stickers..." 
+          className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white outline-none"
+        />
+      </label>
+
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {["All", ...STICKER_CATEGORIES].map((cat) => (
+          <button 
+            key={cat} 
+            type="button" 
+            onClick={() => { setCategory(cat); setPage(1); }} 
+            className={`shrink-0 rounded-full border px-3 py-1.5 text-xs font-bold transition
+              ${category === cat ? "border-pink-300/50 bg-pink-400 text-slate-950" : "border-white/10 bg-white/5 text-slate-400"}`}
+          >
+            {cat}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 md:grid-cols-8">
+        {visibleItems.map((item) => (
+          <button 
+            key={item.id} 
+            type="button" 
+            onClick={() => {
+              setAssetError("");
+              void addSticker(createElement, item).catch(() => setAssetError("Sticker SVG could not be loaded. It was not added to the print design."));
+            }}
+            className="aspect-square rounded-xl border border-white/10 bg-white/5 hover:border-violet-300/50 active:scale-95 transition"
+          >
+            <StickerPreview item={item} />
+          </button>
+        ))}
+      </div>
+
+      {assetError && <p role="alert" className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-200">{assetError}</p>}
+
+      {visibleItems.length < items.length && (
+        <button 
+          onClick={() => setPage((p) => p + 1)} 
+          className="h-9 w-full rounded-xl border border-white/10 bg-white/5 text-xs font-bold text-white hover:bg-white/10"
+        >
+          Carregar mais
+        </button>
+      )}
     </div>
   );
 }
-
 
 export default memo(StickersPanel);

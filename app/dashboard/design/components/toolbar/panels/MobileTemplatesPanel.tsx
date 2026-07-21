@@ -2,7 +2,8 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Crown } from "lucide-react";
-import { TEMPLATES, loadEditorFont, type TemplatePreset } from "../data";
+import { TEMPLATES, type TemplatePreset } from "../data";
+import { insertTemplate } from "./templateInsert";
 
 const MOBILE_TEMPLATE_PAGE_SIZE = 12;
 
@@ -36,46 +37,6 @@ function triggerTemplatePreview(template: TemplatePreset) {
   }).catch(() => undefined);
 }
 
-function addTemplate(
-  createElement: ((element: any) => void) | undefined,
-  template: TemplatePreset,
-) {
-  void loadEditorFont(template.fontFamily);
-
-  const width = Math.max(
-    150,
-    Math.round(template.text.length * template.fontSize * 0.52),
-  );
-  const height = Math.round(
-    template.fontSize * (template.text.includes(" ") ? 1.45 : 1.25),
-  );
-
-  createElement?.({
-    type: "text",
-    text: template.text,
-    content: template.text,
-    width,
-    height,
-    fontFamily: template.fontFamily,
-    fontSize: template.fontSize,
-    fontWeight: template.fontWeight,
-    color: template.color,
-    meta: {
-      fontFamily: template.fontFamily,
-      color: template.color,
-      fontSize: template.fontSize,
-      fontWeight: template.fontWeight,
-      letterSpacing: template.letterSpacing ?? 0,
-      lineHeight: template.lineHeight ?? 0.92,
-      opacity: 1,
-      rotation: 0,
-      textAlign: "center",
-      textShape: "straight",
-      template: template.label,
-    },
-  });
-}
-
 function MobileTemplatesPanel({
   createElement,
 }: {
@@ -107,7 +68,7 @@ function MobileTemplatesPanel({
   }, [visible]);
 
   const handleAdd = useCallback(
-    (template: TemplatePreset) => addTemplate(createElement, template),
+    (template: TemplatePreset) => insertTemplate(createElement, template),
     [createElement],
   );
 

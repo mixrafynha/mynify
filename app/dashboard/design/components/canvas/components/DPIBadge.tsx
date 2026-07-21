@@ -22,6 +22,11 @@ export default function DPIBadge({
     height: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const isVector = Boolean(
+    element?.meta?.isVector ||
+    String(element?.src || "").startsWith("data:image/svg") ||
+    String(element?.src || "").endsWith(".svg"),
+  );
 
   const MM_PER_INCH = 25.4;
 
@@ -44,7 +49,7 @@ export default function DPIBadge({
   );
 
   useEffect(() => {
-    if (!element || element.type !== "image") return;
+    if (!element || element.type !== "image" || isVector) return;
 
     if (element.meta?.naturalWidth && element.meta?.naturalHeight) {
       setNaturalDimensions({
@@ -66,7 +71,7 @@ export default function DPIBadge({
           setLoading(false);
         });
     }
-  }, [element, naturalDimensions, loading, loadNaturalDimensions]);
+  }, [element, isVector, naturalDimensions, loading, loadNaturalDimensions]);
 
   const calculateGelatoDPI = useCallback(() => {
     if (
@@ -105,6 +110,10 @@ export default function DPIBadge({
     setDpi(null);
     setQuality(null);
   }, [calculateGelatoDPI]);
+
+  if (isVector) {
+    return <div className="absolute left-1 top-1 z-30 rounded-md bg-green-500/90 px-1.5 py-0.5 text-[10px] font-bold text-white shadow-md" title="Vector artwork; rasterized only in the final 300 DPI production PNG.">Vector</div>;
+  }
 
   if (loading || !dpi || !quality) return null;
 

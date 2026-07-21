@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import DraggableElement from "../DraggableElement";
+import PreviewCleanElement from "../preview/PreviewCleanElement";
 import { getPrintBox } from "../canvas/canvasMath";
 import { getConfiguredSafeArea } from "../canvas/productConfig";
 import type { ProductDisplayConfig } from "../canvas/productConfig";
@@ -15,8 +15,6 @@ function sorted(elements: any[]) {
     (a, b) => (Number(a?.zIndex) || 0) - (Number(b?.zIndex) || 0),
   );
 }
-
-function noop() {}
 
 function CaptureSideLayer({
   category,
@@ -70,21 +68,9 @@ function CaptureSideLayer({
         }}
       >
         {sideElements.map((el: any) => (
-          <DraggableElement
+          <PreviewCleanElement
             key={`production-capture-${side}-${el?.id}`}
             el={el}
-            safeArea={{ x: 0, y: 0, width: safeArea.width, height: safeArea.height }}
-            zoom={1}
-            isSelected={false}
-            selectedIds={[]}
-            setSelectedIds={noop}
-            setSelectedId={noop}
-            setSelectedElement={noop}
-            updateSelectedElements={noop}
-            endSelectedElementsDrag={noop}
-            updateElement={noop}
-            allElements={sideElements}
-            previewMode
           />
         ))}
       </div>

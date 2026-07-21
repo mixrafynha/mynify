@@ -38,6 +38,7 @@ export function useCanvasColors(
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     async function loadColors() {
       const safeProductId = String(productId || "").trim();
@@ -48,9 +49,10 @@ export function useCanvasColors(
       }
 
       try {
-        const res = await fetch(`/api/product-colors?productId=${encodeURIComponent(safeProductId)}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/product-colors?productId=${encodeURIComponent(safeProductId)}`,
+          { signal: controller.signal },
+        );
 
         if (!res.ok) throw new Error("Product colors request failed");
 
@@ -60,7 +62,8 @@ export function useCanvasColors(
         if (!cancelled) {
           setAvailableColors(colors.length ? colors : FALLBACK_COLORS);
         }
-      } catch {
+      } catch (error) {
+        if (controller.signal.aborted) return;
         if (!cancelled) setAvailableColors(FALLBACK_COLORS);
       }
     }
@@ -68,6 +71,7 @@ export function useCanvasColors(
     loadColors();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [productId]);
 

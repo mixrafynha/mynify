@@ -13,6 +13,7 @@ import {
 } from "./canvas/engine/bounds";
 import { fitElementToSafeArea } from "./canvas/engine/transform";
 import { normalizeTextElement } from "./canvas/engine/textBounds";
+import { getRenderableElement } from "./element/renderAsset";
 
 import { useElementSelection } from "./element/hooks/useElementSelection";
 import { useElementDrag } from "./element/hooks/useElementDrag";
@@ -291,7 +292,7 @@ function DraggableElement({
   );
 
   const rendererElement = useMemo(
-    () => ({
+    () => getRenderableElement({
       ...el,
       x: rect.x,
       y: rect.y,

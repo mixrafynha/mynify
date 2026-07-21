@@ -1,5 +1,19 @@
-export type StickerPreset = { id: string; category: string; value: string; label: string; };
+// types/stickers.ts
+export interface StickerPreset {
+    id: string;
+    category: string;
+    label: string;
+    
+    // legado
+    value: string;
+    
+    // novo sistema de assets (opcional)
+    svg?: string;
+    preview?: string;
+}
+
 export const STICKER_CATEGORIES = ["Sale","Fashion","Emoji","Kids","Streetwear","Vintage","Gym","Business"] as const;
+
 export const STICKER_ITEMS: StickerPreset[] = [
   {
     "id": "sticker-1",
@@ -962,4 +976,5 @@ export const STICKER_ITEMS: StickerPreset[] = [
     "label": "Business Sticker 160"
   }
 ];
+
 export const STICKERS = STICKER_ITEMS.map((item) => item.value);

@@ -33,6 +33,7 @@ type Props = {
   setElements: React.Dispatch<React.SetStateAction<ElementItem[]>>;
   elements?: ElementItem[];
   selectedId: string | null;
+  setSelectedId: (id: string | null) => void;
   zoomIn: () => void;
   zoomOut: () => void;
 };
@@ -50,6 +51,7 @@ export default function ToolbarFAB({
   setElements,
   elements = [],
   selectedId,
+  setSelectedId,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
@@ -63,7 +65,6 @@ export default function ToolbarFAB({
     const item = data && typeof data === "object" ? (data as Partial<ElementItem>) : {};
     const width = finiteNumber(item.width, item.type === "image" ? 180 : 220);
     const height = finiteNumber(item.height, item.type === "image" ? 180 : 64);
-    const maxZ = Math.max(0, ...elements.map((el) => finiteNumber(el.zIndex, 0)));
 
     const element: ElementItem = {
       id: crypto.randomUUID(),
@@ -79,7 +80,7 @@ export default function ToolbarFAB({
       fontFamily: item.fontFamily,
       fontSize: item.fontSize,
       fontWeight: item.fontWeight,
-      zIndex: maxZ + 1,
+      zIndex: 0,
       meta: {
         insertedFromPanel: panel,
         insertedAt: Date.now(),
@@ -87,7 +88,10 @@ export default function ToolbarFAB({
       },
     };
 
-    setElements((prev) => [...prev, { ...element, ...item, meta: element.meta }]);
+    setElements((prev) => {
+      const maxZ = Math.max(-1, ...prev.map((existing) => finiteNumber(existing.zIndex, 0)));
+      return [...prev, { ...element, ...item, zIndex: maxZ + 1, meta: element.meta }];
+    });
     setOpen(false);
   }, [elements, panel, setElements]);
 
@@ -140,8 +144,8 @@ export default function ToolbarFAB({
         updateSelected={updateSelected}
         deleteSelected={deleteSelected}
         elements={elements}
-        setSelectedId={() => {}}
-        setSelectedElement={() => {}}
+        setSelectedId={setSelectedId}
+        setSelectedElement={(element) => setSelectedId(element?.id ?? null)}
         updateElement={updateElementById}
         deleteElement={deleteElementById}
       />
@@ -165,8 +169,8 @@ export default function ToolbarFAB({
         updateSelected={updateSelected}
         deleteSelected={deleteSelected}
         elements={elements}
-        setSelectedId={() => {}}
-        setSelectedElement={() => {}}
+        setSelectedId={setSelectedId}
+        setSelectedElement={(element) => setSelectedId(element?.id ?? null)}
         updateElement={updateElementById}
         deleteElement={deleteElementById}
       />

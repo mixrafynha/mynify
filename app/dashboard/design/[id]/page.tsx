@@ -925,6 +925,7 @@ export default function EditorPage() {
             setElements={setElements}
             elements={elements}
             selectedId={selectedId}
+            setSelectedId={setSelectedId}
             zoomIn={zoomIn}
             zoomOut={zoomOut}
           />

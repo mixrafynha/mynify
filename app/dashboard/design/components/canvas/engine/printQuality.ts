@@ -95,6 +95,7 @@ export function isVectorLike(element: any) {
     type === "svg" ||
     type === "qr" ||
     type === "barcode" ||
+    (type === "sticker-element" && Boolean(element?.svg || element?.value)) ||
     src.startsWith("data:image/svg") ||
     src.endsWith(".svg")
   );
@@ -160,7 +161,7 @@ export function analyzeElementPrintQuality(
 
   if (isVectorLike(element)) {
     return {
-      dpi: TARGET_PRINT_DPI,
+      dpi: null,
       quality: "vector" as DpiQuality,
       physicalWidthMm:
         Math.round(physical.widthMm * 10) / 10,
