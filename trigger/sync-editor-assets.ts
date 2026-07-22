@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 import { task } from "@trigger.dev/sdk/v3";
+import WebSocket from "ws";
 
 import { SHAPES } from "../app/dashboard/design/components/data/shapes";
 import { STICKER_ITEMS } from "../app/dashboard/design/components/data/stickers";
@@ -88,6 +89,7 @@ function createRuntime() {
   return {
     supabase: createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
+      realtime: { transport: WebSocket as never },
     }),
     r2: new S3Client({
       region: "auto",
