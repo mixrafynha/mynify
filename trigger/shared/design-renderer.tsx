@@ -1,8 +1,14 @@
+import { execFile } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
 import sharp from "sharp";
 import { chromium } from "playwright";
 import { renderToStaticMarkup } from "react-dom/server";
 import PrintCanvas from "../../shared/rendering/PrintCanvas";
 import { googleFontsLinks } from "../../shared/rendering/font";
+import { getServiceSupabase } from "./supabase";
 
 export type DesignSide = "front" | "back";
 
@@ -49,6 +55,71 @@ type DesignData = {
 const DEFAULT_PRINT_DPI = 300;
 const CHECKOUT_SIZE = 1024;
 const MIN_SIZE = 1;
+const execFileAsync = promisify(execFile);
+
+let arialFontInstallPromise: Promise<void> | null = null;
+
+function fontFileName(id: string) {
+  return id === "arial-bold" ? "Arial-Bold.ttf" : "Arial.ttf";
+}
+
+async function downloadFont(url: string) {
+  const response = await fetch(url, {
+    headers: { accept: "font/ttf,font/otf,application/octet-stream,*/*;q=0.8" },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to download Arial font: ${response.status} ${response.statusText}`);
+  }
+
+  const font = Buffer.from(await response.arrayBuffer());
+  if (font.length < 1024) throw new Error("Downloaded Arial font file is invalid or empty.");
+  return font;
+}
+
+async function installArialFonts() {
+  const supabase = getServiceSupabase();
+  const { data, error } = await supabase
+    .from("editor_fonts")
+    .select("id,font_url,enabled")
+    .in("id", ["arial", "arial-bold"])
+    .eq("enabled", true);
+
+  if (error) throw new Error(`Unable to load Arial font records: ${error.message}`);
+
+  const rows = new Map((data || []).map((row) => [String(row.id), row]));
+  for (const id of ["arial", "arial-bold"]) {
+    const fontUrl = String(rows.get(id)?.font_url || "").trim();
+    if (!fontUrl) {
+      throw new Error(`editor_fonts.${id}.font_url is required for identical shape rendering.`);
+    }
+  }
+
+  const fontDirectory = join(homedir(), ".local", "share", "fonts", "ryfio");
+  await mkdir(fontDirectory, { recursive: true });
+
+  await Promise.all(
+    ["arial", "arial-bold"].map(async (id) => {
+      const fontUrl = String(rows.get(id)?.font_url || "").trim();
+      await writeFile(join(fontDirectory, fontFileName(id)), await downloadFont(fontUrl));
+    }),
+  );
+
+  await execFileAsync("fc-cache", ["-f", fontDirectory]);
+  const { stdout } = await execFileAsync("fc-match", ["Arial", "-f", "%{family}"]);
+  if (!String(stdout).toLowerCase().includes("arial")) {
+    throw new Error(`Arial font registration failed; fontconfig returned: ${String(stdout).trim() || "unknown"}`);
+  }
+}
+
+async function ensureArialFontsInstalled() {
+  if (!arialFontInstallPromise) {
+    arialFontInstallPromise = installArialFonts().catch((error) => {
+      arialFontInstallPromise = null;
+      throw error;
+    });
+  }
+  await arialFontInstallPromise;
+}
 
 function n(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -237,6 +308,7 @@ async function renderHtmlPng(args: {
    */
   scaleWholeLayer?: boolean;
 }) {
+  await ensureArialFontsInstalled();
   const elements = await inlineRenderImages(normalizeElements(args.elements));
   const outputScaleX = args.outputWidth / args.sourceWidth;
   const outputScaleY = args.outputHeight / args.sourceHeight;
