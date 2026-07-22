@@ -253,6 +253,7 @@ async function processAndUploadElementImages(
             }
           } catch (err) {
             console.error("[save-design] Failed to upload inline element image:", err);
+            throw err;
           }
         }
       }

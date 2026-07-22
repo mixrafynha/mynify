@@ -681,6 +681,19 @@ export default function EditorPage() {
         variantId: selectedVariant?.variantId || null,
         selectedVariant,
         productConfig,
+        onUploadInlineImage: async (dataUrl, elementId) => {
+          const uploadResponse = await fetch("/api/user-products/design-element-image", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dataUrl, elementId }),
+          });
+          const uploadResult = await uploadResponse.json().catch(() => null);
+          if (!uploadResponse.ok || !uploadResult?.url) {
+            throw new Error(uploadResult?.error || "Failed to upload design image");
+          }
+          return String(uploadResult.url);
+        },
       });
 
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
