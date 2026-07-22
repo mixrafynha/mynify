@@ -95,7 +95,9 @@ async function installArialFonts() {
   }
 
   const fontDirectory = join(homedir(), ".local", "share", "fonts", "ryfio");
+  const fontCacheDirectory = "/tmp/ryfio-fontconfig-cache";
   await mkdir(fontDirectory, { recursive: true });
+  await mkdir(fontCacheDirectory, { recursive: true });
 
   await Promise.all(
     ["arial", "arial-bold"].map(async (id) => {
@@ -104,8 +106,14 @@ async function installArialFonts() {
     }),
   );
 
-  await execFileAsync("fc-cache", ["-f", fontDirectory]);
-  const { stdout } = await execFileAsync("fc-match", ["Arial", "-f", "%{family}"]);
+  const fontconfigEnv = {
+    ...process.env,
+    XDG_CACHE_HOME: fontCacheDirectory,
+  };
+  await execFileAsync("fc-cache", ["-f", fontDirectory], { env: fontconfigEnv });
+  const { stdout } = await execFileAsync("fc-match", ["Arial", "-f", "%{family}"], {
+    env: fontconfigEnv,
+  });
   if (!String(stdout).toLowerCase().includes("arial")) {
     throw new Error(`Arial font registration failed; fontconfig returned: ${String(stdout).trim() || "unknown"}`);
   }
