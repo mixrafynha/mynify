@@ -1,7 +1,6 @@
-import "dotenv/config";
-
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
+import { task } from "@trigger.dev/sdk/v3";
 
 import { SHAPES } from "../app/dashboard/design/components/data/shapes";
 import { STICKER_ITEMS } from "../app/dashboard/design/components/data/stickers";
@@ -57,61 +56,84 @@ function decodeSvg(value: string) {
     : decodeURIComponent(content);
 }
 
-const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL");
-const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY");
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+function createRuntime() {
+  const supabaseUrl = required("NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_URL");
+  const serviceRoleKey = required("SUPABASE_SERVICE_ROLE_KEY");
+  const r2AccountId = required(
+    "R2_ACCOUNT_ID",
+    "CLOUDFLARE_ACCOUNT_ID",
+    "CLOUDFLARE_R2_ACCOUNT_ID",
+  );
+  const r2AccessKeyId = required(
+    "R2_ACCESS_KEY_ID",
+    "CLOUDFLARE_R2_ACCESS_KEY_ID",
+  );
+  const r2SecretAccessKey = required(
+    "R2_SECRET_ACCESS_KEY",
+    "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+  );
+  const r2Bucket = required(
+    "R2_BUCKET",
+    "R2_BUCKET_NAME",
+    "CLOUDFLARE_R2_BUCKET_NAME",
+    "CLOUDFLARE_R2_BUCKET",
+  );
+  const r2PublicUrl = required(
+    "R2_PUBLIC_URL",
+    "CLOUDFLARE_R2_PUBLIC_URL",
+    "CLOUDFLARE_R2_PUBLIC_BASE_URL",
+    "NEXT_PUBLIC_R2_PUBLIC_URL",
+  ).replace(/\/+$/, "");
 
-const r2AccountId = required("R2_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID");
-const r2AccessKeyId = required("R2_ACCESS_KEY_ID", "CLOUDFLARE_R2_ACCESS_KEY_ID");
-const r2SecretAccessKey = required("R2_SECRET_ACCESS_KEY", "CLOUDFLARE_R2_SECRET_ACCESS_KEY");
-const r2Bucket = required(
-  "R2_BUCKET",
-  "R2_BUCKET_NAME",
-  "CLOUDFLARE_R2_BUCKET_NAME",
-);
-const r2PublicUrl = required(
-  "R2_PUBLIC_URL",
-  "CLOUDFLARE_R2_PUBLIC_URL",
-  "CLOUDFLARE_R2_PUBLIC_BASE_URL",
-).replace(/\/+$/, "");
-const forcedShapeFontId = optional("EDITOR_SHAPES_FONT_ID");
+  return {
+    supabase: createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }),
+    r2: new S3Client({
+      region: "auto",
+      endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+      credentials: {
+        accessKeyId: r2AccessKeyId,
+        secretAccessKey: r2SecretAccessKey,
+      },
+    }),
+    r2Bucket,
+    r2PublicUrl,
+    forcedShapeFontId: optional("EDITOR_SHAPES_FONT_ID"),
+  };
+}
 
-const r2 = new S3Client({
-  region: "auto",
-  endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId: r2AccessKeyId,
-    secretAccessKey: r2SecretAccessKey,
-  },
-});
+type Runtime = ReturnType<typeof createRuntime>;
 
-async function uploadSvg(id: string, svg: string) {
+async function uploadSvg(runtime: Runtime, id: string, svg: string) {
   const key = `editor-assets/stickers/${safeKey(id)}.svg`;
-  await r2.send(
+  await runtime.r2.send(
     new PutObjectCommand({
-      Bucket: r2Bucket,
+      Bucket: runtime.r2Bucket,
       Key: key,
       Body: Buffer.from(svg, "utf8"),
       ContentType: "image/svg+xml; charset=utf-8",
       CacheControl: "public, max-age=31536000, immutable",
     }),
   );
-  return `${r2PublicUrl}/${key}`;
+  return `${runtime.r2PublicUrl}/${key}`;
 }
 
-async function upsertRows(table: string, rows: Record<string, unknown>[]) {
+async function upsertRows(
+  runtime: Runtime,
+  table: string,
+  rows: Record<string, unknown>[],
+) {
   for (const batch of chunks(rows)) {
-    const { error } = await supabase.from(table).upsert(batch, {
+    const { error } = await runtime.supabase.from(table).upsert(batch, {
       onConflict: "id",
     });
     if (error) throw new Error(`${table}: ${error.message}`);
   }
 }
 
-async function syncShapes() {
-  const { data: fonts, error } = await supabase
+async function syncShapes(runtime: Runtime) {
+  const { data: fonts, error } = await runtime.supabase
     .from("editor_fonts")
     .select("id,family,font_url,enabled")
     .eq("enabled", true);
@@ -121,13 +143,13 @@ async function syncShapes() {
   const fontsByFamily = new Map(
     (fonts || []).map((font) => [normalize(font.family), font]),
   );
-  const forcedFont = forcedShapeFontId
-    ? fontsById.get(forcedShapeFontId)
+  const forcedFont = runtime.forcedShapeFontId
+    ? fontsById.get(runtime.forcedShapeFontId)
     : null;
 
-  if (forcedShapeFontId && !forcedFont) {
+  if (runtime.forcedShapeFontId && !forcedFont) {
     throw new Error(
-      `EDITOR_SHAPES_FONT_ID=${forcedShapeFontId} was not found as an enabled editor_fonts row.`,
+      `EDITOR_SHAPES_FONT_ID=${runtime.forcedShapeFontId} was not found as an enabled editor_fonts row.`,
     );
   }
 
@@ -161,11 +183,11 @@ async function syncShapes() {
     );
   }
 
-  await upsertRows("editor_shapes", rows);
+  await upsertRows(runtime, "editor_shapes", rows);
   return rows.length;
 }
 
-async function syncStickers() {
+async function syncStickers(runtime: Runtime) {
   const stickers = [...STICKER_ITEMS, ...EXTRA_STICKER_ITEMS];
   const rows: Record<string, unknown>[] = [];
 
@@ -182,7 +204,7 @@ async function syncStickers() {
       const svg = rawSvg ? decodeSvg(rawSvg) : "";
       if (svg) {
         source = "r2";
-        assetUrl = await uploadSvg(sticker.id, svg);
+        assetUrl = await uploadSvg(runtime, sticker.id, svg);
       }
     }
 
@@ -202,17 +224,22 @@ async function syncStickers() {
     });
   }
 
-  await upsertRows("editor_stickers", rows);
+  await upsertRows(runtime, "editor_stickers", rows);
   return rows.length;
 }
 
-async function main() {
-  const shapeCount = await syncShapes();
-  const stickerCount = await syncStickers();
-  console.info(`Synced ${shapeCount} shapes and ${stickerCount} stickers.`);
-}
+export const syncEditorAssets = task({
+  id: "sync-editor-assets",
+  maxDuration: 300,
+  run: async () => {
+    const runtime = createRuntime();
+    const shapeCount = await syncShapes(runtime);
+    const stickerCount = await syncStickers(runtime);
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
+    return {
+      ok: true,
+      shapeCount,
+      stickerCount,
+    };
+  },
 });
