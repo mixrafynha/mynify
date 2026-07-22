@@ -13,7 +13,35 @@ import { queueDesignAssetJobs } from "./queue-design-assets";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const INLINE_SAVE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
+const INLINE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
+const INLINE_SVG_RE = /^data:image\/svg\+xml(?:;charset=utf-8)?,/i;
+const MAX_INLINE_SVG_CHARS = 120_000;
+
+function containsInvalidInlineImage(value: unknown): boolean {
+  if (typeof value === "string") {
+    if (!INLINE_IMAGE_RE.test(value)) return false;
+
+    const trimmed = value.trim();
+    return !(
+      trimmed.length <= MAX_INLINE_SVG_CHARS &&
+      INLINE_SVG_RE.test(trimmed) &&
+      !/base64,/i.test(trimmed) &&
+      !/blob:/i.test(trimmed)
+    );
+  }
+
+  if (Array.isArray(value)) {
+    return value.some(containsInvalidInlineImage);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value as Record<string, unknown>).some(
+      containsInvalidInlineImage,
+    );
+  }
+
+  return false;
+}
 
 async function createCookieSupabaseServer() {
   const cookieStore = await cookies();
@@ -124,9 +152,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const serializedBody = JSON.stringify(body);
-
-    if (INLINE_SAVE_IMAGE_RE.test(serializedBody)) {
+    if (containsInvalidInlineImage(body)) {
       return NextResponse.json(
         { error: "Invalid save payload: inline image data is not allowed." },
         { status: 400 },
