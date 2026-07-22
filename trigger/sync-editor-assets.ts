@@ -1,6 +1,7 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 import { task } from "@trigger.dev/sdk/v3";
+import fontkit from "fontkit";
 import WebSocket from "ws";
 
 import { SHAPES } from "../app/dashboard/design/components/data/shapes";
@@ -107,8 +108,13 @@ function createRuntime() {
 
 type Runtime = ReturnType<typeof createRuntime>;
 
-async function uploadSvg(runtime: Runtime, id: string, svg: string) {
-  const key = `editor-assets/stickers/${safeKey(id)}.svg`;
+async function uploadSvg(
+  runtime: Runtime,
+  folder: "shapes" | "stickers",
+  id: string,
+  svg: string,
+) {
+  const key = `editor-assets/${folder}/${safeKey(id)}.svg`;
   await runtime.r2.send(
     new PutObjectCommand({
       Bucket: runtime.r2Bucket,
@@ -119,6 +125,59 @@ async function uploadSvg(runtime: Runtime, id: string, svg: string) {
     }),
   );
   return `${runtime.r2PublicUrl}/${key}`;
+}
+
+async function downloadFont(url: string) {
+  const response = await fetch(url, {
+    headers: { accept: "font/ttf,font/otf,application/octet-stream,*/*;q=0.8" },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to download shape font: ${response.status} ${response.statusText}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length < 1024) throw new Error("Downloaded shape font is invalid or empty.");
+  return fontkit.create(buffer) as any;
+}
+
+function fontContains(font: any, value: string) {
+  return Array.from(value).every(
+    (character) => font.glyphForCodePoint(character.codePointAt(0) || 0).id !== 0,
+  );
+}
+
+function shapePathSvg(font: any, value: string, color: string) {
+  const run = font.layout(value);
+  let cursorX = 0;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  const paths: string[] = [];
+
+  run.glyphs.forEach((glyph: any, index: number) => {
+    const position = run.positions[index];
+    const x = cursorX + Number(position.xOffset || 0);
+    const y = Number(position.yOffset || 0);
+    const box = glyph.bbox;
+    minX = Math.min(minX, x + box.minX);
+    minY = Math.min(minY, y + box.minY);
+    maxX = Math.max(maxX, x + box.maxX);
+    maxY = Math.max(maxY, y + box.maxY);
+    paths.push(`<path d="${glyph.path.toSVG()}" transform="translate(${x} ${y})"/>`);
+    cursorX += Number(position.xAdvance || glyph.advanceWidth || 0);
+  });
+
+  if (!paths.length || ![minX, minY, maxX, maxY].every(Number.isFinite)) {
+    throw new Error(`Unable to generate SVG path for shape value: ${value}`);
+  }
+
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const scale = Math.min(832 / width, 832 / height);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><g fill="${color}" transform="translate(512 512) scale(${scale} ${-scale}) translate(${-centerX} ${-centerY})">${paths.join("")}</g></svg>`;
 }
 
 async function upsertRows(
@@ -155,28 +214,56 @@ async function syncShapes(runtime: Runtime) {
     );
   }
 
+  const arialBoldRow = fontsById.get("arial-bold");
+  const symbolRow = fontsById.get("segoe-ui-symbol");
+  if (!arialBoldRow?.font_url || !symbolRow?.font_url) {
+    throw new Error(
+      "Enabled editor_fonts rows arial-bold and segoe-ui-symbol with font_url are required to generate shape SVG paths.",
+    );
+  }
+
+  const [arialBold, segoeUiSymbol] = await Promise.all([
+    downloadFont(String(arialBoldRow.font_url)),
+    downloadFont(String(symbolRow.font_url)),
+  ]);
+
   const missingFamilies = new Set<string>();
-  const rows = SHAPES.map((shape, index) => {
+  const rows: Record<string, unknown>[] = [];
+  for (let index = 0; index < SHAPES.length; index += 1) {
+    const shape = SHAPES[index];
     const family = String(shape.fontFamily || "Arial").trim();
     const font = forcedFont || fontsByFamily.get(normalize(family));
     if (!font) missingFamilies.add(family);
 
-    return {
+    const pathFont = fontContains(arialBold, shape.value) ? arialBold : segoeUiSymbol;
+    if (!fontContains(pathFont, shape.value)) {
+      throw new Error(`No configured shape font contains every glyph in ${shape.id}: ${shape.value}`);
+    }
+    const pathFontRow = pathFont === arialBold ? arialBoldRow : symbolRow;
+    const color = shape.color || "#111111";
+    const assetUrl = await uploadSvg(
+      runtime,
+      "shapes",
+      shape.id || `shape-${index + 1}`,
+      shapePathSvg(pathFont, shape.value, color),
+    );
+
+    rows.push({
       id: shape.id || `shape-${index + 1}`,
       label: shape.label,
       category: shape.category,
-      source: "font",
+      source: "r2",
       value: shape.value,
-      font_id: font?.id || null,
-      font_family: font?.family || family,
+      font_id: pathFontRow.id,
+      font_family: pathFontRow.family,
       font_size: Number(shape.fontSize || 64),
-      color: shape.color || "#111111",
-      asset_url: null,
+      color,
+      asset_url: assetUrl,
       preview_webp_url: shape.preview || null,
       enabled: true,
       position: index,
-    };
-  });
+    });
+  }
 
   if (missingFamilies.size) {
     throw new Error(
@@ -206,7 +293,7 @@ async function syncStickers(runtime: Runtime) {
       const svg = rawSvg ? decodeSvg(rawSvg) : "";
       if (svg) {
         source = "r2";
-        assetUrl = await uploadSvg(runtime, sticker.id, svg);
+        assetUrl = await uploadSvg(runtime, "stickers", sticker.id, svg);
       }
     }
 

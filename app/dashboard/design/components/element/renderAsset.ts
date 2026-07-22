@@ -87,5 +87,7 @@ export function getRenderableElement(element: any) {
 }
 
 export function createShapeAsset(shape: any) {
+  const svg = typeof shape?.svg === "string" ? shape.svg.trim() : "";
+  if (svg) return svg;
   return createTextAsset(String(shape?.value || ""), String(shape?.color || "#111111"), String(shape?.fontFamily || "Arial, sans-serif"), false);
 }
