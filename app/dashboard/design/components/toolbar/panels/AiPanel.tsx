@@ -79,9 +79,7 @@ export default function AiPanel({
           setNotice={ai.setNotice}
           setError={ai.setError}
           randomPrompt={ai.randomPrompt}
-          generateImage={
-            hasNoCredits ? () => ai.setShowCreditsModal(true) : ai.generateImage
-          }
+          generateImage={ai.generateImage}
         />
       </div>
 
