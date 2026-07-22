@@ -61,6 +61,7 @@ function withPrintJobState(designData: any, patch: Record<string, unknown>) {
 
 export const generateDesignPrintFile = task({
   id: "generate-design-print-file",
+  machine: "medium-1x",
   retry: {
     maxAttempts: 3,
     factor: 2,
