@@ -1,3 +1,5 @@
+import { SHAPE_PATH_SVGS } from "../data/shapePaths";
+
 const assetCache = new Map<string, string>();
 const stickerRequestCache = new Map<string, Promise<string>>();
 
@@ -87,5 +89,20 @@ export function getRenderableElement(element: any) {
 }
 
 export function createShapeAsset(shape: any) {
+  const rawSvg = typeof shape?.svg === "string" ? shape.svg.trim() : "";
+  if (rawSvg) {
+    return /^data:image\/svg\+xml/i.test(rawSvg)
+      ? rawSvg
+      : encodeSvg(rawSvg);
+  }
+
+  const value = String(shape?.value || "");
+  const pathSvg = SHAPE_PATH_SVGS[value];
+  if (pathSvg) {
+    return encodeSvg(
+      pathSvg.replace(/currentColor/g, escapeXml(shape?.color || "#111111")),
+    );
+  }
+
   return createTextAsset(String(shape?.value || ""), String(shape?.color || "#111111"), String(shape?.fontFamily || "Arial, sans-serif"), false);
 }
