@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import sharp from "sharp";
@@ -94,10 +93,13 @@ async function installArialFonts() {
     }
   }
 
-  const fontDirectory = join(homedir(), ".local", "share", "fonts", "ryfio");
+  const fontDirectory = "/tmp/ryfio-fonts";
   const fontCacheDirectory = "/tmp/ryfio-fontconfig-cache";
+  const fontConfigDirectory = "/tmp/ryfio-fontconfig";
+  const fontConfigFile = join(fontConfigDirectory, "fonts.conf");
   await mkdir(fontDirectory, { recursive: true });
   await mkdir(fontCacheDirectory, { recursive: true });
+  await mkdir(fontConfigDirectory, { recursive: true });
 
   await Promise.all(
     ["arial", "arial-bold"].map(async (id) => {
@@ -106,17 +108,35 @@ async function installArialFonts() {
     }),
   );
 
+  await writeFile(
+    fontConfigFile,
+    `<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <dir>${fontDirectory}</dir>
+  <cachedir>${fontCacheDirectory}</cachedir>
+</fontconfig>`,
+    "utf8",
+  );
+
   const fontconfigEnv = {
     ...process.env,
+    FONTCONFIG_FILE: fontConfigFile,
+    FONTCONFIG_PATH: "/etc/fonts",
     XDG_CACHE_HOME: fontCacheDirectory,
   };
-  await execFileAsync("fc-cache", ["-f", fontDirectory], { env: fontconfigEnv });
+  await execFileAsync("fc-cache", ["-f"], { env: fontconfigEnv });
   const { stdout } = await execFileAsync("fc-match", ["Arial", "-f", "%{family}"], {
     env: fontconfigEnv,
   });
   if (!String(stdout).toLowerCase().includes("arial")) {
     throw new Error(`Arial font registration failed; fontconfig returned: ${String(stdout).trim() || "unknown"}`);
   }
+
+  process.env.FONTCONFIG_FILE = fontConfigFile;
+  process.env.FONTCONFIG_PATH = "/etc/fonts";
+  process.env.XDG_CACHE_HOME = fontCacheDirectory;
 }
 
 async function ensureArialFontsInstalled() {
