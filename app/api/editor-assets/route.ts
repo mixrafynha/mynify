@@ -24,7 +24,7 @@ async function readTable(table: "editor_shapes" | "editor_stickers", select: str
       apikey: supabaseKey,
       Authorization: `Bearer ${supabaseKey}`,
     },
-    next: { revalidate: 300 },
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
       }));
 
       return NextResponse.json({ shapes }, {
-        headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400" },
+        headers: { "Cache-Control": "no-store, max-age=0" },
       });
     }
 
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
     }));
 
     return NextResponse.json({ stickers }, {
-      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=86400" },
+      headers: { "Cache-Control": "no-store, max-age=0" },
     });
   } catch (error) {
     console.error("[editor-assets]", error);

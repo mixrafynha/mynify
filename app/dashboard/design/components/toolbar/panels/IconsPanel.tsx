@@ -55,7 +55,10 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
   useEffect(() => {
     const controller = new AbortController();
 
-    void fetch("/api/editor-assets?type=shapes", { signal: controller.signal })
+    void fetch("/api/editor-assets?type=shapes", {
+      signal: controller.signal,
+      cache: "no-store",
+    })
       .then(async (response) => {
         if (!response.ok) throw new Error(`Editor shapes request failed: ${response.status}`);
         return response.json() as Promise<{ shapes?: ShapePreset[] }>;
