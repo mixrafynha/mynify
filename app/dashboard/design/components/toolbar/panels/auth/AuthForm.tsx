@@ -102,6 +102,7 @@ export default function AuthForm({
         </div>
 
         {auth.error && <p className="text-sm font-medium leading-relaxed text-red-300">{auth.error}</p>}
+        {auth.message && <p className="rounded-2xl bg-emerald-500/10 px-3 py-2 text-sm font-bold leading-relaxed text-emerald-200 ring-1 ring-emerald-400/20">{auth.message}</p>}
 
         <button
           type="button"

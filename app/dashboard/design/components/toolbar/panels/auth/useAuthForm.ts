@@ -19,12 +19,14 @@ export function useAuthForm({ mode, popup, onSuccess }: Args) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState<AuthLoadingState>(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
   const turnstile = useTurnstile();
 
   useEffect(() => {
     setAuthMode(mode);
     setError("");
+    setMessage("");
     turnstile.resetCaptcha();
   }, [mode, turnstile.resetCaptcha]);
 
@@ -58,6 +60,7 @@ export function useAuthForm({ mode, popup, onSuccess }: Args) {
 
     setLoading("password");
     setError("");
+    setMessage("");
 
     try {
       if (authMode === "login") {
@@ -68,19 +71,29 @@ export function useAuthForm({ mode, popup, onSuccess }: Args) {
         });
 
         if (authError || !data.session) throw authError || new Error("No session");
+        finishPasswordLogin();
       } else {
-        const { data, error: authError } = await supabase.auth.signUp({
-          email: safeEmail,
-          password,
-          options: { captchaToken: turnstile.token },
+        const response = await fetch("/api/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: safeEmail, password, token: turnstile.token }),
         });
+        const result = await response.json().catch(() => ({}));
 
-        if (authError || !data.user) throw authError || new Error("Unable to create account");
+        if (!response.ok) throw new Error(result?.message || "Unable to create account");
+
+        setPassword("");
+        setMessage("Account created. Check your email to verify your account before logging in.");
+        turnstile.resetCaptcha();
       }
-
-      finishPasswordLogin();
-    } catch {
-      setError(authMode === "login" ? "Invalid email or password." : "Unable to create account.");
+    } catch (authError) {
+      setError(
+        authMode === "login"
+          ? "Invalid email or password."
+          : authError instanceof Error
+            ? authError.message
+            : "Unable to create account.",
+      );
       turnstile.resetCaptcha();
     } finally {
       setLoading(false);
@@ -118,6 +131,7 @@ export function useAuthForm({ mode, popup, onSuccess }: Args) {
   const toggleMode = useCallback(() => {
     setAuthMode((prev) => (prev === "login" ? "signup" : "login"));
     setError("");
+    setMessage("");
     turnstile.resetCaptcha();
   }, [turnstile]);
 
@@ -132,6 +146,7 @@ export function useAuthForm({ mode, popup, onSuccess }: Args) {
     loading,
     error,
     setError,
+    message,
     handlePasswordAuth,
     handleOAuth,
     toggleMode,
