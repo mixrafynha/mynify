@@ -1,12 +1,34 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const TABLE = "user_generated_images";
 const SAVE_LIMIT = 5;
+
+const STARTER_IMAGES = [
+  {
+    generation_id: "starter-chinese-dragon",
+    prompt: "Ancient Chinese dragon wrapped around a flaming katana",
+    image_url: "https://pub-32be62cb2f1f47048c590acdfa322022.r2.dev/ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/1ab2d445-cd18-4461-901f-aeabbe38436f-1783539471064.png",
+    storage_key: "ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/1ab2d445-cd18-4461-901f-aeabbe38436f-1783539471064.png",
+  },
+  {
+    generation_id: "starter-astronaut-skull",
+    prompt: "Astronaut skull wearing a cracked vintage space helmet",
+    image_url: "https://pub-32be62cb2f1f47048c590acdfa322022.r2.dev/ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/761af6ff-7391-440f-ba1e-48afbd798cb8-1783531346381.png",
+    storage_key: "ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/761af6ff-7391-440f-ba1e-48afbd798cb8-1783531346381.png",
+  },
+  {
+    generation_id: "starter-black-panther",
+    prompt: "Fierce black panther roaring with electric blue lightning",
+    image_url: "https://pub-32be62cb2f1f47048c590acdfa322022.r2.dev/ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/a63fe991-e737-4b0a-bf3b-10ee58dbf61d-1783434567640.png",
+    storage_key: "ai-images/5f40b207-96af-4fb6-b750-473f18ee8c1a/a63fe991-e737-4b0a-bf3b-10ee58dbf61d-1783434567640.png",
+  },
+] as const;
 
 const jsonHeaders = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -33,6 +55,49 @@ async function getSupabase() {
       },
     },
   );
+}
+
+function getServiceSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
+async function seedStarterImagesOnce(user: { id: string; app_metadata?: Record<string, unknown> }) {
+  if (user.app_metadata?.ai_starter_images_seeded === true) return;
+
+  const serviceSupabase = getServiceSupabase();
+  const { count, error: countError } = await serviceSupabase
+    .from(TABLE)
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("is_saved", true);
+
+  if (countError) throw countError;
+
+  if ((count || 0) === 0) {
+    const now = Date.now();
+    const { error: insertError } = await serviceSupabase.from(TABLE).insert(
+      STARTER_IMAGES.map((image, index) => ({
+        user_id: user.id,
+        ...image,
+        original_image_url: image.image_url,
+        is_saved: true,
+        saved_at: new Date(now - index).toISOString(),
+      })),
+    );
+    if (insertError) throw insertError;
+  }
+
+  const { error: metadataError } = await serviceSupabase.auth.admin.updateUserById(user.id, {
+    app_metadata: {
+      ...(user.app_metadata || {}),
+      ai_starter_images_seeded: true,
+    },
+  });
+  if (metadataError) throw metadataError;
 }
 
 function getImageUrl(body: any) {
@@ -62,6 +127,8 @@ export async function GET() {
     if (authError || !user) {
       return json({ success: false, images: [], savedCount: 0, savedLimit: SAVE_LIMIT }, 401);
     }
+
+    await seedStarterImagesOnce(user);
 
     const { data, error } = await supabase
       .from(TABLE)
