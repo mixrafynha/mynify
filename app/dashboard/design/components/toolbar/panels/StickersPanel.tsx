@@ -26,9 +26,13 @@ async function addSticker(createElement: ((element: any) => void) | undefined, i
   const svg = await loadStickerAsset(item.value, item.svg);
   if (!svg) throw new Error(`Sticker asset unavailable: ${item.label}`);
   createElement?.({
-    type: "sticker-element",
+    type: "image",
     value: item.value,
     svg,
+    src: svg,
+    imageUrl: svg,
+    url: svg,
+    printUrl: svg,
     width: STICKER_INSERT_SIZE,
     height: STICKER_INSERT_SIZE,
     meta: {
@@ -37,7 +41,11 @@ async function addSticker(createElement: ((element: any) => void) | undefined, i
       targetDpi: TARGET_PRINT_DPI,
       isVector: true,
       // Se não for SVG, o motor de renderização usará o value para desenhar o emoji
-      source: item.svg ? "svg" : "emoji", 
+      source: "sticker-vector",
+      originalSource: item.svg ? "svg" : "emoji",
+      printKind: "vector",
+      dpiQuality: "vector",
+      qualityStatus: "Excellent",
     },
   });
 }
