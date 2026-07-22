@@ -88,7 +88,7 @@ export default function Canvas({
 
   const productId = searchParams.get("productId");
   const mockupId = String(params?.id || "hoodie").toLowerCase();
-  const productColorKey = productConfig?.productId || productId || mockupId;
+  const productColorKey = productId || productConfig?.productId || mockupId;
   const currentSide: CanvasSide = side === "back" ? "back" : "front";
   const isPreviewMode =
     mode === "preview" ||
@@ -535,7 +535,6 @@ export default function Canvas({
         }}
       >
         <CanvasMockup
-          key={`${currentSide}:${mockup}:${mockupColor}:${productConfig?.useVariantMockups ? "variant" : "tint"}`}
           mockup={mockup}
           mockupId={resolvedProductId}
           currentSide={currentSide}
