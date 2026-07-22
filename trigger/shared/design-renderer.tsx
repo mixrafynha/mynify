@@ -65,6 +65,7 @@ function fontFileName(id: string) {
 async function downloadFont(url: string) {
   const response = await fetch(url, {
     headers: { accept: "font/ttf,font/otf,application/octet-stream,*/*;q=0.8" },
+    signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
     throw new Error(`Failed to download Arial font: ${response.status} ${response.statusText}`);
@@ -166,6 +167,14 @@ function hasArtwork(elements: RenderElement[]) {
   return elements.some((el) => el && !el.meta?.hidden && ["image", "text", "shape"].includes(String(el.type || "")));
 }
 
+function needsArialFont(elements: RenderElement[]) {
+  return elements.some((el) => {
+    if (String(el.type || "") !== "text") return false;
+    const family = String(el.meta?.fontFamily || el.fontFamily || "").toLowerCase();
+    return family.includes("arial");
+  });
+}
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -225,6 +234,7 @@ async function imageUrlToDataUrl(src: string) {
       "user-agent":
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
     },
+    signal: AbortSignal.timeout(15_000),
   });
 
   if (!response.ok) {
@@ -336,8 +346,9 @@ async function renderHtmlPng(args: {
    */
   scaleWholeLayer?: boolean;
 }) {
-  await ensureArialFontsInstalled();
-  const elements = await inlineRenderImages(normalizeElements(args.elements));
+  const normalizedElements = normalizeElements(args.elements);
+  if (needsArialFont(normalizedElements)) await ensureArialFontsInstalled();
+  const elements = await inlineRenderImages(normalizedElements);
   const outputScaleX = args.outputWidth / args.sourceWidth;
   const outputScaleY = args.outputHeight / args.sourceHeight;
   const elementScaleX = args.scaleWholeLayer ? 1 : outputScaleX;
