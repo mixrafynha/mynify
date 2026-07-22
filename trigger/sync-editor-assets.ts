@@ -1,7 +1,7 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { createClient } from "@supabase/supabase-js";
 import { task } from "@trigger.dev/sdk/v3";
-import fontkit from "fontkit";
+import * as fontkit from "fontkit";
 import WebSocket from "ws";
 
 import { SHAPES } from "../app/dashboard/design/components/data/shapes";
