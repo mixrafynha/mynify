@@ -2,7 +2,7 @@
 
 import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { SHAPE_CATEGORIES, SHAPES, type ShapePreset } from "../data";
+import { SHAPE_CATEGORIES, type ShapePreset } from "../data";
 import { createShapeAsset } from "../../element/renderAsset";
 
 const DESKTOP_PAGE_SIZE = 48;
@@ -42,7 +42,8 @@ function addShape(createElement: ((element: any) => void) | undefined, shape: Sh
 }
 
 function IconsPanel({ createElement }: { createElement?: (element: any) => void }) {
-  const [shapes, setShapes] = useState<ShapePreset[]>(SHAPES);
+  const [shapes, setShapes] = useState<ShapePreset[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [category, setCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -67,11 +68,15 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
         if (Array.isArray(payload.shapes) && payload.shapes.length > 0) {
           setShapes(payload.shapes);
           setPage(1);
+          setLoadError(false);
+          return;
         }
+        throw new Error("Editor shapes response was empty.");
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
-          console.warn("Using local shape catalog fallback.", error);
+          console.error("Editor shape catalog failed to load.", error);
+          setLoadError(true);
         }
       });
 
@@ -101,6 +106,8 @@ function IconsPanel({ createElement }: { createElement?: (element: any) => void 
       <div className="grid grid-cols-5 gap-2 sm:grid-cols-7 md:grid-cols-5 xl:grid-cols-7">
         {visibleItems.map((shape) => <button key={shape.id || shape.label} type="button" aria-label={shape.label} title={shape.label} onClick={() => addShape(createElement, shape)} className="flex min-h-[54px] items-center justify-center rounded-2xl border border-violet-300/18 bg-white/[0.09] text-[24px] font-black text-violet-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.07)] transition duration-150 hover:-translate-y-0.5 hover:border-violet-300/45 hover:bg-violet-500/20 active:scale-95 [content-visibility:auto] [contain-intrinsic-size:54px]"><span className="drop-shadow-[0_1px_8px_rgba(196,181,253,0.28)]">{shape.value}</span></button>)}
       </div>
+      {!loadError && shapes.length === 0 && <p className="py-4 text-center text-sm font-semibold text-violet-100/70">Loading shapes...</p>}
+      {loadError && <p className="py-4 text-center text-sm font-semibold text-red-200">Shapes could not be loaded. Reopen this panel to try again.</p>}
       {visibleItems.length < items.length && <button type="button" onClick={() => setPage((value) => value + 1)} className="h-10 w-full rounded-2xl border border-violet-300/20 bg-white/[0.06] text-sm font-black text-violet-100 transition hover:bg-white/[0.09]">Load more</button>}
     </div>
   );
