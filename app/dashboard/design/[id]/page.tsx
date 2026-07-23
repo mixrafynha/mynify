@@ -672,30 +672,6 @@ export default function EditorPage() {
       setSaveNotice(null);
       saveDraftToSession();
 
-      const mockupRoot = previewCanvasRef.current?.querySelector(
-        "#mockup-export-root",
-      ) as HTMLElement | null;
-      const thumbnailUploadPromise = (async () => {
-        const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
-        if (!checkoutThumbnail) {
-          throw new Error("Failed to capture checkout thumbnail");
-        }
-
-        const response = await fetch("/api/user-products/checkout-thumbnail", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dataUrl: checkoutThumbnail }),
-        });
-        const upload = await response.json().catch(() => null);
-        if (!response.ok || !upload?.url) {
-          throw new Error(
-            upload?.error || "Failed to upload checkout thumbnail",
-          );
-        }
-        return upload;
-      })();
-
       const designPayloadPromise = buildDesignSavePayload({
           productId: baseProductId,
           category,
@@ -723,36 +699,20 @@ export default function EditorPage() {
           },
         });
 
-      const [thumbnailUpload, designPayload] = await Promise.all([
-        thumbnailUploadPromise,
-        designPayloadPromise,
-      ]);
-      const checkoutThumbnailUrl = String(thumbnailUpload.url);
-      const designPayloadJson = assertSavePayloadIsJsonOnly({
-        ...designPayload,
-        checkout_thumbnail_url: checkoutThumbnailUrl,
-        checkout_thumbnail_status: "ready",
-        mockups: {
-          ...(designPayload.mockups || {}),
-          checkout_thumbnail_url: checkoutThumbnailUrl,
-          checkout_thumbnail_status: "ready",
-        },
-        designData: {
-          ...(designPayload.designData || {}),
-          checkout_thumbnail_url: checkoutThumbnailUrl,
-          checkoutThumbnailStatus: "ready",
-        },
-        design_data: {
-          ...(designPayload.design_data || {}),
-          checkout_thumbnail_url: checkoutThumbnailUrl,
-          checkoutThumbnailStatus: "ready",
-        },
-      });
+      const designPayload = await designPayloadPromise;
+      const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token || null;
 
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
         body: designPayloadJson,
       });
 
@@ -788,6 +748,29 @@ export default function EditorPage() {
       setSaveNotice(
         "Design saved successfully. Redirecting you to checkout...",
       );
+
+      const mockupRoot = previewCanvasRef.current?.querySelector(
+        "#mockup-export-root",
+      ) as HTMLElement | null;
+      void (async () => {
+        try {
+          const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
+          if (!checkoutThumbnail) return;
+
+          await fetch("/api/user-products/checkout-thumbnail", {
+            method: "POST",
+            credentials: "include",
+            keepalive: true,
+            headers: {
+              "Content-Type": "application/json",
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+            },
+            body: JSON.stringify({ dataUrl: checkoutThumbnail }),
+          });
+        } catch {
+          // Thumbnail upload is best-effort and must never block save.
+        }
+      })();
 
       const checkoutUrl = data?.designId
         ? `/checkout?designId=${data.designId}`
