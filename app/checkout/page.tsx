@@ -132,8 +132,8 @@ function resolvePreviewImageSources(item: CartItem) {
       : {};
 
   const front =
-    cleanUrl(mockups.front) ||
     cleanUrl(mockups.checkout_thumbnail_url) ||
+    cleanUrl(mockups.front) ||
     cleanUrl(frontSide.mockupUrl) ||
     cleanUrl(frontSide.mockup_url) ||
     cleanUrl(item.front_print_file_url) ||
