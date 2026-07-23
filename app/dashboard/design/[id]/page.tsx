@@ -765,7 +765,11 @@ export default function EditorPage() {
               "Content-Type": "application/json",
               ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
             },
-            body: JSON.stringify({ dataUrl: checkoutThumbnail }),
+            body: JSON.stringify({
+              dataUrl: checkoutThumbnail,
+              userProductId: data?.designId || null,
+              designId: data?.designId || null,
+            }),
           });
         } catch {
           // Thumbnail upload is best-effort and must never block save.
