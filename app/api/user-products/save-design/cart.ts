@@ -75,6 +75,8 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
   const currency = userProduct.currency || "USD";
 
   const mockupUrl =
+    mockups?.checkout_thumbnail_url ||
+    mockups?.checkoutThumbnailUrl ||
     mockups?.front ||
     mockups?.back ||
     userProduct.ai_mockup_url ||

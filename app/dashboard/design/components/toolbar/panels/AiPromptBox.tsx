@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { Loader2, Shuffle, Wand2 } from "lucide-react";
 
 type Props = {
@@ -18,7 +19,7 @@ function safePrompt(value: string) {
   return value.replace(/[<>]/g, "").replace(/\s+/g, " ").slice(0, 180);
 }
 
-export default function AiPromptBox({
+function AiPromptBox({
   prompt,
   loading,
   notice,
@@ -79,3 +80,5 @@ export default function AiPromptBox({
     </div>
   );
 }
+
+export default memo(AiPromptBox);

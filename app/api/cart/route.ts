@@ -65,7 +65,13 @@ function publicString(value: unknown): string | null {
 
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
-  return publicString(mockups.front) ?? publicString(mockups.mockup_front) ?? publicString(mockups.image);
+  return (
+    publicString(mockups.checkout_thumbnail_url) ??
+    publicString(mockups.checkoutThumbnailUrl) ??
+    publicString(mockups.front) ??
+    publicString(mockups.mockup_front) ??
+    publicString(mockups.image)
+  );
 }
 
 async function resolveUserProductAssets(

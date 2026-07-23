@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import dynamic from "next/dynamic";
 import {
   Image,
@@ -110,6 +110,11 @@ export default function DesktopToolbar({
   const textInsertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [activePanel, setActivePanel] = useState<Panel>(null);
+  const [aiMounted, setAiMounted] = useState(false);
+
+  useEffect(() => {
+    if (activePanel === "ai") setAiMounted(true);
+  }, [activePanel]);
 
   const panelInfo = useMemo(() => {
     if (!activePanel) return null;
@@ -256,9 +261,11 @@ const handleUploadChange = useCallback(
             {panelInfo && <PanelHeader title={panelInfo.title} subtitle={panelInfo.subtitle} onClose={closePanel} />}
 
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.13),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.08),transparent_30%),#0b0c17] px-3 py-4 [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,.8)_transparent] lg:px-5 lg:py-5">
-              <div className={activePanel === "ai" ? "block" : "hidden"}>
-                <AiPanel createElement={safeCreateElement} />
-              </div>
+              {aiMounted && (
+                <div className={activePanel === "ai" ? "block" : "hidden"}>
+                  <AiPanel createElement={safeCreateElement} />
+                </div>
+              )}
               {activePanel === "templates" && <TemplatesPanel createElement={safeCreateElement} />}
               {activePanel === "text" && <TextPanel createElement={safeCreateElement} onAddText={safeOnAddText} />}
               {activePanel === "stickers" && <StickersPanel createElement={safeCreateElement} />}

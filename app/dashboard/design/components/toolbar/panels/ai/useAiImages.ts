@@ -3,16 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AI_IMAGE_QUALITY } from "../../data";
 import { FREE_SAVED_IMAGE_LIMIT, PROMPT_EXAMPLES } from "./ai.constants";
-import type { AiCreditPack, AiImageItem, UseAiImagesArgs, BuyCreditsOptions } from "./ai.types";
+import type { AiImageItem, UseAiImagesArgs } from "./ai.types";
 import {
-  createAiCreditsCheckout,
   deleteSavedImage,
-  fetchAiCredits,
-  fetchCreditPacks,
   fetchSavedImages,
   requestAiImage,
   saveGeneratedImage,
 } from "./ai.api";
+import { fetchAiCredits } from "../credits/credits.api";
 import {
   fitWithinBox,
   getImageSrc,
@@ -71,12 +69,10 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [error, setError] = useState("");
   const [showAuthPopup, setShowAuthPopup] = useState(false);
   const [showCreditsModal, setShowCreditsModal] = useState(false);
-  const [buyingCredits, setBuyingCredits] = useState(false);
   const [lastAddedSrc, setLastAddedSrc] = useState<string | null>(null);
   const [generatedImages, setGeneratedImages] = useState<AiImageItem[]>([]);
   const [savedImages, setSavedImages] = useState<AiImageItem[]>([]);
   const [credits, setCredits] = useState<number | null>(null);
-  const [creditPacks, setCreditPacks] = useState<AiCreditPack[]>([]);
   const [savedCount, setSavedCount] = useState(0);
   const [savedLimit, setSavedLimit] = useState(FREE_SAVED_IMAGE_LIMIT);
 
@@ -115,15 +111,6 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     } catch {}
   }, []);
 
-  const loadCreditPacks = useCallback(async () => {
-    try {
-      const packs = await fetchCreditPacks();
-      setCreditPacks(packs);
-    } catch {
-      setCreditPacks([]);
-    }
-  }, []);
-
   const loadSavedImages = useCallback(async () => {
     try {
       const { data } = await fetchSavedImages();
@@ -150,8 +137,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   useEffect(() => {
     loadCredits();
     loadSavedImages();
-    loadCreditPacks();
-  }, [loadCredits, loadSavedImages, loadCreditPacks]);
+  }, [loadCredits, loadSavedImages]);
 
   const randomPrompt = useCallback(() => {
     const item = PROMPT_EXAMPLES[Math.floor(Math.random() * PROMPT_EXAMPLES.length)];
@@ -363,33 +349,6 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     }
   }, []);
 
-  const buyCredits = useCallback(async ({ packId, source = "editor" }: BuyCreditsOptions) => {
-    try {
-      setBuyingCredits(true);
-      setError("");
-      setNotice("Opening secure checkout...");
-
-      const { response, data } = await createAiCreditsCheckout(packId, source);
-
-      if (response.status === 401) {
-        setShowAuthPopup(true);
-        setNotice("Sign in to buy AI credits.");
-        return;
-      }
-
-      if (!response.ok || !data?.url) {
-        throw new Error(data?.error || "Could not create checkout session");
-      }
-
-      window.open(data.url, "_blank", "noopener,noreferrer");
-      setNotice("Checkout opened in a new tab. Your editor stays open here.");
-    } catch {
-      setError("Could not open credits checkout.");
-    } finally {
-      setBuyingCredits(false);
-    }
-  }, []);
-
   const handleAuthSuccess = useCallback(() => {
     setShowAuthPopup(false);
     setNotice("You are signed in. AI image generation is ready.");
@@ -413,11 +372,9 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     authVariant: "ai_credits" as const,
     showCreditsModal,
     setShowCreditsModal,
-    buyingCredits,
     lastAddedSrc,
     generatedImages: visibleImages,
     credits,
-    creditPacks,
     savedCount,
     savedLimit,
     refreshCredits: loadCredits,
@@ -426,7 +383,6 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     generateImage,
     saveImage,
     deleteImage,
-    buyCredits,
     handleAuthSuccess,
   };
 }

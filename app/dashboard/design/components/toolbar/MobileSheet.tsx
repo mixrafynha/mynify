@@ -74,8 +74,13 @@ function MobileSheet({
   setSelectedElement,
 }: MobileSheetProps) {
   const [sheetSize, setSheetSize] = useState<SheetSize>("mid");
+  const [aiMounted, setAiMounted] = useState(false);
   const dragStartY = useRef(0);
   const dragging = useRef(false);
+
+  useEffect(() => {
+    if (panel === "ai") setAiMounted(true);
+  }, [panel]);
 
   useEffect(() => {
     if (open) setSheetSize("mid");
@@ -252,7 +257,7 @@ function MobileSheet({
           shadow-[0_-10px_28px_rgba(0,0,0,0.32),0_0_18px_rgba(124,58,237,0.08)]
           transition-transform duration-[220ms] ease-[cubic-bezier(.2,.9,.2,1)]
           will-change-transform
-          ${open ? "translate-y-0" : "pointer-events-none translate-y-full"}
+          ${open ? "translate-y-0" : "pointer-events-none translate-y-[calc(100%+40px)]"}
         `}
         style={{
           height: `min(${SHEET_HEIGHTS[sheetSize]}, 720px)`,
@@ -331,9 +336,11 @@ function MobileSheet({
             data-ryfio-mobile-sheet-content="true"
             className="mx-auto w-full max-w-[720px]"
           >
-            <div className={panel === "ai" ? "block" : "hidden"}>
-              <AiPanel createElement={createAiElement} />
-            </div>
+            {aiMounted && (
+              <div className={panel === "ai" ? "block" : "hidden"}>
+                <AiPanel createElement={createAiElement} />
+              </div>
+            )}
             {panel !== "ai" && nonAiContent}
           </div>
         </div>

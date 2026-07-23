@@ -47,6 +47,8 @@ import {
   variantSku,
   variantProductColorId,
   isVariantAvailable,
+  isCustomDesignItem,
+  customSecondPrintCharge,
   readCheckoutSession,
   readCheckoutStep,
   CHECKOUT_SESSION_KEY,
@@ -104,6 +106,49 @@ function stringifyForDisplay(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function cleanUrl(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function resolvePreviewImageSources(item: CartItem) {
+  const designData = item.design_data ?? item.designData ?? {};
+  const mockups =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.mockups && typeof designData.mockups === "object"
+      ? (designData.mockups as Record<string, unknown>)
+      : {};
+  const sides =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
+      ? (designData.sides as Record<string, unknown>)
+      : {};
+  const frontSide =
+    sides.front && typeof sides.front === "object" && !Array.isArray(sides.front)
+      ? (sides.front as Record<string, unknown>)
+      : {};
+  const backSide =
+    sides.back && typeof sides.back === "object" && !Array.isArray(sides.back)
+      ? (sides.back as Record<string, unknown>)
+      : {};
+
+  const front =
+    cleanUrl(mockups.front) ||
+    cleanUrl(mockups.checkout_thumbnail_url) ||
+    cleanUrl(frontSide.mockupUrl) ||
+    cleanUrl(frontSide.mockup_url) ||
+    cleanUrl(item.front_print_file_url) ||
+    cleanUrl(item.frontPrintFileUrl) ||
+    cleanUrl(item.image);
+
+  const back =
+    cleanUrl(mockups.back) ||
+    cleanUrl(backSide.mockupUrl) ||
+    cleanUrl(backSide.mockup_url) ||
+    cleanUrl(item.back_print_file_url) ||
+    cleanUrl(item.backPrintFileUrl) ||
+    cleanUrl(item.image);
+
+  return { front, back };
 }
 
 export default function CheckoutPage() {
@@ -513,8 +558,9 @@ export default function CheckoutPage() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Error updating item");
-      if (data?.item) {
-        setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, ...data.item } : entry)));
+      const updatedItem = data?.item ?? data?.data;
+      if (updatedItem) {
+        setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, ...updatedItem } : entry)));
       }
     } catch {
       setItems(previousItems);
@@ -530,8 +576,17 @@ export default function CheckoutPage() {
     const nextColor = variantColor(selected) ?? item.color ?? null;
     const nextSize = variantSize(selected) ?? item.size ?? null;
     const nextVariantId = selected.id || selected.variant_id || item.variant_id || null;
-    const nextPrice = variantPrice(selected, Math.max(0, Number(item.price) || 0));
-    const nextImage = variantImage(selected) || item.image || null;
+    const customDesign = isCustomDesignItem(item);
+    const secondPrintCharge = customSecondPrintCharge(item);
+    const nextPrice = customDesign
+      ? variantPrice(
+          selected,
+          Math.max(0, (Number(item.price) || 0) - secondPrintCharge),
+        ) + secondPrintCharge
+      : variantPrice(selected, Math.max(0, Number(item.price) || 0));
+    const nextImage = customDesign
+      ? item.image || variantImage(selected) || null
+      : variantImage(selected) || item.image || null;
     const nextSku = variantSku(selected) || item.sku || null;
     const nextProductColorId = variantProductColorId(selected) || item.product_color_id || null;
 
@@ -692,17 +747,6 @@ export default function CheckoutPage() {
       const durationMs = Math.round(performance.now() - startedAt);
       const nextResult: GelatoDraftTestResult = data ?? { ok: false, status: res.status, durationMs };
 
-      console.log("=========================\nGELATO REQUEST\n=========================");
-      console.log(requestPayload);
-      console.log("=========================\nGELATO RESPONSE\n=========================");
-      console.log(nextResult.responsePayload ?? nextResult);
-      console.log("=========================\nHEADERS\n=========================");
-      console.log(nextResult.headers ?? {});
-      console.log("=========================\nSTATUS\n=========================");
-      console.log(nextResult.status ?? res.status);
-      console.log("=========================\nREQUEST TIME\n=========================");
-      console.log(`${nextResult.durationMs ?? durationMs}ms`);
-
       setGelatoTestResult({ ...nextResult, durationMs: nextResult.durationMs ?? durationMs, status: nextResult.status ?? res.status });
     } catch (cause) {
       const durationMs = Math.round(performance.now() - startedAt);
@@ -715,17 +759,6 @@ export default function CheckoutPage() {
         status: 0,
         durationMs,
       };
-
-      console.log("=========================\nGELATO REQUEST\n=========================");
-      console.log(requestPayload);
-      console.log("=========================\nGELATO RESPONSE\n=========================");
-      console.log(nextResult.responsePayload);
-      console.log("=========================\nHEADERS\n=========================");
-      console.log(nextResult.headers);
-      console.log("=========================\nSTATUS\n=========================");
-      console.log(nextResult.status);
-      console.log("=========================\nREQUEST TIME\n=========================");
-      console.log(`${durationMs}ms`);
 
       setGelatoTestResult(nextResult);
     } finally {
@@ -938,9 +971,13 @@ export default function CheckoutPage() {
                       const currentColor = current ? variantColor(current) : item.color;
                       const currentSize = current ? variantSize(current) : item.size;
                       const quantity = Math.max(1, Number(item.quantity) || 1);
-                      const price = variantPrice(current, Math.max(0, Number(item.price) || 0));
+                      const customDesign = isCustomDesignItem(item);
+                      const secondPrintCharge = customSecondPrintCharge(item);
+                      const price = customDesign
+                        ? Math.max(0, Number(item.price) || 0)
+                        : variantPrice(current, Math.max(0, Number(item.price) || 0));
                       const busy = updatingItemId === item.id || removingItemId === item.id;
-                      const displayImage = variantImage(current) || item.image || null;
+                      const previewImages = resolvePreviewImageSources(item);
                       const currentSku = variantSku(current) || item.sku || null;
                       const currentStock = current ? variantStock(current) : null;
 
@@ -974,7 +1011,11 @@ export default function CheckoutPage() {
                       return (
                         <article key={item.id} className="py-5">
                           <div className="grid grid-cols-[132px_1fr] gap-4 sm:grid-cols-[168px_1fr] sm:gap-6">
-<ProductPreviewImage image={displayImage} title={item.title} />
+  <ProductPreviewImage
+    title={item.title}
+    frontImage={previewImages.front}
+    backImage={previewImages.back}
+  />
 
                             <div className="min-w-0">
                               <div className="flex items-start gap-3">
@@ -982,7 +1023,8 @@ export default function CheckoutPage() {
                                   <p className="line-clamp-2 text-[15px] font-black leading-5 sm:text-base">{item.title}</p>
                                   <p className="mt-1 text-xs font-bold text-white/35">{[currentColor, currentSize].filter(Boolean).join(" / ") || "Custom product"}</p>
                                   <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-white/35 sm:text-[11px]">
-                                    <span>Variant price {money(price)}</span>
+                                    <span>Variant price {money(Math.max(0, price - secondPrintCharge))}</span>
+                                    {secondPrintCharge > 0 ? <span className="text-purple-200">Second print side +{money(secondPrintCharge)}</span> : null}
                                     <span>Excl. tax</span>
                                     {currentSku ? <span>SKU {currentSku}</span> : null}
                                     {typeof currentStock === "number" && currentStock > 0 ? <span>{currentStock} in stock</span> : null}
@@ -1003,7 +1045,9 @@ export default function CheckoutPage() {
                                     {colorGroups.map(({ color, variant }) => {
                                       const active = color === currentColor;
                                       const available = isVariantAvailable(variant);
-                                      const optionPrice = variantPrice(variant, price);
+                                      const optionPrice = customDesign
+                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + secondPrintCharge
+                                        : variantPrice(variant, price);
                                       return (
                                         <button key={`${color}-${variantId(variant)}`} type="button" title={`${color} · ${money(optionPrice)}`} aria-label={`Select ${color}`} disabled={busy || !available} onClick={() => changeVariantByColor(item, color)} className={`group grid h-10 w-10 place-items-center rounded-full border transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white/12 ring-2 ring-white/25" : "border-white/15 hover:border-white/35"}`}>
                                           <span className="h-7 w-7 rounded-full border border-black/25" style={{ backgroundColor: variantHex(variant) }} />
@@ -1025,7 +1069,9 @@ export default function CheckoutPage() {
                                       const size = variantSize(variant);
                                       const active = size === currentSize;
                                       const available = isVariantAvailable(variant);
-                                      const optionPrice = variantPrice(variant, price);
+                                      const optionPrice = customDesign
+                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + secondPrintCharge
+                                        : variantPrice(variant, price);
                                       return (
                                         <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-12 rounded-2xl border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white text-[#080812]" : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"}`}>
                                           <span className="block text-xs font-black leading-4">{size}</span>

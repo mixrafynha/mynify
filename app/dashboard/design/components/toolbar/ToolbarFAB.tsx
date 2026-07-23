@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import DesktopToolbar from "./DesktopToolbar";
 import MobileToolbar from "./MobileToolbar";
@@ -55,6 +55,18 @@ export default function ToolbarFAB({
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
+
+  useEffect(() => {
+    const openMobileLayers = () => {
+      setPanel("layers");
+      setOpen(true);
+    };
+
+    window.addEventListener("ryfio:open-mobile-layers", openMobileLayers);
+    return () => {
+      window.removeEventListener("ryfio:open-mobile-layers", openMobileLayers);
+    };
+  }, []);
 
   const selected = useMemo(
     () => elements.find((el) => el.id === selectedId) ?? null,

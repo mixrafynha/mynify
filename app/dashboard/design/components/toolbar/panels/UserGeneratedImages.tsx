@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { Check, ImagePlus, Trash2 } from "lucide-react";
 
 type ImageItem = {
@@ -41,7 +42,7 @@ function isValidImageSrc(src: string) {
   return src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:image/");
 }
 
-export default function UserGeneratedImages({
+function UserGeneratedImages({
   images,
   lastAddedSrc,
   limit = 5,
@@ -50,7 +51,10 @@ export default function UserGeneratedImages({
   onSave,
   onDelete,
 }: Props) {
-  const validImages = images.filter((item) => isValidImageSrc(getImageSrc(item)));
+  const validImages = useMemo(
+    () => images.filter((item) => isValidImageSrc(getImageSrc(item))),
+    [images],
+  );
 
   if (!validImages.length) {
     return (
@@ -96,6 +100,8 @@ export default function UserGeneratedImages({
                     alt="AI generated design"
                     className="h-full w-full object-contain p-2"
                     draggable={false}
+                    decoding="async"
+                    loading="lazy"
                     onError={(event) => {
                       event.currentTarget.closest("[data-ai-image-card]")?.classList.add("hidden");
                     }}
@@ -145,3 +151,5 @@ export default function UserGeneratedImages({
     </div>
   );
 }
+
+export default memo(UserGeneratedImages);

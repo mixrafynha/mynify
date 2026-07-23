@@ -8,7 +8,10 @@ import TopBar from "@/app/dashboard/design/components/TopBar";
 import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
-import { captureProductionPreview } from "@/app/dashboard/design/components/preview/services/previewCapture";
+import {
+  captureProductionPreview,
+  captureVisualMockupPreview,
+} from "@/app/dashboard/design/components/preview/services/previewCapture";
 import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
 import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
 import ProductionCaptureLayers from "@/app/dashboard/design/components/capture/ProductionCaptureLayers";
@@ -669,33 +672,34 @@ export default function EditorPage() {
       setSaveNotice(null);
       saveDraftToSession();
 
-      const designPayload = await buildDesignSavePayload({
-        productId: baseProductId,
-        category,
-        side,
-        elements,
-        frontElements,
-        backElements,
-        mockupColor,
-        color: mockupColor,
-        variantId: selectedVariant?.variantId || null,
-        selectedVariant,
-        productConfig,
-        onUploadInlineImage: async (dataUrl, elementId) => {
-          const uploadResponse = await fetch("/api/user-products/design-element-image", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ dataUrl, elementId }),
-          });
-          const uploadResult = await uploadResponse.json().catch(() => null);
-          if (!uploadResponse.ok || !uploadResult?.url) {
-            throw new Error(uploadResult?.error || "Failed to upload design image");
-          }
-          return String(uploadResult.url);
-        },
-      });
+      const designPayloadPromise = buildDesignSavePayload({
+          productId: baseProductId,
+          category,
+          side,
+          elements,
+          frontElements,
+          backElements,
+          mockupColor,
+          color: mockupColor,
+          variantId: selectedVariant?.variantId || null,
+          selectedVariant,
+          productConfig,
+          onUploadInlineImage: async (dataUrl, elementId) => {
+            const uploadResponse = await fetch("/api/user-products/design-element-image", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ dataUrl, elementId }),
+            });
+            const uploadResult = await uploadResponse.json().catch(() => null);
+            if (!uploadResponse.ok || !uploadResult?.url) {
+              throw new Error(uploadResult?.error || "Failed to upload design image");
+            }
+            return String(uploadResult.url);
+          },
+        });
 
+      const designPayload = await designPayloadPromise;
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
 
       const response = await fetch("/api/user-products/save-design", {
@@ -737,6 +741,26 @@ export default function EditorPage() {
       setSaveNotice(
         "Design saved successfully. Redirecting you to checkout...",
       );
+
+      const mockupRoot = previewCanvasRef.current?.querySelector(
+        "#mockup-export-root",
+      ) as HTMLElement | null;
+      try {
+        const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
+        if (checkoutThumbnail) {
+          void fetch("/api/user-products/checkout-thumbnail", {
+            method: "POST",
+            credentials: "include",
+            keepalive: true,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ dataUrl: checkoutThumbnail }),
+          }).catch(() => {
+            // Thumbnail upload is best-effort and must never block save.
+          });
+        }
+      } catch {
+        // Thumbnail capture is best-effort and must never block save.
+      }
 
       const checkoutUrl = data?.designId
         ? `/checkout?designId=${data.designId}`

@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
-import { Copy, Lock, SlidersHorizontal, Trash2, Unlock, X } from "lucide-react";
+import { Copy, Layers, Lock, SlidersHorizontal, Trash2, Unlock, X } from "lucide-react";
 import { loadEditorFont } from "./data";
 import FloatingFontPicker from "./FloatingFontPicker";
 import {
@@ -160,6 +160,12 @@ function MobileFloatingEditToolbar({
 
         <MobileIconButton label="More" onClick={() => setAdvancedOpen((value) => !value)}>
           <SlidersHorizontal size={18} />
+        </MobileIconButton>
+        <MobileIconButton
+          label="Layers"
+          onClick={() => window.dispatchEvent(new Event("ryfio:open-mobile-layers"))}
+        >
+          <Layers size={18} />
         </MobileIconButton>
         <MobileIconButton
           label="Copy"

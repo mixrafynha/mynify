@@ -8,6 +8,9 @@ import {
 } from "./image-utils";
 import type { DesignAssetKind, DesignSide } from "./image-utils";
 import { uploadBufferToR2, type R2UploadResult } from "./r2";
+import { resolveVariantById } from "../../cart/_variant";
+
+const SECOND_PRINT_PRICE = 6;
 
 export function isUuid(value: unknown) {
   return (
@@ -31,6 +34,15 @@ function parseJsonIfString<T>(value: unknown, fallback: T): T {
 function arrayValue(value: unknown) {
   const parsed = parseJsonIfString<unknown>(value, value);
   return Array.isArray(parsed) ? parsed : [];
+}
+
+function hasVisibleDesign(elements: unknown[]) {
+  return elements.some((element) => {
+    if (!element || typeof element !== "object") return false;
+    const value = element as { type?: unknown; meta?: { hidden?: unknown } };
+    return value.meta?.hidden !== true &&
+      ["image", "text", "shape"].includes(String(value.type || ""));
+  });
 }
 
 function objectValue<T extends Record<string, unknown>>(value: unknown, fallback: T): T {
@@ -428,17 +440,28 @@ export async function getBaseProduct(args: {
 }
 
 export async function buildUserProductSavePayload(args: {
+  supabase: ReturnType<typeof createSupabaseServer>;
   body: any;
   userId: string;
   designId: string;
   baseProduct: any;
 }) {
-  const { body, userId, designId, baseProduct } = args;
+  const { supabase, body, userId, designId, baseProduct } = args;
 
   const incomingDesignData = objectValue<any>(body.design_data || body.designData, {});
   const incomingPrintFiles = objectValue<any>(body.printFiles || body.print_files, {});
   const incomingMockups = objectValue<any>(body.mockups || body.mockupFiles, {});
   const incomingSides = objectValue<any>(body.sides || incomingDesignData.sides, {});
+  const checkoutThumbnailUrl = firstValue(
+    body.checkout_thumbnail_url,
+    body.checkoutThumbnailUrl,
+    incomingMockups.checkout_thumbnail_url,
+    incomingMockups.checkoutThumbnailUrl,
+    incomingDesignData.checkout_thumbnail_url,
+  );
+  const savedCheckoutThumbnailUrl = isHttpUrl(checkoutThumbnailUrl)
+    ? checkoutThumbnailUrl
+    : null;
 
   const frontElements = arrayValue(
     body.designFront || body.design_front || incomingSides?.front?.elements,
@@ -622,9 +645,34 @@ export async function buildUserProductSavePayload(args: {
     url: uploadedMockupBack.url || null,
   };
 
+  const selectedColor = getSelectedColor(body, incomingDesignData);
+  const selectedVariant = getSelectedVariant(body, incomingDesignData);
+  const selectedVariantId = firstValue(
+    selectedVariant?.variantId,
+    selectedVariant?.id,
+  );
+  const databaseVariant = selectedVariantId
+    ? await resolveVariantById(supabase, String(selectedVariantId))
+    : null;
+
+  if (selectedVariantId && !databaseVariant) {
+    throw new Error("Selected product variant not found");
+  }
+
+  if (
+    databaseVariant?.product_id &&
+    String(databaseVariant.product_id) !== String(baseProduct.id)
+  ) {
+    throw new Error("Selected variant does not belong to the base product");
+  }
+
   const productMarkup = Number(body.markup || 0);
-  const basePrice = Number(baseProduct.price || 0);
-  const finalPrice = basePrice + productMarkup;
+  const basePrice = Number(databaseVariant?.price ?? baseProduct.price ?? 0);
+  const hasFrontDesign = hasVisibleDesign(frontElements);
+  const hasBackDesign = hasVisibleDesign(backElements);
+  const secondPrintCharge =
+    hasFrontDesign && hasBackDesign ? SECOND_PRINT_PRICE : 0;
+  const finalPrice = basePrice + secondPrintCharge;
 
   const printBox = objectValue<any>(body.printBox || body.print_box, {
     front: incomingSides?.front?.printBox || incomingDesignData?.sides?.front?.printBox || null,
@@ -636,8 +684,6 @@ export async function buildUserProductSavePayload(args: {
     back: incomingSides?.back?.safeArea || incomingDesignData?.sides?.back?.safeArea || null,
   });
 
-  const selectedColor = getSelectedColor(body, incomingDesignData);
-  const selectedVariant = getSelectedVariant(body, incomingDesignData);
   const normalizedProduction = normalizeProductionForSafeAreaAspect(
     incomingDesignData.production || body.production || {},
     safeArea as Record<DesignSide, unknown>,
@@ -658,6 +704,8 @@ export async function buildUserProductSavePayload(args: {
     gelatoVariantUid: selectedVariant?.gelatoVariantUid || incomingDesignData.gelatoVariantUid || incomingDesignData.gelato_variant_uid || null,
     gelato_variant_uid: selectedVariant?.gelato_variant_uid || incomingDesignData.gelato_variant_uid || incomingDesignData.gelatoVariantUid || null,
     status: body.status || incomingDesignData.status || "draft",
+    checkout_thumbnail_url: savedCheckoutThumbnailUrl,
+    checkoutThumbnailStatus: savedCheckoutThumbnailUrl ? "ready" : "pending",
     sides: {
       front: {
         ...(incomingDesignData?.sides?.front || {}),
@@ -692,6 +740,7 @@ export async function buildUserProductSavePayload(args: {
   }) as any;
 
   const bestPreviewImage =
+    savedCheckoutThumbnailUrl ||
     mockupFront.url ||
     mockupBack.url ||
     baseProduct.image ||
@@ -736,6 +785,8 @@ export async function buildUserProductSavePayload(args: {
     mockups: {
       front: mockupFront.url,
       back: mockupBack.url,
+      checkout_thumbnail_url: savedCheckoutThumbnailUrl,
+      checkout_thumbnail_status: savedCheckoutThumbnailUrl ? "ready" : "pending",
       keys: {
         front: uploadedMockupFront.key,
         back: uploadedMockupBack.key,
@@ -743,7 +794,7 @@ export async function buildUserProductSavePayload(args: {
     },
     print_box: printBox,
     safe_area: safeArea,
-    design_image_url: null,
+    design_image_url: savedCheckoutThumbnailUrl,
     ai_mockup_url: mockupFront.url || mockupBack.url || null,
     ai_mockup_images: [mockupFront.url, mockupBack.url].filter(Boolean),
     markup: productMarkup,

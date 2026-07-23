@@ -2,18 +2,28 @@ import { AI_IMAGE_QUALITY } from "../../data";
 import type { AiImageItem } from "./ai.types";
 import { buildFinalPrompt, getImageSrc } from "./ai.utils";
 
-export async function fetchAiCredits() {
-  const res = await fetch("/api/ai-credits", { cache: "no-store" });
-  if (res.status === 401) return null;
-  if (!res.ok) return null;
-  return res.json();
-}
+type SavedImagesResult = {
+  unauthorized: boolean;
+  data: any;
+};
+
+let savedImagesRequest: Promise<SavedImagesResult> | null = null;
 
 export async function fetchSavedImages() {
-  const res = await fetch("/api/user-generated-images", { cache: "no-store" });
-  if (res.status === 401) return { unauthorized: true, data: null };
-  if (!res.ok) return { unauthorized: false, data: null };
-  return { unauthorized: false, data: await res.json() };
+  if (savedImagesRequest) return savedImagesRequest;
+
+  savedImagesRequest = (async () => {
+    const res = await fetch("/api/user-generated-images", { cache: "no-store" });
+    if (res.status === 401) return { unauthorized: true, data: null };
+    if (!res.ok) return { unauthorized: false, data: null };
+    return { unauthorized: false, data: await res.json() };
+  })();
+
+  try {
+    return await savedImagesRequest;
+  } finally {
+    savedImagesRequest = null;
+  }
 }
 
 export async function requestAiImage(cleanPrompt: string) {
@@ -70,24 +80,6 @@ export async function deleteSavedImage(id: string) {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id }),
-  });
-
-  const data = await response.json().catch(() => ({}));
-  return { response, data };
-}
-
-export async function fetchCreditPacks() {
-  const res = await fetch("/api/credit-packs", { cache: "no-store" });
-  if (!res.ok) return [];
-  const data = await res.json().catch(() => ({}));
-  return Array.isArray(data?.packs) ? data.packs : [];
-}
-
-export async function createAiCreditsCheckout(packId: string, source = "editor") {
-  const response = await fetch("/api/stripe/create-ai-credits-checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ packId, source }),
   });
 
   const data = await response.json().catch(() => ({}));

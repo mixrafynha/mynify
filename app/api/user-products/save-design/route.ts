@@ -221,6 +221,7 @@ export async function POST(req: Request) {
       : crypto.randomUUID();
 
     const savePayload = await buildUserProductSavePayload({
+      supabase,
       body,
       userId: user.id,
       designId,

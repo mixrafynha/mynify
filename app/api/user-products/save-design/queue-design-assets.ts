@@ -85,28 +85,20 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   });
 
   try {
-    const [thumbnailRun, printRun] = await Promise.all([
-      tasks.trigger("generate-checkout-thumbnail", {
-        userProductId: input.userProductId,
-        side: sides.includes("front") ? "front" : sides[0],
-      }),
-      tasks.trigger("generate-design-print-file", {
-        userProductId: input.userProductId,
-        sides,
-      }),
-    ]);
+    const printRun = await tasks.trigger("generate-design-print-file", {
+      userProductId: input.userProductId,
+      sides,
+    });
 
     console.info("[save-design] design asset jobs triggered", {
       userProductId: input.userProductId,
       sides,
-      checkoutThumbnailRunId: (thumbnailRun as any)?.id ?? null,
       printFileRunId: (printRun as any)?.id ?? null,
     });
 
     return {
       queued: true,
       sides,
-      checkoutThumbnailRunId: (thumbnailRun as any)?.id ?? null,
       printFileRunId: (printRun as any)?.id ?? null,
     };
   } catch (error) {

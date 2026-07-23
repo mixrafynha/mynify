@@ -118,6 +118,50 @@ export type CartItem = {
   product?: { variants?: CartVariant[] | null } | null;
 };
 
+export function isCustomDesignItem(item: CartItem) {
+  return Boolean(item.user_product_id ?? item.userProductId);
+}
+
+function sideHasVisibleDesign(item: CartItem, side: "front" | "back") {
+  const designData = item.design_data ?? item.designData;
+  const sides =
+    designData?.sides &&
+    typeof designData.sides === "object" &&
+    !Array.isArray(designData.sides)
+      ? (designData.sides as FlexibleRecord)
+      : null;
+  const sideData =
+    sides?.[side] &&
+    typeof sides[side] === "object" &&
+    !Array.isArray(sides[side])
+      ? (sides[side] as FlexibleRecord)
+      : null;
+  const elements = sideData?.elements;
+
+  return Array.isArray(elements) && elements.some((element) => {
+    if (!element || typeof element !== "object") return false;
+    const value = element as FlexibleRecord;
+    const meta =
+      value.meta && typeof value.meta === "object"
+        ? (value.meta as FlexibleRecord)
+        : null;
+    return (
+      meta?.hidden !== true &&
+      ["image", "text", "shape"].includes(String(value.type || ""))
+    );
+  });
+}
+
+export function customSecondPrintCharge(item: CartItem) {
+  return (
+    isCustomDesignItem(item) &&
+    sideHasVisibleDesign(item, "front") &&
+    sideHasVisibleDesign(item, "back")
+  )
+    ? 6
+    : 0;
+}
+
 export type CheckoutForm = {
   email: string;
   fullName: string;
@@ -368,10 +412,10 @@ export function createCheckoutRequestPayload(
     shipping: { method: form.shippingMethod, price: shippingPrice },
     items: items.map((item, index) => {
       const currentVariant = item.selectedVariant ?? null;
-      const resolvedPrice = Math.max(
-        0,
-        variantPrice(currentVariant, Number(item.price) || 0),
-      );
+      const customDesign = isCustomDesignItem(item);
+      const resolvedPrice = Math.max(0, customDesign
+        ? Number(item.price) || 0
+        : variantPrice(currentVariant, Number(item.price) || 0));
 
       const productUid = resolveProductUid(item, currentVariant);
       const printFiles = resolveGelatoPrintFiles(item);
@@ -388,7 +432,9 @@ export function createCheckoutRequestPayload(
         unit_price: resolvedPrice,
         final_price: currentVariant?.final_price ?? null,
         base_price: currentVariant?.base_price ?? null,
-        image: variantImage(currentVariant) ?? item.image ?? null,
+        image: customDesign
+          ? item.image ?? variantImage(currentVariant) ?? null
+          : variantImage(currentVariant) ?? item.image ?? null,
         color: item.color,
         size: item.size,
         sku: variantSku(currentVariant) ?? item.sku ?? null,

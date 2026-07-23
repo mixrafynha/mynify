@@ -8,9 +8,11 @@ type CartItem = {
   id: string;
   user_id: string;
   product_id: string;
+  user_product_id: string | null;
   variant_id: string | null;
   quantity: number | null;
   image: string | null;
+  price: number | null;
 };
 
 type SupabaseSingleResponse<T> = {
@@ -43,6 +45,33 @@ function nullableString(value: unknown): string | null {
   return parsed ? parsed : null;
 }
 
+function hasVisibleDesign(elements: unknown) {
+  return Array.isArray(elements) && elements.some((element) => {
+    if (!element || typeof element !== "object") return false;
+    const value = element as { type?: unknown; meta?: { hidden?: unknown } };
+    return (
+      value.meta?.hidden !== true &&
+      ["image", "text", "shape"].includes(String(value.type || ""))
+    );
+  });
+}
+
+async function getSecondPrintCharge(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  userProductId: string,
+) {
+  const { data } = await supabase
+    .from("user_products")
+    .select("design_front, design_back")
+    .eq("id", userProductId)
+    .maybeSingle();
+
+  return hasVisibleDesign(data?.design_front) &&
+    hasVisibleDesign(data?.design_back)
+    ? 6
+    : 0;
+}
+
 export async function PATCH(req: Request) {
   try {
     const supabase = createSupabaseServer();
@@ -65,7 +94,7 @@ export async function PATCH(req: Request) {
 
     const { data: cartItem, error: cartError } = (await supabase
       .from("cart_items")
-      .select("id, user_id, product_id, variant_id, quantity, image")
+      .select("id, user_id, product_id, user_product_id, variant_id, quantity, image, price")
       .eq("id", id)
       .eq("user_id", user.id)
       .maybeSingle()) as SupabaseSingleResponse<CartItem>;
@@ -105,10 +134,18 @@ export async function PATCH(req: Request) {
       patch.color = selectedVariant.color;
       patch.size = selectedVariant.size;
       patch.sku = selectedVariant.sku;
-      patch.image = selectedVariant.image ?? cartItem.image ?? null;
+      if (!cartItem.user_product_id) {
+        patch.image = selectedVariant.image ?? cartItem.image ?? null;
 
-      if (selectedVariant.price !== null && selectedVariant.price > 0) {
-        patch.price = selectedVariant.price;
+        if (selectedVariant.price !== null && selectedVariant.price > 0) {
+          patch.price = selectedVariant.price;
+        }
+      } else if (selectedVariant.price !== null && selectedVariant.price > 0) {
+        const secondPrintCharge = await getSecondPrintCharge(
+          supabase,
+          cartItem.user_product_id,
+        );
+        patch.price = selectedVariant.price + secondPrintCharge;
       }
     } else if (cartItem.variant_id && patch.quantity !== undefined) {
       const selectedVariant = await resolveVariantById(supabase, cartItem.variant_id);

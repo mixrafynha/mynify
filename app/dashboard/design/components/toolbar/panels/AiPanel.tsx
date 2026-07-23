@@ -1,13 +1,18 @@
 "use client";
 
+import dynamic from "next/dynamic";
+import { useCallback } from "react";
 import { Coins } from "lucide-react";
-import AuthPopup from "./AuthPopup";
 import AiPromptBox from "./AiPromptBox";
 import UserGeneratedImages from "./UserGeneratedImages";
-import CreditsModal from "./credits/CreditsModal";
 import { useAiImages } from "./ai/useAiImages";
 import { useCreditPacks } from "./credits/useCreditPacks";
 import type { CanvasImageElementInput } from "./ai/ai.types";
+
+const AuthPopup = dynamic(() => import("./AuthPopup"), { ssr: false });
+const CreditsModal = dynamic(() => import("./credits/CreditsModal"), {
+  ssr: false,
+});
 
 export default function AiPanel({
   createElement,
@@ -15,17 +20,29 @@ export default function AiPanel({
   createElement?: (data: CanvasImageElementInput) => void;
 }) {
   const ai = useAiImages({ createElement });
+  const openAuthPopup = useCallback(() => ai.setShowAuthPopup(true), [ai.setShowAuthPopup]);
 
   const credits = useCreditPacks({
     source: "editor",
-    onUnauthorized: () => ai.setShowAuthPopup(true),
+    onUnauthorized: openAuthPopup,
     onNotice: ai.setNotice,
     onError: ai.setError,
   });
 
-    const creditCount = Number(ai.credits ?? credits.balance?.credits ?? 0);
-    const creditsAreLoading = ai.credits === null && credits.balanceLoading;
-    const hasNoCredits = !creditsAreLoading && creditCount <= 0;
+  const handleCreditsClose = useCallback(async () => {
+    credits.resetCheckout();
+    ai.setShowCreditsModal(false);
+    await ai.refreshCredits();
+  }, [ai.refreshCredits, ai.setShowCreditsModal, credits.resetCheckout]);
+
+  const handleCheckoutComplete = useCallback(async () => {
+    await credits.completeCheckout();
+    await ai.refreshCredits();
+  }, [ai.refreshCredits, credits.completeCheckout]);
+
+  const creditCount = Number(ai.credits ?? credits.balance?.credits ?? 0);
+  const creditsAreLoading = ai.credits === null && credits.balanceLoading;
+  const hasNoCredits = !creditsAreLoading && creditCount <= 0;
 
   return (
     <div className="relative min-h-[560px] space-y-3 pb-5 text-white">
@@ -119,32 +136,29 @@ export default function AiPanel({
           Updating saved AI images...
         </p>
       )}
-      <CreditsModal
-        open={ai.showCreditsModal}
-        packs={credits.packs}
-        loading={credits.loading}
-        buyingPackId={credits.buyingPackId}
-        checkoutClientSecret={credits.checkoutClientSecret}
-        checkoutMessage={credits.checkoutMessage}
-        onClose={async () => {
-          credits.resetCheckout();
-          ai.setShowCreditsModal(false);
-          await ai.refreshCredits();
-        }}
-        onBuy={credits.buyCredits}
-        onCancelCheckout={credits.cancelCheckout}
-        onCheckoutComplete={async () => {
-          await credits.completeCheckout();
-          await ai.refreshCredits();
-        }}
-      />
+      {ai.showCreditsModal && (
+        <CreditsModal
+          open
+          packs={credits.packs}
+          loading={credits.loading}
+          buyingPackId={credits.buyingPackId}
+          checkoutClientSecret={credits.checkoutClientSecret}
+          checkoutMessage={credits.checkoutMessage}
+          onClose={handleCreditsClose}
+          onBuy={credits.buyCredits}
+          onCancelCheckout={credits.cancelCheckout}
+          onCheckoutComplete={handleCheckoutComplete}
+        />
+      )}
 
-      <AuthPopup
-        open={ai.showAuthPopup}
-        variant={ai.authVariant ?? "ai_credits"}
-        onClose={() => ai.setShowAuthPopup(false)}
-        onSuccess={ai.handleAuthSuccess}
-      />
+      {ai.showAuthPopup && (
+        <AuthPopup
+          open
+          variant={ai.authVariant ?? "ai_credits"}
+          onClose={() => ai.setShowAuthPopup(false)}
+          onSuccess={ai.handleAuthSuccess}
+        />
+      )}
     </div>
   );
 }

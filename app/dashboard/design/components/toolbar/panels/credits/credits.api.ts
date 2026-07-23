@@ -6,6 +6,8 @@ import type {
 } from "./credits.types";
 
 type ApiObject = Record<string, unknown>;
+let creditsRequest: Promise<CreditsBalance | null> | null = null;
+let creditPacksRequest: Promise<CreditPack[]> | null = null;
 
 async function readJson(response: Response): Promise<ApiObject> {
   const data: unknown = await response.json().catch(() => ({}));
@@ -13,24 +15,44 @@ async function readJson(response: Response): Promise<ApiObject> {
 }
 
 export async function fetchCreditPacks(): Promise<CreditPack[]> {
-  const response = await fetch("/api/credit-packs", { cache: "no-store" });
-  if (!response.ok) return [];
+  if (creditPacksRequest) return creditPacksRequest;
 
-  const data = await readJson(response);
-  return Array.isArray(data.packs) ? (data.packs as CreditPack[]) : [];
+  creditPacksRequest = (async () => {
+    const response = await fetch("/api/credit-packs", { cache: "no-store" });
+    if (!response.ok) return [];
+
+    const data = await readJson(response);
+    return Array.isArray(data.packs) ? (data.packs as CreditPack[]) : [];
+  })();
+
+  try {
+    return await creditPacksRequest;
+  } finally {
+    creditPacksRequest = null;
+  }
 }
 
 export async function fetchAiCredits(): Promise<CreditsBalance | null> {
-  const response = await fetch("/api/ai-credits", { cache: "no-store" });
-  if (response.status === 401 || !response.ok) return null;
+  if (creditsRequest) return creditsRequest;
 
-  const data = await readJson(response);
+  creditsRequest = (async () => {
+    const response = await fetch("/api/ai-credits", { cache: "no-store" });
+    if (response.status === 401 || !response.ok) return null;
 
-  return {
-    credits: Number(data.credits ?? 0),
-    savedCount: Number(data.savedCount ?? 0),
-    savedLimit: Number(data.savedLimit ?? 5),
-  };
+    const data = await readJson(response);
+
+    return {
+      credits: Number(data.credits ?? 0),
+      savedCount: Number(data.savedCount ?? 0),
+      savedLimit: Number(data.savedLimit ?? 5),
+    };
+  })();
+
+  try {
+    return await creditsRequest;
+  } finally {
+    creditsRequest = null;
+  }
 }
 
 export async function createAiCreditsEmbeddedCheckout(

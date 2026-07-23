@@ -525,7 +525,7 @@ export default function Canvas({
       <div
         ref={mockupRootRef}
         id="mockup-export-root"
-        className="relative shrink-0"
+        className="relative shrink-0 will-change-transform md:will-change-auto"
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,
