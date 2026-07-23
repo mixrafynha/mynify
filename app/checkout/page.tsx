@@ -141,6 +141,7 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(item.image);
 
   const back =
+    cleanUrl(mockups.checkout_thumbnail_url) ||
     cleanUrl(mockups.back) ||
     cleanUrl(backSide.mockupUrl) ||
     cleanUrl(backSide.mockup_url) ||
