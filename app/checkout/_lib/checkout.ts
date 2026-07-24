@@ -94,6 +94,7 @@ export type CartItem = {
   gelatoUid?: string | null;
   design_data?: FlexibleRecord | null;
   designData?: FlexibleRecord | null;
+  mockups?: FlexibleRecord | null;
   production?: FlexibleRecord | null;
   product_color_id?: string | null;
   print_file_url?: string | null;

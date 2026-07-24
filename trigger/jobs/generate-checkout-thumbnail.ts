@@ -57,6 +57,24 @@ function withThumbnailState(designData: any, patch: Record<string, unknown>) {
   };
 }
 
+function sideUrlPatch(side: DesignSide | undefined, url: string, key: string) {
+  if (side === "back") {
+    return {
+      back: url,
+      checkout_thumbnail_back_url: url,
+      checkout_thumbnail_back_key: key,
+    };
+  }
+
+  return {
+    front: url,
+    checkout_thumbnail_front_url: url,
+    checkout_thumbnail_front_key: key,
+    checkout_thumbnail_url: url,
+    checkout_thumbnail_key: key,
+  };
+}
+
 export const generateCheckoutThumbnail = task({
   id: "generate-checkout-thumbnail",
   retry: {
@@ -73,9 +91,10 @@ export const generateCheckoutThumbnail = task({
       .from(USER_PRODUCTS_TABLE)
       .select("id, design_data, mockups")
       .eq("id", payload.userProductId)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!record) throw new Error(`User product not found: ${payload.userProductId}`);
 
     const designData = ensureDesignData(record);
     const existingMockups = parseJsonIfString<any>(record?.mockups, {});
@@ -109,11 +128,11 @@ export const generateCheckoutThumbnail = task({
         body: webp,
         contentType: "image/webp",
       });
+      const sidePatch = sideUrlPatch(payload.side, url, key);
 
       const nextMockups = {
         ...existingMockups,
-        checkout_thumbnail_url: url,
-        checkout_thumbnail_key: key,
+        ...sidePatch,
         checkout_thumbnail_status: "ready",
         checkout_thumbnail_error: null,
         checkout_thumbnail_width: 1024,
@@ -124,11 +143,15 @@ export const generateCheckoutThumbnail = task({
 
       const nextDesignData = withThumbnailState(designData, {
         status: "ready",
-        url,
+        url: payload.side === "back"
+          ? (designData.checkout_thumbnail_url ?? existingMockups.checkout_thumbnail_url ?? null)
+          : url,
         key,
         width: 1024,
         height: 1024,
         format: "webp",
+        side: payload.side ?? "front",
+        sideUrl: url,
         updatedAt: new Date().toISOString(),
         error: null,
       });

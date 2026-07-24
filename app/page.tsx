@@ -312,7 +312,7 @@ export default function HomePage() {
         <span className="hidden h-4 w-px bg-white/10 sm:block" />
 
         <span className="text-xs font-medium text-white/55 sm:text-sm">
-          4.9/5
+          5/5
         </span>
 
         <span className="hidden h-4 w-px bg-white/10 sm:block" />

@@ -114,10 +114,15 @@ function cleanUrl(value: unknown) {
 
 function resolvePreviewImageSources(item: CartItem) {
   const designData = item.design_data ?? item.designData ?? {};
+  const directMockups =
+    item.mockups && typeof item.mockups === "object" && !Array.isArray(item.mockups)
+      ? (item.mockups as Record<string, unknown>)
+      : {};
   const mockups =
     designData && typeof designData === "object" && !Array.isArray(designData) && designData.mockups && typeof designData.mockups === "object"
       ? (designData.mockups as Record<string, unknown>)
       : {};
+  const mergedMockups = { ...directMockups, ...mockups };
   const sides =
     designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
       ? (designData.sides as Record<string, unknown>)
@@ -132,8 +137,9 @@ function resolvePreviewImageSources(item: CartItem) {
       : {};
 
   const front =
-    cleanUrl(mockups.checkout_thumbnail_url) ||
-    cleanUrl(mockups.front) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_front_url) ||
+    cleanUrl(mergedMockups.front) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_url) ||
     cleanUrl(frontSide.mockupUrl) ||
     cleanUrl(frontSide.mockup_url) ||
     cleanUrl(item.front_print_file_url) ||
@@ -141,8 +147,9 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(item.image);
 
   const back =
-    cleanUrl(mockups.checkout_thumbnail_url) ||
-    cleanUrl(mockups.back) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
+    cleanUrl(mergedMockups.back) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_url) ||
     cleanUrl(backSide.mockupUrl) ||
     cleanUrl(backSide.mockup_url) ||
     cleanUrl(item.back_print_file_url) ||
@@ -284,6 +291,41 @@ export default function CheckoutPage() {
   useEffect(() => {
     loadCart();
   }, [loadCart]);
+
+  useEffect(() => {
+    if (!items.some((item) => isCustomDesignItem(item))) return undefined;
+
+    const needsThumbnailRefresh = (item: CartItem) => {
+      if (!isCustomDesignItem(item)) return false;
+      const preview = resolvePreviewImageSources(item);
+      const designData = item.design_data ?? item.designData ?? {};
+      const sides =
+        designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
+          ? (designData.sides as Record<string, unknown>)
+          : {};
+      const backSide =
+        sides.back && typeof sides.back === "object" && !Array.isArray(sides.back)
+          ? (sides.back as Record<string, unknown>)
+          : {};
+      const backElements = Array.isArray(backSide.elements) ? backSide.elements : [];
+      const hasVisibleBack = backElements.some((element) => {
+        if (!element || typeof element !== "object") return false;
+        const value = element as Record<string, unknown>;
+        const meta = value.meta && typeof value.meta === "object" ? (value.meta as Record<string, unknown>) : null;
+        return meta?.hidden !== true && ["image", "text", "shape"].includes(String(value.type || ""));
+      });
+
+      return !preview.front || (hasVisibleBack && !preview.back);
+    };
+
+    if (!items.some(needsThumbnailRefresh)) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      void loadCart();
+    }, 2500);
+
+    return () => window.clearInterval(intervalId);
+  }, [items, loadCart]);
 
   useEffect(() => {
     try {

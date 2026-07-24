@@ -66,7 +66,6 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   const sides = (["front", "back"] as DesignSide[]).filter((side) =>
     sideHasArtwork(input, side),
   );
-
   if (!sides.length) {
     console.info("[save-design] trigger queue skipped: no artwork", {
       userProductId: input.userProductId,
@@ -85,6 +84,15 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   });
 
   try {
+    const thumbnailRuns = await Promise.all(
+      sides.map((side) =>
+        tasks.trigger("generate-checkout-thumbnail", {
+          userProductId: input.userProductId,
+          side,
+        }),
+      ),
+    );
+
     const printRun = await tasks.trigger("generate-design-print-file", {
       userProductId: input.userProductId,
       sides,
@@ -94,12 +102,20 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
       userProductId: input.userProductId,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
+      checkoutThumbnailRunIds: thumbnailRuns.map((run, index) => ({
+        side: sides[index],
+        runId: (run as any)?.id ?? null,
+      })),
     });
 
     return {
       queued: true,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
+      checkoutThumbnailRunIds: thumbnailRuns.map((run, index) => ({
+        side: sides[index],
+        runId: (run as any)?.id ?? null,
+      })),
     };
   } catch (error) {
     const message = serializeQueueError(error);

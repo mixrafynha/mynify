@@ -76,9 +76,10 @@ export const generateDesignPrintFile = task({
       .from(USER_PRODUCTS_TABLE)
       .select("id, design_data, print_files")
       .eq("id", payload.userProductId)
-      .single();
+      .maybeSingle();
 
     if (error) throw error;
+    if (!record) throw new Error(`User product not found: ${payload.userProductId}`);
 
     const designData = ensureDesignData(record);
     const existingPrintFiles = parseJsonIfString<any>(record?.print_files, {});
