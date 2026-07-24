@@ -226,7 +226,7 @@ export default function HomePage() {
   "
 >
         <Image
-  src="/hero2.png"
+  src="/hero2.webp"
   alt="Create custom products with Ryfio"
   fill
   priority
@@ -368,7 +368,7 @@ export default function HomePage() {
               className="relative h-[250px] overflow-hidden rounded-[28px] md:h-[420px]"
             >
               <Image
-                src="/1.png"
+                src="/1.webp"
                 alt="Customize products"
                 fill
                 sizes="(max-width: 1024px) 100vw, 55vw"
