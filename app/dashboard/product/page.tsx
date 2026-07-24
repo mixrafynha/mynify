@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 
-import CartDrawer from "@/app/components/ui/CartDrawer";
+
 import ProductSection from "@/app/dashboard/product/product_components/ProductSection";
 import ProductSkeletonGrid from "@/app/dashboard/product/product_components/ProductSkeletonGrid";
 import ProductsHeader from "@/app/dashboard/product/product_components/ProductsHeader";
@@ -12,6 +13,10 @@ import type { Product } from "@/app/dashboard/product/product_components/types";
 import { useCurrency } from "@/hooks/useCurrency";
 import { useFavorites } from "@/hooks/useFavorites";
 import { useProducts } from "@/hooks/useProducts";
+
+const CartDrawer = dynamic(() => import("@/app/components/ui/CartDrawer"), {
+  ssr: false,
+});
 
 export default function ProductsPage() {
   const { products = [], loading } = useProducts();
@@ -23,6 +28,7 @@ export default function ProductsPage() {
   const [audience, setAudience] = useState<AudienceName>("All");
 
   const [cartOpen, setCartOpen] = useState(false);
+  const cartRequestRef = useRef<Promise<void> | null>(null);
   const [cartCount, setCartCount] = useState(0);
 
   const safeSearch = useMemo(
@@ -125,31 +131,38 @@ export default function ProductsPage() {
   );
 
   const loadCart = useCallback(async () => {
-    try {
-      const response = await fetch("/api/cart", {
-        cache: "no-store",
-      });
+    if (cartRequestRef.current) return cartRequestRef.current;
 
-      if (!response.ok) return;
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/cart", {
+          cache: "no-store",
+        });
 
-      const data = await response.json();
+        if (!response.ok) return;
 
-      const items = Array.isArray(data?.items)
-        ? data.items
-        : Array.isArray(data)
-        ? data
-        : [];
+        const data = await response.json();
+        const items = Array.isArray(data?.items)
+          ? data.items
+          : Array.isArray(data)
+          ? data
+          : [];
 
-      const total = items.reduce(
-        (acc: number, item: any) =>
-          acc + Number(item.quantity || 1),
-        0
-      );
+        setCartCount(
+          items.reduce(
+            (acc: number, item: any) => acc + Number(item.quantity || 1),
+            0
+          )
+        );
+      } catch (error) {
+        console.error("Cart error:", error);
+      } finally {
+        cartRequestRef.current = null;
+      }
+    })();
 
-      setCartCount(total);
-    } catch (error) {
-      console.error("Cart error:", error);
-    }
+    cartRequestRef.current = request;
+    return request;
   }, []);
 
   useEffect(() => {
@@ -164,7 +177,7 @@ export default function ProductsPage() {
   }, [loadCart]);
 
   useEffect(() => {
-    loadCart();
+    if (!cartOpen) loadCart();
   }, [cartOpen, loadCart]);
 
   return (

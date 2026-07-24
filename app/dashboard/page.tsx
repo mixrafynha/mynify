@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import NotificationBell from "@/app/components/NotificationBell";
 import SmartCreateButton from "@/app/components/SmartCreateButton";
 import Section from "@/app/components/ui/Section";
-import CartDrawer from "@/app/components/ui/CartDrawer";
-import ProductGrid from "@/app/components/products/ProductGrid";
+
 import { useDashboard } from "@/hooks/useDashboard";
 import {
   ArrowRight,
@@ -19,6 +20,20 @@ import {
   Sparkles,
   Store,
 } from "lucide-react";
+
+
+const CartDrawer = dynamic(() => import("@/app/components/ui/CartDrawer"), {
+  ssr: false,
+});
+
+const ProductGrid = dynamic(
+  () => import("@/app/components/products/ProductGrid"),
+  {
+    loading: () => (
+      <div className="h-[320px] animate-pulse rounded-3xl bg-white/[0.035]" />
+    ),
+  }
+);
 
 const safeArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? v : []);
 
@@ -61,6 +76,9 @@ const STEPS = [
 ] as const;
 
 export default function Dashboard() {
+  const router = useRouter();
+  const cartRequestRef = useRef<Promise<void> | null>(null);
+
   const {
     cartOpen,
     openCart,
@@ -87,8 +105,8 @@ export default function Dashboard() {
   );
 
   const goTo = useCallback((href: string) => {
-    window.location.href = href;
-  }, []);
+    router.push(href);
+  }, [router]);
 
   const toggleMinimized = useCallback(() => {
     setMinimized((prev) => {
@@ -99,15 +117,26 @@ export default function Dashboard() {
   }, []);
 
   const loadCartCount = useCallback(async () => {
-    try {
-      const res = await fetch("/api/cart", { cache: "no-store" });
-      if (!res.ok) return;
+    if (cartRequestRef.current) return cartRequestRef.current;
 
-      const data = await res.json();
-      setCartItems(safeArray<CartItem>(data?.items));
-    } catch {
-      setCartItems([]);
-    }
+    const request = (async () => {
+      try {
+        const res = await fetch("/api/cart", {
+          cache: "no-store",
+        });
+        if (!res.ok) return;
+
+        const data = await res.json();
+        setCartItems(safeArray<CartItem>(data?.items));
+      } catch {
+        setCartItems([]);
+      } finally {
+        cartRequestRef.current = null;
+      }
+    })();
+
+    cartRequestRef.current = request;
+    return request;
   }, []);
 
   const loadAd = useCallback(async () => {
@@ -131,7 +160,9 @@ export default function Dashboard() {
   useEffect(() => {
     setMinimized(localStorage.getItem(STORAGE_KEY) === "true");
     loadCartCount();
-    loadAd();
+
+    const deferredAd = window.setTimeout(loadAd, 500);
+    return () => window.clearTimeout(deferredAd);
   }, [loadCartCount, loadAd]);
 
   useEffect(() => {
@@ -147,10 +178,10 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen overflow-hidden bg-[#03030a] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#03030a_0%,#070711_52%,#03030a_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[680px] bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.15),transparent_34%),linear-gradient(180deg,#03030a_0%,#070711_58%,transparent_100%)] md:fixed md:inset-0 md:h-auto md:bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#03030a_0%,#070711_52%,#03030a_100%)]" />
 
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#03030a]/80 px-3 py-3 backdrop-blur-xl sm:px-5 md:px-8">
+        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#03030a]/95 px-3 py-3 sm:px-5 md:bg-[#03030a]/80 md:px-8 md:backdrop-blur-xl">
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3">
             <div className="md:hidden pl-[40px]">
               <p className="truncate text-[11px] font-extrabold uppercase tracking-[0.28em] text-purple-300 drop-shadow-sm">
@@ -377,7 +408,7 @@ export default function Dashboard() {
               </div>
             </section>
 
-            <section>
+            <section className="[content-visibility:auto] [contain-intrinsic-size:700px]">
               <div className="mb-4 flex items-end justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-purple-300">

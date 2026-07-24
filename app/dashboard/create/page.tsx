@@ -1,36 +1,93 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
   Loader2,
+  Coffee,
   PackageCheck,
   Sparkles,
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+type CategoryIcon = "tshirt" | "hoodie" | "bag" | "cap" | "mug";
+
 const CATEGORIES = [
   {
     id: "tshirt",
-    label: "T-Shirt",
-    desc: "Everyday essentials",
-    emoji: "👕",
+    label: "T-Shirts",
+    desc: "Classic and oversized styles",
+    icon: "tshirt" as CategoryIcon,
   },
   {
     id: "hoodie",
-    label: "Hoodie",
+    label: "Hoodies",
     desc: "Premium comfort wear",
-    emoji: "🧥",
+    icon: "hoodie" as CategoryIcon,
+  },
+  {
+    id: "bag",
+    label: "Bags & Accessories",
+    desc: "Tote bags, backpacks and more",
+    icon: "bag" as CategoryIcon,
+    featured: true,
+  },
+  {
+    id: "caps",
+    label: "Caps",
+    desc: "Everyday branded accessories",
+    icon: "cap" as CategoryIcon,
   },
   {
     id: "mug",
-    label: "Mug",
+    label: "Mugs",
     desc: "Custom ceramic mugs",
-    emoji: "☕",
+    icon: "mug" as CategoryIcon,
   },
 ];
+
+function CategoryArtwork({ type }: { type: CategoryIcon }) {
+  if (type === "mug") {
+    return <Coffee className="h-8 w-8 sm:h-9 sm:w-9" strokeWidth={1.7} />;
+  }
+
+  if (type === "tshirt") {
+    return (
+      <svg viewBox="0 0 64 64" className="h-9 w-9 sm:h-10 sm:w-10" fill="none" aria-hidden="true">
+        <path d="M22 10 12 15 5 27l10 6 5-7v28h24V26l5 7 10-6-7-12-10-5c-2 5-5 7-10 7s-8-2-10-7Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+        <path d="M22 10c1 6 5 9 10 9s9-3 10-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+
+  if (type === "hoodie") {
+    return (
+      <svg viewBox="0 0 64 64" className="h-9 w-9 sm:h-10 sm:w-10" fill="none" aria-hidden="true">
+        <path d="M23 13c2-5 5-8 9-8s7 3 9 8l10 6 8 15-10 6-5-8v23H20V32l-5 8-10-6 8-15 10-6Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+        <path d="M23 13c1 7 4 11 9 11s8-4 9-11M32 24v31M27 38h10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+
+  if (type === "bag") {
+    return (
+      <svg viewBox="0 0 64 64" className="h-9 w-9 sm:h-10 sm:w-10" fill="none" aria-hidden="true">
+        <path d="M13 20h38l4 36H9l4-36Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+        <path d="M22 24v-7c0-6 4-10 10-10s10 4 10 10v7" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+        <path d="M24 34c2 3 5 5 8 5s6-2 8-5" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 64 64" className="h-9 w-9 sm:h-10 sm:w-10" fill="none" aria-hidden="true">
+      <path d="M8 31c4-15 13-23 26-23 12 0 20 7 23 19-12-4-24-2-36 5L8 31Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+      <path d="M21 32c9-4 21-6 36-5-2 8-8 13-18 15-8 2-14 1-18-2v-8Z" stroke="currentColor" strokeWidth="3" strokeLinejoin="round"/>
+    </svg>
+  );
+}
 
 type Product = {
   id: string;
@@ -76,11 +133,7 @@ export default function CreatePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
-  const [markup] = useState(10);
-
-  const price = useMemo(() => {
-    return (selected?.price || 0) + markup;
-  }, [selected, markup]);
+  const productsCache = useRef<Record<string, Product[]>>({});
 
   const activeCategory = useMemo(() => {
     return CATEGORIES.find((item) => item.id === category);
@@ -99,7 +152,14 @@ export default function CreatePage() {
   useEffect(() => {
     if (!category) return;
 
-    let cancelled = false;
+    const cached = productsCache.current[category];
+    if (cached) {
+      setProducts(cached);
+      setSelected(cached[0] || null);
+      return;
+    }
+
+    const controller = new AbortController();
 
     async function loadProducts() {
       setLoading(true);
@@ -109,42 +169,39 @@ export default function CreatePage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ type: category }),
+          signal: controller.signal,
         });
 
+        if (!res.ok) throw new Error("Unable to load products");
+
         const data = await res.json();
-
-        if (cancelled) return;
-
         const list = Array.isArray(data) ? data : [];
 
+        productsCache.current[category] = list;
         setProducts(list);
         setSelected(list[0] || null);
-      } catch {
-        if (!cancelled) {
-          setProducts([]);
-          setSelected(null);
-        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setProducts([]);
+        setSelected(null);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     loadProducts();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [category]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#03030a] px-4 py-7 text-white sm:px-7 lg:px-10 lg:py-10">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_15%_0%,rgba(168,85,247,0.20),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(217,70,239,0.14),transparent_30%),linear-gradient(180deg,#03030a_0%,#080812_52%,#03030a_100%)]" />
-      <div className="pointer-events-none fixed inset-0 bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20" />
+    <main className="relative min-h-screen overflow-hidden bg-[#03030a] px-3 py-5 text-white sm:px-7 sm:py-7 lg:px-10 lg:py-10">
+      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,#03030a_0%,#080812_55%,#03030a_100%)] sm:fixed sm:bg-[radial-gradient(circle_at_15%_0%,rgba(168,85,247,0.20),transparent_34%),radial-gradient(circle_at_85%_10%,rgba(217,70,239,0.14),transparent_30%),linear-gradient(180deg,#03030a_0%,#080812_52%,#03030a_100%)]" />
+      <div className="pointer-events-none fixed inset-0 hidden bg-[linear-gradient(rgba(255,255,255,0.025)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.025)_1px,transparent_1px)] bg-[size:72px_72px] opacity-20 sm:block" />
 
       <button
         type="button"
         onClick={handleExit}
-        className="fixed right-4 top-4 z-50 inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-[#0b0b13]/80 px-4 text-xs font-black uppercase tracking-[0.16em] text-white/65 shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur-xl transition hover:border-fuchsia-300/25 hover:text-white active:scale-95 sm:right-8 sm:top-8"
+        className="fixed right-4 top-4 z-50 inline-flex h-10 items-center gap-2 rounded-full border border-white/10 bg-[#0b0b13]/80 px-4 text-xs font-black uppercase tracking-[0.16em] text-white/65 shadow-[0_10px_35px_rgba(0,0,0,0.35)] sm:backdrop-blur-xl transition hover:border-fuchsia-300/25 hover:text-white active:scale-95 sm:right-8 sm:top-8"
       >
         <X size={15} />
         Exit
@@ -205,7 +262,7 @@ export default function CreatePage() {
         </div>
 
         {step === 1 && (
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-5">
             {CATEGORIES.map((item) => (
               <button
                 key={item.id}
@@ -214,24 +271,24 @@ export default function CreatePage() {
                   setCategory(item.id);
                   setStep(2);
                 }}
-                className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.03] p-7 text-left shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-xl transition hover:-translate-y-1 hover:border-fuchsia-300/25 hover:bg-white/[0.055] active:scale-[0.985] sm:p-8"
+                className={`group relative overflow-hidden rounded-[1.4rem] border bg-white/[0.03] p-4 text-left transition active:scale-[0.985] sm:rounded-[2rem] sm:p-8 sm:shadow-[0_24px_80px_rgba(0,0,0,0.22)] sm:backdrop-blur-xl sm:hover:-translate-y-1 ${item.featured ? "col-span-2 border-fuchsia-300/20 bg-gradient-to-r from-purple-500/[0.08] to-fuchsia-500/[0.05] sm:col-span-1" : "border-white/10 hover:border-fuchsia-300/25 hover:bg-white/[0.055]"}`}
               >
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_38%)] opacity-0 transition group-hover:opacity-100" />
 
                 <div className="relative">
-                  <div className="mb-8 grid h-16 w-16 place-items-center rounded-3xl border border-white/10 bg-[#0b0b13]/70 text-4xl shadow-[0_0_35px_rgba(168,85,247,0.10)]">
-                    {item.emoji}
+                  <div className="mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-white/10 bg-[#0b0b13]/70 text-purple-200 shadow-[0_0_24px_rgba(168,85,247,0.10)] sm:mb-8 sm:h-16 sm:w-16 sm:rounded-3xl">
+                    <CategoryArtwork type={item.icon} />
                   </div>
 
-                  <p className="text-2xl font-black tracking-[-0.045em] text-white">
+                  <p className="text-base font-black tracking-[-0.035em] text-white sm:text-2xl">
                     {item.label}
                   </p>
 
-                  <p className="mt-2 text-sm font-semibold leading-6 text-white/42">
+                  <p className="mt-1 text-xs font-semibold leading-5 text-white/42 sm:mt-2 sm:text-sm sm:leading-6">
                     {item.desc}
                   </p>
 
-                  <div className="mt-8 inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.18em] text-purple-300/80">
+                  <div className="mt-4 inline-flex items-center gap-2 text-[10px] sm:mt-8 sm:text-xs font-black uppercase tracking-[0.18em] text-purple-300/80">
                     Choose
                     <ArrowRight
                       size={14}
@@ -311,7 +368,7 @@ export default function CreatePage() {
                       >
                         <div
                           className={`
-                            relative aspect-square overflow-hidden rounded-[1.75rem] border bg-white/[0.03] p-4 backdrop-blur-xl transition
+                            relative aspect-square overflow-hidden rounded-[1.75rem] border bg-white/[0.03] p-3 transition sm:p-4 sm:backdrop-blur-xl
                             ${
                               active
                                 ? "border-fuchsia-300/35 shadow-[0_0_35px_rgba(168,85,247,0.22)]"
@@ -322,7 +379,9 @@ export default function CreatePage() {
                           <img
                             src={product.image || "/placeholder.png"}
                             alt={product.title}
-                            className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
+                            className="h-full w-full object-contain transition duration-300 sm:group-hover:scale-105"
+                            loading="lazy"
+                            decoding="async"
                           />
 
                           {active && (
@@ -344,17 +403,7 @@ export default function CreatePage() {
                   })}
                 </div>
 
-                <div className="mt-10 flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.22em] text-white/30">
-                      Estimated price
-                    </p>
-
-                    <p className="mt-1 text-3xl font-black tracking-[-0.05em] text-white">
-                      €{price}
-                    </p>
-                  </div>
-
+                <div className="mt-8 flex justify-end border-t border-white/10 pt-5 sm:mt-10 sm:pt-6">
                   <button
                     type="button"
                     onClick={() => setStep(3)}
