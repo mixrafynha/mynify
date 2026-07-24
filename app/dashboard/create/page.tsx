@@ -150,12 +150,23 @@ export default function CreatePage() {
   }
 
   useEffect(() => {
-    if (!category) return;
+    if (!category) {
+      setProducts([]);
+      setSelected(null);
+      setLoading(false);
+      return;
+    }
 
-    const cached = productsCache.current[category];
+    // Preserve the narrowed string value for the async function.
+    // TypeScript cannot guarantee that the state value remains non-null
+    // inside an asynchronous closure.
+    const currentCategory = category;
+
+    const cached = productsCache.current[currentCategory];
     if (cached) {
       setProducts(cached);
-      setSelected(cached[0] || null);
+      setSelected(cached[0] ?? null);
+      setLoading(false);
       return;
     }
 
@@ -168,29 +179,38 @@ export default function CreatePage() {
         const res = await fetch("/api/products/by-type", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: category }),
+          body: JSON.stringify({ type: currentCategory }),
           signal: controller.signal,
         });
 
-        if (!res.ok) throw new Error("Unable to load products");
+        if (!res.ok) {
+          throw new Error(`Unable to load products: ${res.status}`);
+        }
 
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        const data: unknown = await res.json();
+        const list: Product[] = Array.isArray(data) ? data : [];
 
-        productsCache.current[category] = list;
+        productsCache.current[currentCategory] = list;
         setProducts(list);
-        setSelected(list[0] || null);
+        setSelected(list[0] ?? null);
       } catch (error) {
         if (controller.signal.aborted) return;
+
+        console.error("Unable to load products:", error);
         setProducts([]);
         setSelected(null);
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
       }
     }
 
-    loadProducts();
-    return () => controller.abort();
+    void loadProducts();
+
+    return () => {
+      controller.abort();
+    };
   }, [category]);
 
   return (
