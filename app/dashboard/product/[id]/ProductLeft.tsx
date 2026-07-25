@@ -77,12 +77,39 @@ export function ProductLeft({
       <style jsx global>{`
         .ryfio-gallery-polish {
           isolation: isolate;
-          background: #f5f5f7 !important;
+          width: 100%;
+          background: #ffffff !important;
+          contain: layout paint;
+        }
+
+        /* Let ProductGallery use the full left column instead of keeping
+           the main product image inside a narrow internal wrapper. */
+        .ryfio-gallery-polish > * {
+          width: 100% !important;
+          max-width: none !important;
         }
 
         .ryfio-gallery-polish img {
           object-fit: contain !important;
           object-position: center !important;
+          image-rendering: auto;
+          transform: translateZ(0);
+        }
+
+        .ryfio-gallery-polish [class*="max-w-"] {
+          max-width: none !important;
+        }
+
+        .ryfio-gallery-polish [class*="backdrop-blur"],
+        .ryfio-gallery-polish [class*="blur-"] {
+          backdrop-filter: none !important;
+          filter: none !important;
+        }
+
+        @media (min-width: 1024px) {
+          .ryfio-gallery-polish {
+            min-height: 620px;
+          }
         }
 
         .ryfio-gallery-polish [class*="overflow-x"] {
@@ -106,7 +133,7 @@ export function ProductLeft({
         }
       `}</style>
 
-      <div className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-[#f5f5f7]">
+      <div className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-white">
         <ProductGallery images={images} title={product?.title} />
       </div>
 

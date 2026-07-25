@@ -239,7 +239,7 @@ export function ProductRight({
           >
             <div className="flex items-start gap-4">
               <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black shadow-lg ${
+                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black ${
                   toast.type === "success"
                     ? "bg-gradient-to-br from-emerald-400 to-emerald-500 text-black"
                     : "bg-gradient-to-br from-red-400 to-red-500 text-black"
@@ -387,9 +387,9 @@ export function ProductRight({
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white transition-colors duration-150 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 hidden" />
 
             <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-black/25">
               {loading ? (
@@ -412,7 +412,7 @@ export function ProductRight({
             onClick={handleStartDesigning}
             className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/25 bg-[#1b1424] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 hidden" />
 
             <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-fuchsia-300/20">
               <Palette size={20} />
