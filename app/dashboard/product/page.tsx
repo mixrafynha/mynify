@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import dynamic from "next/dynamic";
-
 
 import ProductSection from "@/app/dashboard/product/product_components/ProductSection";
 import ProductSkeletonGrid from "@/app/dashboard/product/product_components/ProductSkeletonGrid";
@@ -16,7 +22,16 @@ import { useProducts } from "@/hooks/useProducts";
 
 const CartDrawer = dynamic(() => import("@/app/components/ui/CartDrawer"), {
   ssr: false,
+  loading: () => null,
 });
+
+const CATEGORY_MAP: Record<string, string> = {
+  "T-Shirts": "tshirt",
+  Hoodies: "hoodie",
+  Caps: "caps",
+  Mugs: "mug",
+  Posters: "poster",
+};
 
 export default function ProductsPage() {
   const { products = [], loading } = useProducts();
@@ -28,107 +43,81 @@ export default function ProductsPage() {
   const [audience, setAudience] = useState<AudienceName>("All");
 
   const [cartOpen, setCartOpen] = useState(false);
-  const cartRequestRef = useRef<Promise<void> | null>(null);
+  const [cartMounted, setCartMounted] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
+  const cartRequestRef = useRef<Promise<void> | null>(null);
+  const deferredSearch = useDeferredValue(search);
+
   const safeSearch = useMemo(
-    () => search.replace(/[<>]/g, "").trim().toLowerCase().slice(0, 50),
-    [search]
+    () =>
+      deferredSearch
+        .replace(/[<>]/g, "")
+        .trim()
+        .toLowerCase()
+        .slice(0, 50),
+    [deferredSearch]
   );
 
-  const normalizedCategory = useMemo(() => {
-    switch (category) {
-      case "T-Shirts":
-        return "tshirt";
+  const normalizedCategory = useMemo(
+    () => CATEGORY_MAP[category] ?? category.toLowerCase(),
+    [category]
+  );
 
-      case "Hoodies":
-        return "hoodie";
+  const {
+    filteredCount,
+    newProducts,
+    hotProducts,
+    bestSellerProducts,
+  } = useMemo(() => {
+    const newItems: Product[] = [];
+    const hotItems: Product[] = [];
+    const bestSellerItems: Product[] = [];
+    const selectedAudience = audience.toLowerCase();
+    let count = 0;
 
-      case "Caps":
-        return "caps";
-
-      case "Mugs":
-        return "mug";
-
-      case "Posters":
-        return "poster";
-
-      default:
-        return category.toLowerCase();
-    }
-  }, [category]);
-
-  const filtered = useMemo(() => {
-    return (products as Product[]).filter((product: any) => {
+    for (const product of products as Product[]) {
       const title = String(product.title ?? "").toLowerCase();
-
-      const productCategory = String(
-        product.category ?? ""
-      ).toLowerCase();
-
-      const productAudience = String(
-        product.audience ?? "unisex"
-      ).toLowerCase();
-
-      const selectedAudience = audience.toLowerCase();
+      const productCategory = String(product.category ?? "").toLowerCase();
+      const productAudience = String(product.audience ?? "unisex").toLowerCase();
 
       const matchesAudience =
         audience === "All" ||
         productAudience === "unisex" ||
         productAudience === selectedAudience;
 
-      const matchesSearch =
-        !safeSearch || title.includes(safeSearch);
-
+      const matchesSearch = !safeSearch || title.includes(safeSearch);
       const matchesCategory =
-        category === "All" ||
-        productCategory.includes(normalizedCategory);
+        category === "All" || productCategory.includes(normalizedCategory);
 
-      return (
-        matchesAudience &&
-        matchesSearch &&
-        matchesCategory
-      );
-    });
-  }, [
-    products,
-    safeSearch,
-    category,
-    audience,
-    normalizedCategory,
-  ]);
+      if (!matchesAudience || !matchesSearch || !matchesCategory) continue;
 
-  const newProducts = useMemo(
-    () =>
-      filtered
-        .filter((product) => Boolean(product.is_new))
-        .slice(0, 10),
-    [filtered]
-  );
+      count += 1;
 
-  const hotProducts = useMemo(
-    () =>
-      filtered
-        .filter((product) => Boolean(product.is_hot))
-        .slice(0, 10),
-    [filtered]
-  );
+      if (product.is_new && newItems.length < 10) {
+        newItems.push(product);
+      }
 
-  const bestSellerProducts = useMemo(
-    () =>
-      [...filtered]
-        .filter(
-          (product) =>
-            Number(product.sales_count ?? 0) > 0
-        )
-        .sort(
-          (a, b) =>
-            Number(b.sales_count ?? 0) -
-            Number(a.sales_count ?? 0)
-        )
-        .slice(0, 10),
-    [filtered]
-  );
+      if (product.is_hot && hotItems.length < 10) {
+        hotItems.push(product);
+      }
+
+      if (Number(product.sales_count ?? 0) > 0) {
+        bestSellerItems.push(product);
+      }
+    }
+
+    bestSellerItems.sort(
+      (a, b) => Number(b.sales_count ?? 0) - Number(a.sales_count ?? 0)
+    );
+
+    return {
+      filteredCount: count,
+      newProducts: newItems,
+      hotProducts: hotItems,
+      bestSellerProducts: bestSellerItems.slice(0, 10),
+    };
+  }, [products, safeSearch, category, audience, normalizedCategory]);
 
   const loadCart = useCallback(async () => {
     if (cartRequestRef.current) return cartRequestRef.current;
@@ -145,14 +134,17 @@ export default function ProductsPage() {
         const items = Array.isArray(data?.items)
           ? data.items
           : Array.isArray(data)
-          ? data
-          : [];
+            ? data
+            : [];
 
-        setCartCount(
-          items.reduce(
-            (acc: number, item: any) => acc + Number(item.quantity || 1),
-            0
-          )
+        const nextCount = items.reduce(
+          (total: number, item: { quantity?: number | string }) =>
+            total + Number(item.quantity || 1),
+          0
+        );
+
+        setCartCount((currentCount) =>
+          currentCount === nextCount ? currentCount : nextCount
         );
       } catch (error) {
         console.error("Cart error:", error);
@@ -166,23 +158,39 @@ export default function ProductsPage() {
   }, []);
 
   useEffect(() => {
-    loadCart();
+    void loadCart();
 
-    const onFocus = () => loadCart();
+    const refreshCart = () => {
+      if (document.visibilityState === "visible") {
+        void loadCart();
+      }
+    };
 
-    window.addEventListener("focus", onFocus);
+    window.addEventListener("focus", refreshCart, { passive: true });
+    document.addEventListener("visibilitychange", refreshCart, {
+      passive: true,
+    });
 
-    return () =>
-      window.removeEventListener("focus", onFocus);
+    return () => {
+      window.removeEventListener("focus", refreshCart);
+      document.removeEventListener("visibilitychange", refreshCart);
+    };
   }, [loadCart]);
 
-  useEffect(() => {
-    if (!cartOpen) loadCart();
-  }, [cartOpen, loadCart]);
+  const openCart = useCallback(() => {
+    setCartMounted(true);
+    setCartOpen(true);
+    void loadCart();
+  }, [loadCart]);
+
+  const closeCart = useCallback(() => {
+    setCartOpen(false);
+    void loadCart();
+  }, [loadCart]);
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#080814] text-white">
-      <div className="relative z-10 mx-auto max-w-[1550px] px-3 pb-10 pt-3 sm:px-5 md:px-8">
+    <main className="min-h-screen w-full min-w-0 overflow-x-clip border-0 border-l-0 bg-[#080814] text-white outline-none">
+      <div className="relative z-10 mx-auto w-full min-w-0 max-w-[1550px] px-3 pb-10 pt-3 sm:px-5 md:px-8">
         <ProductsHeader
           search={search}
           setSearch={setSearch}
@@ -193,10 +201,7 @@ export default function ProductsPage() {
           currency={currency}
           setCurrency={setCurrency}
           cartCount={cartCount}
-          onOpenCart={() => {
-            setCartOpen(true);
-            loadCart();
-          }}
+          onOpenCart={openCart}
         />
 
         {loading ? (
@@ -235,12 +240,9 @@ export default function ProductsPage() {
           </>
         )}
 
-        {!loading && filtered.length === 0 && (
+        {!loading && filteredCount === 0 && (
           <div className="mt-16 rounded-[34px] border border-white/[0.05] bg-white/[0.045] p-10 text-center backdrop-blur-xl">
-            <p className="text-xl font-black text-white">
-              No products found
-            </p>
-
+            <p className="text-xl font-black text-white">No products found</p>
             <p className="mt-2 text-sm text-white/45">
               Try another search or category.
             </p>
@@ -248,13 +250,7 @@ export default function ProductsPage() {
         )}
       </div>
 
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => {
-          setCartOpen(false);
-          loadCart();
-        }}
-      />
+      {cartMounted && <CartDrawer open={cartOpen} onClose={closeCart} />}
     </main>
   );
 }
