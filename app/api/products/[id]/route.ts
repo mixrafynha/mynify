@@ -200,7 +200,12 @@ export async function GET(
       images,
       colors,
       variants,
+      // Mantido para compatibilidade com consumidores que usam uma sugestão inicial.
+      // A seleção efetiva continua vazia: o utilizador não é obrigado a escolher variante.
       defaultVariant,
+      selectedVariant: null,
+      variantSelectionRequired: false,
+      hasVariants: variants.length > 0,
     };
 
     return NextResponse.json(
