@@ -2,9 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Heart, LoaderCircle } from "lucide-react";
+import { Heart } from "lucide-react";
 
 import { convertPrice, symbols } from "@/lib/currency";
 import type { Currency, Product } from "./types";
@@ -22,13 +20,8 @@ export default function ProductCard({
   likes,
   toggleLike,
 }: ProductCardProps) {
-  const router = useRouter();
-  const [isOpening, setIsOpening] = useState(false);
-
   if (!product?.id || !product?.image) return null;
 
-  const href = `/dashboard/product/${encodeURIComponent(product.id)}`;
-  const prefetchProduct = () => router.prefetch(href);
   const isLiked = Boolean(likes?.[product.id]);
 
   const regularPrice = Number(product.price ?? 0);
@@ -48,25 +41,10 @@ export default function ProductCard({
   return (
     <Link
       key={product.id}
-      href={href}
-      prefetch
-      onPointerEnter={prefetchProduct}
-      onPointerDown={prefetchProduct}
-      onTouchStart={prefetchProduct}
-      onClick={() => setIsOpening(true)}
-      aria-busy={isOpening}
-      className={`group min-w-0 ${isOpening ? "pointer-events-none" : ""}`}
+      href={`/dashboard/product/${encodeURIComponent(product.id)}`}
+      className="group min-w-0"
     >
-      <article className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-b from-[#1b1830] via-[#131325] to-[#0f1020] p-2 transition-colors duration-200 active:scale-[0.99] md:transition md:duration-300 md:hover:-translate-y-1 md:hover:border-fuchsia-400/25 md:hover:shadow-[0_25px_80px_rgba(217,70,239,0.16)]">
-        {isOpening && (
-          <div className="absolute inset-0 z-30 grid place-items-center bg-[#0f1020]/72 backdrop-blur-sm">
-            <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/45 px-4 py-2 text-xs font-black text-white shadow-xl">
-              <LoaderCircle size={16} className="animate-spin" />
-              Opening product…
-            </div>
-          </div>
-        )}
-
+      <article className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-b from-[#1b1830] via-[#131325] to-[#0f1020] p-2 transition duration-300 active:scale-[0.99] hover:-translate-y-1 hover:border-fuchsia-400/25 hover:shadow-[0_25px_80px_rgba(217,70,239,0.16)]">
         <div className="pointer-events-none absolute inset-0 opacity-100">
           <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-fuchsia-500/10 blur-3xl" />
           <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
@@ -77,7 +55,7 @@ export default function ProductCard({
             src={product.image}
             alt={product.title || "Product image"}
             fill
-            className="object-cover md:transition md:duration-700 md:group-hover:scale-[1.06]"
+            className="object-cover transition duration-700 group-hover:scale-[1.06]"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
 
@@ -96,7 +74,7 @@ export default function ProductCard({
               event.stopPropagation();
               toggleLike?.(product.id);
             }}
-            className={`absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full border backdrop-blur-sm transition active:scale-95 md:backdrop-blur-xl ${
+            className={`absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full border backdrop-blur-xl transition active:scale-95 ${
               isLiked
                 ? "border-rose-300/40 bg-rose-400/20 text-rose-100 shadow-[0_0_24px_rgba(251,113,133,0.35)]"
                 : "border-white/10 bg-black/35 text-white hover:bg-white/10 hover:text-rose-100"
@@ -133,7 +111,7 @@ export default function ProductCard({
               )}
             </div>
 
-            <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] transition md:backdrop-blur-xl md:group-hover:bg-white/[0.14]">
+            <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] backdrop-blur-xl transition group-hover:bg-white/[0.14]">
               View
             </span>
           </div>

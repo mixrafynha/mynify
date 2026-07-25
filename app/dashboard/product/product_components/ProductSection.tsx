@@ -21,7 +21,7 @@ export default function ProductSection({
   if (!products.length) return null;
 
   return (
-    <section className="mt-8 [content-visibility:auto] [contain-intrinsic-size:620px]">
+    <section className="mt-8">
       <div className="mb-4 flex items-center gap-4">
         <h2 className="shrink-0 text-lg font-black uppercase tracking-tight text-white sm:text-2xl">
           {title}

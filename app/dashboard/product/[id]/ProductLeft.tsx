@@ -65,31 +65,9 @@ export function ProductLeft({
       }
     };
 
-    const idleWindow = window as Window & {
-      requestIdleCallback?: (
-        callback: IdleRequestCallback,
-        options?: IdleRequestOptions
-      ) => number;
-      cancelIdleCallback?: (handle: number) => void;
-    };
+    loadReviews();
 
-    const canUseIdleCallback =
-      typeof idleWindow.requestIdleCallback === "function" &&
-      typeof idleWindow.cancelIdleCallback === "function";
-
-    const schedule = canUseIdleCallback
-      ? idleWindow.requestIdleCallback!(loadReviews, { timeout: 1500 })
-      : window.setTimeout(loadReviews, 500);
-
-    return () => {
-      controller.abort();
-
-      if (canUseIdleCallback) {
-        idleWindow.cancelIdleCallback!(schedule);
-      } else {
-        window.clearTimeout(schedule);
-      }
-    };
+    return () => controller.abort();
   }, [product?.id]);
 
   return (

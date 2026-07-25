@@ -41,7 +41,7 @@ export default function ProductsHeader({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full min-w-0 bg-[#080814] pb-3 pt-3">
+    <header className="sticky top-0 z-40 -mx-3 bg-[#080814] px-3 pb-3 pt-3 sm:-mx-5 sm:px-5 md:-mx-8 md:px-8">
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
@@ -87,7 +87,7 @@ export default function ProductsHeader({
               />
             </summary>
 
-            <div className="absolute right-0 z-50 mt-2 w-28 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1 md:backdrop-blur-md">
+            <div className="absolute right-0 z-50 mt-2 w-28 overflow-hidden rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1 backdrop-blur-md">
               {(["USD", "EUR", "GBP"] as const).map((item) => (
                 <button
                   key={item}
@@ -170,7 +170,7 @@ export default function ProductsHeader({
               />
             </summary>
 
-            <div className="absolute left-0 z-50 mt-2 grid w-[160px] gap-1 rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1.5 md:backdrop-blur-md">
+            <div className="absolute left-0 z-50 mt-2 grid w-[160px] gap-1 rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1.5 backdrop-blur-md">
               {AUDIENCES.map(({ name, label, icon: Icon }) => {
                 const active = audience === name;
 
@@ -207,7 +207,7 @@ export default function ProductsHeader({
               />
             </summary>
 
-            <div className="absolute right-0 z-50 mt-2 grid w-[185px] gap-1 rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1.5 md:backdrop-blur-md">
+            <div className="absolute right-0 z-50 mt-2 grid w-[185px] gap-1 rounded-2xl border border-white/[0.06] bg-[#15152b]/96 p-1.5 backdrop-blur-md">
               {CATEGORIES.map(({ name, icon: Icon }) => {
                 const active = category === name;
 

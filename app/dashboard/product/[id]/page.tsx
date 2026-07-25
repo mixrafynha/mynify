@@ -25,31 +25,18 @@ async function getProduct(id: string) {
       return null;
     }
 
-    // Colors and variants are independent once the product is known.
-    // Fetching them together removes one full database round trip.
-    const [colorsResult, variantsResult] = await Promise.all([
-      supabase
-        .from("product_colors")
-        .select("*")
-        .eq("product_id", product.id)
-        .order("position", { ascending: true }),
-      supabase
-        .from("product_variants")
-        .select("*")
-        .eq("product_id", product.id),
-    ]);
+    const { data: colorsData, error: colorsError } = await supabase
+      .from("product_colors")
+      .select("*")
+      .eq("product_id", product.id)
+      .order("position", { ascending: true });
 
-    if (colorsResult.error) {
-      console.error("COLORS ERROR:", colorsResult.error);
+    if (colorsError) {
+      console.error("COLORS ERROR:", colorsError);
       return null;
     }
 
-    if (variantsResult.error) {
-      console.error("VARIANTS ERROR:", variantsResult.error);
-      return null;
-    }
-
-    const colors = (colorsResult.data || []).map((color: any) => ({
+    const colors = (colorsData || []).map((color: any) => ({
       id: color.id,
       product_id: color.product_id,
       color: color.color,
@@ -60,24 +47,40 @@ async function getProduct(id: string) {
       position: color.position,
     }));
 
-    const colorById = new Map(colors.map((color: any) => [color.id, color]));
+    const colorIds = colors.map((color: any) => color.id);
 
-    const variants = (variantsResult.data || []).map((variant: any) => {
-      const color = colorById.get(variant.product_color_id) as any;
+    let variants: any[] = [];
 
-      return {
-        id: variant.id,
-        product_id: product.id,
-        product_color_id: variant.product_color_id,
-        name: variant.name ?? null,
-        size: normalize(variant.size),
-        stock: Number(variant.stock ?? 0),
-        price: variant.price != null ? Number(variant.price) : null,
-        sku: variant.sku ?? null,
-        color: color?.color || null,
-        color_hex: color?.color_hex || "#ccc",
-      };
-    });
+    if (colorIds.length > 0) {
+      const { data: variantsData, error: variantsError } = await supabase
+        .from("product_variants")
+        .select("*")
+        .in("product_color_id", colorIds);
+
+      if (variantsError) {
+        console.error("VARIANTS ERROR:", variantsError);
+        return null;
+      }
+
+      variants = (variantsData || []).map((variant: any) => {
+        const color = colors.find(
+          (c: any) => c.id === variant.product_color_id
+        );
+
+        return {
+          id: variant.id,
+          product_id: product.id,
+          product_color_id: variant.product_color_id,
+          name: variant.name ?? null,
+          size: normalize(variant.size),
+          stock: Number(variant.stock ?? 0),
+          price: variant.price != null ? Number(variant.price) : null,
+          sku: variant.sku ?? null,
+          color: color?.color || null,
+          color_hex: color?.color_hex || "#ccc",
+        };
+      });
+    }
 
     const images = Array.isArray(product.images)
       ? product.images.filter(Boolean)
@@ -144,7 +147,7 @@ export default async function ProductPage({
 
   return (
     <main
-      className="min-h-screen overflow-hidden text-white"
+      className="min-h-screen overflow-x-hidden text-white"
       style={{
         background:
           "radial-gradient(circle at 16% 0%, rgba(168,85,247,0.24), transparent 34%), radial-gradient(circle at 88% 8%, rgba(217,70,239,0.14), transparent 32%), radial-gradient(circle at 50% 100%, rgba(14,165,233,0.08), transparent 38%), linear-gradient(180deg, #160b24 0%, #12091f 46%, #0d0718 100%)",
