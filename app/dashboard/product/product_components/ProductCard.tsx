@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { Heart } from "lucide-react";
+import { ArrowUpRight, Heart } from "lucide-react";
 
 import { convertPrice, symbols } from "@/lib/currency";
 import type { Currency, Product } from "./types";
@@ -36,82 +36,97 @@ export default function ProductCard({
     discountPrice > 0 &&
     discountPrice < regularPrice;
 
-  const price = hasDiscount ? discountPrice : regularPrice;
+  const currentPrice = hasDiscount ? discountPrice : regularPrice;
 
   return (
     <Link
-      key={product.id}
       href={`/dashboard/product/${encodeURIComponent(product.id)}`}
-      className="group min-w-0"
+      className="group block min-w-0 focus-visible:outline-none"
     >
-      <article className="relative overflow-hidden rounded-[28px] border border-white/[0.08] bg-gradient-to-b from-[#1b1830] via-[#131325] to-[#0f1020] p-2 transition duration-300 active:scale-[0.99] hover:-translate-y-1 hover:border-fuchsia-400/25 hover:shadow-[0_25px_80px_rgba(217,70,239,0.16)]">
-        <div className="pointer-events-none absolute inset-0 opacity-100">
-          <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-fuchsia-500/10 blur-3xl" />
-          <div className="absolute bottom-0 right-0 h-40 w-40 rounded-full bg-cyan-400/10 blur-3xl" />
-        </div>
-
-        <div className="relative aspect-[4/5] overflow-hidden rounded-[24px] bg-[#18182d]">
+      <article className="relative overflow-hidden rounded-[24px] border border-white/[0.08] bg-[#11111d] transition-[transform,border-color,background-color] duration-300 ease-out hover:-translate-y-1 hover:border-white/[0.16] hover:bg-[#141421] active:translate-y-0">
+        <div className="relative aspect-[4/5] overflow-hidden bg-[#f4f3f1]">
           <Image
             src={product.image}
             alt={product.title || "Product image"}
             fill
-            className="object-cover transition duration-700 group-hover:scale-[1.06]"
+            unoptimized
+            className="object-cover object-center transition-transform duration-500 ease-out group-hover:scale-[1.035]"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
 
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
 
-          {hasDiscount && (
-            <div className="absolute left-2.5 top-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
-              Sale
-            </div>
-          )}
+          <div className="absolute left-3 top-3 flex items-center gap-2">
+            {hasDiscount && (
+              <span className="rounded-full bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-black shadow-sm">
+                Sale
+              </span>
+            )}
+
+            {product.is_new && (
+              <span className="rounded-full border border-white/20 bg-black/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.12em] text-white">
+                New
+              </span>
+            )}
+          </div>
 
           <button
             type="button"
+            aria-label={
+              isLiked
+                ? `Remove ${product.title || "product"} from favourites`
+                : `Add ${product.title || "product"} to favourites`
+            }
+            aria-pressed={isLiked}
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
               toggleLike?.(product.id);
             }}
-            className={`absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full border backdrop-blur-xl transition active:scale-95 ${
+            className={`absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full border transition-[transform,background-color,border-color,color] duration-200 active:scale-90 ${
               isLiked
-                ? "border-rose-300/40 bg-rose-400/20 text-rose-100 shadow-[0_0_24px_rgba(251,113,133,0.35)]"
-                : "border-white/10 bg-black/35 text-white hover:bg-white/10 hover:text-rose-100"
+                ? "border-rose-300/40 bg-rose-500 text-white"
+                : "border-white/20 bg-black/50 text-white hover:bg-white hover:text-black"
             }`}
           >
             <Heart
               size={17}
-              className={
-                isLiked ? "fill-rose-300 text-rose-200" : "text-white/85"
-              }
+              strokeWidth={2.2}
+              className={isLiked ? "fill-current" : ""}
             />
           </button>
         </div>
 
-        <div className="relative px-1 pb-1 pt-3">
-          <p className="mb-1 truncate text-[10px] font-black uppercase tracking-[0.14em] text-[#b8b9d9]">
-            {product.category || "Product"}
-          </p>
+        <div className="p-4 sm:p-5">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="truncate text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/45">
+              {product.category || "Product"}
+            </p>
 
-          <h3 className="line-clamp-2 min-h-[34px] text-[13px] font-extrabold leading-tight tracking-[-0.03em] text-[#f3f4ff] sm:text-sm">
+            <ArrowUpRight
+              size={16}
+              className="shrink-0 text-white/35 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-white"
+            />
+          </div>
+
+          <h3 className="line-clamp-2 min-h-[42px] text-[15px] font-bold leading-[1.35] tracking-[-0.02em] text-white sm:text-base">
             {product.title?.slice(0, 80) || "Untitled product"}
           </h3>
 
-          <div className="mt-3 flex items-end justify-between gap-2">
-            <div>
-              <p className="text-sm font-extrabold text-white sm:text-base">
-                {symbols[currency]} {convertPrice(price, currency)}
+          <div className="mt-4 flex items-end justify-between gap-3 border-t border-white/[0.07] pt-4">
+            <div className="min-w-0">
+              <p className="text-lg font-black tracking-[-0.04em] text-white">
+                {symbols[currency]} {convertPrice(currentPrice, currency)}
               </p>
 
               {hasDiscount && (
-                <p className="text-[10px] font-bold text-[#8d90b3] line-through">
+                <p className="mt-0.5 text-[11px] font-semibold text-white/35 line-through">
                   {symbols[currency]} {convertPrice(regularPrice, currency)}
                 </p>
               )}
             </div>
 
-            <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] backdrop-blur-xl transition group-hover:bg-white/[0.14]">
+            <span className="shrink-0 rounded-full border border-white/[0.1] bg-white/[0.05] px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-white/70 transition-colors duration-200 group-hover:border-white/20 group-hover:bg-white group-hover:text-black">
               View
             </span>
           </div>
