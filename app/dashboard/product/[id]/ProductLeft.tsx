@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, ShieldCheck, Truck } from "lucide-react";
+import { CheckCircle, Maximize2, ShieldCheck, Truck, X } from "lucide-react";
 
 import ProductGallery from "@/app/components/ProductGallery";
 import ColorSelector from "@/app/components/ColorSelector";
@@ -37,9 +37,33 @@ export function ProductLeft({
   onSizeChange,
 }: Props) {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [fullscreenSrc, setFullscreenSrc] = useState<string | null>(null);
   const galleryRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    if (!fullscreenSrc) return;
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setFullscreenSrc(null);
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [fullscreenSrc]);
+
+  const openCurrentImageFullscreen = () => {
+    const image = galleryRef.current?.querySelector<HTMLImageElement>(
+      'img[data-ryfio-main-image="true"]'
+    );
+    const src = image?.currentSrc || image?.src;
+    if (src) setFullscreenSrc(src);
+  };
 
   useEffect(() => {
     const gallery = galleryRef.current;
@@ -88,7 +112,7 @@ export function ProductLeft({
               ? mainImage.naturalWidth / mainImage.naturalHeight
               : 1;
 
-          const zoom = naturalRatio > 1.3 ? 1.06 : naturalRatio < 0.78 ? 1.1 : 1.18;
+          const zoom = naturalRatio > 1.3 ? 1.04 : naturalRatio < 0.78 ? 1.08 : 1.11;
           mainImage.style.setProperty("--ryfio-smart-zoom", String(zoom));
 
           let parent: HTMLElement | null = mainImage.parentElement;
@@ -200,34 +224,35 @@ export function ProductLeft({
 
         .ryfio-gallery-polish img {
           object-fit: contain !important;
-          object-position: center !important;
+          object-position: 50% 48% !important;
           -webkit-user-drag: none;
           user-select: none;
         }
 
         .ryfio-gallery-polish [data-ryfio-main-frame="true"] {
-          min-height: clamp(430px, 47vw, 650px) !important;
-          max-height: 650px !important;
+          min-height: clamp(500px, 52vw, 720px) !important;
+          max-height: 720px !important;
+          position: relative !important;
           overflow: hidden !important;
           background: #fff !important;
         }
 
         .ryfio-gallery-polish img[data-ryfio-main-image="true"] {
-          transform: scale(var(--ryfio-smart-zoom, 1.16)) !important;
-          transform-origin: center center !important;
+          transform: translateY(1.5%) scale(var(--ryfio-smart-zoom, 1.1)) !important;
+          transform-origin: 50% 48% !important;
           transition: transform 220ms ease, opacity 180ms ease !important;
           will-change: auto !important;
         }
 
         .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
-          width: 80px !important;
-          height: 80px !important;
-          flex: 0 0 80px !important;
+          width: 88px !important;
+          height: 88px !important;
+          flex: 0 0 88px !important;
           overflow: hidden !important;
-          border-radius: 10px !important;
+          border-radius: 12px !important;
           border: 1px solid #d9dde5 !important;
-          background: #fff !important;
-          padding: 3px !important;
+          background: #f8fafc !important;
+          padding: 2px !important;
           box-shadow: none !important;
           transition: border-color 140ms ease, transform 140ms ease !important;
         }
@@ -248,11 +273,16 @@ export function ProductLeft({
         .ryfio-gallery-polish img[data-ryfio-thumbnail-image="true"] {
           width: 100% !important;
           height: 100% !important;
-          transform: scale(1.08) !important;
-          border-radius: 7px !important;
+          object-position: 50% 42% !important;
+          transform: scale(1.14) !important;
+          border-radius: 9px !important;
         }
 
         .ryfio-gallery-polish [class*="overflow-x"] {
+          display: flex !important;
+          align-items: center !important;
+          gap: 10px !important;
+          padding: 12px 2px 2px !important;
           scrollbar-width: none;
           -ms-overflow-style: none;
           overscroll-behavior-inline: contain;
@@ -280,18 +310,18 @@ export function ProductLeft({
 
         @media (max-width: 640px) {
           .ryfio-gallery-polish [data-ryfio-main-frame="true"] {
-            min-height: 390px !important;
-            max-height: 520px !important;
+            min-height: 430px !important;
+            max-height: 560px !important;
           }
 
           .ryfio-gallery-polish img[data-ryfio-main-image="true"] {
-            --ryfio-smart-zoom: 1.1 !important;
+            --ryfio-smart-zoom: 1.06 !important;
           }
 
           .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
-            width: 68px !important;
-            height: 68px !important;
-            flex-basis: 68px !important;
+            width: 72px !important;
+            height: 72px !important;
+            flex-basis: 72px !important;
           }
         }
 
@@ -303,9 +333,47 @@ export function ProductLeft({
         }
       `}</style>
 
-      <div ref={galleryRef} className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-white">
+      <div
+        ref={galleryRef}
+        className="ryfio-gallery-polish relative overflow-hidden rounded-2xl border border-white/10 bg-white"
+      >
         <ProductGallery images={images} title={product?.title} />
+
+        <button
+          type="button"
+          onClick={openCurrentImageFullscreen}
+          aria-label="Open product image in fullscreen"
+          className="absolute right-4 top-4 z-20 grid h-11 w-11 place-items-center rounded-full border border-black/10 bg-black/75 text-white transition hover:scale-105 hover:bg-black focus:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400"
+        >
+          <Maximize2 size={18} />
+        </button>
       </div>
+
+      {fullscreenSrc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Product image fullscreen"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 p-3 sm:p-6"
+          onClick={() => setFullscreenSrc(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setFullscreenSrc(null)}
+            aria-label="Close fullscreen image"
+            className="absolute right-4 top-4 z-10 grid h-11 w-11 place-items-center rounded-full border border-white/15 bg-white/10 text-white transition hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-fuchsia-400"
+          >
+            <X size={20} />
+          </button>
+
+          <img
+            src={fullscreenSrc}
+            alt={product?.title || "Product image"}
+            className="max-h-full max-w-full object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
 
       <div className="ryfio-variant-panel border-t border-white/[0.08] pt-4">
         <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-400/[0.06] px-4 py-3">
