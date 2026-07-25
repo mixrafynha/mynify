@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
   BadgeCheck,
   Factory,
@@ -46,19 +46,7 @@ export default function ProductClient({
   images,
   id,
 }: ProductClientProps) {
-  const [variants, setVariants] = useState<Variant[]>([]);
-  const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
-  const [selectedColor, setSelectedColor] = useState<string | null>(null);
-  const [hasExplicitSizeSelection, setHasExplicitSizeSelection] = useState(false);
-
-  const lastSaveRef = useRef(0);
-
-  const safeImages = useMemo(() => {
-    const cleanImages = Array.isArray(images) ? images.filter(Boolean) : [];
-    return cleanImages.length > 0 ? cleanImages : ["/placeholder.png"];
-  }, [images]);
-
-  useEffect(() => {
+  const initialVariants = useMemo(() => {
     const mapped: Variant[] = Array.isArray(product?.variants)
       ? product.variants.map((variant: Variant) => ({
           ...variant,
@@ -70,21 +58,34 @@ export default function ProductClient({
         }))
       : [];
 
-    mapped.sort((a, b) => {
+    return mapped.sort((a, b) => {
       const aIndex = SIZE_ORDER.indexOf(normalizeSize(a.size));
       const bIndex = SIZE_ORDER.indexOf(normalizeSize(b.size));
-
       return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
     });
+  }, [product?.variants]);
 
-    const initial =
-      mapped.find((variant) => (variant.stock ?? 0) > 0) || mapped[0] || null;
+  const initialVariant = useMemo(
+    () =>
+      initialVariants.find((variant) => (variant.stock ?? 0) > 0) ||
+      initialVariants[0] ||
+      null,
+    [initialVariants]
+  );
 
-    setVariants(mapped);
-    setSelectedVariant(initial);
-    setSelectedColor(initial?.color ?? null);
-    setHasExplicitSizeSelection(false);
-  }, [product]);
+  const [variants] = useState<Variant[]>(initialVariants);
+  const [selectedVariant, setSelectedVariant] = useState<Variant | null>(initialVariant);
+  const [selectedColor, setSelectedColor] = useState<string | null>(
+    initialVariant?.color ?? null
+  );
+  const [hasExplicitSizeSelection, setHasExplicitSizeSelection] = useState(false);
+
+  const lastSaveRef = useRef(0);
+
+  const safeImages = useMemo(() => {
+    const cleanImages = Array.isArray(images) ? images.filter(Boolean) : [];
+    return cleanImages.length > 0 ? cleanImages : ["/placeholder.png"];
+  }, [images]);
 
   const colors = useMemo(() => {
     const uniqueColors = new Map<
@@ -229,7 +230,7 @@ export default function ProductClient({
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[28px] border border-white/[0.06] bg-white/[0.025] shadow-[0_18px_52px_rgba(0,0,0,0.22)]">
+      <section className="[content-visibility:auto] [contain-intrinsic-size:900px] overflow-hidden rounded-[28px] border border-white/[0.06] bg-white/[0.025] shadow-[0_18px_52px_rgba(0,0,0,0.22)]">
         <div className="relative overflow-hidden border-b border-white/[0.06] px-4 py-5 sm:px-6 sm:py-6">
           <div className="relative">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">

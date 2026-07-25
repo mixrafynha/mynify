@@ -65,9 +65,18 @@ export function ProductLeft({
       }
     };
 
-    loadReviews();
+    const schedule = window.requestIdleCallback
+      ? window.requestIdleCallback(() => loadReviews(), { timeout: 1500 })
+      : window.setTimeout(loadReviews, 500);
 
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (window.requestIdleCallback) {
+        window.cancelIdleCallback(schedule as number);
+      } else {
+        window.clearTimeout(schedule as number);
+      }
+    };
   }, [product?.id]);
 
   return (

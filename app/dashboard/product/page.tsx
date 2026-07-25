@@ -189,7 +189,7 @@ export default function ProductsPage() {
   }, [loadCart]);
 
   return (
-    <main className="min-h-screen w-full min-w-0 overflow-x-clip border-0 border-l-0 bg-[#080814] text-white outline-none">
+    <main className="min-h-screen w-full min-w-0 overflow-hidden bg-[#080814] text-white">
       <div className="relative z-10 mx-auto w-full min-w-0 max-w-[1550px] px-3 pb-10 pt-3 sm:px-5 md:px-8">
         <ProductsHeader
           search={search}
