@@ -163,7 +163,7 @@ export default async function ProductPage({
                   className="text-[27px] md:text-[40px] uppercase leading-none tracking-[-0.03em] select-none transition-opacity duration-200 group-hover:opacity-90"
                   style={{
                     fontFamily: "var(--font-logo)",
-                    textShadow: "none",
+                    textShadow: "0 0 18px rgba(102, 67, 136, 0.35)",
                   }}
                 >
                   <span className="ryfio-letter text-white" style={{ animationDelay: "0ms" }}>R</span>
@@ -189,7 +189,7 @@ export default async function ProductPage({
           </div>
         </header>
 
-        <div className="relative z-10 mx-auto max-w-[1500px] px-2.5 pb-5 pt-3 sm:px-4 md:px-6 lg:px-8">
+        <div className="relative z-10 mx-auto max-w-7xl px-2.5 pb-5 pt-3 sm:px-4 md:px-6 lg:px-8">
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (

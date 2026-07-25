@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CheckCircle, ShieldCheck, Truck } from "lucide-react";
 
 import ProductGallery from "@/app/components/ProductGallery";
@@ -37,6 +37,109 @@ export function ProductLeft({
   onSizeChange,
 }: Props) {
   const [reviews, setReviews] = useState<Review[]>([]);
+  const galleryRef = useRef<HTMLDivElement | null>(null);
+
+
+
+  useEffect(() => {
+    const gallery = galleryRef.current;
+    if (!gallery) return;
+
+    let frame = 0;
+
+    const polishGallery = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const images = Array.from(gallery.querySelectorAll<HTMLImageElement>("img"));
+        if (!images.length) return;
+
+        const visibleImages = images.filter((image) => {
+          const rect = image.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        });
+
+        const mainImage = visibleImages.reduce<HTMLImageElement | null>((largest, image) => {
+          if (!largest) return image;
+          const area = image.getBoundingClientRect().width * image.getBoundingClientRect().height;
+          const largestArea =
+            largest.getBoundingClientRect().width * largest.getBoundingClientRect().height;
+          return area > largestArea ? image : largest;
+        }, null);
+
+        images.forEach((image) => {
+          image.removeAttribute("data-ryfio-main-image");
+          image.removeAttribute("data-ryfio-thumbnail-image");
+        });
+
+        gallery
+          .querySelectorAll<HTMLElement>(
+            "[data-ryfio-main-frame], [data-ryfio-thumbnail-button]"
+          )
+          .forEach((element) => {
+            element.removeAttribute("data-ryfio-main-frame");
+            element.removeAttribute("data-ryfio-thumbnail-button");
+          });
+
+        if (mainImage) {
+          mainImage.setAttribute("data-ryfio-main-image", "true");
+
+          const naturalRatio =
+            mainImage.naturalWidth > 0 && mainImage.naturalHeight > 0
+              ? mainImage.naturalWidth / mainImage.naturalHeight
+              : 1;
+
+          const zoom = naturalRatio > 1.3 ? 1.06 : naturalRatio < 0.78 ? 1.1 : 1.18;
+          mainImage.style.setProperty("--ryfio-smart-zoom", String(zoom));
+
+          let parent: HTMLElement | null = mainImage.parentElement;
+          const imageRect = mainImage.getBoundingClientRect();
+
+          while (parent && parent !== gallery) {
+            const rect = parent.getBoundingClientRect();
+            const isMainFrame =
+              rect.width >= imageRect.width * 0.85 &&
+              rect.height >= imageRect.height * 0.85 &&
+              rect.width > 320 &&
+              rect.height > 300;
+
+            if (isMainFrame) {
+              parent.setAttribute("data-ryfio-main-frame", "true");
+              break;
+            }
+
+            parent = parent.parentElement;
+          }
+        }
+
+        visibleImages.forEach((image) => {
+          if (image === mainImage) return;
+          const rect = image.getBoundingClientRect();
+
+          if (rect.width <= 180 && rect.height <= 180) {
+            image.setAttribute("data-ryfio-thumbnail-image", "true");
+            const button = image.closest<HTMLElement>("button, [role='button']");
+            button?.setAttribute("data-ryfio-thumbnail-button", "true");
+          }
+        });
+      });
+    };
+
+    const observer = new MutationObserver(polishGallery);
+    observer.observe(gallery, { childList: true, subtree: true });
+
+    const resizeObserver = new ResizeObserver(polishGallery);
+    resizeObserver.observe(gallery);
+
+    gallery.addEventListener("load", polishGallery, true);
+    polishGallery();
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      resizeObserver.disconnect();
+      gallery.removeEventListener("load", polishGallery, true);
+    };
+  }, [images]);
 
   useEffect(() => {
     if (!product?.id) return;
@@ -77,48 +180,91 @@ export function ProductLeft({
       <style jsx global>{`
         .ryfio-gallery-polish {
           isolation: isolate;
-          width: 100%;
           background: #ffffff !important;
           contain: layout paint;
         }
 
-        /* Let ProductGallery use the full left column instead of keeping
-           the main product image inside a narrow internal wrapper. */
+        .ryfio-gallery-polish,
         .ryfio-gallery-polish > * {
-          width: 100% !important;
-          max-width: none !important;
+          min-height: 0 !important;
+        }
+
+        .ryfio-gallery-polish > * {
+          height: auto !important;
+        }
+
+        .ryfio-gallery-polish * {
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
         }
 
         .ryfio-gallery-polish img {
           object-fit: contain !important;
           object-position: center !important;
-          image-rendering: auto;
-          transform: translateZ(0);
+          -webkit-user-drag: none;
+          user-select: none;
         }
 
-        .ryfio-gallery-polish [class*="max-w-"] {
-          max-width: none !important;
+        .ryfio-gallery-polish [data-ryfio-main-frame="true"] {
+          min-height: clamp(430px, 47vw, 650px) !important;
+          max-height: 650px !important;
+          overflow: hidden !important;
+          background: #fff !important;
         }
 
-        .ryfio-gallery-polish [class*="backdrop-blur"],
-        .ryfio-gallery-polish [class*="blur-"] {
-          backdrop-filter: none !important;
-          filter: none !important;
+        .ryfio-gallery-polish img[data-ryfio-main-image="true"] {
+          transform: scale(var(--ryfio-smart-zoom, 1.16)) !important;
+          transform-origin: center center !important;
+          transition: transform 220ms ease, opacity 180ms ease !important;
+          will-change: auto !important;
         }
 
-        @media (min-width: 1024px) {
-          .ryfio-gallery-polish {
-            min-height: 620px;
-          }
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
+          width: 80px !important;
+          height: 80px !important;
+          flex: 0 0 80px !important;
+          overflow: hidden !important;
+          border-radius: 10px !important;
+          border: 1px solid #d9dde5 !important;
+          background: #fff !important;
+          padding: 3px !important;
+          box-shadow: none !important;
+          transition: border-color 140ms ease, transform 140ms ease !important;
+        }
+
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"]:hover {
+          transform: translateY(-1px) !important;
+          border-color: rgb(168 85 247 / 0.7) !important;
+        }
+
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"][aria-current="true"],
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"][aria-pressed="true"],
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"][data-active="true"],
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"][data-selected="true"] {
+          border-color: #00d874 !important;
+          box-shadow: 0 0 0 1px #00d874 !important;
+        }
+
+        .ryfio-gallery-polish img[data-ryfio-thumbnail-image="true"] {
+          width: 100% !important;
+          height: 100% !important;
+          transform: scale(1.08) !important;
+          border-radius: 7px !important;
         }
 
         .ryfio-gallery-polish [class*="overflow-x"] {
           scrollbar-width: none;
           -ms-overflow-style: none;
+          overscroll-behavior-inline: contain;
+          scroll-snap-type: x proximity;
         }
 
         .ryfio-gallery-polish [class*="overflow-x"]::-webkit-scrollbar {
           display: none;
+        }
+
+        .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
+          scroll-snap-align: start;
         }
 
         .ryfio-variant-panel button[aria-pressed="true"],
@@ -131,9 +277,33 @@ export function ProductLeft({
           color: white !important;
           box-shadow: 0 0 0 1px rgb(217 70 239 / 0.18) !important;
         }
+
+        @media (max-width: 640px) {
+          .ryfio-gallery-polish [data-ryfio-main-frame="true"] {
+            min-height: 390px !important;
+            max-height: 520px !important;
+          }
+
+          .ryfio-gallery-polish img[data-ryfio-main-image="true"] {
+            --ryfio-smart-zoom: 1.1 !important;
+          }
+
+          .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
+            width: 68px !important;
+            height: 68px !important;
+            flex-basis: 68px !important;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ryfio-gallery-polish img,
+          .ryfio-gallery-polish [data-ryfio-thumbnail-button="true"] {
+            transition: none !important;
+          }
+        }
       `}</style>
 
-      <div className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-white">
+      <div ref={galleryRef} className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-white">
         <ProductGallery images={images} title={product?.title} />
       </div>
 
