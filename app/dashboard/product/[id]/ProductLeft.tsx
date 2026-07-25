@@ -65,16 +65,29 @@ export function ProductLeft({
       }
     };
 
-    const schedule = window.requestIdleCallback
-      ? window.requestIdleCallback(() => loadReviews(), { timeout: 1500 })
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (
+        callback: IdleRequestCallback,
+        options?: IdleRequestOptions
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+
+    const canUseIdleCallback =
+      typeof idleWindow.requestIdleCallback === "function" &&
+      typeof idleWindow.cancelIdleCallback === "function";
+
+    const schedule = canUseIdleCallback
+      ? idleWindow.requestIdleCallback!(loadReviews, { timeout: 1500 })
       : window.setTimeout(loadReviews, 500);
 
     return () => {
       controller.abort();
-      if (window.requestIdleCallback) {
-        window.cancelIdleCallback(schedule as number);
+
+      if (canUseIdleCallback) {
+        idleWindow.cancelIdleCallback!(schedule);
       } else {
-        window.clearTimeout(schedule as number);
+        window.clearTimeout(schedule);
       }
     };
   }, [product?.id]);
