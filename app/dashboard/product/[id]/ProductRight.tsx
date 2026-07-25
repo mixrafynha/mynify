@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Minus,
   Plus,
-  Sparkles,
-  Star,
   Zap,
   ShoppingCart,
   Palette,
+  BadgeCheck,
+  ShieldCheck,
+  Globe2,
 } from "lucide-react";
 
 export function ProductRight({
@@ -40,14 +41,6 @@ export function ProductRight({
 
   const originalPrice =
     product?.discount_price && product?.price ? Number(product.price) : null;
-
-  const verifiedReviews = useMemo(() => {
-    const reviews = Array.isArray(product?.reviews) ? product.reviews : [];
-
-    return reviews
-      .filter((review: any) => review?.verified === true)
-      .slice(0, 3);
-  }, [product?.reviews]);
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
@@ -231,254 +224,150 @@ export function ProductRight({
       {toast && (
         <div className="fixed left-4 right-4 top-24 z-[9999] sm:left-auto sm:right-6 sm:top-28 sm:w-[360px]">
           <div
-            className={`rounded-2xl border px-5 py-4 shadow-lg ${
+            className={`rounded-2xl border bg-[#17121f] px-5 py-4 shadow-xl ${
               toast.type === "success"
-                ? "border-emerald-400/40 bg-[#1b1424] text-emerald-100 shadow-emerald-500/20"
-                : "border-red-400/40 bg-[#1b1424] text-red-100 shadow-red-500/20"
+                ? "border-emerald-400/40 text-emerald-100"
+                : "border-red-400/40 text-red-100"
             }`}
           >
-            <div className="flex items-start gap-4">
-              <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-lg font-black shadow-lg ${
-                  toast.type === "success"
-                    ? "bg-gradient-to-br from-emerald-400 to-emerald-500 text-black"
-                    : "bg-gradient-to-br from-red-400 to-red-500 text-black"
-                }`}
-              >
-                {toast.type === "success" ? "✓" : "!"}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-black tracking-wide text-white">
-                    {toast.type === "success"
-                      ? "Added to cart"
-                      : "Something went wrong"}
-                  </p>
-
-                  {toast.type === "success" && (
-                    <span className="rounded-full bg-[#1b1424] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
-                      success
-                    </span>
-                  )}
-                </div>
-
-                <p className="mt-1 text-xs leading-relaxed text-white/60">
-                  {toast.message}
-                </p>
-
-                <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.08]">
-                  <div
-                    className={`h-full animate-[toastBar_3s_linear_forwards] rounded-full ${
-                      toast.type === "success" ? "bg-emerald-400" : "bg-red-400"
-                    }`}
-                  />
-                </div>
-              </div>
-            </div>
+            <p className="text-sm font-black text-white">
+              {toast.type === "success" ? "Added to cart" : "Something went wrong"}
+            </p>
+            <p className="mt-1 text-xs text-white/60">{toast.message}</p>
           </div>
         </div>
       )}
 
-      <style jsx global>{`
-        @keyframes toastBar {
-          from {
-            width: 100%;
-          }
-
-          to {
-            width: 0%;
-          }
-        }
-      `}</style>
-
-      <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
+      <div className="flex min-w-0 flex-col gap-5">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[#1b1424] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
-            <Sparkles size={13} aria-hidden="true" />
-            Made on demand
-          </div>
-
-          <h1 className="text-3xl font-black uppercase leading-[0.95] tracking-[-0.04em] text-white sm:text-4xl lg:text-5xl">
+          <h1 className="text-3xl font-black uppercase leading-[0.96] tracking-[-0.045em] text-white sm:text-4xl xl:text-[46px]">
             {product?.title ?? "Untitled product"}
           </h1>
 
-          <p className="text-sm leading-relaxed text-white/58 sm:text-base">
-            Premium customizable products made for creators, online brands and RYFIO stores.
+          <p className="max-w-xl text-sm leading-relaxed text-white/65 sm:text-base">
+            {product?.description ||
+              "Premium customizable products made for creators, online brands and RYFIO stores."}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 space-y-2">
-              <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+        <div className="rounded-2xl border border-white/10 bg-[#191421] p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-3xl font-black tracking-[-0.04em] text-white sm:text-4xl">
                 €{price.toFixed(2)}
               </div>
 
               {originalPrice && (
-                <div className="text-sm text-white/38 line-through">
+                <div className="mt-1 text-sm text-white/35 line-through">
                   €{originalPrice.toFixed(2)}
                 </div>
               )}
 
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50 ">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300 " />
+              <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-400/30 bg-fuchsia-400/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.1em] text-fuchsia-100">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300" />
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
 
-            <div className="shrink-0 rounded-full border border-cyan-300/20 bg-[#1b1424] px-3 py-1 text-[11px] font-bold text-cyan-100">
+            <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-400/[0.04] px-3 py-1.5 text-[10px] font-bold text-cyan-100">
               No inventory needed
-            </div>
+            </span>
           </div>
 
-          <div className="mt-4 text-sm">
+          <div className="mt-3 text-xs">
             {typeof stock === "number" ? (
               stock > 0 ? (
-                <span className="font-bold text-emerald-300">
-                  ● In stock ({stock})
-                </span>
+                <span className="font-bold text-emerald-300">● In stock ({stock})</span>
               ) : (
                 <span className="font-bold text-red-300">● Out of stock</span>
               )
             ) : (
-              <span className="text-white/50">Select variant</span>
+              <span className="text-white/45">Variant optional</span>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-bold text-white/75">Quantity</span>
-
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={decreaseQuantity}
-                disabled={quantity <= 1 || loading}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
-              >
-                <Minus size={16} />
-              </button>
-
-              <span className="min-w-8 text-center text-sm font-black text-white">
-                {quantity}
-              </span>
-
-              <button
-                type="button"
-                onClick={increaseQuantity}
-                disabled={
-                  loading ||
-                  isOutOfStock ||
-                  (typeof stock === "number" && quantity >= stock)
-                }
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
+        <div>
+          <p className="mb-2 text-sm font-medium text-white/75">Variant</p>
+          <div className="flex min-h-14 items-center justify-between rounded-2xl border border-white/10 bg-[#191421] px-4 text-sm text-white">
+            <span className="truncate">{selectedVariantLabel}</span>
+            <span className="ml-3 text-white/55">⌄</span>
           </div>
         </div>
 
+        <div className="flex items-center justify-between gap-4 py-1">
+          <span className="text-sm font-medium text-white/75">Quantity</span>
 
-        <div className="space-y-3">
-          <button
-            type="button"
-            disabled={!selectedVariant || isOutOfStock || loading}
-            onClick={handleAddToCart}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={decreaseQuantity}
+              disabled={quantity <= 1 || loading}
+              className="grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-[#1b1624] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Decrease quantity"
+            >
+              <Minus size={17} />
+            </button>
 
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-black/25">
-              {loading ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              ) : (
-                <ShoppingCart size={20} />
-              )}
-            </span>
+            <span className="min-w-8 text-center text-sm font-black text-white">{quantity}</span>
 
-            <span className="relative">
-              {loading ? "Adding..." : "Add to cart"}
-            </span>
-
-            {!loading && <Zap className="relative text-yellow-200" size={20} />}
-          </button>
-
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleStartDesigning}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/25 bg-[#1b1424] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-fuchsia-300/20">
-              <Palette size={20} />
-            </span>
-
-            <span className="relative">Start Designing</span>
-          </button>
+            <button
+              type="button"
+              onClick={increaseQuantity}
+              disabled={loading || isOutOfStock || (typeof stock === "number" && quantity >= stock)}
+              className="grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-[#1b1624] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35"
+              aria-label="Increase quantity"
+            >
+              <Plus size={17} />
+            </button>
+          </div>
         </div>
 
-        {verifiedReviews.length > 0 && (
-          <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="text-sm font-black text-white">Verified reviews</p>
+        <button
+          type="button"
+          disabled={!selectedVariant || isOutOfStock || loading}
+          onClick={handleAddToCart}
+          className="flex w-full items-center justify-center gap-4 rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+        >
+          {loading ? (
+            <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+          ) : (
+            <ShoppingCart size={22} />
+          )}
+          <span>{loading ? "Adding..." : "Add to cart"}</span>
+          {!loading && <Zap size={20} className="text-yellow-200" />}
+        </button>
 
-              <div className="flex items-center gap-1 text-yellow-300">
-                {[1, 2, 3, 4, 5].map((item) => (
-                  <Star key={item} size={13} fill="currentColor" />
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {verifiedReviews.map((review: any) => (
-                <div
-                  key={review.id}
-                  className="rounded-2xl border border-white/[0.08] bg-[#1b1424] p-3"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 text-xs font-black text-white">
-                      {review.name?.[0]?.toUpperCase() ?? "U"}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-white">
-                        {review.name ?? "Verified customer"}
-                      </p>
-                      <p className="text-[11px] font-bold text-emerald-300">
-                        verified account
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs leading-relaxed text-white/58">
-                    {review.message}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Secure checkout
+        <button
+          type="button"
+          disabled={loading}
+          onClick={handleStartDesigning}
+          className="flex w-full items-center justify-center gap-3 rounded-2xl border border-white/12 bg-[#17121f] px-7 py-5 text-base font-black uppercase tracking-[0.1em] text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/35"
+        >
+          <span className="grid h-10 w-10 place-items-center rounded-full bg-fuchsia-500/20 text-fuchsia-200">
+            <Palette size={20} />
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Quality tested
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Fast production
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Worldwide shipping
-          </span>
+          Start designing
+        </button>
+
+        <div className="grid grid-cols-2 gap-2 border-t border-white/10 pt-4 sm:grid-cols-4">
+          <Feature icon={BadgeCheck} label="Quality tested" tone="text-cyan-300" />
+          <Feature icon={Zap} label="Fast production" tone="text-fuchsia-300" />
+          <Feature icon={ShieldCheck} label="Secure checkout" tone="text-sky-300" />
+          <Feature icon={Globe2} label="Worldwide shipping" tone="text-yellow-300" />
         </div>
       </div>
     </>
+  );
+}
+
+function Feature({ icon: Icon, label, tone }: any) {
+  return (
+    <div className="flex min-h-24 flex-col items-center justify-center rounded-xl border border-white/[0.08] bg-[#191421] px-2 py-3 text-center">
+      <span className={`grid h-10 w-10 place-items-center rounded-full border border-white/10 ${tone}`}>
+        <Icon size={20} strokeWidth={1.8} />
+      </span>
+      <span className="mt-2 text-[10px] leading-tight text-white/75">{label}</span>
+    </div>
   );
 }
