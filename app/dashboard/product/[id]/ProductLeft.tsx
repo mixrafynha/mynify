@@ -48,7 +48,6 @@ export function ProductLeft({
         const res = await fetch(
           `/api/product-reviews?productId=${product.id}`,
           {
-            cache: "no-store",
             signal: controller.signal,
           }
         );
@@ -65,9 +64,12 @@ export function ProductLeft({
       }
     };
 
-    loadReviews();
+    const timeoutId = window.setTimeout(loadReviews, 350);
 
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(timeoutId);
+      controller.abort();
+    };
   }, [product?.id]);
 
   return (
@@ -75,76 +77,21 @@ export function ProductLeft({
       <style jsx global>{`
         .ryfio-gallery-polish {
           isolation: isolate;
-          background:
-            radial-gradient(circle at 16% 0%, rgba(168, 85, 247, 0.24), transparent 34%),
-            radial-gradient(circle at 88% 8%, rgba(217, 70, 239, 0.14), transparent 32%),
-            radial-gradient(circle at 50% 100%, rgba(14, 165, 233, 0.08), transparent 38%),
-            linear-gradient(180deg, #160b24 0%, #12091f 46%, #0d0718 100%) !important;
+          background: #f5f5f7 !important;
         }
 
-        .ryfio-gallery-polish,
-        .ryfio-gallery-polish * {
-          border-color: rgba(255, 255, 255, 0.07) !important;
-        }
-
-        .ryfio-gallery-polish > * {
-          background: transparent !important;
-        }
-
-        /* Hide only the visible gallery scrollbars. The thumbnail row can still scroll by swipe/trackpad. */
-        .ryfio-gallery-polish [class*="overflow-x"],
-        .ryfio-gallery-polish [class*="overflow-y"],
-        .ryfio-gallery-polish [class*="overflow-auto"],
-        .ryfio-gallery-polish [class*="overflow-scroll"] {
-          scrollbar-width: none !important;
-          -ms-overflow-style: none !important;
-        }
-
-        .ryfio-gallery-polish [class*="overflow-x"]::-webkit-scrollbar,
-        .ryfio-gallery-polish [class*="overflow-y"]::-webkit-scrollbar,
-        .ryfio-gallery-polish [class*="overflow-auto"]::-webkit-scrollbar,
-        .ryfio-gallery-polish [class*="overflow-scroll"]::-webkit-scrollbar {
-          width: 0 !important;
-          height: 0 !important;
-          display: none !important;
-        }
-
-        .ryfio-gallery-polish {
-          max-height: none !important;
-        }
-
-        .ryfio-gallery-polish > div {
-          max-height: none !important;
-        }
-
-        /* Main gallery image: do not shrink it with max-height. Let it fill the white/product canvas. */
         .ryfio-gallery-polish img {
-          width: 100% !important;
-          height: 100% !important;
-          max-width: none !important;
-          max-height: none !important;
           object-fit: contain !important;
           object-position: center !important;
-          padding: 2px !important;
         }
 
-        /* Product photo should feel larger, but without cropping the product. */
-        .ryfio-gallery-polish picture img,
-        .ryfio-gallery-polish img:not([width="40"]):not([height="40"]) {
-          transform: scale(1.18) !important;
-          transform-origin: center !important;
+        .ryfio-gallery-polish [class*="overflow-x"] {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
 
-        /* Keep thumbnails fixed and clean, only hide their scrollbar. */
-        .ryfio-gallery-polish [class*="overflow-x"] img {
-          transform: scale(1.04) !important;
-          padding: 1px !important;
-        }
-
-        .ryfio-gallery-polish button,
-        .ryfio-gallery-polish a {
-          background: rgba(255, 255, 255, 0.04) !important;
-          backdrop-filter: none !important;
+        .ryfio-gallery-polish [class*="overflow-x"]::-webkit-scrollbar {
+          display: none;
         }
 
         .ryfio-variant-panel button[aria-pressed="true"],
@@ -152,44 +99,19 @@ export function ProductLeft({
         .ryfio-variant-panel [data-selected="true"],
         .ryfio-variant-panel [data-state="checked"],
         .ryfio-variant-panel .selected {
-          border-color: rgba(217, 70, 239, 0.72) !important;
-          background: rgba(168, 85, 247, 0.18) !important;
-          color: rgba(255, 255, 255, 0.98) !important;
-          box-shadow: 0 0 0 1px rgba(217, 70, 239, 0.24), 0 0 26px rgba(168, 85, 247, 0.22) !important;
-        }
-
-        .ryfio-variant-panel button:focus-visible {
-          outline: 2px solid rgba(217, 70, 239, 0.75) !important;
-          outline-offset: 3px !important;
-        }
-
-        @media (max-width: 767px) {
-          .ryfio-gallery-polish {
-            border-radius: 22px !important;
-          }
-
-          .ryfio-gallery-polish img {
-            max-height: none !important;
-            padding: 2px !important;
-          }
-
-          .ryfio-gallery-polish picture img,
-          .ryfio-gallery-polish img:not([width="40"]):not([height="40"]) {
-            transform: scale(1.2) !important;
-          }
-
-          .ryfio-gallery-polish [class*="overflow-x"] img {
-            transform: scale(1.05) !important;
-          }
+          border-color: rgb(217 70 239 / 0.75) !important;
+          background: rgb(168 85 247 / 0.14) !important;
+          color: white !important;
+          box-shadow: 0 0 0 1px rgb(217 70 239 / 0.18) !important;
         }
       `}</style>
 
-      <div className="ryfio-gallery-polish overflow-hidden rounded-[26px] border border-white/[0.07] shadow-[0_18px_52px_rgba(0,0,0,0.24)]">
+      <div className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-[#f5f5f7]">
         <ProductGallery images={images} title={product?.title} />
       </div>
 
       <div className="ryfio-variant-panel border-t border-white/[0.08] pt-4">
-        <div className="rounded-2xl border border-fuchsia-300/25 bg-fuchsia-400/[0.08] px-4 py-3 shadow-[0_0_26px_rgba(168,85,247,0.12)]">
+        <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-400/[0.06] px-4 py-3">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200">
             Selected variant
           </p>

@@ -15,7 +15,6 @@ import {
 export function ProductRight({
   product,
   selectedVariant,
-  hasExplicitSizeSelection = false,
 }: any) {
   const router = useRouter();
 
@@ -153,8 +152,8 @@ export function ProductRight({
   const handleStartDesigning = async () => {
     if (!product?.id || loading) return;
 
-    if (!selectedVariant || !hasExplicitSizeSelection) {
-      showToast("error", "Choose a size before opening the editor.");
+    if (!selectedVariant) {
+      showToast("error", "This product has no available variant.");
       return;
     }
 
@@ -232,10 +231,10 @@ export function ProductRight({
       {toast && (
         <div className="fixed left-4 right-4 top-24 z-[9999] sm:left-auto sm:right-6 sm:top-28 sm:w-[360px]">
           <div
-            className={`rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-xl ${
+            className={`rounded-2xl border px-5 py-4 shadow-lg ${
               toast.type === "success"
-                ? "border-emerald-400/40 bg-white/[0.025] text-emerald-100 shadow-emerald-500/20"
-                : "border-red-400/40 bg-white/[0.025] text-red-100 shadow-red-500/20"
+                ? "border-emerald-400/40 bg-[#1b1424] text-emerald-100 shadow-emerald-500/20"
+                : "border-red-400/40 bg-[#1b1424] text-red-100 shadow-red-500/20"
             }`}
           >
             <div className="flex items-start gap-4">
@@ -258,7 +257,7 @@ export function ProductRight({
                   </p>
 
                   {toast.type === "success" && (
-                    <span className="rounded-full bg-white/[0.025] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
+                    <span className="rounded-full bg-[#1b1424] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
                       success
                     </span>
                   )}
@@ -295,7 +294,7 @@ export function ProductRight({
 
       <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-white/[0.025] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[#1b1424] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
             <Sparkles size={13} aria-hidden="true" />
             Made on demand
           </div>
@@ -309,7 +308,7 @@ export function ProductRight({
           </p>
         </div>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
+        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
               <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
@@ -322,13 +321,13 @@ export function ProductRight({
                 </div>
               )}
 
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50 shadow-[0_0_24px_rgba(168,85,247,0.16)]">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300 shadow-[0_0_12px_rgba(217,70,239,0.9)]" />
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50 ">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300 " />
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
 
-            <div className="shrink-0 rounded-full border border-cyan-300/20 bg-white/[0.025] px-3 py-1 text-[11px] font-bold text-cyan-100">
+            <div className="shrink-0 rounded-full border border-cyan-300/20 bg-[#1b1424] px-3 py-1 text-[11px] font-bold text-cyan-100">
               No inventory needed
             </div>
           </div>
@@ -348,7 +347,7 @@ export function ProductRight({
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
+        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-white/75">Quantity</span>
 
@@ -357,7 +356,7 @@ export function ProductRight({
                 type="button"
                 onClick={decreaseQuantity}
                 disabled={quantity <= 1 || loading}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Minus size={16} />
               </button>
@@ -374,7 +373,7 @@ export function ProductRight({
                   isOutOfStock ||
                   (typeof stock === "number" && quantity >= stock)
                 }
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
                 <Plus size={16} />
               </button>
@@ -382,18 +381,13 @@ export function ProductRight({
           </div>
         </div>
 
-        {!hasExplicitSizeSelection && (
-          <div className="rounded-3xl border border-fuchsia-300/20 bg-fuchsia-500/[0.06] px-4 py-3 text-sm font-semibold text-fuchsia-100 shadow-[0_0_22px_rgba(168,85,247,0.14)]">
-            Choose a size before opening the editor. Your selected variant will be saved for the design step.
-          </div>
-        )}
 
         <div className="space-y-3">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-[0_0_44px_rgba(168,85,247,0.34)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:scale-[1.02] md:hover:shadow-[0_0_64px_rgba(217,70,239,0.38)]"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -416,7 +410,7 @@ export function ProductRight({
             type="button"
             disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-[28px] border border-fuchsia-300/25 bg-white/[0.025] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white shadow-[0_0_28px_rgba(168,85,247,0.20)] transition-all duration-300 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:-translate-y-1 md:hover:border-fuchsia-300/35 md:hover:shadow-[0_0_50px_rgba(217,70,239,0.30)]"
+            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/25 bg-[#1b1424] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -429,7 +423,7 @@ export function ProductRight({
         </div>
 
         {verifiedReviews.length > 0 && (
-          <div className="rounded-3xl border border-white/[0.07] bg-white/[0.025] p-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-black text-white">Verified reviews</p>
 
@@ -444,7 +438,7 @@ export function ProductRight({
               {verifiedReviews.map((review: any) => (
                 <div
                   key={review.id}
-                  className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-3"
+                  className="rounded-2xl border border-white/[0.08] bg-[#1b1424] p-3"
                 >
                   <div className="mb-2 flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 text-xs font-black text-white">
@@ -471,16 +465,16 @@ export function ProductRight({
         )}
 
         <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
             ✔ Secure checkout
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
             ✔ Quality tested
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
             ✔ Fast production
           </span>
-          <span className="rounded-full border border-white/[0.08] bg-white/[0.025] px-3 py-1">
+          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
             ✔ Worldwide shipping
           </span>
         </div>

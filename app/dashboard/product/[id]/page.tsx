@@ -62,10 +62,10 @@ async function getProduct(id: string) {
         return null;
       }
 
+      const colorsById = new Map(colors.map((color: any) => [color.id, color]));
+
       variants = (variantsData || []).map((variant: any) => {
-        const color = colors.find(
-          (c: any) => c.id === variant.product_color_id
-        );
+        const color = colorsById.get(variant.product_color_id);
 
         return {
           id: variant.id,
@@ -147,15 +147,11 @@ export default async function ProductPage({
 
   return (
     <main
-      className="min-h-screen overflow-x-hidden text-white"
-      style={{
-        background:
-          "radial-gradient(circle at 16% 0%, rgba(168,85,247,0.24), transparent 34%), radial-gradient(circle at 88% 8%, rgba(217,70,239,0.14), transparent 32%), radial-gradient(circle at 50% 100%, rgba(14,165,233,0.08), transparent 38%), linear-gradient(180deg, #160b24 0%, #12091f 46%, #0d0718 100%)",
-      }}
+      className="min-h-screen overflow-x-hidden bg-[#0f0b14] text-white"
     >
       <section className="relative min-h-screen bg-transparent">
         {/* HEADER COM A MESMA UX DO NAVBAR, MAS SEM FUNDO DIFERENTE */}
-        <header className="sticky top-0 z-50 border-b border-white/10 bg-transparent shadow-[0_0_55px_rgba(168,85,247,0.14)] backdrop-blur-2xl">
+        <header className="sticky top-0 z-50 border-b border-white/10 bg-[#0f0b14]/95">
           <div className="relative mx-auto flex max-w-7xl items-center justify-center px-3 py-3 sm:px-5 md:justify-between md:px-6 lg:px-8">
             <Link
               href="/"
@@ -164,7 +160,7 @@ export default async function ProductPage({
             >
               <div className="relative flex items-center">
                 <span
-                  className="text-[27px] md:text-[40px] uppercase leading-none tracking-[-0.03em] select-none transition-all duration-300 group-hover:scale-[1.03]"
+                  className="text-[27px] md:text-[40px] uppercase leading-none tracking-[-0.03em] select-none transition-opacity duration-200 group-hover:opacity-90"
                   style={{
                     fontFamily: "var(--font-logo)",
                     textShadow: "0 0 18px rgba(102, 67, 136, 0.35)",
@@ -176,13 +172,12 @@ export default async function ProductPage({
                   <span className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent" style={{ animationDelay: "360ms" }}>I</span>
                   <span className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent" style={{ animationDelay: "480ms" }}>O</span>
                 </span>
-                <div className="absolute -inset-3 rounded-full bg-purple-500/10 opacity-70 blur-2xl pointer-events-none" />
               </div>
             </Link>
 
             <Link
               href="/dashboard/product"
-              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white shadow-[0_0_25px_rgba(168,85,247,0.14)] backdrop-blur-xl transition active:scale-[0.98] hover:border-fuchsia-300/30 hover:border-fuchsia-300/30 hover:shadow-[0_0_30px_rgba(217,70,239,0.18)] sm:right-5 md:static"
+              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white transition active:scale-[0.98] hover:border-fuchsia-300/30 sm:right-5 md:static"
               aria-label="Back to products"
             >
               <ArrowLeft
@@ -198,7 +193,7 @@ export default async function ProductPage({
           <ProductClient product={product} images={product.images} id={id} />
 
           {isAdmin && (
-            <div className="mt-4 rounded-[24px] border border-white/[0.06] bg-white/[0.03] p-4">
+            <div className="mt-4 rounded-2xl border border-white/[0.06] bg-[#15101d] p-4">
               <p className="text-sm font-bold text-white/75">
                 Admin tools
               </p>
