@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Box, ShieldCheck, Truck } from "lucide-react";
+import { CheckCircle, ShieldCheck, Truck } from "lucide-react";
 
 import ProductGallery from "@/app/components/ProductGallery";
 import ColorSelector from "@/app/components/ColorSelector";
@@ -45,12 +45,17 @@ export function ProductLeft({
 
     const loadReviews = async () => {
       try {
-        const res = await fetch(`/api/product-reviews?productId=${product.id}`, {
-          signal: controller.signal,
-        });
+        const res = await fetch(
+          `/api/product-reviews?productId=${product.id}`,
+          {
+            signal: controller.signal,
+          }
+        );
 
         if (!res.ok) return;
+
         const json = await res.json();
+
         setReviews(Array.isArray(json?.reviews) ? json.reviews : []);
       } catch (err: any) {
         if (err?.name !== "AbortError") {
@@ -70,22 +75,22 @@ export function ProductLeft({
   return (
     <div className="min-w-0 space-y-4 bg-transparent">
       <style jsx global>{`
-        .ryfio-product-gallery {
+        .ryfio-gallery-polish {
           isolation: isolate;
-          background: #15111d !important;
+          background: #f5f5f7 !important;
         }
 
-        .ryfio-product-gallery img {
-          object-fit: cover !important;
+        .ryfio-gallery-polish img {
+          object-fit: contain !important;
           object-position: center !important;
         }
 
-        .ryfio-product-gallery [class*="overflow-x"] {
+        .ryfio-gallery-polish [class*="overflow-x"] {
           scrollbar-width: none;
           -ms-overflow-style: none;
         }
 
-        .ryfio-product-gallery [class*="overflow-x"]::-webkit-scrollbar {
+        .ryfio-gallery-polish [class*="overflow-x"]::-webkit-scrollbar {
           display: none;
         }
 
@@ -94,41 +99,67 @@ export function ProductLeft({
         .ryfio-variant-panel [data-selected="true"],
         .ryfio-variant-panel [data-state="checked"],
         .ryfio-variant-panel .selected {
-          border-color: rgb(217 70 239 / 0.9) !important;
-          background: rgb(168 85 247 / 0.12) !important;
+          border-color: rgb(217 70 239 / 0.75) !important;
+          background: rgb(168 85 247 / 0.14) !important;
           color: white !important;
-          box-shadow: 0 0 0 1px rgb(34 211 238 / 0.35) !important;
+          box-shadow: 0 0 0 1px rgb(217 70 239 / 0.18) !important;
         }
       `}</style>
 
-      <div className="ryfio-product-gallery overflow-hidden rounded-2xl border border-white/10 bg-[#15111d]">
+      <div className="ryfio-gallery-polish overflow-hidden rounded-2xl border border-white/10 bg-[#f5f5f7]">
         <ProductGallery images={images} title={product?.title} />
       </div>
 
-      <div className="grid grid-cols-3 overflow-hidden rounded-2xl border border-fuchsia-400/35 bg-[#17121f]">
-        <Benefit icon={Box} title="Production" text="2–4 business days" tone="text-fuchsia-300" />
-        <Benefit icon={Truck} title="Shipping" text="3–7 business days" tone="text-cyan-300" border />
-        <Benefit icon={ShieldCheck} title="Secure checkout" text="Safe & encrypted" tone="text-emerald-300" border />
-      </div>
+      <div className="ryfio-variant-panel border-t border-white/[0.08] pt-4">
+        <div className="rounded-xl border border-fuchsia-300/20 bg-fuchsia-400/[0.06] px-4 py-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-200">
+            Selected variant
+          </p>
+          <p className="mt-1 text-sm font-black text-white">
+            {selectedVariant
+              ? [selectedVariant.color, selectedVariant.size].filter(Boolean).join(" / ") ||
+                selectedVariant.sku ||
+                "Variant selected"
+              : "Choose color and size"}
+          </p>
+        </div>
 
-      <div className="ryfio-variant-panel rounded-2xl border border-white/10 bg-[#17121f] p-4 sm:p-5">
-        <div className="grid gap-5 sm:grid-cols-2">
-          <div className="min-w-0 sm:border-r sm:border-white/10 sm:pr-5">
+        <div className="mt-5 grid items-start gap-5 md:grid-cols-[minmax(0,1fr)_minmax(230px,300px)]">
+          <div className="min-w-0 space-y-5">
             <ColorSelector
               variants={variants}
               selectedColor={selectedColor}
               selectedVariant={selectedVariant}
               onChange={onColorChange}
             />
-          </div>
 
-          <div className="min-w-0 sm:pl-1">
             <SizeSelector
               variants={availableVariants}
               selectedVariant={selectedVariant}
               selectedColor={selectedColor}
               onChange={onSizeChange}
             />
+          </div>
+
+          <div className="md:mt-0 pt-1">
+            <p className="mb-2 text-sm font-black text-white">
+              Production & Delivery
+            </p>
+
+            <div className="space-y-2 text-sm text-white/70">
+              <p className="flex items-center gap-2">
+                <CheckCircle size={15} className="shrink-0 text-fuchsia-200" />
+                <span>Production: 2–4 business days</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <Truck size={15} className="shrink-0 text-cyan-300" />
+                <span>Shipping: 3–7 business days</span>
+              </p>
+              <p className="flex items-center gap-2">
+                <ShieldCheck size={15} className="shrink-0 text-emerald-300" />
+                <span>Secure checkout</span>
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -142,7 +173,7 @@ export function ProductLeft({
           <div className="space-y-3">
             {reviews.map((review) => (
               <div key={review.id} className="flex items-start gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-fuchsia-300/25 bg-white/[0.04] text-xs font-black text-white">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/[0.04] border border-fuchsia-300/25 text-xs font-black text-white">
                   {review.name?.[0]?.toUpperCase() ?? "U"}
                 </div>
 
@@ -153,7 +184,7 @@ export function ProductLeft({
                     </p>
 
                     {review.verified && (
-                      <span className="rounded-full border border-emerald-300/20 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                      <span className="rounded-full bg-white/[0.04] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
                         verified
                       </span>
                     )}
@@ -168,20 +199,6 @@ export function ProductLeft({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function Benefit({ icon: Icon, title, text, tone, border = false }: any) {
-  return (
-    <div className={`flex min-w-0 items-center gap-3 px-3 py-4 sm:px-5 ${border ? "border-l border-white/10" : ""}`}>
-      <Icon size={25} className={`hidden shrink-0 sm:block ${tone}`} strokeWidth={1.8} />
-      <div className="min-w-0">
-        <p className="truncate text-[10px] font-bold uppercase tracking-wide text-white/55 sm:text-xs">
-          {title}
-        </p>
-        <p className="mt-1 truncate text-[10px] text-white/80 sm:text-xs">{text}</p>
-      </div>
     </div>
   );
 }
