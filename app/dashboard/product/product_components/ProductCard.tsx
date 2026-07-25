@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { Heart } from "lucide-react";
 
 import { convertPrice, symbols } from "@/lib/currency";
@@ -14,13 +15,38 @@ type ProductCardProps = {
   toggleLike?: (id: string) => void;
 };
 
+const PLACEHOLDER_IMAGE = "/placeholder.png";
+
+function resolveProductImage(product: Product): string | undefined {
+  if (typeof product.image === "string" && product.image.trim()) {
+    return product.image.trim();
+  }
+
+  if (Array.isArray(product.images)) {
+    return product.images
+      .find((image) => typeof image === "string" && image.trim())
+      ?.trim();
+  }
+
+  return undefined;
+}
+
 export default function ProductCard({
   product,
   currency,
   likes,
   toggleLike,
 }: ProductCardProps) {
-  if (!product?.id || !product?.image) return null;
+  if (!product?.id) return null;
+
+  const productImage = resolveProductImage(product);
+  const [imageSrc, setImageSrc] = useState(
+    productImage || PLACEHOLDER_IMAGE
+  );
+
+  useEffect(() => {
+    setImageSrc(productImage || PLACEHOLDER_IMAGE);
+  }, [productImage]);
 
   const isLiked = Boolean(likes?.[product.id]);
 
@@ -40,7 +66,6 @@ export default function ProductCard({
 
   return (
     <Link
-      key={product.id}
       href={`/dashboard/product/${encodeURIComponent(product.id)}`}
       className="group min-w-0"
     >
@@ -52,11 +77,17 @@ export default function ProductCard({
 
         <div className="relative aspect-[4/5] overflow-hidden rounded-[24px] bg-[#18182d]">
           <Image
-            src={product.image}
+            src={imageSrc}
             alt={product.title || "Product image"}
             fill
-            className="object-cover transition duration-700 group-hover:scale-[1.06]"
+            unoptimized
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+            className="object-cover object-center transition duration-700 group-hover:scale-[1.06]"
+            onError={() => {
+              if (imageSrc !== PLACEHOLDER_IMAGE) {
+                setImageSrc(PLACEHOLDER_IMAGE);
+              }
+            }}
           />
 
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
