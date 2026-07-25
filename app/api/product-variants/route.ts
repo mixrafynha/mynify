@@ -1,118 +1,138 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 60;
 
-type AnyRow = Record<string, any>;
+const PUBLIC_CACHE =
+  "public, max-age=30, s-maxage=60, stale-while-revalidate=300";
+const NO_STORE = "no-store";
 
-function readFirst(row: AnyRow | null | undefined, keys: string[], fallback: any = null) {
-  if (!row) return fallback;
-  for (const key of keys) {
-    const value = row[key];
-    if (value !== undefined && value !== null && value !== "") return value;
-  }
-  return fallback;
+function isSafeId(value: string): boolean {
+  return value.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(value);
 }
 
-function normalizeColor(color: AnyRow | null | undefined) {
-  if (!color) return null;
+type ColorRow = {
+  id: string;
+  product_id: string;
+  color: string | null;
+  color_hex: string | null;
+  mockup_front: string | null;
+  thumbnail: string | null;
+  position: number | null;
+};
 
-  return {
-    id: color.id ?? null,
-    product_id: color.product_id ?? null,
-    name: readFirst(color, ["color", "name", "color_name", "title", "label"], null),
-    color: readFirst(color, ["color", "name", "color_name", "title", "label"], null),
-    color_hex: readFirst(color, ["color_hex", "hex", "hex_code", "value"], "#d1d5db"),
-    image: readFirst(color, ["image", "image_url", "thumbnail", "thumbnail_url", "mockup_url"], null),
-    position: readFirst(color, ["position", "sort_order", "order"], 0),
-    raw: color,
-  };
-}
+type VariantRow = {
+  id: string;
+  product_color_id: string;
+  size: string | null;
+  name: string | null;
+  sku: string | null;
+  stock: number | null;
+  price: number | string | null;
+};
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const productId = searchParams.get("productId")?.trim();
+  try {
+    const productId = new URL(req.url).searchParams.get("productId")?.trim();
 
-  if (!productId) {
-    return NextResponse.json(
-      { variants: [], error: "Missing productId" },
-      { status: 400, headers: { "Cache-Control": "no-store" } }
-    );
-  }
+    if (!productId || !isSafeId(productId)) {
+      return NextResponse.json(
+        { variants: [], error: "Invalid productId" },
+        { status: 400, headers: { "Cache-Control": NO_STORE } },
+      );
+    }
 
-  const supabase = await createSupabaseServer();
+    const supabase = await createSupabaseServer();
+    const { data: colorRows, error: colorsError } = await supabase
+      .from("product_colors")
+      .select("id, product_id, color, color_hex, mockup_front, thumbnail, position")
+      .eq("product_id", productId)
+      .order("position", { ascending: true });
 
-  const { data: colorsData, error: colorsError } = await supabase
-    .from("product_colors")
-    .select("*")
-    .eq("product_id", productId);
+    if (colorsError) {
+      console.error("PRODUCT_VARIANTS_COLORS_ERROR", { code: colorsError.code });
+      return NextResponse.json(
+        { variants: [], error: "Failed to load product colors" },
+        { status: 500, headers: { "Cache-Control": NO_STORE } },
+      );
+    }
 
-  if (colorsError) {
-    return NextResponse.json(
-      { variants: [], error: colorsError.message || "Failed to load product colors" },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
-  }
+    const colors = ((colorRows ?? []) as ColorRow[]).map((color) => {
+      const image = color.thumbnail ?? color.mockup_front ?? null;
+      return {
+        id: color.id,
+        product_id: color.product_id,
+        name: color.color,
+        color: color.color,
+        color_hex: color.color_hex ?? "#d1d5db",
+        image,
+        position: color.position ?? 0,
+        raw: color,
+      };
+    });
 
-  const colors = (colorsData ?? []).map(normalizeColor).filter(Boolean) as AnyRow[];
-  const colorIds = colors.map((color) => color.id).filter(Boolean);
+    const colorIds = colors.map((color) => color.id);
+    if (colorIds.length === 0) {
+      return NextResponse.json(
+        { variants: [], availableVariants: { colors: [], sizes: [], variants: [] }, colors: [] },
+        { status: 200, headers: { "Cache-Control": PUBLIC_CACHE } },
+      );
+    }
 
-  if (!colorIds.length) {
-    return NextResponse.json(
-      { variants: [], colors: [] },
-      { status: 200, headers: { "Cache-Control": "no-store" } }
-    );
-  }
+    const { data: variantRows, error: variantsError } = await supabase
+      .from("product_variants")
+      .select("id, product_color_id, size, name, sku, stock, price")
+      .in("product_color_id", colorIds)
+      .order("size", { ascending: true });
 
-  const { data: variantsData, error: variantsError } = await supabase
-    .from("product_variants")
-    .select("*")
-    .in("product_color_id", colorIds)
-    .order("size", { ascending: true });
+    if (variantsError) {
+      console.error("PRODUCT_VARIANTS_ERROR", { code: variantsError.code });
+      return NextResponse.json(
+        { variants: [], error: "Failed to load product variants" },
+        { status: 500, headers: { "Cache-Control": NO_STORE } },
+      );
+    }
 
-  if (variantsError) {
-    return NextResponse.json(
-      { variants: [], error: variantsError.message || "Failed to load product variants" },
-      { status: 500, headers: { "Cache-Control": "no-store" } }
-    );
-  }
+    const colorMap = new Map(colors.map((color) => [color.id, color]));
+    const variants = ((variantRows ?? []) as VariantRow[]).map((variant) => {
+      const color = colorMap.get(variant.product_color_id) ?? null;
+      const image = color?.image ?? null;
+      return {
+        id: variant.id,
+        variant_id: variant.id,
+        product_color_id: variant.product_color_id,
+        size: variant.size,
+        name: variant.name,
+        sku: variant.sku,
+        stock: Number(variant.stock ?? 0),
+        price: variant.price,
+        color: color?.color ?? null,
+        color_name: color?.color ?? null,
+        color_hex: color?.color_hex ?? "#d1d5db",
+        image,
+        image_url: image,
+        product_color: color,
+        raw: variant,
+      };
+    });
 
-  const colorMap = new Map(colors.map((color) => [color.id, color]));
-
-  const variants = (variantsData ?? []).map((variant: AnyRow) => {
-    const color = colorMap.get(variant.product_color_id) ?? null;
-    const colorName = color?.color ?? color?.name ?? null;
-    const colorHex = color?.color_hex ?? "#d1d5db";
-    const image = color?.image ?? readFirst(variant, ["image", "image_url", "mockup_url"], null);
-
-    return {
-      id: variant.id,
-      variant_id: variant.id,
-      product_color_id: variant.product_color_id,
-      size: variant.size,
-      name: variant.name,
-      sku: variant.sku,
-      stock: Number(variant.stock ?? 0),
-      price: variant.price,
-      color: colorName,
-      color_name: colorName,
-      color_hex: colorHex,
-      image,
-      image_url: image,
-      product_color: color,
-      raw: variant,
+    const availableVariants = {
+      colors,
+      sizes: [...new Set(variants.map((variant) => variant.size).filter(Boolean))],
+      variants,
     };
-  });
 
-  const availableVariants = {
-    colors,
-    sizes: Array.from(new Set(variants.map((v) => v.size).filter(Boolean))),
-    variants,
-  };
-
-  return NextResponse.json(
-    { variants, availableVariants, colors },
-    { status: 200, headers: { "Cache-Control": "no-store" } }
-  );
+    return NextResponse.json(
+      { variants, availableVariants, colors },
+      { status: 200, headers: { "Cache-Control": PUBLIC_CACHE } },
+    );
+  } catch (error) {
+    console.error("PRODUCT_VARIANTS_ROUTE_ERROR", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+    return NextResponse.json(
+      { variants: [], error: "Internal server error" },
+      { status: 500, headers: { "Cache-Control": NO_STORE } },
+    );
+  }
 }

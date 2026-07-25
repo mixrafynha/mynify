@@ -10,10 +10,8 @@ type DataUrlUpload = {
   publicUrl: string | null;
 };
 
-const DESIGN_BUCKET =
-  process.env.SUPABASE_DESIGN_BUCKET ||
-  process.env.NEXT_PUBLIC_SUPABASE_DESIGN_BUCKET ||
-  "design-assets";
+const DESIGN_BUCKET = process.env.SUPABASE_DESIGN_BUCKET || "design-assets";
+const MAX_BODY_BYTES = 12 * 1024 * 1024;
 
 function isUuid(value: unknown) {
   return (
@@ -135,13 +133,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = await req.json();
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
+
+    const body: unknown = await req.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const input = body as Record<string, any>;
 
     const baseProductId =
-      body.baseProductId ||
-      body.base_product_id ||
-      body.productId ||
-      body.product_id;
+      input.baseProductId ||
+      input.base_product_id ||
+      input.productId ||
+      input.product_id;
 
     if (!baseProductId) {
       return NextResponse.json(
@@ -179,83 +186,97 @@ export async function POST(req: Request) {
       );
     }
 
-    const designId = isUuid(body.designId || body.id)
-      ? String(body.designId || body.id)
+    const designId = isUuid(input.designId || input.id)
+      ? String(input.designId || input.id)
       : crypto.randomUUID();
 
-    const printFront = await uploadDataImage({
-      supabase,
-      userId: user.id,
-      designId,
-      side: "front",
-      kind: "print",
-      dataUrl:
-        sideValue(body.printFiles, "front") ||
-        body?.sides?.front?.designImage ||
-        body?.design_data?.sides?.front?.designImage,
-    });
+    const { data: existingDesign, error: existingDesignError } = await supabase
+      .from("user_products")
+      .select("id, user_id")
+      .eq("id", designId)
+      .maybeSingle();
 
-    const printBack = await uploadDataImage({
-      supabase,
-      userId: user.id,
-      designId,
-      side: "back",
-      kind: "print",
-      dataUrl:
-        sideValue(body.printFiles, "back") ||
-        body?.sides?.back?.designImage ||
-        body?.design_data?.sides?.back?.designImage,
-    });
+    if (existingDesignError) {
+      console.error("DESIGN_OWNERSHIP_CHECK_ERROR", { code: existingDesignError.code });
+      return NextResponse.json({ error: "Unable to validate design" }, { status: 500 });
+    }
 
-    const mockupFront = await uploadDataImage({
-      supabase,
-      userId: user.id,
-      designId,
-      side: "front",
-      kind: "mockup",
-      dataUrl: sideValue(body.mockups, "front"),
-    });
+    if (existingDesign && existingDesign.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-    const mockupBack = await uploadDataImage({
-      supabase,
-      userId: user.id,
-      designId,
-      side: "back",
-      kind: "mockup",
-      dataUrl: sideValue(body.mockups, "back"),
-    });
+    const [printFront, printBack, mockupFront, mockupBack] = await Promise.all([
+      uploadDataImage({
+        supabase,
+        userId: user.id,
+        designId,
+        side: "front",
+        kind: "print",
+        dataUrl:
+          sideValue(input.printFiles, "front") ||
+          input?.sides?.front?.designImage ||
+          input?.design_data?.sides?.front?.designImage,
+      }),
+      uploadDataImage({
+        supabase,
+        userId: user.id,
+        designId,
+        side: "back",
+        kind: "print",
+        dataUrl:
+          sideValue(input.printFiles, "back") ||
+          input?.sides?.back?.designImage ||
+          input?.design_data?.sides?.back?.designImage,
+      }),
+      uploadDataImage({
+        supabase,
+        userId: user.id,
+        designId,
+        side: "front",
+        kind: "mockup",
+        dataUrl: sideValue(input.mockups, "front"),
+      }),
+      uploadDataImage({
+        supabase,
+        userId: user.id,
+        designId,
+        side: "back",
+        kind: "mockup",
+        dataUrl: sideValue(input.mockups, "back"),
+      }),
+    ]);
 
-    const productMarkup = Number(body.markup || 0);
+    const productMarkup = Number(input.markup || 0);
     const basePrice = Number(baseProduct.price || 0);
     const finalPrice = basePrice + productMarkup;
 
-    const designData = cleanDataUrls(body.design_data || {
-      schemaVersion: body.schemaVersion || 3,
+    const designData = cleanDataUrls(input.design_data || {
+      schemaVersion: input.schemaVersion || 3,
       productId: baseProduct.id,
-      category: baseProduct.category || body.category || null,
-      color: body.color || body.mockupColor || null,
-      mockupColor: body.mockupColor || body.color || null,
+      category: baseProduct.category || input.category || null,
+      color: input.color || input.mockupColor || null,
+      mockupColor: input.mockupColor || input.color || null,
       sides: {
         front: {
-          elements: body.designFront || body.design_front || [],
-          printBox: body.printBox?.front || body.print_box?.front || null,
-          safeArea: body.safeArea?.front || body.safe_area?.front || null,
+          elements: input.designFront || input.design_front || [],
+          printBox: input.printBox?.front || input.print_box?.front || null,
+          safeArea: input.safeArea?.front || input.safe_area?.front || null,
           designImage: null,
           designImageUrl: printFront.publicUrl,
           printFileUrl: printFront.publicUrl,
           mockupUrl: mockupFront.publicUrl,
         },
         back: {
-          elements: body.designBack || body.design_back || [],
-          printBox: body.printBox?.back || body.print_box?.back || null,
-          safeArea: body.safeArea?.back || body.safe_area?.back || null,
+          elements: input.designBack || input.design_back || [],
+          printBox: input.printBox?.back || input.print_box?.back || null,
+          safeArea: input.safeArea?.back || input.safe_area?.back || null,
           designImage: null,
           designImageUrl: printBack.publicUrl,
           printFileUrl: printBack.publicUrl,
           mockupUrl: mockupBack.publicUrl,
         },
       },
-      production: body.production || null,
+      production: input.production || null,
     }) as any;
 
     if (designData?.sides?.front) {
@@ -282,10 +303,10 @@ export async function POST(req: Request) {
       currency: baseProduct.currency || "USD",
       image: baseProduct.image || null,
       images: baseProduct.images || null,
-      category: baseProduct.category || body.category || null,
+      category: baseProduct.category || input.category || null,
       slug: `${baseProduct.slug || "product"}-${designId.slice(0, 8)}`,
-      design_front: body.designFront || body.design_front || designData?.sides?.front?.elements || [],
-      design_back: body.designBack || body.design_back || designData?.sides?.back?.elements || [],
+      design_front: input.designFront || input.design_front || designData?.sides?.front?.elements || [],
+      design_back: input.designBack || input.design_back || designData?.sides?.back?.elements || [],
       design_data: designData,
       print_files: {
         front: printFront.publicUrl,
@@ -303,21 +324,21 @@ export async function POST(req: Request) {
           back: mockupBack.path,
         },
       },
-      print_box: body.printBox || body.print_box || {
+      print_box: input.printBox || input.print_box || {
         front: designData?.sides?.front?.printBox || null,
         back: designData?.sides?.back?.printBox || null,
       },
-      safe_area: body.safeArea || body.safe_area || {
+      safe_area: input.safeArea || input.safe_area || {
         front: designData?.sides?.front?.safeArea || null,
         back: designData?.sides?.back?.safeArea || null,
       },
       design_image_url: printFront.publicUrl || printBack.publicUrl || null,
       markup: productMarkup,
       final_price: finalPrice,
-      status: body.status || "draft",
-      cart_status: body.cartStatus || body.cart_status || "in_cart",
+      status: input.status || "draft",
+      cart_status: input.cartStatus || input.cart_status || "in_cart",
       is_active: true,
-      design_version: body.schemaVersion || 3,
+      design_version: input.schemaVersion || 3,
       updated_at: new Date().toISOString(),
     };
 
@@ -344,13 +365,13 @@ export async function POST(req: Request) {
       product: data,
       redirectTo: `/cart?designId=${data.id}`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Erro ao guardar produto com design:", error);
 
     return NextResponse.json(
       {
         error:
-          error?.message ||
+          (error instanceof Error ? error.message : null) ||
           "Erro ao guardar produto com design",
       },
       { status: 500 },
