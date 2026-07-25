@@ -48,9 +48,7 @@ export default function ProductCard({
           relative overflow-hidden rounded-[18px]
           border border-white/[0.08]
           bg-[#101012]
-          transition-transform duration-200 ease-out
-          hover:-translate-y-1
-          active:translate-y-0
+          transition-none
           [content-visibility:auto]
           [contain:layout_paint]
         "
@@ -62,7 +60,7 @@ export default function ProductCard({
             fill
             unoptimized
             loading="lazy"
-            className="object-cover object-center transition-transform duration-300 ease-out group-hover:scale-[1.02]"
+            className="object-cover object-center"
             sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
           />
 
@@ -96,7 +94,7 @@ export default function ProductCard({
             className={`
               absolute right-3 top-3
               grid h-9 w-9 place-items-center rounded-full
-              border transition duration-200 active:scale-90
+              border transition-none
               ${
                 isLiked
                   ? "border-black bg-black text-white"
@@ -137,7 +135,7 @@ export default function ProductCard({
             <ArrowRight
               size={18}
               strokeWidth={1.8}
-              className="shrink-0 text-white/45 transition-transform duration-200 group-hover:translate-x-1 group-hover:text-white"
+              className="shrink-0 text-white/45 group-hover:text-white"
             />
           </div>
         </div>
