@@ -292,9 +292,8 @@ export async function POST(req: Request) {
         variants.map((variant) => [variant.id, variant]),
       );
 
-      const stripeLineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
-        [];
-
+      const stripeLineItems: Stripe.Checkout.SessionCreateParams["line_items"] = [];
+      
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
