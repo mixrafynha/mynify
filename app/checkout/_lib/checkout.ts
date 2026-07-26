@@ -179,7 +179,7 @@ export type CheckoutForm = {
 
 export type SecureCheckoutRequestPayload = {
   orderReferenceId: string;
-  currency: "EUR";
+  currency: string;
   cartItemIds: string[];
   customer: CheckoutForm & { phone: string; countryIso: string | null };
   shipping: {
@@ -189,7 +189,7 @@ export type SecureCheckoutRequestPayload = {
 
 export type CheckoutRequestPayload = {
   orderReferenceId: string;
-  currency: "EUR";
+  currency: string;
   customer: CheckoutForm & { phone: string; countryIso: string | null };
   shipping: {
     method: CheckoutForm["shippingMethod"];
@@ -409,6 +409,23 @@ function createItemReferenceId(item: CartItem, index: number): string {
 }
 
 
+export function resolveCheckoutCurrency(items: CartItem[]): string {
+  const currencies = Array.from(
+    new Set(
+      items
+        .map((item) => String(item.currency || "").trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  );
+
+  if (currencies.length === 0) return "EUR";
+  if (currencies.length !== 1) {
+    throw new Error("All checkout items must use the same currency");
+  }
+
+  return currencies[0];
+}
+
 export function createSecureCheckoutRequestPayload(
   form: CheckoutForm,
   items: CartItem[],
@@ -423,7 +440,7 @@ export function createSecureCheckoutRequestPayload(
 
   return {
     orderReferenceId: createOrderReferenceId(),
-    currency: "EUR",
+    currency: resolveCheckoutCurrency(items),
     cartItemIds,
     customer: {
       ...form,
@@ -443,7 +460,7 @@ export function createCheckoutRequestPayload(
 ): CheckoutRequestPayload {
   return {
     orderReferenceId: createOrderReferenceId(),
-    currency: "EUR",
+    currency: resolveCheckoutCurrency(items),
     customer: {
       ...form,
       phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,

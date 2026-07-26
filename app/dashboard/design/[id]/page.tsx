@@ -57,6 +57,7 @@ type EditorVariantSelection = {
   sku: string | null;
   price: string | null;
   variantPrice: string | null;
+  currency: string | null;
   image: string | null;
   imageUrl: string | null;
 };
@@ -232,6 +233,11 @@ function buildVariantSelection(
   );
   const sku = readSearchParam(params, ["sku", "variantSku"]);
   const price = readSearchParam(params, ["variantPrice", "price"]);
+  const currency = readSearchParam(params, [
+    "currency",
+    "selectedCurrency",
+    "productCurrency",
+  ])?.toUpperCase() || null;
   const image = readSearchParam(params, ["variantImage", "image", "imageUrl"]);
 
   if (
@@ -242,6 +248,7 @@ function buildVariantSelection(
     !colorHex &&
     !sku &&
     !price &&
+    !currency &&
     !image
   ) {
     return null;
@@ -257,6 +264,7 @@ function buildVariantSelection(
     sku,
     price,
     variantPrice: price,
+    currency,
     image,
     imageUrl: image,
   };
@@ -770,6 +778,7 @@ export default function EditorPage() {
           productId,
           variantId: selectedVariant?.variantId || null,
           userProductId: savedUserProductId,
+          currency: selectedVariant?.currency || null,
           quantity: 1,
         }),
       });
@@ -974,6 +983,7 @@ export default function EditorPage() {
       sku: option.sku || current?.sku || null,
       price: option.price == null ? current?.price || null : String(option.price),
       variantPrice: option.price == null ? current?.variantPrice || null : String(option.price),
+      currency: current?.currency || null,
       image: option.imageUrl || current?.image || null,
       imageUrl: option.imageUrl || current?.imageUrl || null,
     }));

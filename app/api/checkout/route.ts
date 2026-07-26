@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { convertMoneyToCents, normalizeCheckoutCurrency } from "./currency";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -67,7 +68,7 @@ function isUuid(value: unknown): value is string {
   );
 }
 
-function normalizeCurrency(value: unknown): string {
+function normalizeBaseCurrency(value: unknown): string {
   const currency =
     typeof value === "string" ? value.trim().toLowerCase() : "eur";
 
@@ -292,8 +293,12 @@ export async function POST(req: Request) {
         variants.map((variant) => [variant.id, variant]),
       );
 
-      const stripeLineItems: Stripe.Checkout.SessionCreateParams["line_items"] = [];
-      
+      const stripeLineItems: Array<
+        NonNullable<
+          Parameters<typeof stripe.checkout.sessions.create>[0]["line_items"]
+        >[number]
+      > = [];
+
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
@@ -369,11 +374,9 @@ export async function POST(req: Request) {
          * cart_items.price é deliberadamente ignorado.
          * Qualquer price enviado pelo editor/browser também é ignorado.
          */
-        const variantAmount = moneyToCents(variant?.price);
-        const productAmount = moneyToCents(product.price);
-        const unitAmount = variantAmount ?? productAmount;
+        const officialPrice = Number(variant?.price ?? product.price);
 
-        if (!unitAmount) {
+        if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
           return NextResponse.json(
             {
               error: `Invalid official price for ${product.title}`,
@@ -382,7 +385,8 @@ export async function POST(req: Request) {
           );
         }
 
-        const currency = normalizeCurrency(product.currency);
+        const baseCurrency = normalizeBaseCurrency(product.currency).toUpperCase();
+        const currency = normalizeCheckoutCurrency(cartItem.currency);
 
         if (
           checkoutCurrency !== null &&
@@ -399,6 +403,30 @@ export async function POST(req: Request) {
 
         checkoutCurrency = currency;
 
+        let unitAmount: number;
+        try {
+          unitAmount = convertMoneyToCents(
+            officialPrice,
+            baseCurrency,
+            currency,
+          );
+        } catch (conversionError) {
+          console.error("CHECKOUT_CURRENCY_CONVERSION_ERROR", {
+            productId: product.id,
+            baseCurrency,
+            currency,
+            message:
+              conversionError instanceof Error
+                ? conversionError.message
+                : "Unknown conversion error",
+          });
+
+          return NextResponse.json(
+            { error: "Currency conversion is temporarily unavailable" },
+            { status: 503 },
+          );
+        }
+
         const size = variant?.size ?? cartItem.size;
         const sku = variant?.sku ?? cartItem.sku;
 
@@ -412,7 +440,7 @@ export async function POST(req: Request) {
 
         stripeLineItems.push({
           price_data: {
-            currency,
+            currency: currency.toLowerCase(),
             product_data: {
               name: product.title,
               ...(description ? { description } : {}),
@@ -605,7 +633,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const currency = normalizeCurrency(product.currency);
+    const currency = normalizeBaseCurrency(product.currency);
 
     const baseUrl =
       process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
@@ -641,7 +669,7 @@ export async function POST(req: Request) {
       line_items: [
         {
           price_data: {
-            currency,
+            currency: currency.toLowerCase(),
             product_data: {
               name: product.title,
             },

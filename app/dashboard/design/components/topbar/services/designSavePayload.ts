@@ -102,6 +102,7 @@ function normalizeSelectedVariant(
   const size = cleanString(raw?.size);
   const sku = cleanString(raw?.sku);
   const price = cleanPrice(raw?.variantPrice ?? raw?.price);
+  const currency = cleanString(raw?.currency)?.toUpperCase() || null;
   const image = sanitizeImageSourceForDatabase(raw?.imageUrl || raw?.image) || null;
   const gelatoProductUid =
     cleanString(raw?.gelatoProductUid) ||
@@ -117,6 +118,7 @@ function normalizeSelectedVariant(
     !size &&
     !sku &&
     price === null &&
+    !currency &&
     !image &&
     !gelatoProductUid
   ) {
@@ -133,6 +135,7 @@ function normalizeSelectedVariant(
     sku,
     price,
     variantPrice: price,
+    currency,
     image,
     imageUrl: image,
     gelatoProductUid,
@@ -493,6 +496,7 @@ export async function buildDesignSavePayload(
       null,
     variantPrice:
       selectedVariant?.variantPrice ?? selectedVariant?.price ?? null,
+    currency: selectedVariant?.currency || null,
     status: "draft",
     color: selectedColor,
     mockupColor: input.mockupColor || selectedColor,
@@ -615,6 +619,7 @@ export async function buildDesignSavePayload(
       null,
     variantPrice:
       selectedVariant?.variantPrice ?? selectedVariant?.price ?? null,
+    currency: selectedVariant?.currency || null,
     variantImage: sanitizeImageSourceForDatabase(
       selectedVariant?.imageUrl || selectedVariant?.image
     ) || null,

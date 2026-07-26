@@ -36,6 +36,7 @@ export type SelectedProductVariant = {
   sku?: string | null;
   price?: number | string | null;
   variantPrice?: number | string | null;
+  currency?: string | null;
   image?: string | null;
   imageUrl?: string | null;
   gelatoProductUid?: string | null;

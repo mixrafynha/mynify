@@ -42,6 +42,7 @@ type AddCartBody = {
   userProductId?: unknown;
   user_product_id?: unknown;
   quantity?: unknown;
+  currency?: unknown;
 };
 
 function parsePositiveQuantity(value: unknown): number {
@@ -101,6 +102,7 @@ export async function POST(req: Request) {
       body.userProductId ?? body.user_product_id,
     );
     const quantity = parsePositiveQuantity(body.quantity);
+    const requestedCurrency = nullableString(body.currency)?.toUpperCase() ?? null;
 
     if (!productId) {
       return Response.json({ error: "Invalid payload" }, { status: 400 });
@@ -162,7 +164,12 @@ export async function POST(req: Request) {
     }
 
     const basePrice = getProductPrice(product);
-    const officialPrice = Number(selectedVariant.price ?? basePrice);
+    const officialPrice = Number(
+      userProduct?.final_price ??
+        userProduct?.price ??
+        selectedVariant.price ??
+        basePrice,
+    );
 
     if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
       return Response.json(
@@ -202,7 +209,11 @@ export async function POST(req: Request) {
       title: userProduct?.title ?? product.title,
       // Display cache only. Secure checkout recalculates from products/variants.
       price: officialPrice,
-      currency: product.currency ?? userProduct?.currency ?? "EUR",
+      currency:
+        userProduct?.currency?.toUpperCase() ??
+        requestedCurrency ??
+        product.currency?.toUpperCase() ??
+        "EUR",
       image,
       color: selectedVariant.color,
       size: selectedVariant.size,
