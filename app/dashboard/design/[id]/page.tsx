@@ -744,9 +744,51 @@ export default function EditorPage() {
         );
       }
 
+      const savedUserProductId = String(
+        data?.designId ??
+          data?.userProductId ??
+          data?.user_product_id ??
+          data?.product?.id ??
+          data?.data?.id ??
+          "",
+      ).trim();
+
+      if (!savedUserProductId) {
+        throw new Error("The design was saved, but its ID was not returned");
+      }
+
+      setSaveNotice("Design saved. Adding it to your cart...");
+
+      const cartResponse = await fetch("/api/cart/add", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({
+          productId,
+          variantId: selectedVariant?.variantId || null,
+          userProductId: savedUserProductId,
+          quantity: 1,
+        }),
+      });
+
+      const cartData = await cartResponse.json().catch(() => null);
+
+      if (!cartResponse.ok || !cartData?.data?.id) {
+        throw new Error(
+          cartData?.error ||
+            cartData?.message ||
+            "The design was saved, but it could not be added to the cart",
+        );
+      }
+
+      const cartItemId = String(cartData.data.id);
+
       sessionStorage.removeItem(editorStorageKey);
       setSaveNotice(
-        "Design saved successfully. Redirecting you to checkout...",
+        "Design saved and added to cart. Redirecting you to checkout...",
       );
 
       const mockupRoot = previewCanvasRef.current?.querySelector(
@@ -767,19 +809,20 @@ export default function EditorPage() {
             },
             body: JSON.stringify({
               dataUrl: checkoutThumbnail,
-              userProductId: data?.designId || null,
-              designId: data?.designId || null,
+              userProductId: savedUserProductId,
+              designId: savedUserProductId,
             }),
           });
         } catch {
-          // Thumbnail upload is best-effort and must never block save.
+          // Thumbnail upload is best-effort and must never block save/cart.
         }
       })();
 
-      const checkoutUrl = data?.designId
-        ? `/checkout?designId=${data.designId}`
-        : "/checkout";
-      router.push(checkoutUrl);
+      const checkoutParams = new URLSearchParams({
+        cartItemId,
+        designId: savedUserProductId,
+      });
+      router.push(`/checkout?${checkoutParams.toString()}`);
       return;
     } catch {
       alert("Error saving design");
