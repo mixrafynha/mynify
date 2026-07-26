@@ -1,8 +1,12 @@
 const nextConfig = {
   poweredByHeader: false,
   compress: true,
+
   images: {
+    unoptimized: true,
+
     formats: ["image/avif", "image/webp"],
+
     remotePatterns: [
       {
         protocol: "https",
@@ -14,16 +18,18 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "*.r2.dev",
+        hostname: "**.r2.dev",
       },
       {
         protocol: "http",
         hostname: "localhost",
       },
     ],
+
     deviceSizes: [320, 420, 768, 1024, 1200, 1600],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
   },
+
   async headers() {
     return [
       {
