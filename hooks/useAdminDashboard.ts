@@ -1,17 +1,45 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
+
+type AdminProduct = {
+  id: string;
+  title?: string;
+  price?: number | string | null;
+  discount_price?: number | string | null;
+  currency?: string | null;
+  image?: string | null;
+  images?: string[] | null;
+  category?: string | null;
+  [key: string]: unknown;
+};
+
+function normalizeProducts(value: unknown): AdminProduct[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (product): product is Record<string, unknown> =>
+        Boolean(product) && typeof product === "object"
+    )
+    .map((product) => ({
+      ...product,
+      id: String(product.id ?? ""),
+      title:
+        typeof product.title === "string" && product.title.trim()
+          ? product.title
+          : "Untitled",
+    }))
+    .filter((product) => Boolean(product.id));
+}
 
 export function useAdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const lastActionRef = useRef(0);
 
-  /* =========================
-     LOAD USER
-  ========================= */
   useEffect(() => {
     let mounted = true;
 
@@ -21,16 +49,20 @@ export function useAdminDashboard() {
           credentials: "include",
         });
 
+        if (!res.ok) {
+          if (mounted) setUser(null);
+          return;
+        }
+
         const data = await res.json();
 
         if (!mounted) return;
-
         setUser(data?.user ?? null);
       } catch (err) {
         console.error("Failed to load user:", err);
-        setUser(null);
+        if (mounted) setUser(null);
       } finally {
-        setLoadingUser(false);
+        if (mounted) setLoadingUser(false);
       }
     };
 
@@ -41,51 +73,51 @@ export function useAdminDashboard() {
     };
   }, []);
 
-  /* =========================
-     ADMIN CHECK
-  ========================= */
   const isAdmin = user?.profile?.role === "admin";
-
-  /* =========================
-     PRODUCTS
-  ========================= */
   const shouldFetchProducts = !loadingUser && isAdmin;
 
-  const { data, isLoading } = useSWR(
+  const { data, isLoading, mutate } = useSWR(
     shouldFetchProducts ? "/api/admin/products" : null,
-    fetcher
+    fetcher,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 30000,
+    }
   );
 
-  const products = Array.isArray(data?.data) ? data.data : [];
+  const products = useMemo(
+    () => normalizeProducts(data?.data),
+    [data?.data]
+  );
 
-  /* =========================
-     DELETE PRODUCT
-  ========================= */
-  const deleteProduct = useCallback(async (id: string) => {
-    const now = Date.now();
-    if (now - lastActionRef.current < 500) return;
-    lastActionRef.current = now;
+  const deleteProduct = useCallback(
+    async (id: string) => {
+      const now = Date.now();
+      if (now - lastActionRef.current < 500) return;
+      lastActionRef.current = now;
 
-    try {
-      await fetch(`/api/admin/products/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-    } catch (err) {
-      console.error("Delete failed:", err);
-    }
-  }, []);
+      try {
+        const response = await fetch(`/api/admin/products/${id}`, {
+          method: "DELETE",
+          credentials: "include",
+        });
 
-  /* =========================
-     MOCK DATA (TEMP)
-  ========================= */
+        if (!response.ok) {
+          throw new Error(`Delete failed with status ${response.status}`);
+        }
+
+        await mutate();
+      } catch (err) {
+        console.error("Delete failed:", err);
+      }
+    },
+    [mutate]
+  );
+
   const users: any[] = [];
-  const revenue: number = 0;
+  const revenue = 0;
   const notifications: any[] = [];
 
-  /* =========================
-     RETURN
-  ========================= */
   return {
     user,
     isAdmin,
