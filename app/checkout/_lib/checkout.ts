@@ -176,6 +176,17 @@ export type CheckoutForm = {
   shippingMethod: "standard" | "express";
 };
 
+
+export type SecureCheckoutRequestPayload = {
+  orderReferenceId: string;
+  currency: "EUR";
+  cartItemIds: string[];
+  customer: CheckoutForm & { phone: string; countryIso: string | null };
+  shipping: {
+    method: CheckoutForm["shippingMethod"];
+  };
+};
+
 export type CheckoutRequestPayload = {
   orderReferenceId: string;
   currency: "EUR";
@@ -395,6 +406,34 @@ function createItemReferenceId(item: CartItem, index: number): string {
     item.variant_id ||
     `${getCartProductId(item)}-${item.size ?? "variant"}-${index}`;
   return `ryfio-item-${stableId}`;
+}
+
+
+export function createSecureCheckoutRequestPayload(
+  form: CheckoutForm,
+  items: CartItem[],
+): SecureCheckoutRequestPayload {
+  const cartItemIds = Array.from(
+    new Set(
+      items
+        .map((item) => (typeof item.id === "string" ? item.id.trim() : ""))
+        .filter(Boolean),
+    ),
+  );
+
+  return {
+    orderReferenceId: createOrderReferenceId(),
+    currency: "EUR",
+    cartItemIds,
+    customer: {
+      ...form,
+      phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+      countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+    },
+    shipping: {
+      method: form.shippingMethod,
+    },
+  };
 }
 
 export function createCheckoutRequestPayload(

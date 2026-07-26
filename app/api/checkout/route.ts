@@ -1,251 +1,712 @@
-import { NextResponse } from "next/server";
 import Stripe from "stripe";
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type CheckoutItem = {
-  itemReferenceId?: string | null;
-  id?: string | null;
-  product_id?: string | null;
-  user_product_id?: string | null;
-  base_product_id?: string | null;
-  variant_id?: string | null;
-  title?: string | null;
-  price?: number | string | null;
-  unit_price?: number | string | null;
-  unitPrice?: number | string | null;
-  final_price?: number | string | null;
-  finalPrice?: number | string | null;
-  amount?: number | string | null;
-  image?: string | null;
-  color?: string | null;
-  size?: string | null;
-  sku?: string | null;
-  product_color_id?: string | null;
-  quantity?: number | string | null;
-};
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  },
+);
 
 type CheckoutBody = {
-  orderReferenceId?: string | null;
-  currency?: string | null;
-  customer?: {
-    email?: string | null;
-    fullName?: string | null;
-    phone?: string | null;
-    address?: string | null;
-    apartment?: string | null;
-    city?: string | null;
-    postalCode?: string | null;
-    country?: string | null;
-  };
-  shipping?: {
-    method?: string | null;
-    price?: number | string | null;
-  };
-  items?: CheckoutItem[];
+  // Novo formato seguro vindo do carrinho.
+  cartItemIds?: string[];
+
+  // Compatibilidade temporária com o checkout antigo.
+  id?: string;
 };
 
-type NormalizedCheckoutItem = CheckoutItem & {
-  quantity: number;
-  unitAmount: number;
-  resolvedPrice: number;
+type CartItemRow = {
+  id: string;
+  user_id: string | null;
+  product_id: string;
+  variant_id: string | null;
+  user_product_id: string | null;
+  design_id: string | null;
+  title: string;
+  quantity: number | null;
+  currency: string | null;
+  size: string | null;
+  color: string | null;
+  sku: string | null;
 };
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+type ProductRow = {
+  id: string;
+  title: string;
+  price: number | string | null;
+  currency: string | null;
+};
 
-if (!stripeSecretKey) {
-  throw new Error("Missing STRIPE_SECRET_KEY");
-}
+type VariantRow = {
+  id: string;
+  price: number | string | null;
+  stock: number | null;
+  size: string | null;
+  sku: string | null;
+  product_color_id: string | null;
+  gelato_product_uid: string | null;
+};
 
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2026-04-22.dahlia",
-});
-
-type CheckoutSessionCreateParams = NonNullable<Parameters<typeof stripe.checkout.sessions.create>[0]>;
-type CheckoutLineItem = NonNullable<CheckoutSessionCreateParams["line_items"]>[number];
-
-function parseMoney(value: unknown): number | null {
-  if (typeof value === "number") {
-    return Number.isFinite(value) && value >= 0 ? value : null;
-  }
-
-  if (typeof value !== "string") return null;
-
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) return null;
-
-  const number = Number(normalized);
-  return Number.isFinite(number) && number >= 0 ? number : null;
-}
-
-function moneyToCents(value: unknown): number {
-  const number = parseMoney(value);
-  if (number === null) return 0;
-  return Math.round(number * 100);
-}
-
-function resolveItemPrice(item: CheckoutItem): number | null {
+function isUuid(value: unknown): value is string {
   return (
-    parseMoney(item.price) ??
-    parseMoney(item.unit_price) ??
-    parseMoney(item.unitPrice) ??
-    parseMoney(item.final_price) ??
-    parseMoney(item.finalPrice) ??
-    parseMoney(item.amount)
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
   );
 }
 
-function normalizeItem(item: CheckoutItem): NormalizedCheckoutItem {
-  const quantity = Math.max(1, Math.floor(Number(item.quantity) || 1));
-  const resolvedPrice = resolveItemPrice(item) ?? 0;
-  const unitAmount = moneyToCents(resolvedPrice);
+function normalizeCurrency(value: unknown): string {
+  const currency =
+    typeof value === "string" ? value.trim().toLowerCase() : "eur";
 
-  return {
-    ...item,
-    quantity,
-    resolvedPrice,
-    unitAmount,
-  };
+  // Adiciona aqui outras moedas quando forem oficialmente suportadas.
+  const allowedCurrencies = new Set(["eur", "usd", "gbp", "cad"]);
+
+  return allowedCurrencies.has(currency) ? currency : "eur";
 }
 
-function cleanText(value: unknown, fallback = ""): string {
-  if (typeof value !== "string") return fallback;
-  return value.trim();
+function moneyToCents(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const numeric =
+    typeof value === "number"
+      ? value
+      : Number(String(value).replace(",", "."));
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return null;
+  }
+
+  const cents = Math.round((numeric + Number.EPSILON) * 100);
+
+  if (!Number.isSafeInteger(cents) || cents <= 0) {
+    return null;
+  }
+
+  return cents;
 }
 
-function cleanMetadata(value: unknown): string {
-  return cleanText(value).slice(0, 500);
+function safeQuantity(value: unknown): number | null {
+  const quantity = Number(value);
+
+  if (
+    !Number.isInteger(quantity) ||
+    quantity < 1 ||
+    quantity > 100
+  ) {
+    return null;
+  }
+
+  return quantity;
 }
 
-function siteUrl(): string {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
+function getBearerToken(req: Request): string | null {
+  const authorization = req.headers.get("authorization");
 
-function invalidItemPayload(item: NormalizedCheckoutItem) {
-  return {
-    itemReferenceId: item.itemReferenceId ?? null,
-    id: item.id ?? null,
-    productId: item.product_id ?? null,
-    userProductId: item.user_product_id ?? null,
-    baseProductId: item.base_product_id ?? null,
-    variantId: item.variant_id ?? null,
-    title: item.title ?? null,
-    size: item.size ?? null,
-    sku: item.sku ?? null,
-    quantity: item.quantity,
-    receivedPriceFields: {
-      price: item.price ?? null,
-      unit_price: item.unit_price ?? null,
-      unitPrice: item.unitPrice ?? null,
-      final_price: item.final_price ?? null,
-      finalPrice: item.finalPrice ?? null,
-      amount: item.amount ?? null,
-    },
-  };
+  if (!authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+
+  const token = authorization.slice("Bearer ".length).trim();
+
+  return token || null;
 }
 
 export async function POST(req: Request) {
+  let createdOrderId: string | null = null;
+
   try {
-    const body = (await req.json().catch(() => null)) as CheckoutBody | null;
-    const items = Array.isArray(body?.items) ? body.items : [];
-    const normalizedItems = items.map(normalizeItem);
-    const validItems = normalizedItems.filter((item) => item.unitAmount > 0 && item.quantity > 0);
-    const invalidItems = normalizedItems.filter((item) => item.unitAmount <= 0 || item.quantity <= 0);
+    const token = getBearerToken(req);
 
-    if (!items.length) {
+    if (!token) {
       return NextResponse.json(
-        {
-          error: "Carrinho vazio.",
-          details: "A API /api/checkout recebeu items vazio ou inválido.",
-        },
+        { error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser(token);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 },
+      );
+    }
+
+    let body: CheckoutBody;
+
+    try {
+      body = (await req.json()) as CheckoutBody;
+    } catch {
+      return NextResponse.json(
+        { error: "Invalid request body" },
         { status: 400 },
       );
     }
 
-    if (!validItems.length || invalidItems.length) {
+    const requestedCartItemIds = Array.isArray(body.cartItemIds)
+      ? [...new Set(body.cartItemIds.filter(isUuid))]
+      : [];
+
+    if (requestedCartItemIds.length > 50) {
       return NextResponse.json(
-        {
-          error: "Itens sem preço válido no checkout.",
-          details:
-            "Cada item enviado para /api/checkout precisa de um preço unitário válido. Campos aceites: price, unit_price, unitPrice, final_price, finalPrice ou amount.",
-          invalidItems: invalidItems.map(invalidItemPayload),
-        },
+        { error: "Too many cart items" },
         { status: 400 },
       );
     }
 
-    const customer = body?.customer ?? {};
-    const shipping = body?.shipping ?? {};
-    const shippingPrice = moneyToCents(shipping.price);
-    const baseUrl = siteUrl();
+    /*
+     * FLUXO NOVO:
+     * O cliente envia apenas cartItemIds.
+     * Nunca utilizamos cart_items.price para cobrar.
+     */
+    if (requestedCartItemIds.length > 0) {
+      const { data: cartRows, error: cartError } = await supabase
+        .from("cart_items")
+        .select(`
+          id,
+          user_id,
+          product_id,
+          variant_id,
+          user_product_id,
+          design_id,
+          title,
+          quantity,
+          currency,
+          size,
+          color,
+          sku
+        `)
+        .eq("user_id", user.id)
+        .in("id", requestedCartItemIds);
 
-    const lineItems: CheckoutLineItem[] = validItems.map((item) => ({
-      quantity: item.quantity,
-      price_data: {
-        currency: "eur",
-        unit_amount: item.unitAmount,
-        product_data: {
-          name: cleanText(item.title, "Ryfio product"),
-          images: item.image ? [item.image] : undefined,
+      if (cartError) {
+        console.error("CHECKOUT_CART_ERROR", {
+          code: cartError.code,
+        });
+
+        return NextResponse.json(
+          { error: "Failed to load cart" },
+          { status: 500 },
+        );
+      }
+
+      const cartItems = (cartRows ?? []) as CartItemRow[];
+
+      if (cartItems.length !== requestedCartItemIds.length) {
+        return NextResponse.json(
+          {
+            error:
+              "One or more cart items do not exist or do not belong to you",
+          },
+          { status: 403 },
+        );
+      }
+
+      const productIds = [
+        ...new Set(cartItems.map((item) => item.product_id)),
+      ];
+
+      const variantIds = [
+        ...new Set(
+          cartItems
+            .map((item) => item.variant_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+
+      const { data: productRows, error: productsError } =
+        await supabase
+          .from("products")
+          .select("id, title, price, currency")
+          .in("id", productIds);
+
+      if (productsError) {
+        console.error("CHECKOUT_PRODUCTS_ERROR", {
+          code: productsError.code,
+        });
+
+        return NextResponse.json(
+          { error: "Failed to load products" },
+          { status: 500 },
+        );
+      }
+
+      let variants: VariantRow[] = [];
+
+      if (variantIds.length > 0) {
+        const { data: variantRows, error: variantsError } =
+          await supabase
+            .from("product_variants")
+            .select(`
+              id,
+              price,
+              stock,
+              size,
+              sku,
+              product_color_id,
+              gelato_product_uid
+            `)
+            .in("id", variantIds);
+
+        if (variantsError) {
+          console.error("CHECKOUT_VARIANTS_ERROR", {
+            code: variantsError.code,
+          });
+
+          return NextResponse.json(
+            { error: "Failed to load product variants" },
+            { status: 500 },
+          );
+        }
+
+        variants = (variantRows ?? []) as VariantRow[];
+      }
+
+      const productMap = new Map(
+        ((productRows ?? []) as ProductRow[]).map((product) => [
+          product.id,
+          product,
+        ]),
+      );
+
+      const variantMap = new Map(
+        variants.map((variant) => [variant.id, variant]),
+      );
+
+      const stripeLineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+        [];
+
+      const orderItems: Array<{
+        cart_item_id: string;
+        product_id: string;
+        variant_id: string | null;
+        user_product_id: string | null;
+        design_id: string | null;
+        title: string;
+        quantity: number;
+        unit_amount: number;
+        currency: string;
+        size: string | null;
+        color: string | null;
+        sku: string | null;
+        gelato_product_uid: string | null;
+      }> = [];
+
+      let checkoutCurrency: string | null = null;
+
+      for (const cartItem of cartItems) {
+        const product = productMap.get(cartItem.product_id);
+
+        if (!product) {
+          return NextResponse.json(
+            {
+              error: `Product not found for cart item ${cartItem.id}`,
+            },
+            { status: 404 },
+          );
+        }
+
+        const quantity = safeQuantity(cartItem.quantity);
+
+        if (!quantity) {
+          return NextResponse.json(
+            {
+              error: `Invalid quantity for cart item ${cartItem.id}`,
+            },
+            { status: 400 },
+          );
+        }
+
+        const variant = cartItem.variant_id
+          ? variantMap.get(cartItem.variant_id)
+          : null;
+
+        if (cartItem.variant_id && !variant) {
+          return NextResponse.json(
+            {
+              error: `Variant not found for cart item ${cartItem.id}`,
+            },
+            { status: 404 },
+          );
+        }
+
+        if (
+          variant &&
+          variant.stock !== null &&
+          variant.stock < quantity
+        ) {
+          return NextResponse.json(
+            {
+              error: `Not enough stock for ${product.title}`,
+            },
+            { status: 409 },
+          );
+        }
+
+        /*
+         * PREÇO OFICIAL:
+         * 1. product_variants.price, quando existe e é válido;
+         * 2. products.price como fallback.
+         *
+         * cart_items.price é deliberadamente ignorado.
+         * Qualquer price enviado pelo editor/browser também é ignorado.
+         */
+        const variantAmount = moneyToCents(variant?.price);
+        const productAmount = moneyToCents(product.price);
+        const unitAmount = variantAmount ?? productAmount;
+
+        if (!unitAmount) {
+          return NextResponse.json(
+            {
+              error: `Invalid official price for ${product.title}`,
+            },
+            { status: 400 },
+          );
+        }
+
+        const currency = normalizeCurrency(product.currency);
+
+        if (
+          checkoutCurrency !== null &&
+          checkoutCurrency !== currency
+        ) {
+          return NextResponse.json(
+            {
+              error:
+                "All products in one checkout must use the same currency",
+            },
+            { status: 400 },
+          );
+        }
+
+        checkoutCurrency = currency;
+
+        const size = variant?.size ?? cartItem.size;
+        const sku = variant?.sku ?? cartItem.sku;
+
+        const description = [
+          cartItem.color ? `Color: ${cartItem.color}` : null,
+          size ? `Size: ${size}` : null,
+          sku ? `SKU: ${sku}` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+        stripeLineItems.push({
+          price_data: {
+            currency,
+            product_data: {
+              name: product.title,
+              ...(description ? { description } : {}),
+              metadata: {
+                product_id: product.id,
+                cart_item_id: cartItem.id,
+                ...(cartItem.variant_id
+                  ? { variant_id: cartItem.variant_id }
+                  : {}),
+                ...(cartItem.design_id
+                  ? { design_id: cartItem.design_id }
+                  : {}),
+              },
+            },
+            unit_amount: unitAmount,
+          },
+          quantity,
+        });
+
+        orderItems.push({
+          cart_item_id: cartItem.id,
+          product_id: product.id,
+          variant_id: cartItem.variant_id,
+          user_product_id: cartItem.user_product_id,
+          design_id: cartItem.design_id,
+          title: product.title,
+          quantity,
+          unit_amount: unitAmount,
+          currency,
+          size,
+          color: cartItem.color,
+          sku,
+          gelato_product_uid:
+            variant?.gelato_product_uid ?? null,
+        });
+      }
+
+      const baseUrl =
+        process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
+        new URL(req.url).origin;
+
+      /*
+       * A tabela orders atual parece estar orientada para um produto.
+       * Guardamos uma encomenda principal e colocamos os itens no metadata.
+       *
+       * Quando criares order_items, estes dados devem passar para essa tabela.
+       */
+      const firstItem = orderItems[0];
+
+      if (!firstItem) {
+        return NextResponse.json(
+          { error: "Cart is empty" },
+          { status: 400 },
+        );
+      }
+
+      const totalAmount = orderItems.reduce(
+        (total, item) =>
+          total + item.unit_amount * item.quantity,
+        0,
+      );
+
+      const { data: order, error: orderError } = await supabase
+        .from("orders")
+        .insert({
+          user_id: user.id,
+          product_id: firstItem.product_id,
+          product_title:
+            orderItems.length === 1
+              ? firstItem.title
+              : `${orderItems.length} products`,
+          product_price: totalAmount / 100,
+          product_currency: checkoutCurrency ?? "eur",
+          status: "pending",
+          created_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      if (orderError || !order) {
+        console.error("CHECKOUT_ORDER_CREATE_ERROR", {
+          code: orderError?.code,
+        });
+
+        return NextResponse.json(
+          { error: "Failed to create order" },
+          { status: 500 },
+        );
+      }
+
+      createdOrderId = order.id;
+
+      const session = await stripe.checkout.sessions.create({
+        mode: "payment",
+        customer_email: user.email ?? undefined,
+        line_items: stripeLineItems,
+
+        metadata: {
+          order_id: order.id,
+          user_id: user.id,
+          source: "ryfio_checkout",
+          cart_item_ids: requestedCartItemIds.join(",").slice(0, 500),
+          item_count: String(orderItems.length),
+        },
+
+        payment_intent_data: {
           metadata: {
-            itemReferenceId: cleanMetadata(item.itemReferenceId),
-            cartItemId: cleanMetadata(item.id),
-            productId: cleanMetadata(item.product_id),
-            userProductId: cleanMetadata(item.user_product_id),
-            baseProductId: cleanMetadata(item.base_product_id),
-            variantId: cleanMetadata(item.variant_id),
-            color: cleanMetadata(item.color),
-            size: cleanMetadata(item.size),
-            sku: cleanMetadata(item.sku),
-            productColorId: cleanMetadata(item.product_color_id),
+            order_id: order.id,
+            user_id: user.id,
+            source: "ryfio_checkout",
           },
         },
-      },
-    }));
 
-    if (shippingPrice > 0) {
-      lineItems.push({
-        quantity: 1,
-        price_data: {
-          currency: "eur",
-          unit_amount: shippingPrice,
-          product_data: {
-            name: shipping.method === "express" ? "Express shipping" : "Standard shipping",
-          },
-        },
+        success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}/cancel?order_id=${order.id}`,
+      });
+
+      if (!session.url) {
+        throw new Error("Stripe did not return a checkout URL");
+      }
+
+      const { error: updateError } = await supabase
+        .from("orders")
+        .update({
+          stripe_session_id: session.id,
+        })
+        .eq("id", order.id)
+        .eq("user_id", user.id);
+
+      if (updateError) {
+        console.error("CHECKOUT_ORDER_UPDATE_ERROR", {
+          code: updateError.code,
+        });
+
+        throw new Error("Failed to associate Stripe session");
+      }
+
+      return NextResponse.json({
+        url: session.url,
+        reused: false,
+        orderId: order.id,
       });
     }
 
+    /*
+     * COMPATIBILIDADE COM O FORMATO ANTIGO:
+     * { id: productId }
+     *
+     * Continua seguro porque o preço é lido de products.
+     * Remove este bloco depois de o frontend enviar cartItemIds.
+     */
+    if (!body.id || typeof body.id !== "string") {
+      return NextResponse.json(
+        {
+          error: "cartItemIds or product id required",
+        },
+        { status: 400 },
+      );
+    }
+
+    const productId = body.id.trim();
+
+    if (!productId || productId.length > 128) {
+      return NextResponse.json(
+        { error: "Invalid product id" },
+        { status: 400 },
+      );
+    }
+
+    const { data: product, error: productError } =
+      await supabase
+        .from("products")
+        .select("id, title, price, currency")
+        .eq("id", productId)
+        .single();
+
+    if (productError || !product) {
+      return NextResponse.json(
+        { error: "Product not found" },
+        { status: 404 },
+      );
+    }
+
+    const unitAmount = moneyToCents(product.price);
+
+    if (!unitAmount) {
+      return NextResponse.json(
+        { error: "Invalid official product price" },
+        { status: 400 },
+      );
+    }
+
+    const currency = normalizeCurrency(product.currency);
+
+    const baseUrl =
+      process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
+      new URL(req.url).origin;
+
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({
+        user_id: user.id,
+        product_id: product.id,
+        product_title: product.title,
+        product_price: unitAmount / 100,
+        product_currency: currency,
+        status: "pending",
+        created_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (orderError || !order) {
+      return NextResponse.json(
+        { error: "Failed to create order" },
+        { status: 500 },
+      );
+    }
+
+    createdOrderId = order.id;
+
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      customer_email: cleanText(customer.email) || undefined,
-      phone_number_collection: { enabled: true },
-      billing_address_collection: "auto",
-      line_items: lineItems,
-      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/cancel`,
+      customer_email: user.email ?? undefined,
+
+      line_items: [
+        {
+          price_data: {
+            currency,
+            product_data: {
+              name: product.title,
+            },
+            unit_amount: unitAmount,
+          },
+          quantity: 1,
+        },
+      ],
+
       metadata: {
+        order_id: order.id,
+        user_id: user.id,
+        product_id: product.id,
         source: "ryfio_checkout",
-        orderReferenceId: cleanMetadata(body?.orderReferenceId),
-        currency: cleanMetadata(body?.currency || "EUR"),
-        customerName: cleanMetadata(customer.fullName),
-        customerEmail: cleanMetadata(customer.email),
-        customerPhone: cleanMetadata(customer.phone),
-        shippingMethod: cleanMetadata(shipping.method || "standard"),
-        shippingAddress: cleanMetadata(customer.address),
-        shippingApartment: cleanMetadata(customer.apartment),
-        shippingCity: cleanMetadata(customer.city),
-        shippingPostalCode: cleanMetadata(customer.postalCode),
-        shippingCountry: cleanMetadata(customer.country),
       },
+
+      payment_intent_data: {
+        metadata: {
+          order_id: order.id,
+          user_id: user.id,
+          product_id: product.id,
+          source: "ryfio_checkout",
+        },
+      },
+
+      success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/cancel?order_id=${order.id}`,
     });
 
-    return NextResponse.json({ ok: true, url: session.url, checkoutUrl: session.url, sessionId: session.id });
-  } catch (error) {
-    console.error("CHECKOUT_STRIPE_ERROR:", error);
-    return NextResponse.json({ error: "Erro ao criar checkout Stripe." }, { status: 500 });
+    if (!session.url) {
+      throw new Error("Stripe did not return a checkout URL");
+    }
+
+    const { error: updateError } = await supabase
+      .from("orders")
+      .update({
+        stripe_session_id: session.id,
+      })
+      .eq("id", order.id)
+      .eq("user_id", user.id);
+
+    if (updateError) {
+      throw new Error("Failed to associate Stripe session");
+    }
+
+    return NextResponse.json({
+      url: session.url,
+      reused: false,
+      orderId: order.id,
+    });
+  } catch (error: unknown) {
+    console.error("CHECKOUT_ERROR", {
+      message:
+        error instanceof Error ? error.message : "Unknown error",
+      orderId: createdOrderId,
+    });
+
+    /*
+     * Não apagamos a order aqui.
+     * Mantemos o registo pendente para auditoria e recuperação.
+     */
+    return NextResponse.json(
+      { error: "Unable to create checkout session" },
+      { status: 500 },
+    );
   }
 }

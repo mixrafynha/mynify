@@ -55,6 +55,7 @@ import {
   CHECKOUT_STEP_SESSION_KEY,
   GELATO_COUNTRIES,
   createCheckoutRequestPayload,
+  createSecureCheckoutRequestPayload,
 } from "./_lib/checkout";
 import type {
   AddressSuggestion,
@@ -65,6 +66,7 @@ import type {
   ProductAvailabilityItem,
   Step,
   CheckoutRequestPayload,
+  SecureCheckoutRequestPayload,
 } from "./_lib/checkout";
 
 type GelatoDraftTestResult = {
@@ -714,7 +716,9 @@ export default function CheckoutPage() {
   };
 
 
-  const buildLiveCheckoutPayload = () =>
+  // Payload completo apenas para o teste interno da Gelato.
+  // Nunca deve ser usado para autorizar preços no Stripe.
+  const buildGelatoDraftPayload = () =>
     createCheckoutRequestPayload(
       form,
       items.map((item) => ({
@@ -723,6 +727,11 @@ export default function CheckoutPage() {
       })),
       shipping,
     );
+
+  // Payload mínimo para pagamento. O servidor recebe apenas os IDs do carrinho
+  // e recalcula produtos, variantes, quantidades, preços e envio.
+  const buildSecureCheckoutPayload = (): SecureCheckoutRequestPayload =>
+    createSecureCheckoutRequestPayload(form, items);
 
   const handleCheckout = async () => {
     if (!canPay || submitting) return;
@@ -737,7 +746,7 @@ export default function CheckoutPage() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildLiveCheckoutPayload()),
+        body: JSON.stringify(buildSecureCheckoutPayload()),
       });
 
       const data = await res.json().catch(() => null);
@@ -771,7 +780,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    const requestPayload: CheckoutRequestPayload = buildLiveCheckoutPayload();
+    const requestPayload: CheckoutRequestPayload = buildGelatoDraftPayload();
     const startedAt = performance.now();
 
     setTestingGelato(true);
