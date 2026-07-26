@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+
 import { fetcher } from "@/lib/fetcher";
 
 type AdminProduct = {
@@ -11,15 +12,30 @@ type AdminProduct = {
   discount_price?: number | string | null;
   currency?: string | null;
   image?: string | null;
-  images?: string[] | null;
+  images?: unknown[] | null;
   category?: string | null;
+  audience?: string | null;
+  is_new?: boolean | null;
+  is_hot?: boolean | null;
+  sales_count?: number | string | null;
   [key: string]: unknown;
 };
 
-function normalizeProducts(value: unknown): AdminProduct[] {
-  if (!Array.isArray(value)) return [];
+function extractProducts(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
 
-  return value
+  if (!payload || typeof payload !== "object") return [];
+
+  const source = payload as Record<string, unknown>;
+
+  if (Array.isArray(source.data)) return source.data;
+  if (Array.isArray(source.products)) return source.products;
+
+  return [];
+}
+
+function normalizeProducts(payload: unknown): AdminProduct[] {
+  return extractProducts(payload)
     .filter(
       (product): product is Record<string, unknown> =>
         Boolean(product) && typeof product === "object"
@@ -29,7 +45,7 @@ function normalizeProducts(value: unknown): AdminProduct[] {
       id: String(product.id ?? ""),
       title:
         typeof product.title === "string" && product.title.trim()
-          ? product.title
+          ? product.title.trim()
           : "Untitled",
     }))
     .filter((product) => Boolean(product.id));
@@ -38,6 +54,7 @@ function normalizeProducts(value: unknown): AdminProduct[] {
 export function useAdminDashboard() {
   const [user, setUser] = useState<any>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+
   const lastActionRef = useRef(0);
 
   useEffect(() => {
@@ -45,24 +62,31 @@ export function useAdminDashboard() {
 
     const loadUser = async () => {
       try {
-        const res = await fetch("/api/me", {
+        const response = await fetch("/api/me", {
           credentials: "include",
+          cache: "no-store",
         });
 
-        if (!res.ok) {
+        if (!response.ok) {
           if (mounted) setUser(null);
           return;
         }
 
-        const data = await res.json();
+        const data = await response.json();
 
         if (!mounted) return;
+
         setUser(data?.user ?? null);
-      } catch (err) {
-        console.error("Failed to load user:", err);
-        if (mounted) setUser(null);
+      } catch (error) {
+        console.error("Failed to load admin user:", error);
+
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
-        if (mounted) setLoadingUser(false);
+        if (mounted) {
+          setLoadingUser(false);
+        }
       }
     };
 
@@ -76,7 +100,12 @@ export function useAdminDashboard() {
   const isAdmin = user?.profile?.role === "admin";
   const shouldFetchProducts = !loadingUser && isAdmin;
 
-  const { data, isLoading, mutate } = useSWR(
+  const {
+    data: productsResponse,
+    isLoading,
+    error: productsError,
+    mutate,
+  } = useSWR(
     shouldFetchProducts ? "/api/admin/products" : null,
     fetcher,
     {
@@ -86,14 +115,16 @@ export function useAdminDashboard() {
   );
 
   const products = useMemo(
-    () => normalizeProducts(data?.data),
-    [data?.data]
+    () => normalizeProducts(productsResponse),
+    [productsResponse]
   );
 
   const deleteProduct = useCallback(
     async (id: string) => {
       const now = Date.now();
+
       if (now - lastActionRef.current < 500) return;
+
       lastActionRef.current = now;
 
       try {
@@ -103,12 +134,14 @@ export function useAdminDashboard() {
         });
 
         if (!response.ok) {
-          throw new Error(`Delete failed with status ${response.status}`);
+          throw new Error(
+            `Delete failed with status ${response.status}`
+          );
         }
 
         await mutate();
-      } catch (err) {
-        console.error("Delete failed:", err);
+      } catch (error) {
+        console.error("Delete failed:", error);
       }
     },
     [mutate]
@@ -122,9 +155,13 @@ export function useAdminDashboard() {
     user,
     isAdmin,
     loadingUser,
+
     products,
     isLoading,
+    productsError,
+
     deleteProduct,
+
     users,
     revenue,
     notifications,
