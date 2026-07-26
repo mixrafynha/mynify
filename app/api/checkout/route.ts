@@ -289,16 +289,19 @@ export async function POST(req: Request) {
         ]),
       );
 
-      const variantMap = new Map(
-        variants.map((variant) => [variant.id, variant]),
-      );
+     const variantMap = new Map(
+      variants.map((variant) => [variant.id, variant]),
+    );
 
-      const stripeLineItems: Array<
-        NonNullable<
-          Parameters<typeof stripe.checkout.sessions.create>[0]["line_items"]
-        >[number]
-      > = [];
+    type StripeSessionParams = NonNullable<
+      Parameters<typeof stripe.checkout.sessions.create>[0]
+    >;
 
+    type StripeLineItem = NonNullable<
+      StripeSessionParams["line_items"]
+    >[number];
+
+    const stripeLineItems: StripeLineItem[] = [];
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
