@@ -2,6 +2,7 @@
 
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
 
 export default function SidebarFooter({ user, expanded }: Props) {
   const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const profile = user?.profile ?? {};
   const username =
@@ -29,12 +31,28 @@ export default function SidebarFooter({ user, expanded }: Props) {
     "";
 
   const email = user?.email ?? "";
+  const maskedEmail = email ? `${email.charAt(0)}•••••` : "";
   const initial = username.charAt(0).toUpperCase();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
-    router.refresh();
+    if (loggingOut) return;
+
+    const confirmed = window.confirm("Queres mesmo sair da tua conta?");
+    if (!confirmed) return;
+
+    setLoggingOut(true);
+
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      router.replace("/login");
+      router.refresh();
+    } catch {
+      alert("Não foi possível terminar a sessão agora.");
+    } finally {
+      setLoggingOut(false);
+    }
   };
 
   return (
@@ -62,7 +80,7 @@ export default function SidebarFooter({ user, expanded }: Props) {
 
             {email && (
               <p className="truncate text-[11px] text-white/40">
-                {email}
+                {maskedEmail}
               </p>
             )}
           </div>
@@ -73,14 +91,15 @@ export default function SidebarFooter({ user, expanded }: Props) {
         type="button"
         onClick={handleLogout}
         aria-label="Sign out"
-        className="group flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 active:scale-[0.98]"
+        disabled={loggingOut}
+        className="group flex w-full items-center gap-3 rounded-2xl px-3.5 py-2.5 text-sm font-semibold text-red-300 transition-colors hover:bg-red-500/10 hover:text-red-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
       >
         <LogOut
           size={17}
           className="shrink-0 transition-transform group-hover:translate-x-0.5"
         />
 
-        {expanded && <span>Sign out</span>}
+        {expanded && <span>{loggingOut ? "Signing out..." : "Sign out"}</span>}
       </button>
     </div>
   );
