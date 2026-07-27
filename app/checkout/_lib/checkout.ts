@@ -69,6 +69,7 @@ export type CartVariant = {
 export type CartItem = {
   id: string;
   product_id: string;
+  currency?: string | null;
   base_product_id?: string | null;
   user_product_id?: string | null;
   baseProductId?: string | null;
@@ -410,10 +411,15 @@ function createItemReferenceId(item: CartItem, index: number): string {
 
 
 export function resolveCheckoutCurrency(items: CartItem[]): string {
+  const getItemCurrency = (item: CartItem) =>
+    typeof (item as { currency?: unknown }).currency === "string"
+      ? (item as { currency?: string }).currency
+      : null;
+
   const currencies = Array.from(
     new Set(
       items
-        .map((item) => String(item.currency || "").trim().toUpperCase())
+        .map((item) => String(getItemCurrency(item) || "").trim().toUpperCase())
         .filter(Boolean),
     ),
   );
