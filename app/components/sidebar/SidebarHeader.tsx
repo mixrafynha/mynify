@@ -53,8 +53,8 @@ export default function SidebarHeader({
           <Image
             src="/favicon.ico"
             alt="Ryfio"
-            width={46}
-            height={46}
+            width={48}
+            height={48}
             priority
             unoptimized
             draggable={false}
