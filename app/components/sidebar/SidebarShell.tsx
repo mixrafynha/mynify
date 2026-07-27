@@ -55,20 +55,22 @@ function SidebarShell({
   return (
     <aside
       style={asideStyle}
-      className="fixed left-0 top-0 z-50 hidden h-dvh flex-col bg-[#03030a] text-white transition-[width] duration-300 ease-[cubic-bezier(.2,.9,.2,1)] md:flex"
+      className="fixed left-0 top-0 z-50 hidden h-dvh overflow-hidden bg-[#03030a] text-white transition-[width] duration-300 ease-[cubic-bezier(.2,.9,.2,1)] md:flex"
     >
       <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-purple-400/14" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.10),transparent_34%)]" />
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-hidden">
         <SidebarHeader expanded={expanded} />
 
-        <SidebarMenu
-          menu={menu}
-          expanded={expanded}
-          onNavigate={onNavigate}
-          isAdmin={isAdmin}
-        />
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain [-ms-overflow-style:none] [scrollbar-gutter:stable] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/18">
+          <SidebarMenu
+            menu={menu}
+            expanded={expanded}
+            onNavigate={onNavigate}
+            isAdmin={isAdmin}
+          />
+        </div>
 
         <SidebarFooter user={user} expanded={expanded} />
       </div>
