@@ -59,6 +59,8 @@ type DesktopToolbarProps = {
 };
 
 const PANEL_WIDTH = 420;
+const PANEL_MIN_WIDTH = 320;
+const DESKTOP_NAV_WIDTH = 96;
 const MAX_FILE_SIZE = PRINT_IMAGE_LIMITS.maxBytes;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const TEXT_INSERT_LOCK_MS = 450;
@@ -111,6 +113,7 @@ export default function DesktopToolbar({
 
   const [activePanel, setActivePanel] = useState<Panel>(null);
   const [aiMounted, setAiMounted] = useState(false);
+  const panelWidth = `min(${PANEL_WIDTH}px,max(${PANEL_MIN_WIDTH}px,calc(100vw - ${DESKTOP_NAV_WIDTH}px)))`;
 
   useEffect(() => {
     if (activePanel === "ai") setAiMounted(true);
@@ -225,11 +228,11 @@ const handleUploadChange = useCallback(
         onChange={handleUploadChange}
       />
 
-      <aside className="hidden h-full shrink-0 overflow-visible bg-[#05050d] text-white md:flex">
-        <nav className="relative flex h-full w-[76px] shrink-0 flex-col items-center overflow-hidden border-r border-white/10 bg-[#070713]/88 shadow-[18px_0_60px_rgba(0,0,0,0.42)] backdrop-blur-3xl lg:w-[88px] xl:w-[96px]">
+      <aside className="hidden h-full shrink-0 overflow-hidden bg-[#05050d] text-white md:flex">
+        <nav className="relative flex h-full w-[76px] shrink-0 flex-col items-center overflow-hidden border-r border-white/10 bg-[#070713]/88 shadow-[12px_0_34px_rgba(0,0,0,0.28)] backdrop-blur-2xl [contain:layout_paint] lg:w-[88px] xl:w-[96px]">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.28),transparent_34%),radial-gradient(circle_at_20%_80%,rgba(236,72,153,0.14),transparent_32%),linear-gradient(180deg,rgba(255,255,255,0.055),transparent)]" />
 
-          <div className="relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden px-2 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden overscroll-contain px-2 py-3 [content-visibility:auto] [contain-intrinsic-size:720px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <div className="relative mb-4 h-1.5 w-12 shrink-0 self-center rounded-full bg-gradient-to-r from-violet-400 via-fuchsia-400 to-pink-400 shadow-[0_0_28px_rgba(217,70,239,0.55)]" />
 
             <NavGroup>
@@ -250,17 +253,17 @@ const handleUploadChange = useCallback(
         </nav>
 
         <section
-          className="relative h-full shrink-0 overflow-visible border-r border-white/10 bg-[#0b0c17]/92 shadow-[22px_0_70px_rgba(0,0,0,0.38)] backdrop-blur-3xl transition-[width,opacity,transform] duration-300 ease-out"
+          className="relative h-full shrink-0 overflow-hidden border-r border-white/10 bg-[#0b0c17]/92 shadow-[14px_0_40px_rgba(0,0,0,0.26)] backdrop-blur-2xl [contain:layout_paint] transition-[width,opacity] duration-200 ease-out"
           style={{
-            width: activePanel ? "min(420px,calc(100vw - 96px))" : 0,
+            width: activePanel ? panelWidth : 0,
             opacity: activePanel ? 1 : 0,
             pointerEvents: activePanel ? "auto" : "none",
           }}
         >
-          <div className="flex h-full flex-col overflow-hidden" style={{ width: "min(420px,calc(100vw - 96px))" }}>
+          <div className="flex h-full flex-col overflow-hidden" style={{ width: panelWidth }}>
             {panelInfo && <PanelHeader title={panelInfo.title} subtitle={panelInfo.subtitle} onClose={closePanel} />}
 
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.13),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.08),transparent_30%),#0b0c17] px-3 py-4 [scrollbar-width:thin] [scrollbar-color:rgba(168,85,247,.8)_transparent] lg:px-5 lg:py-5">
+            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.13),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.08),transparent_30%),#0b0c17] px-3 py-4 [content-visibility:auto] [contain-intrinsic-size:960px] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:px-5 lg:py-5">
               {aiMounted && (
                 <div className={activePanel === "ai" ? "block" : "hidden"}>
                   <AiPanel createElement={safeCreateElement} />
@@ -296,7 +299,7 @@ function PanelHeader({
         onClick={onClose}
         type="button"
         aria-label="Close panel"
-        className="absolute right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.09] text-white shadow-[0_14px_34px_rgba(0,0,0,0.36)] backdrop-blur-xl transition hover:scale-105 hover:bg-white/[0.16] active:scale-95"
+      className="absolute right-4 top-4 z-50 flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.09] text-white shadow-[0_10px_24px_rgba(0,0,0,0.28)] backdrop-blur-xl transition-transform duration-150 hover:scale-105 hover:bg-white/[0.16] active:scale-95"
       >
         <ChevronLeft size={20} strokeWidth={2.6} />
       </button>
@@ -342,7 +345,7 @@ function SideItem({
       onClick={disabled ? undefined : onClick}
       type="button"
       disabled={disabled}
-      className={`group relative flex h-[66px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[22px] border border-transparent px-1 text-[11px] font-semibold tracking-[-0.02em] transition-all duration-200 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 lg:h-[70px] ${
+      className={`group relative flex h-[66px] w-full flex-col items-center justify-center gap-1 overflow-hidden rounded-[22px] border border-transparent px-1 text-[11px] font-semibold tracking-[-0.02em] transition-[transform,background-color,border-color,color,box-shadow] duration-150 active:scale-[0.96] disabled:cursor-not-allowed disabled:opacity-35 lg:h-[70px] ${
         active
           ? "border-white/25 bg-white text-slate-950 shadow-[0_18px_44px_rgba(255,255,255,0.09)]"
           : "text-slate-400 hover:border-white/10 hover:bg-white/[0.065] hover:text-white"
@@ -362,7 +365,7 @@ function SideItem({
       )}
 
       <div
-        className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-[17px] transition-all duration-200 lg:h-11 lg:w-11 ${
+        className={`relative z-10 flex h-10 w-10 items-center justify-center rounded-[17px] transition-[transform,background-color,color,box-shadow] duration-150 lg:h-11 lg:w-11 ${
           active
             ? "bg-gradient-to-b from-violet-100 to-violet-200 text-violet-700 shadow-[0_10px_35px_rgba(139,92,246,0.25)]"
             : "group-hover:bg-violet-500/10 group-hover:text-violet-300"
