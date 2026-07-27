@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { syncGelatoCatalog } from "@/lib/gelato/catalog-sync";
+import { syncGelatoCatalogPage } from "@/lib/gelato/catalog-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,10 +40,11 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const result = await syncGelatoCatalog({
+    const result = await syncGelatoCatalogPage({
       productId: body?.productId,
       catalogUid: body?.catalogUid,
       attributeFilters: body?.attributeFilters,
+      gelatoProductUid: body?.gelatoProductUid,
     });
 
     return NextResponse.json({ ok: true, result });

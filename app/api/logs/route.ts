@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { firestore } from "@/lib/firebase-admin";
+import { getFirestoreAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 export const runtime = "nodejs";
@@ -59,6 +59,8 @@ function getClientIp(req: Request) {
 
 export async function POST(req: Request) {
   try {
+    const firestore = getFirestoreAdmin();
+
     if (!firestore) {
       return NextResponse.json({
         success: true,

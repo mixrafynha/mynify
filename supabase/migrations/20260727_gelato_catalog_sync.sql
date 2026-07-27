@@ -7,6 +7,7 @@ create table if not exists public.gelato_catalog_sync_state (
   last_synced_at timestamptz,
   last_success_at timestamptz,
   last_error text,
+  next_offset integer not null default 0,
   synced_products_count integer not null default 0,
   synced_colors_count integer not null default 0,
   synced_variants_count integer not null default 0,

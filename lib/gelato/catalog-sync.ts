@@ -2,6 +2,7 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
+const GELATO_REQUEST_TIMEOUT_MS = 15000;
 
 type JsonValue =
   | string
@@ -38,6 +39,13 @@ export type GelatoCatalogSearchProduct = {
   attributes: Record<string, string>;
   dimensions?: Record<string, { value: number; measureUnit: string }>;
   weight?: { value: number; measureUnit: string };
+};
+
+export type GelatoProductDetails = GelatoCatalogSearchProduct & {
+  countries?: unknown;
+  shippingMethods?: unknown;
+  availability?: unknown;
+  [key: string]: unknown;
 };
 
 export type GelatoCatalogSearchResponse = {
@@ -89,6 +97,8 @@ export type SyncCatalogInput = {
   productId: string;
   catalogUid: string;
   attributeFilters?: CatalogSyncFilters;
+  pageOffset?: number;
+  gelatoProductUid?: string;
 };
 
 export type SyncCatalogResult = {
@@ -96,6 +106,10 @@ export type SyncCatalogResult = {
   catalogUid: string;
   catalogTitle: string;
   filters: CatalogSyncFilters;
+  gelatoProductUid: string | null;
+  pageOffset: number;
+  nextOffset: number | null;
+  completed: boolean;
   productsFetched: number;
   colorsCreated: number;
   colorsUpdated: number;
@@ -132,15 +146,23 @@ function getGelatoApiKey(): string {
 }
 
 async function gelatoFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GELATO_REQUEST_TIMEOUT_MS);
+
   const response = await fetch(`${getGelatoProductBaseUrl()}${path}`, {
     ...init,
+    signal: init?.signal ?? controller.signal,
     headers: {
       "Content-Type": "application/json",
       "X-API-KEY": getGelatoApiKey(),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",
-  });
+  }).finally(() => clearTimeout(timeoutId));
+
+  if (controller.signal.aborted && !init?.signal) {
+    throw new Error(`Gelato request timed out after ${GELATO_REQUEST_TIMEOUT_MS}ms.`);
+  }
 
   const text = await response.text();
   let payload: unknown = null;
@@ -243,6 +265,24 @@ export function validateAttributeFilters(
   return filters;
 }
 
+function getDefaultPublishedFilter(catalog: GelatoCatalog): CatalogSyncFilters {
+  const stateAttribute = catalog.productAttributes.find(
+    (attribute) => attribute.productAttributeUid === "State",
+  );
+
+  if (!stateAttribute) return {};
+
+  const publishedValue = stateAttribute.values.find(
+    (value) => value.productAttributeValueUid === "Published",
+  );
+
+  if (!publishedValue) return {};
+
+  return {
+    State: ["Published"],
+  };
+}
+
 function humanizeAttributeValue(
   attributeMap: Map<string, GelatoCatalogAttribute>,
   attributeUid: string,
@@ -295,6 +335,113 @@ function detectSizeAttributeKey(attributes: Record<string, string>): string | nu
   );
 }
 
+function buildFamilyFilters(
+  attributes: Record<string, string>,
+  ignoreKeys: string[] = [],
+): CatalogSyncFilters {
+  const ignored = new Set(ignoreKeys);
+  const entries = Object.entries(attributes).flatMap(([attributeUid, valueUid]) => {
+    if (ignored.has(attributeUid)) return [];
+    if (!cleanString(valueUid)) return [];
+    return [[attributeUid, [valueUid.trim()]]];
+  });
+
+  return Object.fromEntries(entries);
+}
+
+const COLOR_HEX_MAP: Record<string, string> = {
+  banana: "#f4d35e",
+  berry: "#7b2cbf",
+  black: "#111111",
+  blue: "#2563eb",
+  boysenberry: "#7b2cbf",
+  brown: "#7c4a2d",
+  celadon: "#9dc3a7",
+  chambray: "#8fb3d9",
+  charcoal: "#4b4b4b",
+  citrus: "#f7c948",
+  cinnamon: "#a0522d",
+  clay: "#b5654d",
+  cream: "#f3ead7",
+  cumin: "#a67c52",
+  emerald: "#10b981",
+  forest: "#166534",
+  grape: "#7c3aed",
+  gray: "#9ca3af",
+  grey: "#9ca3af",
+  heather: "#b8b8b8",
+  ice: "#cfe8f3",
+  "ice-blue": "#cfe8f3",
+  ivory: "#f8f1e6",
+  khaki: "#c3b091",
+  kiwi: "#7cb342",
+  lemon: "#f7df1e",
+  magenta: "#d946ef",
+  maroon: "#7f1d1d",
+  melon: "#f4a261",
+  midnight: "#1f2937",
+  moss: "#6b8e23",
+  navy: "#1e3a8a",
+  "neon-blue": "#38bdf8",
+  olive: "#556b2f",
+  orchid: "#c084fc",
+  peony: "#f472b6",
+  periwinkle: "#8da2fb",
+  pink: "#f9a8d4",
+  plum: "#7e22ce",
+  red: "#dc2626",
+  sage: "#9caf88",
+  sandstone: "#c8b08a",
+  seafoam: "#9ee7cf",
+  silver: "#c0c0c0",
+  slate: "#64748b",
+  teal: "#0f766e",
+  "true-navy": "#1e293b",
+  violet: "#8b5cf6",
+  white: "#ffffff",
+  yellow: "#facc15",
+  "washed-denim": "#7aa7c7",
+  "island-reef": "#4fb3a7",
+};
+
+function getColorHex(colorName: string | null | undefined): string {
+  const normalized = normalizeKey(colorName ?? "");
+  return COLOR_HEX_MAP[normalized] ?? "#cccccc";
+}
+
+function deriveFamilyAttributes(attributes: Record<string, string>): Record<string, string> {
+  const familyKeysToDrop = new Set([
+    "Color",
+    "Colour",
+    "GarmentColor",
+    "ColorName",
+    "ColourName",
+    "FabricColor",
+    "Size",
+    "ApparelSize",
+    "PaperFormat",
+    "Format",
+    "Dimensions",
+    "ProductUid",
+    "productUid",
+    "VariantUid",
+    "variantUid",
+  ]);
+
+  return Object.fromEntries(
+    Object.entries(attributes).filter(([key, value]) => {
+      if (familyKeysToDrop.has(key)) return false;
+      return Boolean(cleanString(value));
+    }),
+  );
+}
+
+function deriveFamilyColorName(product: GelatoCatalogSearchProduct): string {
+  const attributeKey = detectColorAttributeKey(product.attributes);
+  if (!attributeKey) return "Default";
+  return cleanString(product.attributes[attributeKey]) ?? "Default";
+}
+
 function deriveColorData(
   product: GelatoCatalogSearchProduct,
   attributeMap: Map<string, GelatoCatalogAttribute>,
@@ -308,6 +455,7 @@ function deriveColorData(
   return {
     colorKey: normalizeKey(colorTitle),
     colorName: colorTitle,
+    colorHex: getColorHex(colorTitle),
     colorAttributeUid,
     colorValueUid,
   };
@@ -389,11 +537,17 @@ export async function searchGelatoCatalogProducts(
   );
 }
 
+export async function getGelatoProduct(productUid: string): Promise<GelatoProductDetails> {
+  validateProductUid(productUid);
+  return gelatoFetch<GelatoProductDetails>(`/v3/products/${productUid}`, { method: "GET" });
+}
+
 async function fetchAllGelatoProducts(
   catalogUid: string,
   filters: CatalogSyncFilters,
 ): Promise<GelatoCatalogSearchProduct[]> {
   const allProducts: GelatoCatalogSearchProduct[] = [];
+  const seenProductUids = new Set<string>();
   let offset = 0;
 
   while (true) {
@@ -405,19 +559,117 @@ async function fetchAllGelatoProducts(
     );
 
     const products = Array.isArray(page.products) ? page.products : [];
+    let addedCount = 0;
     for (const product of products) {
       validateProductUid(product.productUid);
+      if (seenProductUids.has(product.productUid)) {
+        continue;
+      }
+
+      seenProductUids.add(product.productUid);
       allProducts.push(product);
+      addedCount += 1;
     }
 
-    if (products.length < SEARCH_PAGE_SIZE) {
+    if (products.length < SEARCH_PAGE_SIZE || addedCount === 0) {
       break;
     }
 
     offset += SEARCH_PAGE_SIZE;
+
+    if (offset > 50_000) {
+      throw new Error("Gelato product search exceeded the safe pagination limit.");
+    }
   }
 
   return allProducts;
+}
+
+async function fetchGelatoProductPage(
+  catalogUid: string,
+  filters: CatalogSyncFilters,
+  offset: number,
+): Promise<GelatoCatalogSearchProduct[]> {
+  const page = await searchGelatoCatalogProducts(
+    catalogUid,
+    filters,
+    SEARCH_PAGE_SIZE,
+    offset,
+  );
+
+  const seenProductUids = new Set<string>();
+  const products = Array.isArray(page.products) ? page.products : [];
+  const uniqueProducts: GelatoCatalogSearchProduct[] = [];
+
+  for (const product of products) {
+    validateProductUid(product.productUid);
+    if (seenProductUids.has(product.productUid)) {
+      continue;
+    }
+
+    seenProductUids.add(product.productUid);
+    uniqueProducts.push(product);
+  }
+
+  return uniqueProducts;
+}
+
+function extractCountries(product: GelatoProductDetails): string[] {
+  const rawCountries = [
+    ...(Array.isArray(product.countries) ? product.countries : []),
+    ...(
+      isPlainObject(product.availability) && Array.isArray(product.availability.countries)
+        ? product.availability.countries
+        : []
+    ),
+  ];
+  if (!Array.isArray(rawCountries)) return [];
+
+  return rawCountries
+    .map((entry) => {
+      if (typeof entry === "string") return entry.trim();
+      if (isPlainObject(entry)) {
+        const code = cleanString(entry.countryIso ?? entry.iso ?? entry.code);
+        const name = cleanString(entry.country ?? entry.title ?? entry.name);
+        return code ?? name ?? null;
+      }
+      return null;
+    })
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractShippingMethods(product: GelatoProductDetails): JsonValue[] {
+  const rawShippingMethods = [
+    ...(Array.isArray(product.shippingMethods) ? product.shippingMethods : []),
+    ...(
+      isPlainObject(product.availability) && Array.isArray(product.availability.shippingMethods)
+        ? product.availability.shippingMethods
+        : []
+    ),
+  ];
+  if (!Array.isArray(rawShippingMethods)) return [];
+
+  return rawShippingMethods.map((method) => {
+    if (isPlainObject(method)) {
+      return {
+        ...method,
+        countries: Array.isArray(method.countries)
+          ? method.countries
+              .map((country) =>
+                typeof country === "string"
+                  ? country.trim()
+                  : isPlainObject(country)
+                    ? cleanString(country.countryIso ?? country.iso ?? country.code) ??
+                      cleanString(country.country ?? country.title ?? country.name)
+                    : null,
+              )
+              .filter((value): value is string => Boolean(value))
+          : [],
+      } as unknown as JsonValue;
+    }
+
+    return method as JsonValue;
+  });
 }
 
 function nowIso() {
@@ -470,7 +722,10 @@ export async function syncGelatoCatalog(
       getGelatoCatalog(catalogUid),
       getProductOrThrow(productId),
     ]);
-    const filters = validateAttributeFilters(catalog, rawFilters);
+    const filters = validateAttributeFilters(
+      catalog,
+      Object.keys(rawFilters).length > 0 ? rawFilters : getDefaultPublishedFilter(catalog),
+    );
     const attributeMap = buildAttributeTitleMap(catalog);
     const products = await fetchAllGelatoProducts(catalogUid, filters);
     const supabase = createSupabaseAdmin();
@@ -548,7 +803,7 @@ export async function syncGelatoCatalog(
       const colorPayload = {
         product_id: productId,
         color: firstEntry.colorName,
-        color_hex: existingColor?.color_hex ?? "#cccccc",
+        color_hex: existingColor?.color_hex ?? firstEntry.colorHex,
         mockup_front: existingColor?.mockup_front ?? existingProduct.image,
         mockup_back: existingColor?.mockup_back ?? null,
         thumbnail: existingColor?.thumbnail ?? existingProduct.image,
@@ -557,6 +812,9 @@ export async function syncGelatoCatalog(
         gelato_attributes: {
           attributeUid: firstEntry.colorAttributeUid,
           attributeValueUid: firstEntry.colorValueUid,
+          colorHex: firstEntry.colorHex,
+          countries: [],
+          shippingMethods: [],
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -594,10 +852,15 @@ export async function syncGelatoCatalog(
           sku: existingVariant?.sku ?? null,
           stock: existingVariant?.stock ?? 0,
           price: existingVariant?.price ?? null,
-          gelato_product_uid: entry.product.productUid,
+          gelato_product_uid: null,
           gelato_variant_uid: entry.product.productUid,
           gelato_variant_key: entry.variantKey,
-          gelato_attributes: entry.product.attributes,
+          gelato_attributes: {
+            ...entry.product.attributes,
+            colorHex: entry.colorHex,
+            countries: [],
+            shippingMethods: [],
+          },
           gelato_sync_status: "active",
           gelato_last_seen_at: startedAt,
         };
@@ -660,6 +923,10 @@ export async function syncGelatoCatalog(
       catalogUid: catalog.catalogUid,
       catalogTitle: catalog.title,
       filters,
+      gelatoProductUid: null,
+      pageOffset: 0,
+      nextOffset: null,
+      completed: true,
       productsFetched: products.length,
       colorsCreated,
       colorsUpdated,
@@ -682,6 +949,290 @@ export async function syncGelatoCatalog(
         result.colorsCreated + result.colorsUpdated - result.colorsDeactivated,
       synced_variants_count:
         result.variantsCreated + result.variantsUpdated - result.variantsDeactivated,
+    });
+
+    return result;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown Gelato sync error.";
+
+    await saveSyncState(productId, {
+      catalog_uid: catalogUid,
+      sync_status: "failed",
+      attribute_filters: rawFilters as unknown as JsonValue,
+      last_synced_at: startedAt,
+      last_error: message,
+    });
+
+    throw error;
+  }
+}
+
+export async function syncGelatoCatalogPage(
+  input: SyncCatalogInput,
+): Promise<SyncCatalogResult> {
+  const productId = cleanString(input.productId);
+  const catalogUid = cleanString(input.catalogUid);
+  const rawFilters = normalizeFilters(input.attributeFilters);
+  const pageOffset = Number.isFinite(input.pageOffset ?? 0)
+    ? Math.max(0, Number(input.pageOffset ?? 0))
+    : 0;
+  const gelatoProductUid = cleanString(input.gelatoProductUid);
+
+  if (!productId) throw new Error("Missing productId.");
+  if (!catalogUid) throw new Error("Missing catalogUid.");
+  if (gelatoProductUid) validateProductUid(gelatoProductUid);
+
+  await getProductOrThrow(productId);
+
+  const startedAt = nowIso();
+  const supabase = createSupabaseAdmin();
+
+  await saveSyncState(productId, {
+    catalog_uid: catalogUid,
+    sync_status: "running",
+    attribute_filters: rawFilters as unknown as JsonValue,
+    last_synced_at: startedAt,
+    last_error: null,
+  });
+
+  try {
+    const [catalog, existingProduct] = await Promise.all([
+      getGelatoCatalog(catalogUid),
+      getProductOrThrow(productId),
+    ]);
+    const filters = validateAttributeFilters(
+      catalog,
+      Object.keys(rawFilters).length > 0 ? rawFilters : getDefaultPublishedFilter(catalog),
+    );
+    const attributeMap = buildAttributeTitleMap(catalog);
+    const productDetails = gelatoProductUid ? await getGelatoProduct(gelatoProductUid) : null;
+    const products = gelatoProductUid
+      ? await fetchAllGelatoProducts(
+          catalogUid,
+          validateAttributeFilters(
+            catalog,
+            buildFamilyFilters(deriveFamilyAttributes(productDetails?.attributes ?? {})),
+          ),
+        )
+      : await fetchGelatoProductPage(catalogUid, filters, pageOffset);
+
+    const { data: colorRows, error: colorsError } = await supabase
+      .from("product_colors")
+      .select(
+        "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status",
+      )
+      .eq("product_id", productId);
+
+    if (colorsError) throw new Error(colorsError.message);
+
+    const existingColors = (colorRows ?? []) as ExistingColorRow[];
+    const existingColorIds = existingColors.map((color) => color.id);
+    let existingVariants: ExistingVariantRow[] = [];
+
+    if (existingColorIds.length > 0) {
+      const { data: variantRows, error: variantsError } = await supabase
+        .from("product_variants")
+        .select(
+          "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status",
+        )
+        .in("product_color_id", existingColorIds);
+
+      if (variantsError) throw new Error(variantsError.message);
+      existingVariants = (variantRows ?? []) as ExistingVariantRow[];
+    }
+
+    const colorsByKey = new Map<string, ExistingColorRow>();
+    for (const color of existingColors) {
+      const fallbackKey = normalizeKey(color.color ?? "");
+      const key = color.gelato_color_key ?? fallbackKey;
+      if (key && !colorsByKey.has(key)) {
+        colorsByKey.set(key, color);
+      }
+    }
+
+    const variantsByColorIdAndKey = new Map<string, ExistingVariantRow>();
+    for (const variant of existingVariants) {
+      const fallbackKey = normalizeKey(
+        `${variant.product_color_id}__${variant.size ?? variant.name ?? variant.id}`,
+      );
+      const key = `${variant.product_color_id}::${
+        variant.gelato_variant_key ?? fallbackKey
+      }`;
+      if (!variantsByColorIdAndKey.has(key)) {
+        variantsByColorIdAndKey.set(key, variant);
+      }
+    }
+
+    const touchedColorIds = new Set<string>();
+    const touchedVariantIds = new Set<string>();
+    const colorIdByKey = new Map<string, string>();
+
+    let colorsCreated = 0;
+    let colorsUpdated = 0;
+    let variantsCreated = 0;
+    let variantsUpdated = 0;
+
+    const groupedProducts = new Map<string, DerivedVariantEntry[]>();
+
+    for (const product of products) {
+      const variantMeta = variantKeyFromProduct(product, attributeMap);
+      const existing = groupedProducts.get(variantMeta.colorKey) ?? [];
+      existing.push({ ...variantMeta, product });
+      groupedProducts.set(variantMeta.colorKey, existing);
+    }
+
+    for (const [colorKey, entries] of groupedProducts.entries()) {
+      const firstEntry = entries[0];
+      const existingColor = colorsByKey.get(colorKey);
+      let colorId = existingColor?.id ?? null;
+      const colorPayload = {
+        product_id: productId,
+        color: firstEntry.colorName,
+        color_hex: existingColor?.color_hex ?? firstEntry.colorHex,
+        mockup_front: existingColor?.mockup_front ?? existingProduct.image,
+        mockup_back: existingColor?.mockup_back ?? null,
+        thumbnail: existingColor?.thumbnail ?? existingProduct.image,
+        position: existingColor?.position ?? colorIdByKey.size,
+        gelato_color_key: colorKey,
+        gelato_attributes: {
+          attributeUid: firstEntry.colorAttributeUid,
+          attributeValueUid: firstEntry.colorValueUid,
+          colorHex: firstEntry.colorHex,
+          countries: gelatoProductUid ? extractCountries(productDetails as GelatoProductDetails) : [],
+          shippingMethods: gelatoProductUid ? extractShippingMethods(productDetails as GelatoProductDetails) : [],
+        },
+        gelato_sync_status: "active",
+        gelato_last_seen_at: startedAt,
+      };
+
+      if (existingColor) {
+        const { error } = await supabase.from("product_colors").update(colorPayload).eq("id", existingColor.id);
+        if (error) throw new Error(error.message);
+        colorId = existingColor.id;
+        colorsUpdated += 1;
+      } else {
+        const { data, error } = await supabase
+          .from("product_colors")
+          .insert(colorPayload)
+          .select("id")
+          .single();
+        if (error || !data?.id) throw new Error(error?.message || "Failed to create product color.");
+        colorId = data.id as string;
+        colorsCreated += 1;
+      }
+
+      touchedColorIds.add(colorId);
+      colorIdByKey.set(colorKey, colorId);
+
+      for (const entry of entries) {
+        const variantLookupKey = `${colorId}::${entry.variantKey}`;
+        const existingVariant = variantsByColorIdAndKey.get(variantLookupKey);
+        const variantPayload = {
+          product_color_id: colorId,
+          size: entry.sizeName,
+          name: entry.sizeName,
+          sku: existingVariant?.sku ?? null,
+          stock: existingVariant?.stock ?? 0,
+          price: existingVariant?.price ?? null,
+          gelato_product_uid: entry.product.productUid,
+          gelato_variant_uid: entry.product.productUid,
+          gelato_variant_key: entry.variantKey,
+          gelato_attributes: {
+            ...entry.product.attributes,
+            colorHex: entry.colorHex,
+            countries: gelatoProductUid
+              ? extractCountries(productDetails as GelatoProductDetails)
+              : [],
+            shippingMethods: gelatoProductUid
+              ? extractShippingMethods(productDetails as GelatoProductDetails)
+              : [],
+          },
+          gelato_sync_status: "active",
+          gelato_last_seen_at: startedAt,
+        };
+
+        if (existingVariant) {
+          const { error } = await supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
+          if (error) throw new Error(error.message);
+          touchedVariantIds.add(existingVariant.id);
+          variantsUpdated += 1;
+        } else {
+          const { data, error } = await supabase
+            .from("product_variants")
+            .insert(variantPayload)
+            .select("id")
+            .single();
+          if (error || !data?.id) {
+            throw new Error(error?.message || "Failed to create product variant.");
+          }
+          touchedVariantIds.add(data.id as string);
+          variantsCreated += 1;
+        }
+      }
+    }
+
+    const hasMore = !gelatoProductUid && products.length >= SEARCH_PAGE_SIZE;
+    const nextOffset = hasMore ? pageOffset + SEARCH_PAGE_SIZE : null;
+    const completed = !hasMore;
+
+    if (completed) {
+      const staleColorIds = existingColors
+        .filter((color) => color.gelato_color_key && !touchedColorIds.has(color.id))
+        .map((color) => color.id);
+
+      const staleVariantIds = existingVariants
+        .filter(
+          (variant) => variant.gelato_variant_key && !touchedVariantIds.has(variant.id),
+        )
+        .map((variant) => variant.id);
+
+      if (staleColorIds.length > 0) {
+        const { error } = await supabase
+          .from("product_colors")
+          .update({ gelato_sync_status: "inactive" })
+          .in("id", staleColorIds);
+        if (error) throw new Error(error.message);
+      }
+
+      if (staleVariantIds.length > 0) {
+        const { error } = await supabase
+          .from("product_variants")
+          .update({ gelato_sync_status: "inactive" })
+          .in("id", staleVariantIds);
+        if (error) throw new Error(error.message);
+      }
+    }
+
+    const result: SyncCatalogResult = {
+      productId,
+      catalogUid: catalog.catalogUid,
+      catalogTitle: catalog.title,
+      filters,
+      gelatoProductUid: gelatoProductUid ?? null,
+      pageOffset,
+      nextOffset: gelatoProductUid ? null : nextOffset,
+      completed: gelatoProductUid ? true : completed,
+      productsFetched: products.length,
+      colorsCreated,
+      colorsUpdated,
+      colorsDeactivated: completed || gelatoProductUid ? 0 : 0,
+      variantsCreated,
+      variantsUpdated,
+      variantsDeactivated: completed || gelatoProductUid ? 0 : 0,
+    };
+
+    await saveSyncState(productId, {
+      catalog_uid: catalog.catalogUid,
+      catalog_title: catalog.title,
+      sync_status: gelatoProductUid || completed ? "success" : "running",
+      attribute_filters: filters as unknown as JsonValue,
+      last_synced_at: startedAt,
+      last_success_at: gelatoProductUid || completed ? nowIso() : null,
+      last_error: null,
+      synced_products_count: products.length,
+      synced_colors_count: colorsCreated + colorsUpdated,
+      synced_variants_count: variantsCreated + variantsUpdated,
     });
 
     return result;

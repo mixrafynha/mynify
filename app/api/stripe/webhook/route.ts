@@ -6,16 +6,19 @@ import Stripe from "stripe";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-if (!stripeSecretKey) {
-  throw new Error("Missing STRIPE_SECRET_KEY");
-}
+function getStripeClient() {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY?.trim();
 
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2026-04-22.dahlia",
-});
+  if (!stripeSecretKey) {
+    throw new Error("Missing STRIPE_SECRET_KEY");
+  }
+
+  return new Stripe(stripeSecretKey, {
+    apiVersion: "2026-04-22.dahlia",
+  });
+}
 
 function getServiceSupabase() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -128,6 +131,7 @@ export async function POST(req: Request) {
     );
   }
 
+  const stripe = getStripeClient();
   const body = await req.text();
   const headerStore = await headers();
   const signature = headerStore.get("stripe-signature");
