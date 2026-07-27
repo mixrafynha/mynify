@@ -31,7 +31,7 @@ export default function SidebarMenu({
   if (loading) return null;
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-8 space-y-9">
+    <div className="sidebar-menu space-y-9 px-3 py-8">
       {menu.map((item) => {
         if (!item?.path || !item?.icon) return null;
 

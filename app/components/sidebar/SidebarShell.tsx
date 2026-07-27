@@ -57,10 +57,50 @@ function SidebarShell({
       style={asideStyle}
       className="fixed left-0 top-0 z-50 hidden h-dvh flex-col bg-[#03030a] text-white transition-[width] duration-300 ease-[cubic-bezier(.2,.9,.2,1)] md:flex"
     >
+      <style jsx global>{`
+        .sidebar-scroll-shell::-webkit-scrollbar {
+          width: 10px;
+        }
+
+        .sidebar-scroll-shell::-webkit-scrollbar-track {
+          background: transparent;
+        }
+
+        .sidebar-scroll-shell::-webkit-scrollbar-thumb {
+          border-radius: 999px;
+          border: 2px solid transparent;
+          background-clip: padding-box;
+          background-color: rgba(255, 255, 255, 0.12);
+          transition: background-color 180ms ease, transform 180ms ease;
+        }
+
+        .sidebar-scroll-shell:hover::-webkit-scrollbar-thumb {
+          background-color: rgba(255, 255, 255, 0.22);
+        }
+
+        .sidebar-scroll-shell[data-expanded="true"] .sidebar-menu {
+          animation: sidebar-menu-in 240ms cubic-bezier(.2,.9,.2,1) both;
+        }
+
+        @keyframes sidebar-menu-in {
+          from {
+            opacity: 0;
+            transform: translate3d(-6px, 0, 0);
+          }
+          to {
+            opacity: 1;
+            transform: translate3d(0, 0, 0);
+          }
+        }
+      `}</style>
+
       <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-purple-400/14" />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.10),transparent_34%)]" />
 
-      <div className="relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/14 [&::-webkit-scrollbar-thumb:hover]:bg-white/24">
+      <div
+        data-expanded={expanded ? "true" : "false"}
+        className="sidebar-scroll-shell relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/12 [&::-webkit-scrollbar-thumb:hover]:bg-white/22"
+      >
         <SidebarHeader expanded={expanded} />
 
         <SidebarMenu
