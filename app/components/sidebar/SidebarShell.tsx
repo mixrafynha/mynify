@@ -59,7 +59,7 @@ function SidebarShell({
     >
       <style jsx global>{`
         .sidebar-scroll-shell::-webkit-scrollbar {
-          width: 10px;
+          width: 8px;
         }
 
         .sidebar-scroll-shell::-webkit-scrollbar-track {
@@ -68,24 +68,22 @@ function SidebarShell({
 
         .sidebar-scroll-shell::-webkit-scrollbar-thumb {
           border-radius: 999px;
-          border: 2px solid transparent;
-          background-clip: padding-box;
-          background-color: rgba(255, 255, 255, 0.12);
-          transition: background-color 180ms ease, transform 180ms ease;
+          background-color: rgba(255, 255, 255, 0.18);
+          transition: background-color 180ms ease;
         }
 
         .sidebar-scroll-shell:hover::-webkit-scrollbar-thumb {
-          background-color: rgba(255, 255, 255, 0.22);
+          background-color: rgba(255, 255, 255, 0.32);
         }
 
-        .sidebar-scroll-shell[data-expanded="true"] .sidebar-menu {
-          animation: sidebar-menu-in 240ms cubic-bezier(.2,.9,.2,1) both;
+        .sidebar-scroll-shell[data-expanded="true"] .sidebar-shell-content {
+          animation: sidebar-shell-in 220ms cubic-bezier(.2,.9,.2,1) both;
         }
 
-        @keyframes sidebar-menu-in {
+        @keyframes sidebar-shell-in {
           from {
             opacity: 0;
-            transform: translate3d(-6px, 0, 0);
+            transform: translate3d(-8px, 0, 0);
           }
           to {
             opacity: 1;
@@ -101,16 +99,18 @@ function SidebarShell({
         data-expanded={expanded ? "true" : "false"}
         className="sidebar-scroll-shell relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/12 [&::-webkit-scrollbar-thumb:hover]:bg-white/22"
       >
-        <SidebarHeader expanded={expanded} />
+        <div className="sidebar-shell-content flex min-h-0 flex-1 flex-col">
+          <SidebarHeader expanded={expanded} />
 
-        <SidebarMenu
-          menu={menu}
-          expanded={expanded}
-          onNavigate={onNavigate}
-          isAdmin={isAdmin}
-        />
+          <SidebarMenu
+            menu={menu}
+            expanded={expanded}
+            onNavigate={onNavigate}
+            isAdmin={isAdmin}
+          />
 
-        <SidebarFooter user={user} expanded={expanded} />
+          <SidebarFooter user={user} expanded={expanded} />
+        </div>
       </div>
 
       <button
