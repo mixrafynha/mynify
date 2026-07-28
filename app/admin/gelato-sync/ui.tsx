@@ -100,6 +100,7 @@ export default function GelatoSyncPage() {
         body: JSON.stringify({
           productId: productId.trim(),
           catalogUid: catalogUid.trim(),
+          productUid: gelatoProductUid.trim() || undefined,
           gelatoProductUid: gelatoProductUid.trim() || undefined,
           attributeFilters: parsedFilters ?? {},
         }),
