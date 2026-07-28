@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     const result = await syncGelatoCatalogPage({
       productId: body?.productId,
       catalogUid: body?.catalogUid,
+      productUid: body?.productUid,
       attributeFilters: body?.attributeFilters,
       gelatoProductUid: body?.gelatoProductUid,
     });

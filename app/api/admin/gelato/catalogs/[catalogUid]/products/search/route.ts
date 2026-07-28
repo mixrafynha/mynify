@@ -26,7 +26,9 @@ export async function POST(
     }
 
     const body = await request.json().catch(() => ({}));
-    const filters = body?.attributeFilters ?? {};
+    const productUid =
+      typeof body?.productUid === "string" ? body.productUid.trim() : "";
+    const filters = productUid ? {} : body?.attributeFilters ?? {};
     const limit = Number(body?.limit ?? 100);
     const offset = Number(body?.offset ?? 0);
 
@@ -39,10 +41,15 @@ export async function POST(
       Number.isFinite(offset) ? Math.max(0, offset) : 0,
     );
 
+    const products = productUid
+      ? result.products.filter((product) => product.productUid === productUid)
+      : result.products;
+
     return NextResponse.json({
       catalog,
       attributeFilters: validatedFilters,
       ...result,
+      products,
     });
   } catch (error) {
     return NextResponse.json(

@@ -96,6 +96,7 @@ type DerivedVariantEntry = ReturnType<typeof variantKeyFromProduct> & {
 export type SyncCatalogInput = {
   productId: string;
   catalogUid: string;
+  productUid?: string;
   attributeFilters?: CatalogSyncFilters;
   pageOffset?: number;
   gelatoProductUid?: string;
@@ -104,6 +105,7 @@ export type SyncCatalogInput = {
 export type SyncCatalogResult = {
   productId: string;
   catalogUid: string;
+  productUid?: string;
   catalogTitle: string;
   filters: CatalogSyncFilters;
   gelatoProductUid: string | null;
@@ -614,6 +616,65 @@ async function fetchGelatoProductPage(
   return uniqueProducts;
 }
 
+function dedupeProductsByUid(
+  products: GelatoCatalogSearchProduct[],
+): GelatoCatalogSearchProduct[] {
+  const seen = new Set<string>();
+  const unique: GelatoCatalogSearchProduct[] = [];
+
+  for (const product of products) {
+    if (seen.has(product.productUid)) continue;
+    seen.add(product.productUid);
+    unique.push(product);
+  }
+
+  return unique;
+}
+
+async function fetchExactGelatoProduct(
+  catalogUid: string,
+  productUid: string,
+  filters: CatalogSyncFilters,
+): Promise<{
+  matchedProduct: GelatoCatalogSearchProduct;
+  matchedFilters: CatalogSyncFilters;
+}> {
+  const normalizedFilters = Object.keys(filters).length ? filters : {};
+  const filteredProducts = dedupeProductsByUid(
+    await fetchAllGelatoProducts(catalogUid, normalizedFilters),
+  );
+  const exactFilteredMatch = filteredProducts.find(
+    (product) => product.productUid === productUid,
+  );
+
+  if (exactFilteredMatch) {
+    return {
+      matchedProduct: exactFilteredMatch,
+      matchedFilters: normalizedFilters,
+    };
+  }
+
+  if (Object.keys(normalizedFilters).length > 0) {
+    const unfilteredProducts = dedupeProductsByUid(
+      await fetchAllGelatoProducts(catalogUid, {}),
+    );
+    const exactUnfilteredMatch = unfilteredProducts.find(
+      (product) => product.productUid === productUid,
+    );
+
+    if (exactUnfilteredMatch) {
+      return {
+        matchedProduct: exactUnfilteredMatch,
+        matchedFilters: {},
+      };
+    }
+  }
+
+  throw new Error(
+    `Gelato product UID not found in catalog ${catalogUid}: ${productUid}`,
+  );
+}
+
 function extractCountries(product: GelatoProductDetails): string[] {
   const rawCountries = [
     ...(Array.isArray(product.countries) ? product.countries : []),
@@ -701,18 +762,24 @@ export async function syncGelatoCatalog(
 ): Promise<SyncCatalogResult> {
   const productId = cleanString(input.productId);
   const catalogUid = cleanString(input.catalogUid);
+  const productUid =
+    cleanString(input.productUid) ?? cleanString(input.gelatoProductUid);
   const rawFilters = normalizeFilters(input.attributeFilters);
 
   if (!productId) throw new Error("Missing productId.");
   if (!catalogUid) throw new Error("Missing catalogUid.");
+  if (!productUid) throw new Error("Missing productUid.");
 
+  validateProductUid(productUid);
   await getProductOrThrow(productId);
 
   const startedAt = nowIso();
+  const effectiveFilters: CatalogSyncFilters = {};
   await saveSyncState(productId, {
     catalog_uid: catalogUid,
+    product_uid: productUid,
     sync_status: "running",
-    attribute_filters: rawFilters as unknown as JsonValue,
+    attribute_filters: effectiveFilters as unknown as JsonValue,
     last_synced_at: startedAt,
     last_error: null,
   });
@@ -722,12 +789,13 @@ export async function syncGelatoCatalog(
       getGelatoCatalog(catalogUid),
       getProductOrThrow(productId),
     ]);
-    const filters = validateAttributeFilters(
-      catalog,
-      Object.keys(rawFilters).length > 0 ? rawFilters : getDefaultPublishedFilter(catalog),
+    const { matchedProduct, matchedFilters } = await fetchExactGelatoProduct(
+      catalogUid,
+      productUid,
+      effectiveFilters,
     );
     const attributeMap = buildAttributeTitleMap(catalog);
-    const products = await fetchAllGelatoProducts(catalogUid, filters);
+    const products = [matchedProduct];
     const supabase = createSupabaseAdmin();
 
     const { data: colorRows, error: colorsError } = await supabase
@@ -791,7 +859,15 @@ export async function syncGelatoCatalog(
     for (const product of products) {
       const variantMeta = variantKeyFromProduct(product, attributeMap);
       const existing = groupedProducts.get(variantMeta.colorKey) ?? [];
-      existing.push({ ...variantMeta, product });
+      const duplicateIndex = existing.findIndex(
+        (entry) => entry.product.productUid === product.productUid,
+      );
+      const nextEntry = { ...variantMeta, product };
+      if (duplicateIndex >= 0) {
+        existing[duplicateIndex] = nextEntry;
+      } else {
+        existing.push(nextEntry);
+      }
       groupedProducts.set(variantMeta.colorKey, existing);
     }
 
@@ -921,9 +997,10 @@ export async function syncGelatoCatalog(
     const result: SyncCatalogResult = {
       productId,
       catalogUid: catalog.catalogUid,
+      productUid: matchedProduct.productUid,
       catalogTitle: catalog.title,
-      filters,
-      gelatoProductUid: null,
+      filters: matchedFilters,
+      gelatoProductUid: matchedProduct.productUid,
       pageOffset: 0,
       nextOffset: null,
       completed: true,
@@ -938,9 +1015,10 @@ export async function syncGelatoCatalog(
 
     await saveSyncState(productId, {
       catalog_uid: catalog.catalogUid,
+      product_uid: matchedProduct.productUid,
       catalog_title: catalog.title,
       sync_status: "success",
-      attribute_filters: filters as unknown as JsonValue,
+      attribute_filters: matchedFilters as unknown as JsonValue,
       last_synced_at: startedAt,
       last_success_at: nowIso(),
       last_error: null,
@@ -958,8 +1036,9 @@ export async function syncGelatoCatalog(
 
     await saveSyncState(productId, {
       catalog_uid: catalogUid,
+      product_uid: productUid,
       sync_status: "failed",
-      attribute_filters: rawFilters as unknown as JsonValue,
+      attribute_filters: effectiveFilters as unknown as JsonValue,
       last_synced_at: startedAt,
       last_error: message,
     });
@@ -977,7 +1056,8 @@ export async function syncGelatoCatalogPage(
   const pageOffset = Number.isFinite(input.pageOffset ?? 0)
     ? Math.max(0, Number(input.pageOffset ?? 0))
     : 0;
-  const gelatoProductUid = cleanString(input.gelatoProductUid);
+  const gelatoProductUid =
+    cleanString(input.gelatoProductUid) ?? cleanString(input.productUid);
 
   if (!productId) throw new Error("Missing productId.");
   if (!catalogUid) throw new Error("Missing catalogUid.");
@@ -990,6 +1070,7 @@ export async function syncGelatoCatalogPage(
 
   await saveSyncState(productId, {
     catalog_uid: catalogUid,
+    product_uid: gelatoProductUid,
     sync_status: "running",
     attribute_filters: rawFilters as unknown as JsonValue,
     last_synced_at: startedAt,
@@ -1008,13 +1089,11 @@ export async function syncGelatoCatalogPage(
     const attributeMap = buildAttributeTitleMap(catalog);
     const productDetails = gelatoProductUid ? await getGelatoProduct(gelatoProductUid) : null;
     const products = gelatoProductUid
-      ? await fetchAllGelatoProducts(
-          catalogUid,
-          validateAttributeFilters(
-            catalog,
-            buildFamilyFilters(deriveFamilyAttributes(productDetails?.attributes ?? {})),
-          ),
-        )
+      ? [
+          (
+            await fetchExactGelatoProduct(catalogUid, gelatoProductUid, {})
+          ).matchedProduct,
+        ]
       : await fetchGelatoProductPage(catalogUid, filters, pageOffset);
 
     const { data: colorRows, error: colorsError } = await supabase
@@ -1078,7 +1157,15 @@ export async function syncGelatoCatalogPage(
     for (const product of products) {
       const variantMeta = variantKeyFromProduct(product, attributeMap);
       const existing = groupedProducts.get(variantMeta.colorKey) ?? [];
-      existing.push({ ...variantMeta, product });
+      const duplicateIndex = existing.findIndex(
+        (entry) => entry.product.productUid === product.productUid,
+      );
+      const nextEntry = { ...variantMeta, product };
+      if (duplicateIndex >= 0) {
+        existing[duplicateIndex] = nextEntry;
+      } else {
+        existing.push(nextEntry);
+      }
       groupedProducts.set(variantMeta.colorKey, existing);
     }
 
@@ -1207,6 +1294,7 @@ export async function syncGelatoCatalogPage(
     const result: SyncCatalogResult = {
       productId,
       catalogUid: catalog.catalogUid,
+      productUid: gelatoProductUid ?? undefined,
       catalogTitle: catalog.title,
       filters,
       gelatoProductUid: gelatoProductUid ?? null,
@@ -1224,6 +1312,7 @@ export async function syncGelatoCatalogPage(
 
     await saveSyncState(productId, {
       catalog_uid: catalog.catalogUid,
+      product_uid: gelatoProductUid,
       catalog_title: catalog.title,
       sync_status: gelatoProductUid || completed ? "success" : "running",
       attribute_filters: filters as unknown as JsonValue,
@@ -1242,6 +1331,7 @@ export async function syncGelatoCatalogPage(
 
     await saveSyncState(productId, {
       catalog_uid: catalogUid,
+      product_uid: gelatoProductUid,
       sync_status: "failed",
       attribute_filters: rawFilters as unknown as JsonValue,
       last_synced_at: startedAt,
