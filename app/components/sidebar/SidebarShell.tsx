@@ -59,7 +59,7 @@ function SidebarShell({
     >
       <style jsx global>{`
         .sidebar-scroll-shell::-webkit-scrollbar {
-          width: 8px;
+          width: 6px;
         }
 
         .sidebar-scroll-shell::-webkit-scrollbar-track {
@@ -68,27 +68,18 @@ function SidebarShell({
 
         .sidebar-scroll-shell::-webkit-scrollbar-thumb {
           border-radius: 999px;
-          background-color: rgba(255, 255, 255, 0.18);
-          transition: background-color 180ms ease;
+          border: 1px solid transparent;
+          background-color: rgba(255, 255, 255, 0.14);
+          background-clip: padding-box;
+          transition:
+            background-color 180ms ease,
+            opacity 180ms ease;
+          opacity: 0.72;
         }
 
         .sidebar-scroll-shell:hover::-webkit-scrollbar-thumb {
-          background-color: rgba(255, 255, 255, 0.32);
-        }
-
-        .sidebar-scroll-shell[data-expanded="true"] .sidebar-shell-content {
-          animation: sidebar-shell-in 220ms cubic-bezier(.2,.9,.2,1) both;
-        }
-
-        @keyframes sidebar-shell-in {
-          from {
-            opacity: 0;
-            transform: translate3d(-8px, 0, 0);
-          }
-          to {
-            opacity: 1;
-            transform: translate3d(0, 0, 0);
-          }
+          background-color: rgba(255, 255, 255, 0.24);
+          opacity: 1;
         }
       `}</style>
 
@@ -97,7 +88,7 @@ function SidebarShell({
 
       <div
         data-expanded={expanded ? "true" : "false"}
-        className="sidebar-scroll-shell relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable] [scrollbar-width:thin] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/12 [&::-webkit-scrollbar-thumb:hover]:bg-white/22"
+        className="sidebar-scroll-shell relative z-10 flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-color:rgba(255,255,255,0.24)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin] [-ms-overflow-style:none] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border [&::-webkit-scrollbar-thumb]:border-solid [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/15 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-thumb:hover]:bg-white/25"
       >
         <div className="sidebar-shell-content flex min-h-0 flex-1 flex-col">
           <SidebarHeader expanded={expanded} />
