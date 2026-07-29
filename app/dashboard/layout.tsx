@@ -12,6 +12,8 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const isProductsRoute = pathname === "/dashboard/product";
+  const isOrdersRoute = pathname === "/dashboard/orders";
+  const useDarkDashboardShell = isProductsRoute || isOrdersRoute;
 
   const hideSidebar =
     pathname === "/dashboard/create" ||
@@ -19,13 +21,13 @@ export default function DashboardLayout({
     pathname.startsWith("/dashboard/product/");
 
   return (
-    <div className={`min-h-screen ${isProductsRoute ? "bg-[#080814]" : "bg-[#f7f7fb]"}`}>
+    <div className={`min-h-screen ${useDarkDashboardShell ? "bg-[#080814]" : "bg-[#f7f7fb]"}`}>
       {!hideSidebar && <Sidebar />}
 
       <main
         className={`
           relative z-10 min-h-screen
-          ${isProductsRoute ? "bg-[#080814]" : ""}
+          ${useDarkDashboardShell ? "bg-[#080814]" : ""}
           transition-all duration-300
           ${hideSidebar ? "" : "md:ml-[var(--user-sidebar-width,270px)]"}
         `}
