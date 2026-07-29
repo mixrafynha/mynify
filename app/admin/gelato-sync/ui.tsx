@@ -21,6 +21,17 @@ type SyncState = {
   synced_variants_count?: number | null;
 };
 
+async function readResponsePayload(res: Response) {
+  const text = await res.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
+  }
+}
+
 export default function GelatoSyncPage() {
   const [catalogs, setCatalogs] = useState<CatalogItem[]>([]);
   const [productId, setProductId] = useState("");
@@ -55,7 +66,7 @@ export default function GelatoSyncPage() {
           credentials: "include",
           cache: "no-store",
         });
-        const json = await res.json();
+        const json = await readResponsePayload(res);
 
         if (!res.ok) throw new Error(json?.error || "Failed to load catalogs");
         if (active) setCatalogs(Array.isArray(json.catalogs) ? json.catalogs : []);
@@ -78,12 +89,14 @@ export default function GelatoSyncPage() {
       return;
     }
 
-    const res = await fetch(`/api/admin/gelato/catalog-sync?productId=${encodeURIComponent(productId.trim())}`, {
-      credentials: "include",
-      cache: "no-store",
-    });
-    const json = await res.json();
-    if (res.ok) setState(json.state ?? null);
+    try {
+      const res = await fetch(`/api/admin/gelato/catalog-sync?productId=${encodeURIComponent(productId.trim())}`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+      const json = await readResponsePayload(res);
+      if (res.ok) setState(json.state ?? null);
+    } catch {}
   }
 
   async function runSync() {
@@ -108,16 +121,16 @@ export default function GelatoSyncPage() {
         }),
       });
 
-      const json = await res.json();
+      const json = await readResponsePayload(res);
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Sync failed");
       }
 
       const lastPayload = json.result ?? json;
-      await loadState();
 
       setResult(JSON.stringify(lastPayload, null, 2));
       setMessage("Sync completed.");
+      void loadState();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {
