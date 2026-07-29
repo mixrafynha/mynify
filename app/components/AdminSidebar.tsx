@@ -42,6 +42,7 @@ export default function AdminSidebar() {
   const isMobile = useIsMobile();
 
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +55,8 @@ export default function AdminSidebar() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       setCollapsed(saved === "true");
     } catch {}
+
+    setSidebarHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -171,6 +174,7 @@ export default function AdminSidebar() {
           menu={menu}
           user={user}
           collapsed={collapsed}
+          transitionsReady={sidebarHydrated}
           isAdmin
           onNavigate={handleNav}
           onToggleCollapsed={toggleCollapsed}

@@ -28,6 +28,7 @@ const USER_MENU: SidebarMenuItem[] = [
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarHydrated, setSidebarHydrated] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const router = useRouter();
@@ -45,6 +46,8 @@ export default function Sidebar() {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       setCollapsed(saved === "true");
     } catch {}
+
+    setSidebarHydrated(true);
   }, []);
 
   useEffect(() => {
@@ -105,6 +108,7 @@ export default function Sidebar() {
           menu={menu}
           user={user}
           collapsed={collapsed}
+          transitionsReady={sidebarHydrated}
           onNavigate={handleNav}
           onToggleCollapsed={toggleCollapsed}
           width={SIDEBAR_WIDTH}

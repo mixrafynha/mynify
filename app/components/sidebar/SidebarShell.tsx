@@ -18,6 +18,7 @@ type SidebarShellProps = {
   menu: SidebarMenuItem[];
   user?: any;
   collapsed: boolean;
+  transitionsReady?: boolean;
   isAdmin?: boolean;
   onNavigate: (path: string) => void;
   onToggleCollapsed: () => void;
@@ -36,6 +37,7 @@ function SidebarShell({
   menu,
   user,
   collapsed,
+  transitionsReady = true,
   isAdmin = false,
   onNavigate,
   onToggleCollapsed,
@@ -55,7 +57,11 @@ function SidebarShell({
   return (
     <aside
       style={asideStyle}
-      className="fixed left-0 top-0 z-50 hidden h-dvh flex-col bg-[#03030a] text-white transition-[width] duration-300 ease-[cubic-bezier(.2,.9,.2,1)] md:flex"
+      className={`fixed left-0 top-0 z-50 hidden h-dvh flex-col bg-[#03030a] text-white md:flex ${
+        transitionsReady
+          ? "transition-[width] duration-300 ease-[cubic-bezier(.2,.9,.2,1)]"
+          : "transition-none"
+      }`}
     >
       <style jsx global>{`
         .sidebar-scroll-shell::-webkit-scrollbar {

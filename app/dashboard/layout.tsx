@@ -11,6 +11,7 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const isProductsRoute = pathname === "/dashboard/product";
 
   const hideSidebar =
     pathname === "/dashboard/create" ||
@@ -24,6 +25,7 @@ export default function DashboardLayout({
       <main
         className={`
           relative z-10 min-h-screen
+          ${isProductsRoute ? "bg-[#080814]" : ""}
           transition-all duration-300
           ${hideSidebar ? "" : "md:ml-[var(--user-sidebar-width,270px)]"}
         `}
