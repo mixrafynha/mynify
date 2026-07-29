@@ -757,9 +757,20 @@ async function saveSyncState(
     ...state,
   };
 
-  const { error } = await supabase
-    .from("gelato_catalog_sync_state")
-    .upsert(payload, { onConflict: "product_id" });
+  const upsertState = async (value: Record<string, JsonValue>) =>
+    supabase.from("gelato_catalog_sync_state").upsert(value, { onConflict: "product_id" });
+
+  let { error } = await upsertState(payload);
+
+  const missingProductUidColumn =
+    error?.message?.includes("Could not find the 'product_uid' column") ||
+    error?.message?.includes("column \"product_uid\" of relation \"gelato_catalog_sync_state\" does not exist");
+
+  if (error && missingProductUidColumn) {
+    const legacyPayload: Record<string, JsonValue> = { ...payload };
+    delete legacyPayload.product_uid;
+    ({ error } = await upsertState(legacyPayload));
+  }
 
   if (error) {
     throw new Error(error.message);
