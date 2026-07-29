@@ -905,7 +905,7 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
     normalizedPrices.push({
       country,
       quantity,
-      price: amount,
+      price: Number(amount.toFixed(2)),
       currency,
       pageCount: typeof price.pageCount === "number" ? price.pageCount : null,
     });
@@ -923,8 +923,15 @@ function extractCountriesFromPrices(prices: GelatoProductPrice[]): string[] {
 }
 
 function pickEditableVariantPrice(prices: GelatoProductPrice[]): number | null {
+  const preferredCountries = [
+    cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
+    "US",
+    "PT",
+  ].filter((country): country is string => Boolean(country));
+
   const validPrices = prices
     .map((price) => ({
+      country: cleanCountryIso(price.country),
       quantity: typeof price.quantity === "number" && Number.isFinite(price.quantity)
         ? price.quantity
         : Number.MAX_SAFE_INTEGER,
@@ -932,10 +939,24 @@ function pickEditableVariantPrice(prices: GelatoProductPrice[]): number | null {
         ? price.price
         : null,
     }))
-    .filter((price): price is { quantity: number; price: number } => price.price !== null)
-    .sort((left, right) => left.quantity - right.quantity);
+    .filter(
+      (price): price is { country: string | null; quantity: number; price: number } =>
+        price.price !== null,
+    );
 
-  const price = validPrices[0]?.price ?? null;
+  const preferredPrice = preferredCountries
+    .map((country) =>
+      validPrices
+        .filter((price) => price.country === country)
+        .sort((left, right) => left.quantity - right.quantity)[0],
+    )
+    .find(Boolean);
+
+  const fallbackPrice = [...validPrices].sort(
+    (left, right) => left.price - right.price || left.quantity - right.quantity,
+  )[0];
+
+  const price = (preferredPrice ?? fallbackPrice)?.price ?? null;
   return price === null ? null : Number(price.toFixed(2));
 }
 
