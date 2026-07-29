@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import {
+  fetchExactGelatoProduct,
   getGelatoCatalog,
   searchGelatoCatalogProducts,
   validateAttributeFilters,
@@ -34,22 +35,34 @@ export async function POST(
 
     const catalog = await getGelatoCatalog(catalogUid);
     const validatedFilters = validateAttributeFilters(catalog, filters);
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, limit)) : 100;
+    const safeOffset = Number.isFinite(offset) ? Math.max(0, offset) : 0;
+
+    if (productUid) {
+      const exact = await fetchExactGelatoProduct(catalogUid, productUid, {});
+
+      return NextResponse.json({
+        catalog,
+        attributeFilters: {},
+        products: [exact.matchedProduct],
+        hits: null,
+        total: 1,
+        limit: 1,
+        offset: 0,
+      });
+    }
+
     const result = await searchGelatoCatalogProducts(
       catalogUid,
       validatedFilters,
-      Number.isFinite(limit) ? Math.max(1, Math.min(100, limit)) : 100,
-      Number.isFinite(offset) ? Math.max(0, offset) : 0,
+      safeLimit,
+      safeOffset,
     );
-
-    const products = productUid
-      ? result.products.filter((product) => product.productUid === productUid)
-      : result.products;
 
     return NextResponse.json({
       catalog,
       attributeFilters: validatedFilters,
       ...result,
-      products,
     });
   } catch (error) {
     return NextResponse.json(

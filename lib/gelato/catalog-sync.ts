@@ -631,7 +631,7 @@ function dedupeProductsByUid(
   return unique;
 }
 
-async function fetchExactGelatoProduct(
+export async function fetchExactGelatoProduct(
   catalogUid: string,
   productUid: string,
   filters: CatalogSyncFilters,
@@ -673,6 +673,15 @@ async function fetchExactGelatoProduct(
   throw new Error(
     `Gelato product UID not found in catalog ${catalogUid}: ${productUid}`,
   );
+}
+
+function extractVariantUidFromAttributes(
+  attributes: Record<string, string>,
+): string | null {
+  const candidate = cleanString(attributes.VariantUid) ?? cleanString(attributes.variantUid);
+  if (!candidate) return null;
+  validateProductUid(candidate);
+  return candidate;
 }
 
 function extractCountries(product: GelatoProductDetails): string[] {
@@ -921,6 +930,7 @@ export async function syncGelatoCatalog(
       for (const entry of entries) {
         const variantLookupKey = `${colorId}::${entry.variantKey}`;
         const existingVariant = variantsByColorIdAndKey.get(variantLookupKey);
+        const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
         const variantPayload = {
           product_color_id: colorId,
           size: entry.sizeName,
@@ -928,8 +938,8 @@ export async function syncGelatoCatalog(
           sku: existingVariant?.sku ?? null,
           stock: existingVariant?.stock ?? 0,
           price: existingVariant?.price ?? null,
-          gelato_product_uid: null,
-          gelato_variant_uid: entry.product.productUid,
+          gelato_product_uid: entry.product.productUid,
+          gelato_variant_uid: gelatoVariantUid,
           gelato_variant_key: entry.variantKey,
           gelato_attributes: {
             ...entry.product.attributes,
@@ -1063,6 +1073,15 @@ export async function syncGelatoCatalogPage(
   if (!catalogUid) throw new Error("Missing catalogUid.");
   if (gelatoProductUid) validateProductUid(gelatoProductUid);
 
+  if (gelatoProductUid) {
+    return syncGelatoCatalog({
+      productId,
+      catalogUid,
+      productUid: gelatoProductUid,
+      gelatoProductUid,
+    });
+  }
+
   await getProductOrThrow(productId);
 
   const startedAt = nowIso();
@@ -1087,14 +1106,7 @@ export async function syncGelatoCatalogPage(
       Object.keys(rawFilters).length > 0 ? rawFilters : getDefaultPublishedFilter(catalog),
     );
     const attributeMap = buildAttributeTitleMap(catalog);
-    const productDetails = gelatoProductUid ? await getGelatoProduct(gelatoProductUid) : null;
-    const products = gelatoProductUid
-      ? [
-          (
-            await fetchExactGelatoProduct(catalogUid, gelatoProductUid, {})
-          ).matchedProduct,
-        ]
-      : await fetchGelatoProductPage(catalogUid, filters, pageOffset);
+    const products = await fetchGelatoProductPage(catalogUid, filters, pageOffset);
 
     const { data: colorRows, error: colorsError } = await supabase
       .from("product_colors")
@@ -1186,8 +1198,8 @@ export async function syncGelatoCatalogPage(
           attributeUid: firstEntry.colorAttributeUid,
           attributeValueUid: firstEntry.colorValueUid,
           colorHex: firstEntry.colorHex,
-          countries: gelatoProductUid ? extractCountries(productDetails as GelatoProductDetails) : [],
-          shippingMethods: gelatoProductUid ? extractShippingMethods(productDetails as GelatoProductDetails) : [],
+          countries: [],
+          shippingMethods: [],
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -1215,6 +1227,7 @@ export async function syncGelatoCatalogPage(
       for (const entry of entries) {
         const variantLookupKey = `${colorId}::${entry.variantKey}`;
         const existingVariant = variantsByColorIdAndKey.get(variantLookupKey);
+        const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
         const variantPayload = {
           product_color_id: colorId,
           size: entry.sizeName,
@@ -1223,17 +1236,13 @@ export async function syncGelatoCatalogPage(
           stock: existingVariant?.stock ?? 0,
           price: existingVariant?.price ?? null,
           gelato_product_uid: entry.product.productUid,
-          gelato_variant_uid: entry.product.productUid,
+          gelato_variant_uid: gelatoVariantUid,
           gelato_variant_key: entry.variantKey,
           gelato_attributes: {
             ...entry.product.attributes,
             colorHex: entry.colorHex,
-            countries: gelatoProductUid
-              ? extractCountries(productDetails as GelatoProductDetails)
-              : [],
-            shippingMethods: gelatoProductUid
-              ? extractShippingMethods(productDetails as GelatoProductDetails)
-              : [],
+            countries: [],
+            shippingMethods: [],
           },
           gelato_sync_status: "active",
           gelato_last_seen_at: startedAt,
@@ -1294,30 +1303,30 @@ export async function syncGelatoCatalogPage(
     const result: SyncCatalogResult = {
       productId,
       catalogUid: catalog.catalogUid,
-      productUid: gelatoProductUid ?? undefined,
+      productUid: undefined,
       catalogTitle: catalog.title,
       filters,
-      gelatoProductUid: gelatoProductUid ?? null,
+      gelatoProductUid: null,
       pageOffset,
-      nextOffset: gelatoProductUid ? null : nextOffset,
-      completed: gelatoProductUid ? true : completed,
+      nextOffset,
+      completed,
       productsFetched: products.length,
       colorsCreated,
       colorsUpdated,
-      colorsDeactivated: completed || gelatoProductUid ? 0 : 0,
+      colorsDeactivated: 0,
       variantsCreated,
       variantsUpdated,
-      variantsDeactivated: completed || gelatoProductUid ? 0 : 0,
+      variantsDeactivated: 0,
     };
 
     await saveSyncState(productId, {
       catalog_uid: catalog.catalogUid,
-      product_uid: gelatoProductUid,
+      product_uid: null,
       catalog_title: catalog.title,
-      sync_status: gelatoProductUid || completed ? "success" : "running",
+      sync_status: completed ? "success" : "running",
       attribute_filters: filters as unknown as JsonValue,
       last_synced_at: startedAt,
-      last_success_at: gelatoProductUid || completed ? nowIso() : null,
+      last_success_at: completed ? nowIso() : null,
       last_error: null,
       synced_products_count: products.length,
       synced_colors_count: colorsCreated + colorsUpdated,

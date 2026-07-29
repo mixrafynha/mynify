@@ -92,6 +92,8 @@ export default function GelatoSyncPage() {
     setMessage(null);
     setResult(null);
 
+    const exactProductUid = gelatoProductUid.trim();
+
     try {
       const res = await fetch("/api/admin/gelato/catalog-sync", {
         method: "POST",
@@ -100,9 +102,9 @@ export default function GelatoSyncPage() {
         body: JSON.stringify({
           productId: productId.trim(),
           catalogUid: catalogUid.trim(),
-          productUid: gelatoProductUid.trim() || undefined,
-          gelatoProductUid: gelatoProductUid.trim() || undefined,
-          attributeFilters: parsedFilters ?? {},
+          productUid: exactProductUid || undefined,
+          gelatoProductUid: exactProductUid || undefined,
+          attributeFilters: exactProductUid ? undefined : parsedFilters ?? {},
         }),
       });
 
