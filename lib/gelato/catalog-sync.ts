@@ -496,6 +496,20 @@ function variantKeyFromProduct(
   };
 }
 
+function buildGelatoVariantSku(entry: DerivedVariantEntry): string {
+  const manufacturerSku =
+    cleanString(entry.product.attributes.ApparelManufacturerSKU) ??
+    cleanString(entry.product.attributes.ManufacturerSKU);
+  const uidTail = entry.product.productUid.split("_").pop();
+  const suffix = normalizeKey(manufacturerSku ?? uidTail ?? entry.product.productUid)
+    .toUpperCase()
+    .replace(/-/g, "");
+  const color = entry.colorKey.toUpperCase().replace(/-/g, "");
+  const size = entry.sizeKey.toUpperCase().replace(/-/g, "");
+
+  return `RYFIO-GELATO-${color}-${size}-${suffix}`.slice(0, 96);
+}
+
 async function getProductOrThrow(productId: string): Promise<ProductRow> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
@@ -929,12 +943,13 @@ export async function syncGelatoCatalog(
           variantsByColorIdAndKey.get(variantLookupKey) ??
           variantsByGelatoProductUid.get(entry.product.productUid);
         const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
+        const variantName = `${entry.colorName} / ${entry.sizeName}`;
         const variantPayload = {
           product_color_id: colorId,
           size: entry.sizeName,
-          name: entry.sizeName,
-          sku: existingVariant?.sku ?? null,
-          stock: existingVariant?.stock ?? 0,
+          name: variantName,
+          sku: buildGelatoVariantSku(entry),
+          stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
           price: existingVariant?.price ?? null,
           gelato_product_uid: entry.product.productUid,
           gelato_variant_uid: gelatoVariantUid,
@@ -1232,12 +1247,13 @@ export async function syncGelatoCatalogPage(
           variantsByColorIdAndKey.get(variantLookupKey) ??
           variantsByGelatoProductUid.get(entry.product.productUid);
         const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
+        const variantName = `${entry.colorName} / ${entry.sizeName}`;
         const variantPayload = {
           product_color_id: colorId,
           size: entry.sizeName,
-          name: entry.sizeName,
-          sku: existingVariant?.sku ?? null,
-          stock: existingVariant?.stock ?? 0,
+          name: variantName,
+          sku: buildGelatoVariantSku(entry),
+          stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
           price: existingVariant?.price ?? null,
           gelato_product_uid: entry.product.productUid,
           gelato_variant_uid: gelatoVariantUid,
