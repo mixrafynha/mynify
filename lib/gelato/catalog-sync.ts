@@ -639,40 +639,20 @@ export async function fetchExactGelatoProduct(
   matchedProduct: GelatoCatalogSearchProduct;
   matchedFilters: CatalogSyncFilters;
 }> {
-  const normalizedFilters = Object.keys(filters).length ? filters : {};
-  const filteredProducts = dedupeProductsByUid(
-    await fetchAllGelatoProducts(catalogUid, normalizedFilters),
-  );
-  const exactFilteredMatch = filteredProducts.find(
-    (product) => product.productUid === productUid,
-  );
+  validateCatalogUid(catalogUid);
+  validateProductUid(productUid);
 
-  if (exactFilteredMatch) {
-    return {
-      matchedProduct: exactFilteredMatch,
-      matchedFilters: normalizedFilters,
-    };
-  }
+  const product = await getGelatoProduct(productUid);
+  const attributes = isPlainObject(product.attributes) ? product.attributes : {};
 
-  if (Object.keys(normalizedFilters).length > 0) {
-    const unfilteredProducts = dedupeProductsByUid(
-      await fetchAllGelatoProducts(catalogUid, {}),
-    );
-    const exactUnfilteredMatch = unfilteredProducts.find(
-      (product) => product.productUid === productUid,
-    );
-
-    if (exactUnfilteredMatch) {
-      return {
-        matchedProduct: exactUnfilteredMatch,
-        matchedFilters: {},
-      };
-    }
-  }
-
-  throw new Error(
-    `Gelato product UID not found in catalog ${catalogUid}: ${productUid}`,
-  );
+  return {
+    matchedProduct: {
+      ...product,
+      productUid,
+      attributes: attributes as Record<string, string>,
+    },
+    matchedFilters: {},
+  };
 }
 
 function extractVariantUidFromAttributes(
