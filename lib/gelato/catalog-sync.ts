@@ -1070,47 +1070,22 @@ async function saveSyncState(
   }
 }
 
-function shouldIgnoreMissingGelatoPriceTables(error: { message?: string } | null) {
+function shouldIgnoreMissingGelatoMarketTable(error: { message?: string } | null) {
   const message = error?.message ?? "";
   return (
-    message.includes("gelato_variant_prices") ||
-    message.includes("gelato_variant_shipping_methods") ||
+    message.includes("gelato_variant_markets") ||
     message.includes("schema cache")
   );
 }
 
-async function saveGelatoVariantPriceData(input: {
-  productId: string;
-  productColorId: string;
+async function saveGelatoVariantMarkets(input: {
   productVariantId: string;
-  gelatoProductUid: string;
-  gelatoVariantUid: string | null;
   prices: GelatoProductPrice[];
   shippingMethodsByCountry: Record<string, GelatoShipmentMethod[]>;
   syncedAt: string;
 }) {
   const supabase = createSupabaseAdmin();
-
-  const { error: deletePricesError } = await supabase
-    .from("gelato_variant_prices")
-    .delete()
-    .eq("product_variant_id", input.productVariantId);
-  if (deletePricesError && !shouldIgnoreMissingGelatoPriceTables(deletePricesError)) {
-    throw new Error(deletePricesError.message);
-  }
-
-  const { error: deleteShippingMethodsError } = await supabase
-    .from("gelato_variant_shipping_methods")
-    .delete()
-    .eq("product_variant_id", input.productVariantId);
-  if (
-    deleteShippingMethodsError &&
-    !shouldIgnoreMissingGelatoPriceTables(deleteShippingMethodsError)
-  ) {
-    throw new Error(deleteShippingMethodsError.message);
-  }
-
-  const normalizedPrices = input.prices
+  const marketRows = input.prices
     .map((price) => {
       const country = cleanCountryIso(price.country);
       const currency = cleanString(price.currency)?.toUpperCase() ?? null;
@@ -1125,69 +1100,67 @@ async function saveGelatoVariantPriceData(input: {
 
       return {
         product_variant_id: input.productVariantId,
-        product_id: input.productId,
-        product_color_id: input.productColorId,
-        gelato_product_uid: input.gelatoProductUid,
-        gelato_variant_uid: input.gelatoVariantUid,
-        country_iso: country,
+        country_code: country,
         currency,
-        quantity,
+        is_available: true,
         product_price: Number(amount.toFixed(2)),
-        raw_price: amount,
-        page_count: typeof price.pageCount === "number" ? price.pageCount : -1,
-        raw_payload: price as unknown as JsonValue,
-        last_synced_at: input.syncedAt,
+        shipping_price: null,
+        total_cost: null,
+        quantity,
+        availability_source: "gelato_product_prices",
+        price_source: "gelato_product_prices",
+        fulfillment_country: null,
+        unavailable_reason: null,
+        price_checked_at: input.syncedAt,
+        availability_checked_at: input.syncedAt,
         updated_at: nowIso(),
       };
     })
-    .filter((price): price is NonNullable<typeof price> => Boolean(price));
+    .filter((market): market is NonNullable<typeof market> => Boolean(market));
 
-  if (normalizedPrices.length > 0) {
+  if (marketRows.length > 0) {
     const { error } = await supabase
-      .from("gelato_variant_prices")
-      .upsert(normalizedPrices, {
-        onConflict: "product_variant_id,country_iso,currency,quantity,page_count",
+      .from("gelato_variant_markets")
+      .upsert(marketRows, {
+        onConflict: "product_variant_id,country_code,currency,quantity",
       });
-    if (error && !shouldIgnoreMissingGelatoPriceTables(error)) {
+    if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
       throw new Error(error.message);
     }
   }
 
-  const normalizedShippingMethods = Object.entries(input.shippingMethodsByCountry).flatMap(
-    ([country, methods]) =>
-      methods.flatMap((method) => {
-        const shipmentMethodUid = normalizeShipmentMethodUid(method);
-        if (!shipmentMethodUid) return [];
-
-        return [{
-          product_variant_id: input.productVariantId,
-          product_id: input.productId,
-          product_color_id: input.productColorId,
-          gelato_product_uid: input.gelatoProductUid,
-          gelato_variant_uid: input.gelatoVariantUid,
-          country_iso: country,
-          shipment_method_uid: shipmentMethodUid,
-          shipment_method_name: normalizeShipmentMethodName(method),
-          supports_tracking:
-            typeof method.supportsTracking === "boolean"
-              ? method.supportsTracking
-              : typeof method.trackingSupported === "boolean"
-                ? method.trackingSupported
-                : null,
-          raw_payload: method as unknown as JsonValue,
-          last_synced_at: input.syncedAt,
-          updated_at: nowIso(),
-        }];
-      }),
+  const countriesWithShippingMethods = new Set(
+    Object.entries(input.shippingMethodsByCountry)
+      .filter(([, methods]) => methods.length > 0)
+      .map(([country]) => country),
   );
+  const unavailableRows = Object.keys(input.shippingMethodsByCountry)
+    .filter((country) => !countriesWithShippingMethods.has(country))
+    .map((country) => ({
+      product_variant_id: input.productVariantId,
+      country_code: country,
+      currency: "EUR",
+      is_available: false,
+      product_price: null,
+      shipping_price: null,
+      total_cost: null,
+      quantity: 1,
+      availability_source: "gelato_shipment_methods",
+      price_source: null,
+      fulfillment_country: null,
+      unavailable_reason: "No Gelato shipment method returned for this country.",
+      price_checked_at: null,
+      availability_checked_at: input.syncedAt,
+      updated_at: nowIso(),
+    }));
 
-  if (normalizedShippingMethods.length > 0) {
+  if (unavailableRows.length > 0) {
     const { error } = await supabase
-      .from("gelato_variant_shipping_methods")
-      .upsert(normalizedShippingMethods, {
-        onConflict: "product_variant_id,country_iso,shipment_method_uid",
+      .from("gelato_variant_markets")
+      .upsert(unavailableRows, {
+        onConflict: "product_variant_id,country_code,currency,quantity",
       });
-    if (error && !shouldIgnoreMissingGelatoPriceTables(error)) {
+    if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
       throw new Error(error.message);
     }
   }
@@ -1425,12 +1398,8 @@ export async function syncGelatoCatalog(
             .eq("id", existingVariant.id);
           if (error) throw new Error(error.message);
           touchedVariantIds.add(existingVariant.id);
-          await saveGelatoVariantPriceData({
-            productId,
-            productColorId: colorId,
+          await saveGelatoVariantMarkets({
             productVariantId: existingVariant.id,
-            gelatoProductUid: entry.product.productUid,
-            gelatoVariantUid,
             prices: gelatoPriceRows,
             shippingMethodsByCountry,
             syncedAt: startedAt,
@@ -1447,12 +1416,8 @@ export async function syncGelatoCatalog(
           }
           const productVariantId = data.id as string;
           touchedVariantIds.add(productVariantId);
-          await saveGelatoVariantPriceData({
-            productId,
-            productColorId: colorId,
+          await saveGelatoVariantMarkets({
             productVariantId,
-            gelatoProductUid: entry.product.productUid,
-            gelatoVariantUid,
             prices: gelatoPriceRows,
             shippingMethodsByCountry,
             syncedAt: startedAt,
