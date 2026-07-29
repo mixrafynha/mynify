@@ -6,6 +6,8 @@ const DEFAULT_GELATO_SHIPMENT_BASE_URL = "https://shipment.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
 const GELATO_REQUEST_TIMEOUT_MS = 15000;
 const GELATO_COUNTRY_FETCH_CONCURRENCY = 8;
+const DEFAULT_GELATO_PRICE_MARKUP_PERCENT = 0;
+const DEFAULT_GELATO_PRICE_MARKUP_AMOUNT = 0;
 
 type JsonValue =
   | string
@@ -162,6 +164,15 @@ function cleanSizeValue(value: unknown): string | null {
   const cleaned = cleanString(value);
   if (!cleaned) return null;
   return cleaned.length <= 4 ? cleaned.toUpperCase() : cleaned;
+}
+
+function cleanNumber(value: unknown): number | null {
+  const number = typeof value === "number" ? value : Number(cleanString(value));
+  return Number.isFinite(number) ? number : null;
+}
+
+function roundMoney(value: number): number {
+  return Number(value.toFixed(2));
 }
 
 function cleanBaseUrl(value: string) {
@@ -957,7 +968,25 @@ function pickEditableVariantPrice(prices: GelatoProductPrice[]): number | null {
   )[0];
 
   const price = (preferredPrice ?? fallbackPrice)?.price ?? null;
-  return price === null ? null : Number(price.toFixed(2));
+  return price === null ? null : roundMoney(price);
+}
+
+function getGelatoMarkupPercent(): number {
+  return cleanNumber(process.env.GELATO_PRICE_MARKUP_PERCENT) ??
+    DEFAULT_GELATO_PRICE_MARKUP_PERCENT;
+}
+
+function getGelatoMarkupAmount(): number {
+  return cleanNumber(process.env.GELATO_PRICE_MARKUP_AMOUNT) ??
+    DEFAULT_GELATO_PRICE_MARKUP_AMOUNT;
+}
+
+function applyGelatoVariantMarkup(basePrice: number | null): number | null {
+  if (basePrice === null) return null;
+
+  const percent = Math.max(0, getGelatoMarkupPercent());
+  const amount = Math.max(0, getGelatoMarkupAmount());
+  return roundMoney(basePrice * (1 + percent / 100) + amount);
 }
 
 function normalizeShipmentMethodUid(method: GelatoShipmentMethod): string | null {
@@ -1218,7 +1247,8 @@ export async function syncGelatoCatalog(
       ...extractShippingMethods(matchedProductDetails),
       ...normalizeGelatoShippingMethodsByCountry(shippingMethodsByCountry),
     ];
-    const editableVariantPrice = pickEditableVariantPrice(gelatoPriceRows);
+    const gelatoBaseVariantPrice = pickEditableVariantPrice(gelatoPriceRows);
+    const editableVariantPrice = applyGelatoVariantMarkup(gelatoBaseVariantPrice);
     const gelatoProductName = getGelatoProductName(matchedProductDetails);
     const gelatoAvailable = isGelatoProductAvailable(matchedProductDetails);
     const supabase = createSupabaseAdmin();
@@ -1322,6 +1352,10 @@ export async function syncGelatoCatalog(
           notSupportedCountries,
           shippingMethods,
           gelatoPrices,
+          gelatoBaseVariantPrice,
+          gelatoRetailVariantPrice: editableVariantPrice,
+          gelatoMarkupPercent: getGelatoMarkupPercent(),
+          gelatoMarkupAmount: getGelatoMarkupAmount(),
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -1377,6 +1411,10 @@ export async function syncGelatoCatalog(
             notSupportedCountries,
             shippingMethods,
             gelatoPrices,
+            gelatoBaseVariantPrice,
+            gelatoRetailVariantPrice: editableVariantPrice,
+            gelatoMarkupPercent: getGelatoMarkupPercent(),
+            gelatoMarkupAmount: getGelatoMarkupAmount(),
           },
           gelato_sync_status: "active",
           gelato_available: gelatoAvailable,
