@@ -43,6 +43,8 @@ export type GelatoCatalogSearchProduct = {
 
 export type GelatoProductDetails = GelatoCatalogSearchProduct & {
   countries?: unknown;
+  supportedCountries?: unknown;
+  notSupportedCountries?: unknown;
   shippingMethods?: unknown;
   availability?: unknown;
   [key: string]: unknown;
@@ -682,6 +684,7 @@ function extractVariantUidFromAttributes(
 function extractCountries(product: GelatoProductDetails): string[] {
   const rawCountries = [
     ...(Array.isArray(product.countries) ? product.countries : []),
+    ...(Array.isArray(product.supportedCountries) ? product.supportedCountries : []),
     ...(
       isPlainObject(product.availability) && Array.isArray(product.availability.countries)
         ? product.availability.countries
@@ -700,6 +703,16 @@ function extractCountries(product: GelatoProductDetails): string[] {
       }
       return null;
     })
+    .filter((value): value is string => Boolean(value));
+}
+
+function extractNotSupportedCountries(product: GelatoProductDetails): string[] {
+  const rawCountries = Array.isArray(product.notSupportedCountries)
+    ? product.notSupportedCountries
+    : [];
+
+  return rawCountries
+    .map((entry) => (typeof entry === "string" ? entry.trim() : null))
     .filter((value): value is string => Boolean(value));
 }
 
@@ -746,7 +759,7 @@ async function saveSyncState(
   state: Record<string, JsonValue>,
 ) {
   const supabase = createSupabaseAdmin();
-  const payload = {
+  const payload: Record<string, JsonValue> = {
     product_id: productId,
     updated_at: nowIso(),
     ...state,
@@ -761,9 +774,19 @@ async function saveSyncState(
     error?.message?.includes("Could not find the 'product_uid' column") ||
     error?.message?.includes("column \"product_uid\" of relation \"gelato_catalog_sync_state\" does not exist");
 
-  if (error && missingProductUidColumn) {
+  const missingCountriesColumn =
+    error?.message?.includes("Could not find the 'countries' column") ||
+    error?.message?.includes("column \"countries\" of relation \"gelato_catalog_sync_state\" does not exist");
+
+  const missingShippingMethodsColumn =
+    error?.message?.includes("Could not find the 'shipping_methods' column") ||
+    error?.message?.includes("column \"shipping_methods\" of relation \"gelato_catalog_sync_state\" does not exist");
+
+  if (error && (missingProductUidColumn || missingCountriesColumn || missingShippingMethodsColumn)) {
     const legacyPayload: Record<string, JsonValue> = { ...payload };
     delete legacyPayload.product_uid;
+    delete legacyPayload.countries;
+    delete legacyPayload.shipping_methods;
     ({ error } = await upsertState(legacyPayload));
   }
 
@@ -811,6 +834,11 @@ export async function syncGelatoCatalog(
     );
     const attributeMap = buildAttributeTitleMap(catalog);
     const products = [matchedProduct];
+    const supportedCountries = extractCountries(matchedProduct as GelatoProductDetails);
+    const notSupportedCountries = extractNotSupportedCountries(
+      matchedProduct as GelatoProductDetails,
+    );
+    const shippingMethods = extractShippingMethods(matchedProduct as GelatoProductDetails);
     const supabase = createSupabaseAdmin();
 
     const { data: colorRows, error: colorsError } = await supabase
@@ -908,8 +936,9 @@ export async function syncGelatoCatalog(
           attributeUid: firstEntry.colorAttributeUid,
           attributeValueUid: firstEntry.colorValueUid,
           colorHex: firstEntry.colorHex,
-          countries: [],
-          shippingMethods: [],
+          countries: supportedCountries,
+          notSupportedCountries,
+          shippingMethods,
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -957,8 +986,9 @@ export async function syncGelatoCatalog(
           gelato_attributes: {
             ...entry.product.attributes,
             colorHex: entry.colorHex,
-            countries: [],
-            shippingMethods: [],
+            countries: supportedCountries,
+            notSupportedCountries,
+            shippingMethods,
           },
           gelato_sync_status: "active",
           gelato_last_seen_at: startedAt,
@@ -1045,6 +1075,8 @@ export async function syncGelatoCatalog(
       last_synced_at: startedAt,
       last_success_at: nowIso(),
       last_error: null,
+      countries: supportedCountries as unknown as JsonValue,
+      shipping_methods: shippingMethods as unknown as JsonValue,
       synced_products_count: result.productsFetched,
       synced_colors_count:
         result.colorsCreated + result.colorsUpdated - result.colorsDeactivated,
