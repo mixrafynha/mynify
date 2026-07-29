@@ -322,6 +322,7 @@ function detectSizeAttributeKey(attributes: Record<string, string>): string | nu
   const preferredKeys = [
     "Size",
     "ApparelSize",
+    "GarmentSize",
     "PaperFormat",
     "Format",
     "Dimensions",
@@ -833,6 +834,7 @@ export async function syncGelatoCatalog(
     }
 
     const variantsByColorIdAndKey = new Map<string, ExistingVariantRow>();
+    const variantsByGelatoProductUid = new Map<string, ExistingVariantRow>();
     for (const variant of existingVariants) {
       const fallbackKey = normalizeKey(
         `${variant.product_color_id}__${variant.size ?? variant.name ?? variant.id}`,
@@ -842,6 +844,9 @@ export async function syncGelatoCatalog(
       }`;
       if (!variantsByColorIdAndKey.has(key)) {
         variantsByColorIdAndKey.set(key, variant);
+      }
+      if (variant.gelato_product_uid && !variantsByGelatoProductUid.has(variant.gelato_product_uid)) {
+        variantsByGelatoProductUid.set(variant.gelato_product_uid, variant);
       }
     }
 
@@ -920,7 +925,9 @@ export async function syncGelatoCatalog(
 
       for (const entry of entries) {
         const variantLookupKey = `${colorId}::${entry.variantKey}`;
-        const existingVariant = variantsByColorIdAndKey.get(variantLookupKey);
+        const existingVariant =
+          variantsByColorIdAndKey.get(variantLookupKey) ??
+          variantsByGelatoProductUid.get(entry.product.productUid);
         const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
         const variantPayload = {
           product_color_id: colorId,
@@ -1134,6 +1141,7 @@ export async function syncGelatoCatalogPage(
     }
 
     const variantsByColorIdAndKey = new Map<string, ExistingVariantRow>();
+    const variantsByGelatoProductUid = new Map<string, ExistingVariantRow>();
     for (const variant of existingVariants) {
       const fallbackKey = normalizeKey(
         `${variant.product_color_id}__${variant.size ?? variant.name ?? variant.id}`,
@@ -1143,6 +1151,9 @@ export async function syncGelatoCatalogPage(
       }`;
       if (!variantsByColorIdAndKey.has(key)) {
         variantsByColorIdAndKey.set(key, variant);
+      }
+      if (variant.gelato_product_uid && !variantsByGelatoProductUid.has(variant.gelato_product_uid)) {
+        variantsByGelatoProductUid.set(variant.gelato_product_uid, variant);
       }
     }
 
@@ -1217,7 +1228,9 @@ export async function syncGelatoCatalogPage(
 
       for (const entry of entries) {
         const variantLookupKey = `${colorId}::${entry.variantKey}`;
-        const existingVariant = variantsByColorIdAndKey.get(variantLookupKey);
+        const existingVariant =
+          variantsByColorIdAndKey.get(variantLookupKey) ??
+          variantsByGelatoProductUid.get(entry.product.productUid);
         const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
         const variantPayload = {
           product_color_id: colorId,
