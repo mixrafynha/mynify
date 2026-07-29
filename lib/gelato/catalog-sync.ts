@@ -1,4 +1,5 @@
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import { GELATO_COUNTRIES } from "@/app/checkout/_lib/checkout";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
@@ -127,6 +128,17 @@ function cleanString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function cleanCountryIso(value: unknown): string | null {
+  const cleaned = cleanString(value)?.toUpperCase();
+  return cleaned && /^[A-Z]{2}$/.test(cleaned) ? cleaned : null;
+}
+
+function cleanSizeValue(value: unknown): string | null {
+  const cleaned = cleanString(value);
+  if (!cleaned) return null;
+  return cleaned.length <= 4 ? cleaned.toUpperCase() : cleaned;
 }
 
 function cleanBaseUrl(value: string) {
@@ -473,6 +485,7 @@ function deriveSizeData(
   const sizeAttributeUid = detectSizeAttributeKey(product.attributes);
   const sizeValueUid = sizeAttributeUid ? product.attributes[sizeAttributeUid] : null;
   const sizeTitle =
+    cleanSizeValue(sizeValueUid) ||
     humanizeAttributeValue(attributeMap, sizeAttributeUid ?? "", sizeValueUid) ||
     product.productUid;
 
@@ -693,17 +706,17 @@ function extractCountries(product: GelatoProductDetails): string[] {
   ];
   if (!Array.isArray(rawCountries)) return [];
 
-  return rawCountries
+  return Array.from(new Set(rawCountries
     .map((entry) => {
-      if (typeof entry === "string") return entry.trim();
+      if (typeof entry === "string") return cleanCountryIso(entry);
       if (isPlainObject(entry)) {
-        const code = cleanString(entry.countryIso ?? entry.iso ?? entry.code);
+        const code = cleanCountryIso(entry.countryIso ?? entry.iso ?? entry.code);
         const name = cleanString(entry.country ?? entry.title ?? entry.name);
         return code ?? name ?? null;
       }
       return null;
     })
-    .filter((value): value is string => Boolean(value));
+    .filter((value): value is string => Boolean(value))));
 }
 
 function extractNotSupportedCountries(product: GelatoProductDetails): string[] {
@@ -711,9 +724,24 @@ function extractNotSupportedCountries(product: GelatoProductDetails): string[] {
     ? product.notSupportedCountries
     : [];
 
-  return rawCountries
-    .map((entry) => (typeof entry === "string" ? entry.trim() : null))
-    .filter((value): value is string => Boolean(value));
+  return Array.from(new Set(rawCountries
+    .map((entry) => cleanCountryIso(entry))
+    .filter((value): value is string => Boolean(value))));
+}
+
+function resolveSupportedCountries(product: GelatoProductDetails): string[] {
+  const explicitCountries = extractCountries(product);
+  if (explicitCountries.length > 0) return explicitCountries;
+
+  const notSupportedCountries = new Set(extractNotSupportedCountries(product));
+  if (notSupportedCountries.size === 0) return [];
+
+  return GELATO_COUNTRIES
+    .map((country) => cleanCountryIso(country.iso))
+    .filter((iso): iso is string => {
+      if (!iso) return false;
+      return !notSupportedCountries.has(iso);
+    });
 }
 
 function extractShippingMethods(product: GelatoProductDetails): JsonValue[] {
@@ -748,6 +776,24 @@ function extractShippingMethods(product: GelatoProductDetails): JsonValue[] {
 
     return method as JsonValue;
   });
+}
+
+function getGelatoProductName(product: GelatoProductDetails): string | null {
+  return (
+    cleanString(product.title) ??
+    cleanString(product.name) ??
+    cleanString(product.productName)
+  );
+}
+
+function isGelatoProductAvailable(product: GelatoProductDetails): boolean {
+  const status =
+    cleanString(product.attributes?.ProductStatus) ??
+    cleanString(product.attributes?.State) ??
+    cleanString(product.status) ??
+    cleanString(product.state);
+
+  return /^(activated|active|published|available)$/i.test(status ?? "");
 }
 
 function nowIso() {
@@ -834,11 +880,14 @@ export async function syncGelatoCatalog(
     );
     const attributeMap = buildAttributeTitleMap(catalog);
     const products = [matchedProduct];
-    const supportedCountries = extractCountries(matchedProduct as GelatoProductDetails);
+    const matchedProductDetails = matchedProduct as GelatoProductDetails;
+    const supportedCountries = resolveSupportedCountries(matchedProductDetails);
     const notSupportedCountries = extractNotSupportedCountries(
-      matchedProduct as GelatoProductDetails,
+      matchedProductDetails,
     );
-    const shippingMethods = extractShippingMethods(matchedProduct as GelatoProductDetails);
+    const shippingMethods = extractShippingMethods(matchedProductDetails);
+    const gelatoProductName = getGelatoProductName(matchedProductDetails);
+    const gelatoAvailable = isGelatoProductAvailable(matchedProductDetails);
     const supabase = createSupabaseAdmin();
 
     const { data: colorRows, error: colorsError } = await supabase
@@ -971,7 +1020,9 @@ export async function syncGelatoCatalog(
         const existingVariant =
           variantsByColorIdAndKey.get(variantLookupKey) ??
           variantsByGelatoProductUid.get(entry.product.productUid);
-        const gelatoVariantUid = extractVariantUidFromAttributes(entry.product.attributes);
+        const gelatoVariantUid =
+          extractVariantUidFromAttributes(entry.product.attributes) ??
+          entry.product.productUid;
         const variantName = `${entry.colorName} / ${entry.sizeName}`;
         const variantPayload = {
           product_color_id: colorId,
@@ -981,6 +1032,8 @@ export async function syncGelatoCatalog(
           stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
           price: existingVariant?.price ?? null,
           gelato_product_uid: entry.product.productUid,
+          gelato_product_name: gelatoProductName,
+          gelato_catalog_uid: catalog.catalogUid,
           gelato_variant_uid: gelatoVariantUid,
           gelato_variant_key: entry.variantKey,
           gelato_attributes: {
@@ -991,6 +1044,8 @@ export async function syncGelatoCatalog(
             shippingMethods,
           },
           gelato_sync_status: "active",
+          gelato_available: gelatoAvailable,
+          gelato_last_synced_at: startedAt,
           gelato_last_seen_at: startedAt,
         };
 
