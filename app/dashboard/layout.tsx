@@ -19,7 +19,7 @@ export default function DashboardLayout({
     pathname.startsWith("/dashboard/product/");
 
   return (
-    <div className="min-h-screen bg-[#f7f7fb]">
+    <div className={`min-h-screen ${isProductsRoute ? "bg-[#080814]" : "bg-[#f7f7fb]"}`}>
       {!hideSidebar && <Sidebar />}
 
       <main

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Home, Package, Users, DollarSign, Settings, BarChart3, type LucideIcon } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -50,13 +50,26 @@ export default function AdminSidebar() {
   const isAuthRoute = pathname === "/login" || pathname === "/signup";
   const menu = useMemo(() => ADMIN_MENU, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    let nextCollapsed = false;
+
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      setCollapsed(saved === "true");
+      nextCollapsed = saved === "true";
     } catch {}
 
-    setSidebarHydrated(true);
+    setCollapsed(nextCollapsed);
+
+    document.documentElement.style.setProperty(
+      "--admin-sidebar-width",
+      nextCollapsed ? `${SIDEBAR_WIDTH.collapsed}px` : `${SIDEBAR_WIDTH.expanded}px`
+    );
+
+    const frame = window.requestAnimationFrame(() => {
+      setSidebarHydrated(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {

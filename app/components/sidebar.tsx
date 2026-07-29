@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { Home, Package, Tag, Truck, Settings, User, type LucideIcon } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
 
@@ -41,13 +41,26 @@ export default function Sidebar() {
 
   const menu = useMemo(() => USER_MENU, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    let nextCollapsed = false;
+
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
-      setCollapsed(saved === "true");
+      nextCollapsed = saved === "true";
     } catch {}
 
-    setSidebarHydrated(true);
+    setCollapsed(nextCollapsed);
+
+    document.documentElement.style.setProperty(
+      "--user-sidebar-width",
+      nextCollapsed ? `${SIDEBAR_WIDTH.collapsed}px` : `${SIDEBAR_WIDTH.expanded}px`
+    );
+
+    const frame = window.requestAnimationFrame(() => {
+      setSidebarHydrated(true);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
