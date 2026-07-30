@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
 type CatalogItem = {
@@ -37,22 +37,12 @@ export default function GelatoSyncPage() {
   const [productId, setProductId] = useState("");
   const [catalogUid, setCatalogUid] = useState("apparel");
   const [gelatoProductUid, setGelatoProductUid] = useState("");
-  const [filters, setFilters] = useState("{}");
   const [state, setState] = useState<SyncState | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
-
-  const parsedFilters = useMemo(() => {
-    try {
-      const value = JSON.parse(filters);
-      return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-    } catch {
-      return null;
-    }
-  }, [filters]);
 
   useEffect(() => {
     let active = true;
@@ -99,7 +89,7 @@ export default function GelatoSyncPage() {
     } catch {}
   }
 
-  async function runSync() {
+  async function runFamilySync() {
     setSyncing(true);
     setError(null);
     setMessage(null);
@@ -108,16 +98,14 @@ export default function GelatoSyncPage() {
     const exactProductUid = gelatoProductUid.trim();
 
     try {
-      const res = await fetch("/api/admin/gelato/catalog-sync", {
+      const res = await fetch("/api/admin/gelato-sync/family", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           productId: productId.trim(),
           catalogUid: catalogUid.trim(),
-          productUid: exactProductUid || undefined,
-          gelatoProductUid: exactProductUid || undefined,
-          attributeFilters: exactProductUid ? undefined : parsedFilters ?? {},
+          referenceProductUid: exactProductUid,
         }),
       });
 
@@ -129,7 +117,7 @@ export default function GelatoSyncPage() {
       const lastPayload = json.result ?? json;
 
       setResult(JSON.stringify(lastPayload, null, 2));
-      setMessage("Sync completed.");
+      setMessage("Family sync completed.");
       void loadState();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
@@ -197,34 +185,24 @@ export default function GelatoSyncPage() {
             </datalist>
             <button
               type="button"
-              onClick={() => void runSync()}
+              onClick={() => void runFamilySync()}
               disabled={syncing || !productId.trim() || !gelatoProductUid.trim()}
               className="mt-2 inline-flex h-12 items-center gap-2 rounded-2xl bg-black px-4 text-sm font-black text-white transition disabled:cursor-not-allowed disabled:opacity-50"
             >
               {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-              Sync
+              Encontrar e sincronizar família
             </button>
           </div>
           <p className="mt-2 text-xs font-semibold text-black/35">
-            Podes escrever o UID manualmente ou escolher pelas sugestões do Gelato.
+            Introduz o UID de referência da Gelato para sincronizar toda a família.
           </p>
           <p className="mt-1 text-xs font-semibold text-black/35">
-            Este modo faz sync apenas do produto Gelato exato e grava também os países e dados de entrega devolvidos pela API.
+            Este modo encontra a família completa, sincroniza variantes, cores e mercados, e marca ausentes como missing.
           </p>
         </div>
 
-        <div className="lg:col-span-2">
-          <label className="text-xs font-black uppercase tracking-[0.18em] text-black/35">
-            Attribute filters JSON
-          </label>
-          <textarea
-            value={filters}
-            onChange={(e) => setFilters(e.target.value)}
-            className="mt-2 min-h-28 w-full rounded-[24px] border border-black/10 bg-black/[0.02] p-4 font-mono text-xs text-black outline-none"
-          />
-          <p className={`mt-2 text-xs font-semibold ${parsedFilters ? "text-black/40" : "text-rose-600"}`}>
-            {parsedFilters ? "JSON valid." : "Invalid JSON."}
-          </p>
+        <div className="lg:col-span-2 rounded-[24px] border border-dashed border-black/10 bg-black/[0.02] p-4 text-xs font-semibold text-black/45">
+          O sync de família usa apenas o UID de referência Gelato para descobrir toda a família.
         </div>
       </section>
 
