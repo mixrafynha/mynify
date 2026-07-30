@@ -1192,6 +1192,14 @@ function shouldIgnoreMissingGelatoMarketTable(error: { message?: string } | null
   );
 }
 
+function shouldIgnoreMissingGelatoFamilyKeyColumn(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    message.includes("gelato_family_key") ||
+    message.includes("schema cache")
+  );
+}
+
 function isMissingGelatoMarketConflictConstraint(error: { message?: string } | null) {
   return (error?.message ?? "").includes(
     "there is no unique or exclusion constraint matching the ON CONFLICT specification",
@@ -1415,6 +1423,12 @@ export async function syncGelatoProductFamily(
   const explicitSupportedCountries = supportedCountriesResult.countries;
   const notSupportedCountries = rawNotSupportedCountries;
 
+  const { error: familyKeyProbeError } = await supabase
+    .from("product_colors")
+    .select("gelato_family_key")
+    .limit(1);
+  const hasGelatoFamilyKeyColumn = !familyKeyProbeError || !shouldIgnoreMissingGelatoFamilyKeyColumn(familyKeyProbeError);
+
   getProductFamilyProgressPayload(
     productId,
     referenceProductUid,
@@ -1422,28 +1436,30 @@ export async function syncGelatoProductFamily(
     "A procurar variantes",
   );
 
+  const colorSelect = hasGelatoFamilyKeyColumn
+    ? "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status, gelato_family_key"
+    : "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status";
   const { data: colorRows, error: colorsError } = await supabase
     .from("product_colors")
-    .select(
-      "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status, gelato_family_key",
-    )
+    .select(colorSelect)
     .eq("product_id", productId);
 
   if (colorsError) throw new Error(colorsError.message);
 
-  const existingColors = (colorRows ?? []) as ExistingColorRow[];
+  const existingColors = (colorRows ?? []) as unknown as ExistingColorRow[];
   const existingColorIds = existingColors.map((color) => color.id);
   let existingVariants: ExistingVariantRow[] = [];
 
   if (existingColorIds.length > 0) {
+    const variantSelect = hasGelatoFamilyKeyColumn
+      ? "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status, gelato_family_key"
+      : "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status";
     const { data: variantRows, error: variantsError } = await supabase
       .from("product_variants")
-      .select(
-        "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status, gelato_family_key",
-      )
+      .select(variantSelect)
       .in("product_color_id", existingColorIds);
     if (variantsError) throw new Error(variantsError.message);
-    existingVariants = (variantRows ?? []) as ExistingVariantRow[];
+    existingVariants = (variantRows ?? []) as unknown as ExistingVariantRow[];
   }
 
   const existingColorsByFamilyKey = new Map<string, ExistingColorRow>();
@@ -1517,7 +1533,7 @@ export async function syncGelatoProductFamily(
       thumbnail: existingColor?.thumbnail ?? null,
       position: existingColor?.position ?? colorIdByKey.size,
       gelato_color_key: colorKey,
-      gelato_family_key: familyAttributes.familyKey,
+      ...(hasGelatoFamilyKeyColumn ? { gelato_family_key: familyAttributes.familyKey } : {}),
       gelato_attributes: {
         attributeUid: firstEntry.colorAttributeUid,
         attributeValueUid: firstEntry.colorValueUid,
@@ -1582,7 +1598,7 @@ export async function syncGelatoProductFamily(
         gelato_catalog_uid: catalogUid,
         gelato_variant_uid: gelatoVariantUid,
         gelato_variant_key: entry.variantKey,
-        gelato_family_key: familyAttributes.familyKey,
+        ...(hasGelatoFamilyKeyColumn ? { gelato_family_key: familyAttributes.familyKey } : {}),
         gelato_attributes: {
           ...entry.product.attributes,
           colorHex: entry.colorHex,
@@ -1635,9 +1651,13 @@ export async function syncGelatoProductFamily(
     }
   }
 
-  const staleVariantIds = existingVariants
-    .filter((variant) => variant.gelato_family_key === familyAttributes.familyKey && !touchedVariantIds.has(variant.id))
-    .map((variant) => variant.id);
+  const staleVariantIds = hasGelatoFamilyKeyColumn
+    ? existingVariants
+        .filter((variant) => cleanString((variant as Record<string, unknown>).gelato_family_key) === familyAttributes.familyKey && !touchedVariantIds.has(variant.id))
+        .map((variant) => variant.id)
+    : existingVariants
+        .filter((variant) => !touchedVariantIds.has(variant.id))
+        .map((variant) => variant.id);
 
   if (staleVariantIds.length > 0) {
     const { error } = await supabase.from("product_variants").update({
