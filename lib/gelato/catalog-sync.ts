@@ -68,6 +68,27 @@ type GelatoSelectedPrice = {
   price: number;
 };
 
+type GelatoCountryPriceResult = {
+  country: string;
+  prices: GelatoProductPrice[];
+  error: boolean;
+};
+
+type GelatoVariantMarketRow = {
+  product_variant_id: string;
+  country_code: string;
+  currency: string;
+  is_available: boolean;
+  product_price: number | null;
+  quantity: number;
+  availability_source: string;
+  price_source: string;
+  unavailable_reason: string | null;
+  price_checked_at: string;
+  availability_checked_at: string;
+  updated_at: string;
+};
+
 export type GelatoCatalogSearchResponse = {
   products: GelatoCatalogSearchProduct[];
   hits?: {
@@ -657,24 +678,36 @@ async function mapWithConcurrency<T, R>(
 
 async function fetchGelatoPricesForAllCountries(
   productUid: string,
-): Promise<GelatoProductPrice[]> {
+): Promise<{
+  prices: GelatoProductPrice[];
+  failedCountries: string[];
+}> {
   const countries = GELATO_COUNTRIES
     .map((country) => cleanCountryIso(country.iso))
     .filter((country): country is string => Boolean(country));
 
-  const batches = await mapWithConcurrency(
+  const batches = await mapWithConcurrency<string, GelatoCountryPriceResult>(
     countries,
     GELATO_COUNTRY_FETCH_CONCURRENCY,
     async (country) => {
       try {
-        return await getGelatoProductPricesForCountry(productUid, country);
+        return {
+          country,
+          prices: await getGelatoProductPricesForCountry(productUid, country),
+          error: false,
+        };
       } catch {
-        return [];
+        return { country, prices: [], error: true };
       }
     },
   );
 
-  return batches.flat();
+  return {
+    prices: batches.flatMap((batch) => batch.prices),
+    failedCountries: batches
+      .filter((batch) => batch.error)
+      .map((batch) => batch.country),
+  };
 }
 
 async function fetchAllGelatoProducts(
@@ -865,14 +898,6 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
   return normalizedPrices;
 }
 
-function extractCountriesFromPrices(prices: GelatoProductPrice[]): string[] {
-  return Array.from(new Set(
-    prices
-      .map((price) => cleanCountryIso(price.country))
-      .filter((country): country is string => Boolean(country)),
-  ));
-}
-
 function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelectedPrice | null {
   const preferredCountries = [
     cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
@@ -989,42 +1014,31 @@ function shouldIgnoreMissingGelatoMarketTable(error: { message?: string } | null
   );
 }
 
-async function saveGelatoVariantMarkets(input: {
+function isMissingGelatoMarketConflictConstraint(error: { message?: string } | null) {
+  return (error?.message ?? "").includes(
+    "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+  );
+}
+
+export function buildGelatoVariantMarketRows(input: {
   productVariantId: string;
   prices: GelatoProductPrice[];
   notSupportedCountries: string[];
+  explicitSupportedCountries: string[];
   productIsAvailable: boolean;
   syncedAt: string;
-}) {
-  const supabase = createSupabaseAdmin();
-  const { error: deleteError } = await supabase
-    .from("gelato_variant_markets")
-    .delete()
-    .eq("product_variant_id", input.productVariantId);
-  if (deleteError && !shouldIgnoreMissingGelatoMarketTable(deleteError)) {
-    throw new Error(deleteError.message);
-  }
-
+}): GelatoVariantMarketRow[] {
   const notSupportedCountries = new Set(
     input.notSupportedCountries
       .map((country) => cleanCountryIso(country))
       .filter((country): country is string => Boolean(country)),
   );
-
-  const marketsByCountry = new Map<string, {
-    product_variant_id: string;
-    country_code: string;
-    currency: string;
-    is_available: boolean;
-    product_price: number;
-    quantity: number;
-    availability_source: string;
-    price_source: string;
-    unavailable_reason: string | null;
-    price_checked_at: string;
-    availability_checked_at: string;
-    updated_at: string;
-  }>();
+  const explicitSupportedCountries = new Set(
+    input.explicitSupportedCountries
+      .map((country) => cleanCountryIso(country))
+      .filter((country): country is string => Boolean(country)),
+  );
+  const marketsByCountry = new Map<string, GelatoVariantMarketRow>();
 
   for (const price of input.prices) {
     const country = cleanCountryIso(price.country);
@@ -1036,10 +1050,24 @@ async function saveGelatoVariantMarkets(input: {
       ? price.price
       : null;
 
-    if (!country || !currency || quantity !== 1 || amount === null) continue;
-    const productPrice = roundMoney(amount);
-    const countryIsSupported = !notSupportedCountries.has(country);
-    const isAvailable = input.productIsAvailable && countryIsSupported;
+    if (!country || !currency || quantity !== 1) continue;
+
+    const hasValidPrice = amount !== null && amount > 0;
+    const productPrice = hasValidPrice ? roundMoney(amount) : null;
+    const countryIsExplicitlySupported = explicitSupportedCountries.has(country);
+    const countryIsUnsupported = notSupportedCountries.has(country);
+    const isAvailable =
+      hasValidPrice &&
+      input.productIsAvailable &&
+      countryIsExplicitlySupported &&
+      !countryIsUnsupported;
+    const unavailableReason = (() => {
+      if (!hasValidPrice) return amount === null ? "missing_price" : "invalid_price";
+      if (!input.productIsAvailable) return "variant_not_supported";
+      if (countryIsUnsupported) return "country_not_supported";
+      if (!countryIsExplicitlySupported) return "availability_not_confirmed";
+      return null;
+    })();
 
     marketsByCountry.set(country, {
       product_variant_id: input.productVariantId,
@@ -1048,25 +1076,77 @@ async function saveGelatoVariantMarkets(input: {
       is_available: isAvailable,
       product_price: productPrice,
       quantity: 1,
-      availability_source: "gelato_product_details",
+      availability_source: unavailableReason === "availability_not_confirmed"
+        ? "price_only"
+        : "gelato_product_details",
       price_source: "gelato_product_prices",
-      unavailable_reason: isAvailable
-        ? null
-        : input.productIsAvailable
-          ? "Gelato product is not supported in this country."
-          : "Gelato product is not active.",
+      unavailable_reason: unavailableReason,
       price_checked_at: input.syncedAt,
       availability_checked_at: input.syncedAt,
       updated_at: nowIso(),
     });
   }
 
-  const marketRows = Array.from(marketsByCountry.values());
+  return Array.from(marketsByCountry.values());
+}
+
+async function saveGelatoVariantMarkets(input: {
+  productVariantId: string;
+  prices: GelatoProductPrice[];
+  failedCountries: string[];
+  notSupportedCountries: string[];
+  explicitSupportedCountries: string[];
+  productIsAvailable: boolean;
+  syncedAt: string;
+}) {
+  const supabase = createSupabaseAdmin();
+  const marketRows = buildGelatoVariantMarketRows(input);
+  const syncedCountries = marketRows.map((market) => market.country_code);
 
   if (marketRows.length > 0) {
     const { error } = await supabase
       .from("gelato_variant_markets")
-      .insert(marketRows);
+      .upsert(marketRows, {
+        onConflict: "product_variant_id,country_code",
+      });
+
+    if (error && isMissingGelatoMarketConflictConstraint(error)) {
+      const { error: deleteError } = await supabase
+        .from("gelato_variant_markets")
+        .delete()
+        .eq("product_variant_id", input.productVariantId)
+        .in("country_code", syncedCountries);
+      if (deleteError && !shouldIgnoreMissingGelatoMarketTable(deleteError)) {
+        throw new Error(deleteError.message);
+      }
+
+      const { error: insertError } = await supabase
+        .from("gelato_variant_markets")
+        .insert(marketRows);
+      if (insertError && !shouldIgnoreMissingGelatoMarketTable(insertError)) {
+        throw new Error(insertError.message);
+      }
+    } else if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
+      throw new Error(error.message);
+    }
+  }
+
+  const failedCountries = input.failedCountries
+    .map((country) => cleanCountryIso(country))
+    .filter((country): country is string => Boolean(country));
+
+  if (failedCountries.length > 0) {
+    const { error } = await supabase
+      .from("gelato_variant_markets")
+      .update({
+        is_available: false,
+        availability_source: "gelato_api_error",
+        unavailable_reason: "gelato_api_error",
+        availability_checked_at: input.syncedAt,
+        updated_at: nowIso(),
+      })
+      .eq("product_variant_id", input.productVariantId)
+      .in("country_code", failedCountries);
     if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
       throw new Error(error.message);
     }
@@ -1114,16 +1194,15 @@ export async function syncGelatoCatalog(
     const products = [matchedProduct];
     const matchedProductDetails = matchedProduct as GelatoProductDetails;
     const rawNotSupportedCountries = extractNotSupportedCountries(matchedProductDetails);
-    const gelatoPriceRows = await fetchGelatoPricesForAllCountries(
+    const gelatoPriceResult = await fetchGelatoPricesForAllCountries(
       matchedProduct.productUid,
     );
+    const gelatoPriceRows = gelatoPriceResult.prices;
     const gelatoPrices = normalizeGelatoProductPrices(gelatoPriceRows);
-    const priceCountries = extractCountriesFromPrices(gelatoPriceRows);
-    const supportedCountries = priceCountries.length > 0
-      ? priceCountries
-      : resolveSupportedCountries(matchedProductDetails);
+    const explicitSupportedCountries = resolveSupportedCountries(matchedProductDetails);
+    const supportedCountries = explicitSupportedCountries;
     const notSupportedCountries = rawNotSupportedCountries.filter(
-      (country) => !supportedCountries.includes(country),
+      (country) => !explicitSupportedCountries.includes(country),
     );
     const selectedGelatoBaseVariantPrice = pickGelatoBaseVariantPrice(gelatoPriceRows);
     const gelatoBaseVariantPrice = selectedGelatoBaseVariantPrice?.price ?? null;
@@ -1307,7 +1386,9 @@ export async function syncGelatoCatalog(
           await saveGelatoVariantMarkets({
             productVariantId: existingVariant.id,
             prices: gelatoPriceRows,
+            failedCountries: gelatoPriceResult.failedCountries,
             notSupportedCountries,
+            explicitSupportedCountries,
             productIsAvailable: gelatoAvailable,
             syncedAt: startedAt,
           });
@@ -1326,7 +1407,9 @@ export async function syncGelatoCatalog(
           await saveGelatoVariantMarkets({
             productVariantId,
             prices: gelatoPriceRows,
+            failedCountries: gelatoPriceResult.failedCountries,
             notSupportedCountries,
+            explicitSupportedCountries,
             productIsAvailable: gelatoAvailable,
             syncedAt: startedAt,
           });
