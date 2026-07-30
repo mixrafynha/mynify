@@ -2,12 +2,9 @@ import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { GELATO_COUNTRIES } from "@/app/checkout/_lib/checkout";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
-const DEFAULT_GELATO_SHIPMENT_BASE_URL = "https://shipment.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
 const GELATO_REQUEST_TIMEOUT_MS = 15000;
 const GELATO_COUNTRY_FETCH_CONCURRENCY = 8;
-const DEFAULT_GELATO_PRICE_MARKUP_PERCENT = 0;
-const DEFAULT_GELATO_PRICE_MARKUP_AMOUNT = 0;
 
 type JsonValue =
   | string
@@ -50,7 +47,6 @@ export type GelatoProductDetails = GelatoCatalogSearchProduct & {
   countries?: unknown;
   supportedCountries?: unknown;
   notSupportedCountries?: unknown;
-  shippingMethods?: unknown;
   availability?: unknown;
   [key: string]: unknown;
 };
@@ -65,43 +61,11 @@ type GelatoProductPrice = {
   [key: string]: unknown;
 };
 
-type GelatoShipmentMethod = {
-  uid?: string;
-  id?: string;
-  name?: string;
-  title?: string;
-  supportsTracking?: boolean;
-  trackingSupported?: boolean;
-  countries?: unknown;
-  [key: string]: unknown;
-};
-
 type GelatoSelectedPrice = {
   country: string | null;
   currency: string;
   quantity: number;
   price: number;
-};
-
-type GelatoPricingRule = {
-  id: string;
-  category: string | null;
-  subcategory: string | null;
-  quality: string | null;
-  manufacturer: string | null;
-  manufacturer_sku: string | null;
-  currency: string;
-  target_price: number | string | null;
-  markup_percent: number | string | null;
-  markup_amount: number | string | null;
-  priority: number | null;
-};
-
-type GelatoShippingCostRule = {
-  country_code: string;
-  currency: string;
-  shipping_price: number | string;
-  fulfillment_country: string | null;
 };
 
 export type GelatoCatalogSearchResponse = {
@@ -200,7 +164,7 @@ function cleanNumber(value: unknown): number | null {
 }
 
 function roundMoney(value: number): number {
-  return Number(value.toFixed(2));
+  return Number(value.toFixed(4));
 }
 
 function cleanBaseUrl(value: string) {
@@ -212,14 +176,6 @@ function getGelatoProductBaseUrl(): string {
     process.env.GELATO_PRODUCT_API_BASE_URL?.trim() ||
       process.env.GELATO_API_PRODUCT_BASE_URL?.trim() ||
       DEFAULT_GELATO_PRODUCT_BASE_URL,
-  );
-}
-
-function getGelatoShipmentBaseUrl(): string {
-  return cleanBaseUrl(
-    process.env.GELATO_SHIPMENT_API_BASE_URL?.trim() ||
-      process.env.GELATO_API_SHIPMENT_BASE_URL?.trim() ||
-      DEFAULT_GELATO_SHIPMENT_BASE_URL,
   );
 }
 
@@ -675,27 +631,6 @@ async function getGelatoProductPricesForCountry(
   return Array.isArray(prices) ? prices.filter(isPlainObject) as GelatoProductPrice[] : [];
 }
 
-async function getGelatoShipmentMethodsForCountry(
-  countryIso: string,
-): Promise<GelatoShipmentMethod[]> {
-  const country = cleanCountryIso(countryIso);
-  if (!country) return [];
-
-  const response = await gelatoFetchFrom<unknown>(
-    getGelatoShipmentBaseUrl(),
-    `/v1/shipment-methods?country=${encodeURIComponent(country)}`,
-    { method: "GET" },
-  );
-
-  const methods = isPlainObject(response) && Array.isArray(response.shipmentMethods)
-    ? response.shipmentMethods
-    : Array.isArray(response)
-      ? response
-      : [];
-
-  return methods.filter(isPlainObject) as GelatoShipmentMethod[];
-}
-
 async function mapWithConcurrency<T, R>(
   items: T[],
   concurrency: number,
@@ -740,29 +675,6 @@ async function fetchGelatoPricesForAllCountries(
   );
 
   return batches.flat();
-}
-
-async function fetchGelatoShipmentMethodsForCountries(
-  countries: string[],
-): Promise<Record<string, GelatoShipmentMethod[]>> {
-  const uniqueCountries = Array.from(new Set(
-    countries
-      .map((country) => cleanCountryIso(country))
-      .filter((country): country is string => Boolean(country)),
-  ));
-  const entries = await mapWithConcurrency(
-    uniqueCountries,
-    GELATO_COUNTRY_FETCH_CONCURRENCY,
-    async (country) => {
-      try {
-        return [country, await getGelatoShipmentMethodsForCountry(country)] as const;
-      } catch {
-        return [country, []] as const;
-      }
-    },
-  );
-
-  return Object.fromEntries(entries);
 }
 
 async function fetchAllGelatoProducts(
@@ -939,12 +851,12 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
       : null;
     const currency = cleanString(price.currency)?.toUpperCase() ?? null;
 
-    if (!country || quantity === null || amount === null || !currency) continue;
+    if (!country || quantity !== 1 || amount === null || !currency) continue;
 
     normalizedPrices.push({
       country,
       quantity,
-      price: Number(amount.toFixed(2)),
+      price: roundMoney(amount),
       currency,
       pageCount: typeof price.pageCount === "number" ? price.pageCount : null,
     });
@@ -972,8 +884,8 @@ function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelecte
     .map((price) => ({
       country: cleanCountryIso(price.country),
       quantity: typeof price.quantity === "number" && Number.isFinite(price.quantity)
-        ? price.quantity
-        : Number.MAX_SAFE_INTEGER,
+        ? Math.trunc(price.quantity)
+        : null,
       price: typeof price.price === "number" && Number.isFinite(price.price)
         ? price.price
         : null,
@@ -985,7 +897,7 @@ function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelecte
         currency: string;
         quantity: number;
         price: number;
-      } => price.price !== null && Boolean(price.currency),
+      } => price.quantity === 1 && price.price !== null && Boolean(price.currency),
     );
 
   const preferredPrice = preferredCountries
@@ -1009,198 +921,6 @@ function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelecte
     quantity: selectedPrice.quantity,
     price: roundMoney(selectedPrice.price),
   };
-}
-
-function getGelatoMarkupPercent(): number {
-  return cleanNumber(process.env.GELATO_PRICE_MARKUP_PERCENT) ??
-    DEFAULT_GELATO_PRICE_MARKUP_PERCENT;
-}
-
-function getGelatoMarkupAmount(): number {
-  return cleanNumber(process.env.GELATO_PRICE_MARKUP_AMOUNT) ??
-    DEFAULT_GELATO_PRICE_MARKUP_AMOUNT;
-}
-
-function normalizeGelatoRuleValue(value: unknown): string | null {
-  const cleaned = cleanString(value);
-  return cleaned ? normalizeKey(cleaned) : null;
-}
-
-function getGelatoPricingSignature(attributes: Record<string, string>) {
-  return {
-    category: normalizeGelatoRuleValue(
-      attributes.GarmentCategory ?? attributes.Category ?? attributes.ProductCategory,
-    ),
-    subcategory: normalizeGelatoRuleValue(
-      attributes.GarmentSubcategory ?? attributes.Subcategory ?? attributes.ProductSubcategory,
-    ),
-    quality: normalizeGelatoRuleValue(
-      attributes.GarmentQuality ?? attributes.Quality,
-    ),
-    manufacturer: normalizeGelatoRuleValue(
-      attributes.ApparelManufacturer ?? attributes.Manufacturer,
-    ),
-    manufacturerSku: normalizeGelatoRuleValue(
-      attributes.ApparelManufacturerSKU ?? attributes.ManufacturerSKU,
-    ),
-  };
-}
-
-function gelatoPricingRuleMatches(
-  rule: GelatoPricingRule,
-  signature: ReturnType<typeof getGelatoPricingSignature>,
-  currency: string,
-) {
-  const ruleCurrency = cleanString(rule.currency)?.toUpperCase();
-  if (ruleCurrency !== currency) return false;
-
-  return (
-    (!rule.category || normalizeGelatoRuleValue(rule.category) === signature.category) &&
-    (!rule.subcategory || normalizeGelatoRuleValue(rule.subcategory) === signature.subcategory) &&
-    (!rule.quality || normalizeGelatoRuleValue(rule.quality) === signature.quality) &&
-    (!rule.manufacturer || normalizeGelatoRuleValue(rule.manufacturer) === signature.manufacturer) &&
-    (!rule.manufacturer_sku ||
-      normalizeGelatoRuleValue(rule.manufacturer_sku) === signature.manufacturerSku)
-  );
-}
-
-function getGelatoPricingRuleScore(
-  rule: GelatoPricingRule,
-  signature: ReturnType<typeof getGelatoPricingSignature>,
-  currency: string,
-) {
-  if (!gelatoPricingRuleMatches(rule, signature, currency)) return -1;
-
-  const specificity = [
-    rule.category,
-    rule.subcategory,
-    rule.quality,
-    rule.manufacturer,
-    rule.manufacturer_sku,
-  ].filter(Boolean).length;
-
-  return (rule.priority ?? 0) * 10 + specificity;
-}
-
-function findGelatoPricingRule(
-  rules: GelatoPricingRule[],
-  attributes: Record<string, string>,
-  currency: string,
-) {
-  const signature = getGelatoPricingSignature(attributes);
-
-  return [...rules]
-    .map((rule) => ({
-      rule,
-      score: getGelatoPricingRuleScore(rule, signature, currency),
-    }))
-    .filter((entry) => entry.score >= 0)
-    .sort((left, right) => right.score - left.score)[0]?.rule ?? null;
-}
-
-function applyGelatoVariantPricing(
-  selectedPrice: GelatoSelectedPrice | null,
-  attributes: Record<string, string>,
-  rules: GelatoPricingRule[],
-): {
-  price: number | null;
-  rule: GelatoPricingRule | null;
-  markupPercent: number;
-  markupAmount: number;
-} {
-  if (!selectedPrice) {
-    return { price: null, rule: null, markupPercent: 0, markupAmount: 0 };
-  }
-
-  const rule = findGelatoPricingRule(rules, attributes, selectedPrice.currency);
-  const targetPrice = cleanNumber(rule?.target_price);
-  if (targetPrice !== null) {
-    return {
-      price: roundMoney(targetPrice),
-      rule,
-      markupPercent: cleanNumber(rule?.markup_percent) ?? 0,
-      markupAmount: cleanNumber(rule?.markup_amount) ?? 0,
-    };
-  }
-
-  const percent = Math.max(0, cleanNumber(rule?.markup_percent) ?? getGelatoMarkupPercent());
-  const amount = Math.max(0, cleanNumber(rule?.markup_amount) ?? getGelatoMarkupAmount());
-
-  return {
-    price: roundMoney(selectedPrice.price * (1 + percent / 100) + amount),
-    rule,
-    markupPercent: percent,
-    markupAmount: amount,
-  };
-}
-
-function normalizeShipmentMethodUid(method: GelatoShipmentMethod): string | null {
-  return cleanString(method.uid) ?? cleanString(method.id);
-}
-
-function normalizeShipmentMethodName(method: GelatoShipmentMethod): string | null {
-  return cleanString(method.name) ?? cleanString(method.title);
-}
-
-function normalizeGelatoShippingMethodsByCountry(
-  methodsByCountry: Record<string, GelatoShipmentMethod[]>,
-): JsonValue[] {
-  const normalizedMethods: JsonValue[] = [];
-
-  for (const [country, methods] of Object.entries(methodsByCountry)) {
-    for (const method of methods) {
-      const uid = normalizeShipmentMethodUid(method);
-      if (!uid) continue;
-
-      normalizedMethods.push({
-        country,
-        uid,
-        name: normalizeShipmentMethodName(method),
-        supportsTracking:
-          typeof method.supportsTracking === "boolean"
-            ? method.supportsTracking
-            : typeof method.trackingSupported === "boolean"
-              ? method.trackingSupported
-              : null,
-      });
-    }
-  }
-
-  return normalizedMethods;
-}
-
-function extractShippingMethods(product: GelatoProductDetails): JsonValue[] {
-  const rawShippingMethods = [
-    ...(Array.isArray(product.shippingMethods) ? product.shippingMethods : []),
-    ...(
-      isPlainObject(product.availability) && Array.isArray(product.availability.shippingMethods)
-        ? product.availability.shippingMethods
-        : []
-    ),
-  ];
-  if (!Array.isArray(rawShippingMethods)) return [];
-
-  return rawShippingMethods.map((method) => {
-    if (isPlainObject(method)) {
-      return {
-        ...method,
-        countries: Array.isArray(method.countries)
-          ? method.countries
-              .map((country) =>
-                typeof country === "string"
-                  ? country.trim()
-                  : isPlainObject(country)
-                    ? cleanString(country.countryIso ?? country.iso ?? country.code) ??
-                      cleanString(country.country ?? country.title ?? country.name)
-                    : null,
-              )
-              .filter((value): value is string => Boolean(value))
-          : [],
-      } as unknown as JsonValue;
-    }
-
-    return method as JsonValue;
-  });
 }
 
 function getGelatoProductName(product: GelatoProductDetails): string | null {
@@ -1249,15 +969,10 @@ async function saveSyncState(
     error?.message?.includes("Could not find the 'countries' column") ||
     error?.message?.includes("column \"countries\" of relation \"gelato_catalog_sync_state\" does not exist");
 
-  const missingShippingMethodsColumn =
-    error?.message?.includes("Could not find the 'shipping_methods' column") ||
-    error?.message?.includes("column \"shipping_methods\" of relation \"gelato_catalog_sync_state\" does not exist");
-
-  if (error && (missingProductUidColumn || missingCountriesColumn || missingShippingMethodsColumn)) {
+  if (error && (missingProductUidColumn || missingCountriesColumn)) {
     const legacyPayload: Record<string, JsonValue> = { ...payload };
     delete legacyPayload.product_uid;
     delete legacyPayload.countries;
-    delete legacyPayload.shipping_methods;
     ({ error } = await upsertState(legacyPayload));
   }
 
@@ -1270,68 +985,15 @@ function shouldIgnoreMissingGelatoMarketTable(error: { message?: string } | null
   const message = error?.message ?? "";
   return (
     message.includes("gelato_variant_markets") ||
-    message.includes("gelato_pricing_rules") ||
-    message.includes("gelato_shipping_cost_rules") ||
     message.includes("schema cache")
   );
-}
-
-async function getGelatoPricingRules(): Promise<GelatoPricingRule[]> {
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("gelato_pricing_rules")
-    .select(
-      "id, category, subcategory, quality, manufacturer, manufacturer_sku, currency, target_price, markup_percent, markup_amount, priority",
-    )
-    .eq("active", true)
-    .order("priority", { ascending: false });
-
-  if (error) {
-    if (shouldIgnoreMissingGelatoMarketTable(error)) return [];
-    throw new Error(error.message);
-  }
-
-  return (data ?? []) as GelatoPricingRule[];
-}
-
-async function getGelatoShippingCostRules(): Promise<GelatoShippingCostRule[]> {
-  const supabase = createSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("gelato_shipping_cost_rules")
-    .select("country_code, currency, shipping_price, fulfillment_country")
-    .eq("active", true)
-    .order("priority", { ascending: false });
-
-  if (error) {
-    if (shouldIgnoreMissingGelatoMarketTable(error)) return [];
-    throw new Error(error.message);
-  }
-
-  return (data ?? []) as GelatoShippingCostRule[];
-}
-
-function indexGelatoShippingCostRules(rules: GelatoShippingCostRule[]) {
-  const index = new Map<string, GelatoShippingCostRule>();
-
-  for (const rule of rules) {
-    const country = cleanCountryIso(rule.country_code);
-    const currency = cleanString(rule.currency)?.toUpperCase();
-    const shippingPrice = cleanNumber(rule.shipping_price);
-    if (!country || !currency || shippingPrice === null) continue;
-
-    const key = `${country}::${currency}`;
-    if (!index.has(key)) {
-      index.set(key, rule);
-    }
-  }
-
-  return index;
 }
 
 async function saveGelatoVariantMarkets(input: {
   productVariantId: string;
   prices: GelatoProductPrice[];
-  shippingCostRules: Map<string, GelatoShippingCostRule>;
+  notSupportedCountries: string[];
+  productIsAvailable: boolean;
   syncedAt: string;
 }) {
   const supabase = createSupabaseAdmin();
@@ -1342,6 +1004,12 @@ async function saveGelatoVariantMarkets(input: {
   if (deleteError && !shouldIgnoreMissingGelatoMarketTable(deleteError)) {
     throw new Error(deleteError.message);
   }
+
+  const notSupportedCountries = new Set(
+    input.notSupportedCountries
+      .map((country) => cleanCountryIso(country))
+      .filter((country): country is string => Boolean(country)),
+  );
 
   const marketRows = input.prices
     .map((price) => {
@@ -1354,26 +1022,25 @@ async function saveGelatoVariantMarkets(input: {
         ? price.price
         : null;
 
-      if (!country || !currency || !quantity || amount === null) return null;
-      const shippingRule = input.shippingCostRules.get(`${country}::${currency}`);
-      const shippingPrice = cleanNumber(shippingRule?.shipping_price);
+      if (!country || !currency || quantity !== 1 || amount === null) return null;
       const productPrice = roundMoney(amount);
+      const countryIsSupported = !notSupportedCountries.has(country);
+      const isAvailable = input.productIsAvailable && countryIsSupported;
 
       return {
         product_variant_id: input.productVariantId,
         country_code: country,
         currency,
-        is_available: true,
+        is_available: isAvailable,
         product_price: productPrice,
-        shipping_price: shippingPrice === null ? null : roundMoney(shippingPrice),
-        total_cost: shippingPrice === null ? null : roundMoney(productPrice + shippingPrice),
-        quantity,
-        availability_source: shippingRule
-          ? "gelato_product_prices+shipping_cost_rules"
-          : "gelato_product_prices",
+        quantity: 1,
+        availability_source: "gelato_product_details",
         price_source: "gelato_product_prices",
-        fulfillment_country: cleanCountryIso(shippingRule?.fulfillment_country),
-        unavailable_reason: null,
+        unavailable_reason: isAvailable
+          ? null
+          : input.productIsAvailable
+            ? "Gelato product is not supported in this country."
+            : "Gelato product is not active.",
         price_checked_at: input.syncedAt,
         availability_checked_at: input.syncedAt,
         updated_at: nowIso(),
@@ -1385,7 +1052,7 @@ async function saveGelatoVariantMarkets(input: {
     const { error } = await supabase
       .from("gelato_variant_markets")
       .upsert(marketRows, {
-        onConflict: "product_variant_id,country_code,currency,quantity",
+        onConflict: "product_variant_id,country_code",
       });
     if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
       throw new Error(error.message);
@@ -1421,11 +1088,9 @@ export async function syncGelatoCatalog(
   });
 
   try {
-    const [catalog, existingProduct, gelatoPricingRules, gelatoShippingCostRules] = await Promise.all([
+    const [catalog, existingProduct] = await Promise.all([
       getGelatoCatalog(catalogUid),
       getProductOrThrow(productId),
-      getGelatoPricingRules(),
-      getGelatoShippingCostRules(),
     ]);
     const { matchedProduct, matchedFilters } = await fetchExactGelatoProduct(
       catalogUid,
@@ -1447,22 +1112,9 @@ export async function syncGelatoCatalog(
     const notSupportedCountries = rawNotSupportedCountries.filter(
       (country) => !supportedCountries.includes(country),
     );
-    const shippingMethodsByCountry = await fetchGelatoShipmentMethodsForCountries(
-      supportedCountries,
-    );
-    const shippingMethods = [
-      ...extractShippingMethods(matchedProductDetails),
-      ...normalizeGelatoShippingMethodsByCountry(shippingMethodsByCountry),
-    ];
     const selectedGelatoBaseVariantPrice = pickGelatoBaseVariantPrice(gelatoPriceRows);
     const gelatoBaseVariantPrice = selectedGelatoBaseVariantPrice?.price ?? null;
-    const gelatoVariantPricing = applyGelatoVariantPricing(
-      selectedGelatoBaseVariantPrice,
-      matchedProduct.attributes,
-      gelatoPricingRules,
-    );
-    const editableVariantPrice = gelatoVariantPricing.price;
-    const shippingCostRuleIndex = indexGelatoShippingCostRules(gelatoShippingCostRules);
+    const editableVariantPrice = gelatoBaseVariantPrice;
     const gelatoProductName = getGelatoProductName(matchedProductDetails);
     const gelatoAvailable = isGelatoProductAvailable(matchedProductDetails);
     const supabase = createSupabaseAdmin();
@@ -1564,15 +1216,10 @@ export async function syncGelatoCatalog(
           colorHex: firstEntry.colorHex,
           countries: supportedCountries,
           notSupportedCountries,
-          shippingMethods,
           gelatoPrices,
           gelatoBaseVariantPrice,
-          gelatoRetailVariantPrice: editableVariantPrice,
           gelatoBasePriceCountry: selectedGelatoBaseVariantPrice?.country ?? null,
           gelatoBasePriceCurrency: selectedGelatoBaseVariantPrice?.currency ?? null,
-          gelatoPricingRuleId: gelatoVariantPricing.rule?.id ?? null,
-          gelatoMarkupPercent: gelatoVariantPricing.markupPercent,
-          gelatoMarkupAmount: gelatoVariantPricing.markupAmount,
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -1626,15 +1273,10 @@ export async function syncGelatoCatalog(
             colorHex: entry.colorHex,
             countries: supportedCountries,
             notSupportedCountries,
-            shippingMethods,
             gelatoPrices,
             gelatoBaseVariantPrice,
-            gelatoRetailVariantPrice: editableVariantPrice,
             gelatoBasePriceCountry: selectedGelatoBaseVariantPrice?.country ?? null,
             gelatoBasePriceCurrency: selectedGelatoBaseVariantPrice?.currency ?? null,
-            gelatoPricingRuleId: gelatoVariantPricing.rule?.id ?? null,
-            gelatoMarkupPercent: gelatoVariantPricing.markupPercent,
-            gelatoMarkupAmount: gelatoVariantPricing.markupAmount,
           },
           gelato_sync_status: "active",
           gelato_available: gelatoAvailable,
@@ -1652,7 +1294,8 @@ export async function syncGelatoCatalog(
           await saveGelatoVariantMarkets({
             productVariantId: existingVariant.id,
             prices: gelatoPriceRows,
-            shippingCostRules: shippingCostRuleIndex,
+            notSupportedCountries,
+            productIsAvailable: gelatoAvailable,
             syncedAt: startedAt,
           });
           variantsUpdated += 1;
@@ -1670,7 +1313,8 @@ export async function syncGelatoCatalog(
           await saveGelatoVariantMarkets({
             productVariantId,
             prices: gelatoPriceRows,
-            shippingCostRules: shippingCostRuleIndex,
+            notSupportedCountries,
+            productIsAvailable: gelatoAvailable,
             syncedAt: startedAt,
           });
           variantsCreated += 1;
@@ -1737,7 +1381,6 @@ export async function syncGelatoCatalog(
       last_success_at: nowIso(),
       last_error: null,
       countries: supportedCountries as unknown as JsonValue,
-      shipping_methods: shippingMethods as unknown as JsonValue,
       synced_products_count: result.productsFetched,
       synced_colors_count:
         result.colorsCreated + result.colorsUpdated - result.colorsDeactivated,
@@ -1909,7 +1552,6 @@ export async function syncGelatoCatalogPage(
           attributeValueUid: firstEntry.colorValueUid,
           colorHex: firstEntry.colorHex,
           countries: [],
-          shippingMethods: [],
         },
         gelato_sync_status: "active",
         gelato_last_seen_at: startedAt,
@@ -1955,7 +1597,6 @@ export async function syncGelatoCatalogPage(
             ...entry.product.attributes,
             colorHex: entry.colorHex,
             countries: [],
-            shippingMethods: [],
           },
           gelato_sync_status: "active",
           gelato_last_seen_at: startedAt,
