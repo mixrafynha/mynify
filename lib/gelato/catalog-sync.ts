@@ -1011,49 +1011,62 @@ async function saveGelatoVariantMarkets(input: {
       .filter((country): country is string => Boolean(country)),
   );
 
-  const marketRows = input.prices
-    .map((price) => {
-      const country = cleanCountryIso(price.country);
-      const currency = cleanString(price.currency)?.toUpperCase() ?? null;
-      const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
-        ? Math.trunc(price.quantity)
-        : null;
-      const amount = typeof price.price === "number" && Number.isFinite(price.price)
-        ? price.price
-        : null;
+  const marketsByCountry = new Map<string, {
+    product_variant_id: string;
+    country_code: string;
+    currency: string;
+    is_available: boolean;
+    product_price: number;
+    quantity: number;
+    availability_source: string;
+    price_source: string;
+    unavailable_reason: string | null;
+    price_checked_at: string;
+    availability_checked_at: string;
+    updated_at: string;
+  }>();
 
-      if (!country || !currency || quantity !== 1 || amount === null) return null;
-      const productPrice = roundMoney(amount);
-      const countryIsSupported = !notSupportedCountries.has(country);
-      const isAvailable = input.productIsAvailable && countryIsSupported;
+  for (const price of input.prices) {
+    const country = cleanCountryIso(price.country);
+    const currency = cleanString(price.currency)?.toUpperCase() ?? null;
+    const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
+      ? Math.trunc(price.quantity)
+      : null;
+    const amount = typeof price.price === "number" && Number.isFinite(price.price)
+      ? price.price
+      : null;
 
-      return {
-        product_variant_id: input.productVariantId,
-        country_code: country,
-        currency,
-        is_available: isAvailable,
-        product_price: productPrice,
-        quantity: 1,
-        availability_source: "gelato_product_details",
-        price_source: "gelato_product_prices",
-        unavailable_reason: isAvailable
-          ? null
-          : input.productIsAvailable
-            ? "Gelato product is not supported in this country."
-            : "Gelato product is not active.",
-        price_checked_at: input.syncedAt,
-        availability_checked_at: input.syncedAt,
-        updated_at: nowIso(),
-      };
-    })
-    .filter((market): market is NonNullable<typeof market> => Boolean(market));
+    if (!country || !currency || quantity !== 1 || amount === null) continue;
+    const productPrice = roundMoney(amount);
+    const countryIsSupported = !notSupportedCountries.has(country);
+    const isAvailable = input.productIsAvailable && countryIsSupported;
+
+    marketsByCountry.set(country, {
+      product_variant_id: input.productVariantId,
+      country_code: country,
+      currency,
+      is_available: isAvailable,
+      product_price: productPrice,
+      quantity: 1,
+      availability_source: "gelato_product_details",
+      price_source: "gelato_product_prices",
+      unavailable_reason: isAvailable
+        ? null
+        : input.productIsAvailable
+          ? "Gelato product is not supported in this country."
+          : "Gelato product is not active.",
+      price_checked_at: input.syncedAt,
+      availability_checked_at: input.syncedAt,
+      updated_at: nowIso(),
+    });
+  }
+
+  const marketRows = Array.from(marketsByCountry.values());
 
   if (marketRows.length > 0) {
     const { error } = await supabase
       .from("gelato_variant_markets")
-      .upsert(marketRows, {
-        onConflict: "product_variant_id,country_code",
-      });
+      .insert(marketRows);
     if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
       throw new Error(error.message);
     }
