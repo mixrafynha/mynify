@@ -169,6 +169,7 @@ export type SyncCatalogInput = {
   attributeFilters?: CatalogSyncFilters;
   pageOffset?: number;
   gelatoProductUid?: string;
+  preserveFamilyState?: boolean;
 };
 
 export type SyncCatalogResult = {
@@ -248,6 +249,7 @@ async function gelatoFetchFrom<T>(
     ...init,
     signal: init?.signal ?? controller.signal,
     headers: {
+      Accept: "application/json",
       "Content-Type": "application/json",
       "X-API-KEY": getGelatoApiKey(),
       ...(init?.headers ?? {}),
@@ -261,12 +263,26 @@ async function gelatoFetchFrom<T>(
 
   const text = await response.text();
   let payload: unknown = null;
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  const looksLikeHtml =
+    contentType.includes("text/html") ||
+    /^\s*<!doctype html/i.test(text) ||
+    /^\s*<html/i.test(text) ||
+    /just a moment/i.test(text);
 
   if (text) {
     try {
       payload = JSON.parse(text);
     } catch {
-      payload = { message: text };
+      payload = looksLikeHtml
+        ? {
+            message:
+              "Gelato returned an HTML challenge page instead of JSON. The request was likely blocked by Cloudflare.",
+            responseUrl: response.url,
+            responseStatus: response.status,
+            contentType,
+          }
+        : { message: text };
     }
   }
 
@@ -276,7 +292,18 @@ async function gelatoFetchFrom<T>(
       cleanString(payloadRecord?.message) ||
       cleanString(payloadRecord?.error) ||
       `Gelato request failed with status ${response.status}`;
+    if (looksLikeHtml) {
+      throw new Error(
+        `${message} (${response.status}) from ${response.url || `${baseUrl}${path}`}. Check GELATO_API_KEY, endpoint access, or Cloudflare blocking.`,
+      );
+    }
     throw new Error(message);
+  }
+
+  if (looksLikeHtml) {
+    throw new Error(
+      `Gelato returned HTML instead of JSON from ${response.url || `${baseUrl}${path}`}. Check endpoint access or Cloudflare blocking.`,
+    );
   }
 
   return payload as T;
@@ -509,6 +536,30 @@ function getColorHex(colorName: string | null | undefined): string {
   return COLOR_HEX_MAP[normalized] ?? "#cccccc";
 }
 
+function isHexColor(value: string): boolean {
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
+}
+
+function extractExplicitColorHex(attributes: Record<string, string>): string | null {
+  const candidates = [
+    attributes.colorHex,
+    attributes.color_hex,
+    attributes.hex,
+    attributes.Hex,
+    attributes.GelatoColorHex,
+    attributes.gelatoColorHex,
+  ];
+
+  for (const candidate of candidates) {
+    const value = cleanString(candidate);
+    if (value && isHexColor(value)) {
+      return value.toLowerCase();
+    }
+  }
+
+  return null;
+}
+
 function deriveFamilyAttributes(attributes: Record<string, string>): Record<string, string> {
   const familyKeysToDrop = new Set([
     "Color",
@@ -551,11 +602,12 @@ function deriveColorData(
   const colorTitle =
     humanizeAttributeValue(attributeMap, colorAttributeUid ?? "", colorValueUid) ||
     "Default";
+  const explicitColorHex = extractExplicitColorHex(product.attributes);
 
   return {
     colorKey: normalizeKey(colorTitle),
     colorName: colorTitle,
-    colorHex: getColorHex(colorTitle),
+    colorHex: explicitColorHex ?? getColorHex(colorTitle),
     colorAttributeUid,
     colorValueUid,
   };
@@ -1387,6 +1439,8 @@ export async function syncGelatoProductFamily(
     productId: string;
     catalogUid: string;
     referenceProductUid: string;
+    productUids?: string[];
+    preserveFamilyState?: boolean;
   },
 ): Promise<GelatoFamilySyncResult> {
   const productId = cleanString(input.productId);
@@ -1408,6 +1462,14 @@ export async function syncGelatoProductFamily(
     catalogUid,
     referenceProductUid,
   );
+  const productUidFilter = Array.isArray(input.productUids)
+    ? new Set(input.productUids.map((value) => cleanString(value)).filter((value): value is string => Boolean(value)))
+    : null;
+  const selectedFamilyProducts =
+    productUidFilter && productUidFilter.size > 0
+      ? familyProducts.filter((product) => productUidFilter.has(product.productUid))
+      : familyProducts;
+  const processedFamilyProducts = selectedFamilyProducts.length > 0 ? selectedFamilyProducts : familyProducts;
 
   getProductFamilyProgressPayload(
     productId,
@@ -1483,9 +1545,9 @@ export async function syncGelatoProductFamily(
     }
   }
 
-  const productsByUid = new Map(familyProducts.map((product) => [product.productUid, product]));
+  const productsByUid = new Map(processedFamilyProducts.map((product) => [product.productUid, product]));
   const familyGroup = new Map<string, GelatoCatalogSearchProduct[]>();
-  for (const product of familyProducts) {
+  for (const product of processedFamilyProducts) {
     const familyKey = getVariantFamilyKeyFromProduct(product);
     if (familyKey !== familyAttributes.familyKey) continue;
     const list = familyGroup.get(familyKey) ?? [];
@@ -1653,17 +1715,24 @@ export async function syncGelatoProductFamily(
 
   const staleVariantIds = hasGelatoFamilyKeyColumn
     ? existingVariants
-        .filter((variant) => cleanString((variant as Record<string, unknown>).gelato_family_key) === familyAttributes.familyKey && !touchedVariantIds.has(variant.id))
+        .filter(
+          (variant) =>
+            cleanString((variant as Record<string, unknown>).gelato_family_key) ===
+              familyAttributes.familyKey && !touchedVariantIds.has(variant.id),
+        )
         .map((variant) => variant.id)
     : existingVariants
         .filter((variant) => !touchedVariantIds.has(variant.id))
         .map((variant) => variant.id);
 
-  if (staleVariantIds.length > 0) {
-    const { error } = await supabase.from("product_variants").update({
-      gelato_sync_status: "missing",
-      gelato_available: false,
-    }).in("id", staleVariantIds);
+  if (staleVariantIds.length > 0 && !input.preserveFamilyState) {
+    const { error } = await supabase
+      .from("product_variants")
+      .update({
+        gelato_sync_status: "missing",
+        gelato_available: false,
+      })
+      .in("id", staleVariantIds);
     if (error) throw new Error(error.message);
   }
 
@@ -1997,7 +2066,7 @@ export async function syncGelatoCatalog(
       )
       .map((variant) => variant.id);
 
-    if (staleColorIds.length > 0) {
+    if (staleColorIds.length > 0 && !input.preserveFamilyState) {
       const { error } = await supabase
         .from("product_colors")
         .update({
@@ -2007,7 +2076,7 @@ export async function syncGelatoCatalog(
       if (error) throw new Error(error.message);
     }
 
-    if (staleVariantIds.length > 0) {
+    if (staleVariantIds.length > 0 && !input.preserveFamilyState) {
       const { error } = await supabase
         .from("product_variants")
         .update({

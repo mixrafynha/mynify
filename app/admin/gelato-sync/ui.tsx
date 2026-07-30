@@ -21,10 +21,21 @@ type SyncState = {
   synced_variants_count?: number | null;
 };
 
+type SyncJob = {
+  id?: string | null;
+  status?: string | null;
+  total_variants?: number | null;
+  completed_variants?: number | null;
+  pending_items?: number | null;
+  processing_items?: number | null;
+  failed_items?: number | null;
+  current_item_uid?: string | null;
+  current_error?: string | null;
+};
+
 async function readResponsePayload(res: Response) {
   const text = await res.text();
   if (!text) return {};
-
   try {
     return JSON.parse(text);
   } catch {
@@ -38,6 +49,7 @@ export default function GelatoSyncPage() {
   const [catalogUid, setCatalogUid] = useState("apparel");
   const [gelatoProductUid, setGelatoProductUid] = useState("");
   const [state, setState] = useState<SyncState | null>(null);
+  const [job, setJob] = useState<SyncJob | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -57,7 +69,6 @@ export default function GelatoSyncPage() {
           cache: "no-store",
         });
         const json = await readResponsePayload(res);
-
         if (!res.ok) throw new Error(json?.error || "Failed to load catalogs");
         if (active) setCatalogs(Array.isArray(json.catalogs) ? json.catalogs : []);
       } catch (err) {
@@ -80,13 +91,47 @@ export default function GelatoSyncPage() {
     }
 
     try {
-      const res = await fetch(`/api/admin/gelato/catalog-sync?productId=${encodeURIComponent(productId.trim())}`, {
-        credentials: "include",
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/admin/gelato/catalog-sync?productId=${encodeURIComponent(productId.trim())}`,
+        {
+          credentials: "include",
+          cache: "no-store",
+        },
+      );
       const json = await readResponsePayload(res);
       if (res.ok) setState(json.state ?? null);
     } catch {}
+  }
+
+  async function readJobStatus(jobId: string) {
+    const res = await fetch(`/api/admin/gelato-sync/family/status?jobId=${encodeURIComponent(jobId)}`, {
+      credentials: "include",
+      cache: "no-store",
+    });
+    const json = await readResponsePayload(res);
+    if (!res.ok || json?.ok === false) {
+      throw new Error(json?.error || "Failed to read job status");
+    }
+    setJob(json.job ?? null);
+    return json.job as SyncJob;
+  }
+
+  async function processJob(jobId: string) {
+    while (true) {
+      const res = await fetch("/api/admin/gelato-sync/family/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ jobId }),
+      });
+      const json = await readResponsePayload(res);
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error || "Failed to process batch");
+      }
+
+      await readJobStatus(jobId);
+      if (json.completed) break;
+    }
   }
 
   async function runFamilySync() {
@@ -98,7 +143,7 @@ export default function GelatoSyncPage() {
     const exactProductUid = gelatoProductUid.trim();
 
     try {
-      const res = await fetch("/api/admin/gelato-sync/family", {
+      const res = await fetch("/api/admin/gelato-sync/family/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -114,15 +159,30 @@ export default function GelatoSyncPage() {
         throw new Error(json?.error || "Sync failed");
       }
 
-      const lastPayload = json.result ?? json;
+      const jobId = typeof json.jobId === "string" ? json.jobId : "";
+      if (!jobId) throw new Error("Missing jobId.");
 
-      setResult(JSON.stringify(lastPayload, null, 2));
+      localStorage.setItem(`gelato-family-sync:${productId.trim()}`, jobId);
+      setResult(JSON.stringify(json, null, 2));
+      setMessage("Job created. Processing...");
+      await readJobStatus(jobId);
+      await processJob(jobId);
       setMessage("Family sync completed.");
       void loadState();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {
       setSyncing(false);
+    }
+  }
+
+  async function resumeJobFromStorage() {
+    const savedJobId = localStorage.getItem(`gelato-family-sync:${productId.trim()}`);
+    if (!savedJobId) return;
+    try {
+      await readJobStatus(savedJobId);
+    } catch {
+      localStorage.removeItem(`gelato-family-sync:${productId.trim()}`);
     }
   }
 
@@ -134,17 +194,13 @@ export default function GelatoSyncPage() {
             <Sparkles size={18} />
           </div>
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700/80">
-              Gelato Sync
-            </p>
-            <h1 className="text-2xl font-black tracking-[-0.05em] text-black">
-              Catalog sync console
-            </h1>
+            <p className="text-xs font-black uppercase tracking-[0.24em] text-cyan-700/80">Gelato Sync</p>
+            <h1 className="text-2xl font-black tracking-[-0.05em] text-black">Catalog sync console</h1>
           </div>
         </div>
 
         <p className="max-w-2xl text-sm font-semibold leading-6 text-black/55">
-          Cola o `productId`, escolhe o `catalogUid` e dispara a sincronização do catálogo Gelato sem tocar no resto do admin.
+          Cola o `productId`, escolhe o `catalogUid` e dispara a sincronização da família Gelato sem tocar no resto do admin.
         </p>
       </section>
 
@@ -154,7 +210,10 @@ export default function GelatoSyncPage() {
           value={productId}
           onChange={setProductId}
           placeholder="UUID do produto"
-          onBlur={loadState}
+          onBlur={() => {
+            void loadState();
+            void resumeJobFromStorage();
+          }}
         />
 
         <Field
@@ -165,9 +224,7 @@ export default function GelatoSyncPage() {
         />
 
         <div>
-          <label className="text-xs font-black uppercase tracking-[0.18em] text-black/35">
-            Catalog UID
-          </label>
+          <label className="text-xs font-black uppercase tracking-[0.18em] text-black/35">Catalog UID</label>
           <div className="mt-2">
             <input
               list="gelato-catalogs"
@@ -197,7 +254,7 @@ export default function GelatoSyncPage() {
             Introduz o UID de referência da Gelato para sincronizar toda a família.
           </p>
           <p className="mt-1 text-xs font-semibold text-black/35">
-            Este modo encontra a família completa, sincroniza variantes, cores e mercados, e marca ausentes como missing.
+            Este modo encontra a família completa, sincroniza variantes, cores e mercados, e continua por lotes pequenos.
           </p>
         </div>
 
@@ -205,6 +262,15 @@ export default function GelatoSyncPage() {
           O sync de família usa apenas o UID de referência Gelato para descobrir toda a família.
         </div>
       </section>
+
+      {job && (
+        <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Job status</h2>
+          <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">
+            {JSON.stringify(job, null, 2)}
+          </pre>
+        </section>
+      )}
 
       {(message || error) && (
         <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
@@ -226,9 +292,7 @@ export default function GelatoSyncPage() {
 
       {state && (
         <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">
-            Sync state
-          </h2>
+          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Sync state</h2>
           <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">
             {JSON.stringify(state, null, 2)}
           </pre>
@@ -237,10 +301,10 @@ export default function GelatoSyncPage() {
 
       {result !== null && (
         <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">
-            Last result
-          </h2>
-          <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">{result}</pre>
+          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Last result</h2>
+          <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">
+            {result}
+          </pre>
         </section>
       )}
     </div>
@@ -262,9 +326,7 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-xs font-black uppercase tracking-[0.18em] text-black/35">
-        {label}
-      </label>
+      <label className="text-xs font-black uppercase tracking-[0.18em] text-black/35">{label}</label>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
