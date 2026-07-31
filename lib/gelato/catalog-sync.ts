@@ -1525,11 +1525,13 @@ export async function syncGelatoProductFamily(
   }
 
   const existingColorsByFamilyKey = new Map<string, ExistingColorRow>();
+  const existingColorsByColorKey = new Map<string, ExistingColorRow>();
   for (const color of existingColors) {
     const familyKey = cleanString((color as Record<string, unknown>).gelato_family_key) ?? "";
     const colorKey = cleanString(color.gelato_color_key) ?? normalizeKey(color.color ?? "");
     const key = `${familyKey}::${colorKey}`;
     if (familyKey && colorKey && !existingColorsByFamilyKey.has(key)) existingColorsByFamilyKey.set(key, color);
+    if (colorKey && !existingColorsByColorKey.has(colorKey)) existingColorsByColorKey.set(colorKey, color);
   }
 
   const existingVariantsByFamily = new Map<string, ExistingVariantRow>();
@@ -1584,7 +1586,9 @@ export async function syncGelatoProductFamily(
 
   for (const [colorKey, entries] of colorsToProducts.entries()) {
     const firstEntry = entries[0];
-    const existingColor = existingColorsByFamilyKey.get(`${familyAttributes.familyKey}::${colorKey}`);
+    const existingColor =
+      existingColorsByFamilyKey.get(`${familyAttributes.familyKey}::${colorKey}`) ??
+      existingColorsByColorKey.get(colorKey);
     let colorId = existingColor?.id ?? null;
     const colorPayload = {
       product_id: productId,

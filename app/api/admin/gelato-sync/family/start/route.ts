@@ -7,6 +7,16 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+const JOB_ITEM_INSERT_BATCH_SIZE = 100;
+
+function chunk<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
 export async function POST(request: Request) {
   const check = await requireAdmin();
   if ("error" in check) {
@@ -42,6 +52,8 @@ export async function POST(request: Request) {
       .maybeSingle();
 
     let jobId = existingJob?.id ?? null;
+    let totalVariants = familyProducts.length;
+
     if (!jobId) {
       const { data: job, error: jobError } = await supabase
         .from("gelato_sync_jobs")
@@ -50,7 +62,7 @@ export async function POST(request: Request) {
           reference_product_uid: referenceProductUid,
           catalog_uid: catalogUid,
           family_key: familyAttributes.familyKey,
-          status: "pending",
+          status: "creating_items",
           total_variants: familyProducts.length,
           processed_variants: 0,
           successful_variants: 0,
@@ -71,22 +83,86 @@ export async function POST(request: Request) {
         position: index + 1,
         status: "pending",
       }));
-      const { error: itemsError } = await supabase.from("gelato_sync_job_items").insert(items);
-      if (itemsError) throw new Error(itemsError.message);
-    } else if ((existingJob?.total_variants ?? 0) !== familyProducts.length) {
+      for (const batch of chunk(items, JOB_ITEM_INSERT_BATCH_SIZE)) {
+        const { error: itemsError } = await supabase
+          .from("gelato_sync_job_items")
+          .upsert(batch, {
+            onConflict: "job_id,gelato_product_uid",
+            ignoreDuplicates: false,
+          });
+        if (itemsError) {
+        await supabase
+          .from("gelato_sync_jobs")
+          .update({
+            status: "failed",
+            current_error: `Failed to create sync items: ${itemsError.message}`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+          throw new Error(`Failed to create Gelato sync job items: ${itemsError.message}`);
+        }
+      }
+    } else {
+      if ((existingJob?.total_variants ?? 0) !== familyProducts.length) {
+        await supabase
+          .from("gelato_sync_jobs")
+          .update({
+            total_variants: familyProducts.length,
+          })
+          .eq("id", jobId);
+      }
+
+      const { count: insertedCount, error: countError } = await supabase
+        .from("gelato_sync_job_items")
+        .select("id", { count: "exact", head: true })
+        .eq("job_id", jobId);
+      if (countError) throw new Error(countError.message);
+      if ((insertedCount ?? 0) === 0) {
+        await supabase
+          .from("gelato_sync_jobs")
+          .update({
+            status: "failed",
+            current_error: "Job initialization incomplete: variants were discovered but no job items were created.",
+          })
+          .eq("id", jobId);
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Job initialization incomplete: variants were discovered but no job items were created.",
+          },
+          { status: 500 },
+        );
+      }
+      totalVariants = insertedCount ?? 0;
+    }
+
+    const { count: finalCount, error: finalCountError } = await supabase
+      .from("gelato_sync_job_items")
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", jobId);
+    if (finalCountError) throw new Error(finalCountError.message);
+    if ((finalCount ?? 0) !== familyProducts.length) {
       await supabase
         .from("gelato_sync_jobs")
         .update({
-          total_variants: familyProducts.length,
-          status: existingJob?.status ?? "pending",
+          status: "failed",
+          current_error: `Job initialization incomplete: discovered ${familyProducts.length} variants but stored ${(finalCount ?? 0)} items.`,
         })
         .eq("id", jobId);
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Job initialization incomplete: discovered ${familyProducts.length} variants but stored ${(finalCount ?? 0)} items.`,
+        },
+        { status: 500 },
+      );
     }
 
     await supabase
       .from("gelato_sync_jobs")
       .update({
-        status: "discovering",
+        status: "pending",
+        total_variants: totalVariants,
         current_error: null,
         started_at: existingJob?.started_at ?? new Date().toISOString(),
       })
@@ -95,8 +171,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       jobId,
-      status: "discovering",
-      totalVariants: familyProducts.length,
+      status: "pending",
+      totalVariants,
+      insertedItems: finalCount ?? 0,
       colors,
       sizes,
     });

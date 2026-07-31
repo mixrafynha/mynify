@@ -25,12 +25,17 @@ type SyncJob = {
   id?: string | null;
   status?: string | null;
   total_variants?: number | null;
+  processed_variants?: number | null;
+  successful_variants?: number | null;
+  failed_variants?: number | null;
   completed_variants?: number | null;
   pending_items?: number | null;
   processing_items?: number | null;
   failed_items?: number | null;
   current_item_uid?: string | null;
   current_error?: string | null;
+  can_complete?: boolean | null;
+  inconsistent?: boolean | null;
 };
 
 async function readResponsePayload(res: Response) {
@@ -129,8 +134,11 @@ export default function GelatoSyncPage() {
         throw new Error(json?.error || "Failed to process batch");
       }
 
-      await readJobStatus(jobId);
-      if (json.completed) break;
+      const status = await readJobStatus(jobId);
+      if (status?.status === "completed") break;
+      if (status?.status === "failed") {
+        throw new Error(status.current_error || "Job failed");
+      }
     }
   }
 
@@ -165,8 +173,15 @@ export default function GelatoSyncPage() {
       localStorage.setItem(`gelato-family-sync:${productId.trim()}`, jobId);
       setResult(JSON.stringify(json, null, 2));
       setMessage("Job created. Processing...");
-      await readJobStatus(jobId);
+      const initialStatus = await readJobStatus(jobId);
+      if (initialStatus?.status === "failed") {
+        throw new Error(initialStatus.current_error || "Job failed to initialize");
+      }
       await processJob(jobId);
+      const finalStatus = await readJobStatus(jobId);
+      if (finalStatus?.status !== "completed" || !finalStatus?.can_complete) {
+        throw new Error(finalStatus?.current_error || "Job did not complete cleanly");
+      }
       setMessage("Family sync completed.");
       void loadState();
     } catch (err) {

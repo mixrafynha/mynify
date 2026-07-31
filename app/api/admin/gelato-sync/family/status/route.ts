@@ -37,16 +37,29 @@ export async function GET(request: Request) {
     const failed = (items ?? []).filter((item) => item.status === "failed").length;
     const pending = (items ?? []).filter((item) => item.status === "pending").length;
     const processing = (items ?? []).filter((item) => item.status === "processing").length;
+    const processed = completed + failed;
+    const canComplete =
+      total > 0 &&
+      total === Number(job.total_variants ?? 0) &&
+      processed === total &&
+      pending === 0 &&
+      processing === 0;
+    const inconsistent = Number(job.total_variants ?? 0) > 0 && total === 0;
 
     return NextResponse.json({
       ok: true,
       job: {
         ...job,
         total_variants: total,
+        processed_variants: processed,
+        successful_variants: completed,
+        failed_variants: failed,
         completed_variants: completed,
         failed_items: failed,
         pending_items: pending,
         processing_items: processing,
+        can_complete: canComplete,
+        inconsistent,
       },
       items: items ?? [],
     });

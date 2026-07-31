@@ -13,6 +13,109 @@ function isoNow() {
   return new Date().toISOString();
 }
 
+async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
+  const { data: items, error } = await supabase
+    .from("gelato_sync_job_items")
+    .select("status")
+    .eq("job_id", jobId);
+
+  if (error) throw new Error(error.message);
+
+  const rows = items ?? [];
+  const completedItems = rows.filter((item) => item.status === "completed").length;
+  const failedItems = rows.filter((item) => item.status === "failed").length;
+  const pendingItems = rows.filter((item) => item.status === "pending").length;
+  const processingItems = rows.filter((item) => item.status === "processing").length;
+
+  return {
+    totalJobItems: rows.length,
+    completedItems,
+    failedItems,
+    pendingItems,
+    processingItems,
+    finishedItems: completedItems + failedItems,
+  };
+}
+
+async function refreshGelatoSyncJobCounters(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  jobId: string,
+) {
+  const { data, error } = await supabase.rpc("refresh_gelato_sync_job_counters", {
+    target_job_id: jobId,
+  });
+  if (error) throw new Error(error.message);
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    totalItems: Number((row as Record<string, unknown> | null)?.total_items ?? 0),
+    completedItems: Number((row as Record<string, unknown> | null)?.completed_items ?? 0),
+    failedItems: Number((row as Record<string, unknown> | null)?.failed_items ?? 0),
+    pendingItems: Number((row as Record<string, unknown> | null)?.pending_items ?? 0),
+    processingItems: Number((row as Record<string, unknown> | null)?.processing_items ?? 0),
+  };
+}
+
+async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
+  const counters = await refreshGelatoSyncJobCounters(supabase, jobId);
+  const { data: job, error: jobError } = await supabase
+    .from("gelato_sync_jobs")
+    .select("id, total_variants, processed_variants, successful_variants, failed_variants")
+    .eq("id", jobId)
+    .maybeSingle();
+  if (jobError) throw new Error(jobError.message);
+  if (!job) throw new Error("Job not found.");
+
+  if (job.total_variants > 0 && counters.totalItems === 0) {
+    await supabase
+      .from("gelato_sync_jobs")
+      .update({
+        status: "failed",
+        current_error: "Job initialization incomplete: variants were discovered but no job items were created.",
+      })
+      .eq("id", jobId);
+    return { completed: false, inconsistent: true };
+  }
+
+  const canComplete =
+    Number(job.total_variants ?? 0) > 0 &&
+    counters.totalItems === Number(job.total_variants ?? 0) &&
+    counters.completedItems + counters.failedItems === Number(job.total_variants ?? 0) &&
+    counters.pendingItems === 0 &&
+    counters.processingItems === 0;
+
+  if (!canComplete) {
+    if (counters.totalItems !== Number(job.total_variants ?? 0)) {
+      await supabase
+        .from("gelato_sync_jobs")
+        .update({
+          status: "failed",
+          current_error: `Job item count mismatch: expected ${job.total_variants}, found ${counters.totalItems}.`,
+        })
+        .eq("id", jobId);
+      return { completed: false, inconsistent: true };
+    }
+    return { completed: false, inconsistent: false };
+  }
+
+  const finalStatus = counters.failedItems > 0 ? "completed_with_errors" : "completed";
+
+  await supabase
+    .from("gelato_sync_jobs")
+    .update({
+      status: finalStatus,
+      completed_at: isoNow(),
+      current_item_uid: null,
+      current_error: null,
+      processed_variants: counters.completedItems + counters.failedItems,
+      successful_variants: counters.completedItems,
+      failed_variants: counters.failedItems,
+      last_processed_at: isoNow(),
+    })
+    .eq("id", jobId);
+
+  return { completed: true, inconsistent: false, finalStatus };
+}
+
 export async function POST(request: Request) {
   const check = await requireAdmin();
   if ("error" in check) {
@@ -33,52 +136,30 @@ export async function POST(request: Request) {
     if (jobError) throw new Error(jobError.message);
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
 
-    const { data: items, error: itemsError } = await supabase
-      .from("gelato_sync_job_items")
-      .select("id, gelato_product_uid, status, attempts, position")
-      .eq("job_id", jobId)
-      .eq("status", "pending")
-      .order("position", { ascending: true })
-      .limit(BATCH_SIZE);
+    const { data: items, error: itemsError } = await supabase.rpc("claim_gelato_sync_job_items", {
+      target_job_id: jobId,
+      batch_size: BATCH_SIZE,
+    });
     if (itemsError) throw new Error(itemsError.message);
 
-    const claimed = items ?? [];
+    const claimed = (items ?? []) as Array<{
+      id: string;
+      gelato_product_uid: string;
+      attempts: number;
+      position: number;
+    }>;
     if (claimed.length === 0) {
-      const { data: remainingItems, error: remainingError } = await supabase
-        .from("gelato_sync_job_items")
-        .select("id")
-        .eq("job_id", jobId)
-        .in("status", ["pending", "processing"]);
-      if (remainingError) throw new Error(remainingError.message);
-
-      const completed = (remainingItems ?? []).length === 0;
-      if (completed) {
-        await supabase
-          .from("gelato_sync_jobs")
-          .update({
-            status: "completed",
-            completed_at: isoNow(),
-            current_item_uid: null,
-            current_error: null,
-            last_processed_at: isoNow(),
-          })
-          .eq("id", jobId);
-      }
-
+      const finalizeResult = await finalizeJobIfReady(supabase, jobId);
       return NextResponse.json({
-        ok: true,
+        ok: !finalizeResult.inconsistent,
         jobId,
         processed: 0,
         successful: 0,
         failed: 0,
-        completed,
-      });
+        completed: finalizeResult.completed,
+        inconsistent: finalizeResult.inconsistent,
+      }, finalizeResult.inconsistent ? { status: 500 } : undefined);
     }
-
-    await supabase
-      .from("gelato_sync_job_items")
-      .update({ status: "processing", started_at: isoNow() })
-      .in("id", claimed.map((item) => item.id));
 
     const processingPayload: Record<string, unknown> = {
       status: "processing",
@@ -115,67 +196,39 @@ export async function POST(request: Request) {
             error: null,
             attempts: item.attempts + 1,
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("status", "processing");
 
-        await supabase
-          .from("gelato_sync_jobs")
-          .update({
-            processed_variants: job.processed_variants + processed,
-            successful_variants: job.successful_variants + successful,
-            failed_variants: job.failed_variants + failed,
-            current_item_uid: item.gelato_product_uid,
-            current_error: null,
-            last_processed_at: isoNow(),
-            total_variants: Math.max(job.total_variants, result.variantsCreated + result.variantsUpdated),
-          })
-          .eq("id", jobId);
+        await refreshGelatoSyncJobCounters(supabase, jobId);
       } catch (error) {
         failed += 1;
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
+        const finalFailure = item.attempts + 1 >= 3;
         await supabase
           .from("gelato_sync_job_items")
           .update({
-            status: item.attempts + 1 >= 3 ? "failed" : "pending",
+            status: finalFailure ? "failed" : "pending",
             error: errorMessage,
             attempts: item.attempts + 1,
-            completed_at: item.attempts + 1 >= 3 ? isoNow() : null,
+            completed_at: finalFailure ? isoNow() : null,
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("status", "processing");
 
         await supabase
           .from("gelato_sync_jobs")
           .update({
-            processed_variants: job.processed_variants + processed,
-            successful_variants: job.successful_variants + successful,
-            failed_variants: job.failed_variants + failed,
             current_item_uid: item.gelato_product_uid,
             current_error: errorMessage,
             last_processed_at: isoNow(),
           })
           .eq("id", jobId);
+
+        await refreshGelatoSyncJobCounters(supabase, jobId);
       }
     }
 
-    const { data: remaining, error: remainingError } = await supabase
-      .from("gelato_sync_job_items")
-      .select("id")
-      .eq("job_id", jobId)
-      .eq("status", "pending");
-    if (remainingError) throw new Error(remainingError.message);
-
-    const completed = (remaining ?? []).length === 0;
-    if (completed) {
-      await supabase
-        .from("gelato_sync_jobs")
-        .update({
-          status: "completed",
-          completed_at: isoNow(),
-          current_item_uid: null,
-          current_error: null,
-          last_processed_at: isoNow(),
-        })
-        .eq("id", jobId);
-    }
+    const finalizeResult = await finalizeJobIfReady(supabase, jobId);
 
     return NextResponse.json({
       ok: true,
@@ -183,7 +236,9 @@ export async function POST(request: Request) {
       processed,
       successful,
       failed,
-      completed,
+      completed: finalizeResult.completed,
+      inconsistent: finalizeResult.inconsistent,
+      finalStatus: (finalizeResult as { finalStatus?: string }).finalStatus ?? null,
     });
   } catch (error) {
     return NextResponse.json(
