@@ -60,20 +60,6 @@ async function claimGelatoSyncJobItems(
   jobId: string,
   batchSize: number,
 ) {
-  const rpcResult = await supabase.rpc("claim_gelato_sync_job_items", {
-    target_job_id: jobId,
-    batch_size: batchSize,
-  });
-
-  if (!rpcResult.error) {
-    return (rpcResult.data ?? []) as Array<{
-      id: string;
-      gelato_product_uid: string;
-      attempts: number;
-      position: number;
-    }>;
-  }
-
   const fallbackResult = await supabase
     .from("gelato_sync_job_items")
     .select("id, gelato_product_uid, attempts, position")
