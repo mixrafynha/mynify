@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { GELATO_COUNTRIES } from "@/app/checkout/_lib/checkout";
+import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoColorHex } from "@/lib/gelato/gelato-color-map";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
@@ -55,6 +56,9 @@ export type GelatoProductDetails = GelatoCatalogSearchProduct & {
 type GelatoProductPrice = {
   productUid?: string;
   country?: string;
+  countryCode?: string;
+  country_code?: string;
+  isoCode?: string;
   quantity?: number;
   price?: number;
   currency?: string;
@@ -199,8 +203,7 @@ function cleanString(value: unknown): string | null {
 }
 
 function cleanCountryIso(value: unknown): string | null {
-  const cleaned = cleanString(value)?.toUpperCase();
-  return cleaned && /^[A-Z]{2}$/.test(cleaned) ? cleaned : null;
+  return resolveCountryCode(value);
 }
 
 function cleanSizeValue(value: unknown): string | null {
@@ -856,10 +859,7 @@ function extractVariantUidFromAttributes(
 }
 
 function normalizeCountryCode(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-
-  const normalized = value.trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(normalized) ? normalized : null;
+  return resolveCountryCode(value);
 }
 
 function normalizeCountryCodes(values: unknown[]): string[] {
@@ -869,6 +869,7 @@ function normalizeCountryCodes(values: unknown[]): string[] {
         if (typeof entry === "string") return normalizeCountryCode(entry);
         if (isPlainObject(entry)) {
           return (
+            normalizeCountryCode(entry) ??
             normalizeCountryCode(entry.countryIso) ??
             normalizeCountryCode(entry.iso) ??
             normalizeCountryCode(entry.code)
@@ -998,7 +999,7 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
   const normalizedPrices: JsonValue[] = [];
 
   for (const price of prices) {
-    const country = cleanCountryIso(price.country);
+    const country = resolveCountryCode(price);
     const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
       ? price.quantity
       : null;
@@ -1030,7 +1031,7 @@ function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelecte
 
   const validPrices = prices
     .map((price) => ({
-      country: cleanCountryIso(price.country),
+      country: resolveCountryCode(price),
       quantity: typeof price.quantity === "number" && Number.isFinite(price.quantity)
         ? Math.trunc(price.quantity)
         : null,
@@ -1274,7 +1275,7 @@ export function buildGelatoVariantMarketRows(input: {
   const marketsByCountry = new Map<string, GelatoVariantMarketRow>();
 
   for (const price of input.prices) {
-    const country = cleanCountryIso(price.country);
+    const country = resolveCountryCode(price);
     const currency = cleanString(price.currency)?.toUpperCase() ?? null;
     const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
       ? Math.trunc(price.quantity)
