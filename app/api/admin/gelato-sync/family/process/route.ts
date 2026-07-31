@@ -55,6 +55,54 @@ async function refreshGelatoSyncJobCounters(
   };
 }
 
+async function claimGelatoSyncJobItems(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  jobId: string,
+  batchSize: number,
+) {
+  const rpcResult = await supabase.rpc("claim_gelato_sync_job_items", {
+    target_job_id: jobId,
+    batch_size: batchSize,
+  });
+
+  if (!rpcResult.error) {
+    return (rpcResult.data ?? []) as Array<{
+      id: string;
+      gelato_product_uid: string;
+      attempts: number;
+      position: number;
+    }>;
+  }
+
+  const fallbackResult = await supabase
+    .from("gelato_sync_job_items")
+    .select("id, gelato_product_uid, attempts, position")
+    .eq("job_id", jobId)
+    .eq("status", "pending")
+    .order("position", { ascending: true })
+    .limit(batchSize);
+
+  if (fallbackResult.error) throw new Error(fallbackResult.error.message);
+
+  const claimed = (fallbackResult.data ?? []) as Array<{
+    id: string;
+    gelato_product_uid: string;
+    attempts: number;
+    position: number;
+  }>;
+
+  if (claimed.length === 0) return [];
+
+  const { error: claimUpdateError } = await supabase
+    .from("gelato_sync_job_items")
+    .update({ status: "processing", started_at: isoNow(), updated_at: isoNow() })
+    .in("id", claimed.map((item) => item.id))
+    .eq("status", "pending");
+  if (claimUpdateError) throw new Error(claimUpdateError.message);
+
+  return claimed;
+}
+
 async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
   const counters = await refreshGelatoSyncJobCounters(supabase, jobId);
   const { data: job, error: jobError } = await supabase
@@ -136,18 +184,7 @@ export async function POST(request: Request) {
     if (jobError) throw new Error(jobError.message);
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
 
-    const { data: items, error: itemsError } = await supabase.rpc("claim_gelato_sync_job_items", {
-      target_job_id: jobId,
-      batch_size: BATCH_SIZE,
-    });
-    if (itemsError) throw new Error(itemsError.message);
-
-    const claimed = (items ?? []) as Array<{
-      id: string;
-      gelato_product_uid: string;
-      attempts: number;
-      position: number;
-    }>;
+    const claimed = await claimGelatoSyncJobItems(supabase, jobId, BATCH_SIZE);
     if (claimed.length === 0) {
       const finalizeResult = await finalizeJobIfReady(supabase, jobId);
       return NextResponse.json({
