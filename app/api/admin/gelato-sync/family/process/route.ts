@@ -28,7 +28,7 @@ async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jo
   const processingItems = rows.filter((item) => item.status === "processing").length;
 
   return {
-    totalJobItems: rows.length,
+    totalItems: rows.length,
     completedItems,
     failedItems,
     pendingItems,
@@ -41,18 +41,19 @@ async function refreshGelatoSyncJobCounters(
   supabase: ReturnType<typeof createSupabaseAdmin>,
   jobId: string,
 ) {
-  const { data, error } = await supabase.rpc("refresh_gelato_sync_job_counters", {
-    target_job_id: jobId,
-  });
+  const counts = await getJobCounts(supabase, jobId);
+  const { error } = await supabase
+    .from("gelato_sync_jobs")
+    .update({
+      total_variants: counts.totalItems,
+      processed_variants: counts.completedItems + counts.failedItems,
+      successful_variants: counts.completedItems,
+      failed_variants: counts.failedItems,
+      updated_at: isoNow(),
+    })
+    .eq("id", jobId);
   if (error) throw new Error(error.message);
-  const row = Array.isArray(data) ? data[0] : data;
-  return {
-    totalItems: Number((row as Record<string, unknown> | null)?.total_items ?? 0),
-    completedItems: Number((row as Record<string, unknown> | null)?.completed_items ?? 0),
-    failedItems: Number((row as Record<string, unknown> | null)?.failed_items ?? 0),
-    pendingItems: Number((row as Record<string, unknown> | null)?.pending_items ?? 0),
-    processingItems: Number((row as Record<string, unknown> | null)?.processing_items ?? 0),
-  };
+  return counts;
 }
 
 async function claimGelatoSyncJobItems(
@@ -202,7 +203,7 @@ export async function POST(request: Request) {
     for (const item of claimed) {
       processed += 1;
       try {
-        const result = await syncGelatoProductFamily({
+        await syncGelatoProductFamily({
           productId: String(job.product_id),
           catalogUid: String(job.catalog_uid),
           referenceProductUid: String(job.reference_product_uid),
