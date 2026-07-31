@@ -8,9 +8,24 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 const BATCH_SIZE = 3;
+const TEMPORARY_ERROR_CODES = [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524];
 
 function isoNow() {
   return new Date().toISOString();
+}
+
+function isTemporaryUpstreamError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const normalized = message.toLowerCase();
+
+  return (
+    TEMPORARY_ERROR_CODES.some((code) => normalized.includes(String(code))) ||
+    normalized.includes("connection timed out") ||
+    normalized.includes("timeout") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("network") ||
+    normalized.includes("cloudflare")
+  );
 }
 
 async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
@@ -90,6 +105,35 @@ async function claimGelatoSyncJobItems(
   return claimed;
 }
 
+async function releaseProcessingItems(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  itemIds: string[],
+) {
+  if (itemIds.length === 0) return;
+
+  const { error } = await supabase
+    .from("gelato_sync_job_items")
+    .update({ status: "pending", updated_at: isoNow() })
+    .in("id", itemIds)
+    .eq("status", "processing");
+
+  if (error) throw new Error(error.message);
+}
+
+function retryableProcessResponse(jobId: string) {
+  return NextResponse.json(
+    {
+      ok: false,
+      retryable: true,
+      status: "processing",
+      code: "TEMPORARY_UPSTREAM_ERROR",
+      message: "Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.",
+      jobId,
+    },
+    { status: 503 },
+  );
+}
+
 async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
   const counters = await refreshGelatoSyncJobCounters(supabase, jobId);
   const { data: job, error: jobError } = await supabase
@@ -157,12 +201,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: check.error }, { status: check.status });
   }
 
+  let supabase: ReturnType<typeof createSupabaseAdmin> | null = null;
+  let jobId = "";
+  let claimedItemIds: string[] = [];
+
   try {
     const body = await request.json().catch(() => ({}));
-    const jobId = typeof body?.jobId === "string" ? body.jobId.trim() : "";
+    jobId = typeof body?.jobId === "string" ? body.jobId.trim() : "";
     if (!jobId) return NextResponse.json({ ok: false, error: "Missing jobId." }, { status: 400 });
 
-    const supabase = createSupabaseAdmin();
+    supabase = createSupabaseAdmin();
     const { data: job, error: jobError } = await supabase
       .from("gelato_sync_jobs")
       .select("id, product_id, catalog_uid, reference_product_uid, family_key, status, processed_variants, successful_variants, failed_variants, total_variants")
@@ -172,6 +220,7 @@ export async function POST(request: Request) {
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
 
     const claimed = await claimGelatoSyncJobItems(supabase, jobId, BATCH_SIZE);
+    claimedItemIds = claimed.map((item) => item.id);
     if (claimed.length === 0) {
       const finalizeResult = await finalizeJobIfReady(supabase, jobId);
       return NextResponse.json({
@@ -225,6 +274,20 @@ export async function POST(request: Request) {
 
         await refreshGelatoSyncJobCounters(supabase, jobId);
       } catch (error) {
+        if (isTemporaryUpstreamError(error)) {
+          await releaseProcessingItems(supabase, claimedItemIds);
+          await supabase
+            .from("gelato_sync_jobs")
+            .update({
+              status: "processing",
+              current_error: "Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.",
+              last_processed_at: isoNow(),
+            })
+            .eq("id", jobId);
+          await refreshGelatoSyncJobCounters(supabase, jobId);
+          return retryableProcessResponse(jobId);
+        }
+
         failed += 1;
         const errorMessage = error instanceof Error ? error.message : "Unknown error";
         const finalFailure = item.attempts + 1 >= 3;
@@ -265,6 +328,23 @@ export async function POST(request: Request) {
       finalStatus: (finalizeResult as { finalStatus?: string }).finalStatus ?? null,
     });
   } catch (error) {
+    if (jobId && supabase && isTemporaryUpstreamError(error)) {
+      try {
+        await releaseProcessingItems(supabase, claimedItemIds);
+        await supabase
+          .from("gelato_sync_jobs")
+          .update({
+            status: "processing",
+            current_error: "Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.",
+            last_processed_at: isoNow(),
+          })
+          .eq("id", jobId);
+        await refreshGelatoSyncJobCounters(supabase, jobId);
+      } catch {}
+
+      return retryableProcessResponse(jobId);
+    }
+
     return NextResponse.json(
       { ok: false, error: error instanceof Error ? error.message : "Failed to process Gelato family batch." },
       { status: 500 },

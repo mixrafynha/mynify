@@ -38,13 +38,45 @@ type SyncJob = {
   inconsistent?: boolean | null;
 };
 
+const TEMPORARY_STATUS_CODES = [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524];
+const PROCESS_RETRY_DELAYS_MS = [2000, 5000, 10000, 20000, 20000];
+
+class RetryableSyncError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RetryableSyncError";
+  }
+}
+
+function isTemporaryStatus(status: number) {
+  return TEMPORARY_STATUS_CODES.includes(status);
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function readResponsePayload(res: Response) {
+  const contentType = res.headers.get("content-type") ?? "";
   const text = await res.text();
   if (!text) return {};
+  if (!contentType.includes("application/json")) {
+    return {
+      error: isTemporaryStatus(res.status)
+        ? "Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada."
+        : `Unexpected upstream response: ${res.status}`,
+      retryable: isTemporaryStatus(res.status),
+    };
+  }
   try {
     return JSON.parse(text);
   } catch {
-    return { error: text };
+    return {
+      error: isTemporaryStatus(res.status)
+        ? "Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada."
+        : `Unexpected upstream response: ${res.status}`,
+      retryable: isTemporaryStatus(res.status),
+    };
   }
 }
 
@@ -122,6 +154,8 @@ export default function GelatoSyncPage() {
   }
 
   async function processJob(jobId: string) {
+    let consecutiveRetries = 0;
+
     while (true) {
       const res = await fetch("/api/admin/gelato-sync/family/process", {
         method: "POST",
@@ -130,12 +164,30 @@ export default function GelatoSyncPage() {
         body: JSON.stringify({ jobId }),
       });
       const json = await readResponsePayload(res);
+      const retryable = json?.retryable === true || isTemporaryStatus(res.status);
+
+      if (retryable) {
+        consecutiveRetries += 1;
+        const status = await readJobStatus(jobId);
+        if ((status?.pending_items ?? 0) > 0 && (status?.processing_items ?? 0) === 0) {
+          if (consecutiveRetries > PROCESS_RETRY_DELAYS_MS.length) {
+            setMessage("Pausado por erro temporario. Clica em Retomar sincronizacao.");
+            throw new RetryableSyncError("Pausado por erro temporario. Retoma a sincronizacao com o mesmo job.");
+          }
+          setMessage("Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.");
+          await sleep(PROCESS_RETRY_DELAYS_MS[consecutiveRetries - 1]);
+          continue;
+        }
+      }
+
       if (!res.ok || json?.ok === false) {
         throw new Error(json?.error || "Failed to process batch");
       }
 
+      consecutiveRetries = 0;
       const status = await readJobStatus(jobId);
       if (status?.status === "completed") break;
+      if (status?.status === "completed_with_errors") break;
       if (status?.status === "failed") {
         throw new Error(status.current_error || "Job failed");
       }
@@ -179,11 +231,39 @@ export default function GelatoSyncPage() {
       }
       await processJob(jobId);
       const finalStatus = await readJobStatus(jobId);
-      if (finalStatus?.status !== "completed" || !finalStatus?.can_complete) {
+      const finishedStatus =
+        finalStatus?.status === "completed" || finalStatus?.status === "completed_with_errors";
+      if (!finishedStatus || !finalStatus?.can_complete) {
         throw new Error(finalStatus?.current_error || "Job did not complete cleanly");
       }
-      setMessage("Family sync completed.");
+      setMessage(finalStatus.status === "completed_with_errors" ? "Family sync completed with errors." : "Family sync completed.");
       void loadState();
+    } catch (err) {
+      if (err instanceof RetryableSyncError) {
+        setError("Pausado por erro temporario. Usa o mesmo job para retomar a sincronizacao.");
+      } else {
+        setError(err instanceof Error ? err.message : "Sync failed");
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function resumeCurrentJob() {
+    const savedJobId = localStorage.getItem(`gelato-family-sync:${productId.trim()}`) ?? job?.id ?? "";
+    if (!savedJobId) return;
+    setSyncing(true);
+    setError(null);
+    setMessage("A retomar sincronizacao...");
+    try {
+      await processJob(savedJobId);
+      const finalStatus = await readJobStatus(savedJobId);
+      const finishedStatus =
+        finalStatus?.status === "completed" || finalStatus?.status === "completed_with_errors";
+      if (!finishedStatus || !finalStatus?.can_complete) {
+        throw new Error(finalStatus?.current_error || "Job did not complete cleanly");
+      }
+      setMessage(finalStatus.status === "completed_with_errors" ? "Family sync completed with errors." : "Family sync completed.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sync failed");
     } finally {
@@ -300,6 +380,17 @@ export default function GelatoSyncPage() {
           {error && (
             <div className="rounded-2xl border border-rose-500/15 bg-rose-500/10 p-4 text-sm font-semibold text-rose-900">
               {error}
+              {error.includes("Pausado por erro temporario") && (
+                <button
+                  type="button"
+                  onClick={() => void resumeCurrentJob()}
+                  disabled={syncing}
+                  className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-rose-900 px-3 text-xs font-black text-white transition disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                  Retomar sincronizacao
+                </button>
+              )}
             </div>
           )}
         </section>
