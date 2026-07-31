@@ -87,7 +87,7 @@ export async function POST(request: Request) {
         const { error: itemsError } = await supabase
           .from("gelato_sync_job_items")
           .upsert(batch, {
-            onConflict: "job_id,gelato_product_uid",
+            onConflict: "job_id,position",
             ignoreDuplicates: false,
           });
         if (itemsError) {
