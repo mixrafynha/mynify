@@ -45,6 +45,51 @@ export async function GET(request: Request) {
       pending === 0 &&
       processing === 0;
     const inconsistent = Number(job.total_variants ?? 0) > 0 && total === 0;
+    const itemProductUids = Array.from(
+      new Set((items ?? []).map((item) => item.gelato_product_uid).filter(Boolean)),
+    );
+    let variantCosts: Array<Record<string, unknown>> = [];
+
+    if (itemProductUids.length > 0) {
+      const { data: variants } = await supabase
+        .from("product_variants")
+        .select("id, name, size, gelato_product_uid, product_color_id, price")
+        .in("gelato_product_uid", itemProductUids);
+      const variantIds = (variants ?? []).map((variant) => variant.id).filter(Boolean);
+      const { data: colors } = variantIds.length > 0
+        ? await supabase
+            .from("product_colors")
+            .select("id, color")
+            .in("id", (variants ?? []).map((variant) => variant.product_color_id).filter(Boolean))
+        : { data: [] };
+      const { data: markets } = variantIds.length > 0
+        ? await supabase
+            .from("gelato_variant_markets")
+            .select("product_variant_id, country_code, currency, quantity, product_price, price_checked_at")
+            .in("product_variant_id", variantIds)
+            .eq("country_code", "FR")
+            .eq("quantity", 1)
+        : { data: [] };
+      const colorsById = new Map((colors ?? []).map((color) => [color.id, color.color]));
+      const marketsByVariantId = new Map(
+        (markets ?? [])
+          .filter((market) => market.product_price !== null)
+          .map((market) => [market.product_variant_id, market]),
+      );
+
+      variantCosts = (variants ?? []).map((variant) => {
+        const market = marketsByVariantId.get(variant.id);
+        return {
+          gelato_product_uid: variant.gelato_product_uid,
+          name: variant.name,
+          color: colorsById.get(variant.product_color_id) ?? null,
+          size: variant.size,
+          cost_fr: market?.product_price ?? variant.price ?? null,
+          currency: market?.currency ?? null,
+          last_synced_at: market?.price_checked_at ?? null,
+        };
+      });
+    }
 
     return NextResponse.json({
       ok: true,
@@ -60,6 +105,7 @@ export async function GET(request: Request) {
         processing_items: processing,
         can_complete: canComplete,
         inconsistent,
+        variant_costs: variantCosts,
       },
       items: items ?? [],
     });

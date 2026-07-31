@@ -1,5 +1,6 @@
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { GELATO_COUNTRIES } from "@/app/checkout/_lib/checkout";
+import { resolveGelatoColorHex } from "@/lib/gelato/gelato-color-map";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
@@ -476,66 +477,6 @@ function buildFamilyFilters(
   return Object.fromEntries(entries);
 }
 
-const COLOR_HEX_MAP: Record<string, string> = {
-  banana: "#f4d35e",
-  berry: "#7b2cbf",
-  black: "#111111",
-  blue: "#2563eb",
-  boysenberry: "#7b2cbf",
-  brown: "#7c4a2d",
-  celadon: "#9dc3a7",
-  chambray: "#8fb3d9",
-  charcoal: "#4b4b4b",
-  citrus: "#f7c948",
-  cinnamon: "#a0522d",
-  clay: "#b5654d",
-  cream: "#f3ead7",
-  cumin: "#a67c52",
-  emerald: "#10b981",
-  forest: "#166534",
-  grape: "#7c3aed",
-  gray: "#9ca3af",
-  grey: "#9ca3af",
-  heather: "#b8b8b8",
-  ice: "#cfe8f3",
-  "ice-blue": "#cfe8f3",
-  ivory: "#f8f1e6",
-  khaki: "#c3b091",
-  kiwi: "#7cb342",
-  lemon: "#f7df1e",
-  magenta: "#d946ef",
-  maroon: "#7f1d1d",
-  melon: "#f4a261",
-  midnight: "#1f2937",
-  moss: "#6b8e23",
-  navy: "#1e3a8a",
-  "neon-blue": "#38bdf8",
-  olive: "#556b2f",
-  orchid: "#c084fc",
-  peony: "#f472b6",
-  periwinkle: "#8da2fb",
-  pink: "#f9a8d4",
-  plum: "#7e22ce",
-  red: "#dc2626",
-  sage: "#9caf88",
-  sandstone: "#c8b08a",
-  seafoam: "#9ee7cf",
-  silver: "#c0c0c0",
-  slate: "#64748b",
-  teal: "#0f766e",
-  "true-navy": "#1e293b",
-  violet: "#8b5cf6",
-  white: "#ffffff",
-  yellow: "#facc15",
-  "washed-denim": "#7aa7c7",
-  "island-reef": "#4fb3a7",
-};
-
-function getColorHex(colorName: string | null | undefined): string {
-  const normalized = normalizeKey(colorName ?? "");
-  return COLOR_HEX_MAP[normalized] ?? "#cccccc";
-}
-
 function isHexColor(value: string): boolean {
   return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value.trim());
 }
@@ -607,7 +548,11 @@ function deriveColorData(
   return {
     colorKey: normalizeKey(colorTitle),
     colorName: colorTitle,
-    colorHex: explicitColorHex ?? getColorHex(colorTitle),
+    colorHex: resolveGelatoColorHex({
+      colorKey: colorTitle,
+      colorName: colorTitle,
+      gelatoHex: explicitColorHex,
+    }),
     colorAttributeUid,
     colorValueUid,
   };
@@ -1252,10 +1197,57 @@ function shouldIgnoreMissingGelatoFamilyKeyColumn(error: { message?: string } | 
   );
 }
 
+function shouldIgnoreMissingVariantPriceMetadataColumns(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    message.includes("price_currency") ||
+    message.includes("price_country") ||
+    message.includes("price_source") ||
+    message.includes("price_last_synced_at") ||
+    message.includes("schema cache")
+  );
+}
+
 function isMissingGelatoMarketConflictConstraint(error: { message?: string } | null) {
   return (error?.message ?? "").includes(
     "there is no unique or exclusion constraint matching the ON CONFLICT specification",
   );
+}
+
+export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[]) {
+  const preferredCountries = [
+    cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
+    "FR",
+  ].filter((country): country is string => Boolean(country));
+
+  const validMarkets = markets.filter(
+    (market) => market.quantity === 1 && typeof market.product_price === "number" && market.product_price > 0,
+  );
+
+  for (const country of preferredCountries) {
+    const market = validMarkets.find((entry) => entry.country_code === country);
+    if (market) return market;
+  }
+
+  return validMarkets[0] ?? null;
+}
+
+function buildVariantPriceMetadataPayload(
+  market: GelatoVariantMarketRow | null,
+  syncedAt: string,
+  hasPriceMetadataColumns: boolean,
+) {
+  return {
+    price: market?.product_price ?? null,
+    ...(hasPriceMetadataColumns
+      ? {
+          price_currency: market?.currency ?? null,
+          price_country: market?.country_code ?? null,
+          price_source: market ? "gelato_variant_markets" : null,
+          price_last_synced_at: market ? syncedAt : null,
+        }
+      : {}),
+  };
 }
 
 export function buildGelatoVariantMarketRows(input: {
@@ -1367,7 +1359,7 @@ async function saveGelatoVariantMarkets(input: {
     const { error } = await supabase
       .from("gelato_variant_markets")
       .upsert(marketRows, {
-        onConflict: "product_variant_id,country_code",
+        onConflict: "product_variant_id,country_code,currency,quantity",
       });
 
     if (error && isMissingGelatoMarketConflictConstraint(error)) {
@@ -1490,6 +1482,13 @@ export async function syncGelatoProductFamily(
     .select("gelato_family_key")
     .limit(1);
   const hasGelatoFamilyKeyColumn = !familyKeyProbeError || !shouldIgnoreMissingGelatoFamilyKeyColumn(familyKeyProbeError);
+  const { error: variantPriceMetadataProbeError } = await supabase
+    .from("product_variants")
+    .select("price_currency")
+    .limit(1);
+  const hasVariantPriceMetadataColumns =
+    !variantPriceMetadataProbeError ||
+    !shouldIgnoreMissingVariantPriceMetadataColumns(variantPriceMetadataProbeError);
 
   getProductFamilyProgressPayload(
     productId,
@@ -1593,7 +1592,11 @@ export async function syncGelatoProductFamily(
     const colorPayload = {
       product_id: productId,
       color: firstEntry.colorName,
-      color_hex: existingColor?.color_hex ?? firstEntry.colorHex,
+      color_hex: resolveGelatoColorHex({
+        colorKey,
+        colorName: firstEntry.colorName,
+        gelatoHex: existingColor?.color_hex ?? firstEntry.colorHex,
+      }),
       mockup_front: existingColor?.mockup_front ?? null,
       mockup_back: existingColor?.mockup_back ?? null,
       thumbnail: existingColor?.thumbnail ?? null,
@@ -1652,13 +1655,18 @@ export async function syncGelatoProductFamily(
         syncedAt: syncStartedAt,
       });
 
+      const referenceMarket = pickVariantReferenceMarket(familyRowPreview);
       const variantPayload = {
         product_color_id: colorId,
         size: entry.sizeName,
         name: variantName,
         sku: buildGelatoVariantSku(entry),
         stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
-        price: existingVariant?.price ?? null,
+        ...buildVariantPriceMetadataPayload(
+          referenceMarket,
+          syncStartedAt,
+          hasVariantPriceMetadataColumns,
+        ),
         gelato_product_uid: entry.product.productUid,
         gelato_product_name: getGelatoProductName(entryDetails),
         gelato_catalog_uid: catalogUid,
@@ -1831,10 +1839,16 @@ export async function syncGelatoCatalog(
     const notSupportedCountries = rawNotSupportedCountries;
     const selectedGelatoBaseVariantPrice = pickGelatoBaseVariantPrice(gelatoPriceRows);
     const gelatoBaseVariantPrice = selectedGelatoBaseVariantPrice?.price ?? null;
-    const editableVariantPrice = gelatoBaseVariantPrice;
     const gelatoProductName = getGelatoProductName(matchedProductDetails);
     const gelatoAvailable = isGelatoProductAvailable(matchedProductDetails);
     const supabase = createSupabaseAdmin();
+    const { error: variantPriceMetadataProbeError } = await supabase
+      .from("product_variants")
+      .select("price_currency")
+      .limit(1);
+    const hasVariantPriceMetadataColumns =
+      !variantPriceMetadataProbeError ||
+      !shouldIgnoreMissingVariantPriceMetadataColumns(variantPriceMetadataProbeError);
 
     const { data: colorRows, error: colorsError } = await supabase
       .from("product_colors")
@@ -1921,7 +1935,11 @@ export async function syncGelatoCatalog(
       const colorPayload = {
         product_id: productId,
         color: firstEntry.colorName,
-        color_hex: existingColor?.color_hex ?? firstEntry.colorHex,
+        color_hex: resolveGelatoColorHex({
+          colorKey,
+          colorName: firstEntry.colorName,
+          gelatoHex: existingColor?.color_hex ?? firstEntry.colorHex,
+        }),
         mockup_front: existingColor?.mockup_front ?? existingProduct.image,
         mockup_back: existingColor?.mockup_back ?? null,
         thumbnail: existingColor?.thumbnail ?? existingProduct.image,
@@ -1986,13 +2004,18 @@ export async function syncGelatoCatalog(
         const variantGelatoAvailable = variantMarketPreview.some(
           (market) => market.is_available === true,
         );
+        const referenceMarket = pickVariantReferenceMarket(variantMarketPreview);
         const variantPayload = {
           product_color_id: colorId,
           size: entry.sizeName,
           name: variantName,
           sku: buildGelatoVariantSku(entry),
           stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
-          price: existingVariant?.price ?? editableVariantPrice,
+          ...buildVariantPriceMetadataPayload(
+            referenceMarket,
+            startedAt,
+            hasVariantPriceMetadataColumns,
+          ),
           gelato_product_uid: entry.product.productUid,
           gelato_product_name: gelatoProductName,
           gelato_catalog_uid: catalog.catalogUid,
@@ -2279,7 +2302,11 @@ export async function syncGelatoCatalogPage(
       const colorPayload = {
         product_id: productId,
         color: firstEntry.colorName,
-        color_hex: existingColor?.color_hex ?? firstEntry.colorHex,
+        color_hex: resolveGelatoColorHex({
+          colorKey,
+          colorName: firstEntry.colorName,
+          gelatoHex: existingColor?.color_hex ?? firstEntry.colorHex,
+        }),
         mockup_front: existingColor?.mockup_front ?? existingProduct.image,
         mockup_back: existingColor?.mockup_back ?? null,
         thumbnail: existingColor?.thumbnail ?? existingProduct.image,

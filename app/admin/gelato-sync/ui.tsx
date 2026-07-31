@@ -36,6 +36,15 @@ type SyncJob = {
   current_error?: string | null;
   can_complete?: boolean | null;
   inconsistent?: boolean | null;
+  variant_costs?: Array<{
+    gelato_product_uid?: string | null;
+    name?: string | null;
+    color?: string | null;
+    size?: string | null;
+    cost_fr?: number | string | null;
+    currency?: string | null;
+    last_synced_at?: string | null;
+  }> | null;
 };
 
 const TEMPORARY_STATUS_CODES = [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524];
@@ -364,6 +373,38 @@ export default function GelatoSyncPage() {
           <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">
             {JSON.stringify(job, null, 2)}
           </pre>
+        </section>
+      )}
+
+      {job?.variant_costs && job.variant_costs.length > 0 && (
+        <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
+          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Variant costs</h2>
+          <div className="overflow-auto rounded-[24px] border border-black/5">
+            <table className="w-full min-w-[760px] text-left text-xs font-semibold text-black/65">
+              <thead className="bg-black/[0.03] text-[11px] uppercase tracking-[0.16em] text-black/35">
+                <tr>
+                  <th className="px-4 py-3">Cor</th>
+                  <th className="px-4 py-3">Tamanho</th>
+                  <th className="px-4 py-3">UID Gelato</th>
+                  <th className="px-4 py-3">Custo FR</th>
+                  <th className="px-4 py-3">Moeda</th>
+                  <th className="px-4 py-3">Ultima sync</th>
+                </tr>
+              </thead>
+              <tbody>
+                {job.variant_costs.slice(0, 80).map((variant) => (
+                  <tr key={variant.gelato_product_uid ?? `${variant.color}-${variant.size}`} className="border-t border-black/5">
+                    <td className="px-4 py-3">{variant.color ?? "-"}</td>
+                    <td className="px-4 py-3">{variant.size ?? "-"}</td>
+                    <td className="max-w-[340px] truncate px-4 py-3">{variant.gelato_product_uid ?? "-"}</td>
+                    <td className="px-4 py-3">{variant.cost_fr ?? "-"}</td>
+                    <td className="px-4 py-3">{variant.currency ?? "-"}</td>
+                    <td className="px-4 py-3">{variant.last_synced_at ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
