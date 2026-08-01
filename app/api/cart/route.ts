@@ -18,6 +18,7 @@ type CartItem = {
   id: string;
   product_id: string;
   user_product_id: string | null;
+  design_id: string | null;
   variant_id: string | null;
   title: string | null;
   price: number | string | null;
@@ -139,6 +140,7 @@ export async function GET() {
         id,
         product_id,
         user_product_id,
+        design_id,
         variant_id,
         title,
         price,
@@ -186,6 +188,9 @@ export async function GET() {
           productUid: gelatoProductUid,
           gelato_product_uid: gelatoProductUid,
           gelatoProductUid: gelatoProductUid,
+          design_id: item.design_id,
+          designId: item.design_id,
+          userProductId: item.user_product_id,
           stock: variantRelation?.stock ?? selectedVariant?.stock ?? null,
           selectedVariant,
           availableVariants,

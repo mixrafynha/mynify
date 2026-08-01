@@ -415,10 +415,13 @@ export default function CheckoutPage() {
             currency: "EUR",
             items: items.map((item) => ({
               itemId: item.id,
+              cartItemId: item.id,
               title: item.title,
               productId: getCartProductId(item),
               productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
               variantId: item.variant_id ?? null,
+              designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
+              userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
               color: item.color ?? null,
               size: item.size ?? null,
               quantity: Math.max(1, Number(item.quantity) || 1),

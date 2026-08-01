@@ -72,8 +72,10 @@ export type CartItem = {
   currency?: string | null;
   base_product_id?: string | null;
   user_product_id?: string | null;
+  design_id?: string | null;
   baseProductId?: string | null;
   userProductId?: string | null;
+  designId?: string | null;
   title: string;
   price: number;
   quantity: number;
