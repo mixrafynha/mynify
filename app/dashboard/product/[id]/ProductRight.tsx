@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -283,27 +283,17 @@ export function ProductRight({
         </div>
       )}
 
-      <style jsx global>{`
-        @keyframes toastBar {
-          from {
-            width: 100%;
-          }
-
-          to {
-            width: 0%;
-          }
-        }
-      `}</style>
+      <style jsx global>{`\n        @keyframes toastBar {\n          from {\n            width: 100%;\n          }\n\n          to {\n            width: 0%;\n          }\n        }\n      `}</style>
 
       <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
         <div className="space-y-2 text-left">
           <h1
-            className="max-w-[11ch] text-[1.95rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.4rem] lg:text-[3rem]"
+            className="max-w-[11ch] text-[1.79rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.21rem] lg:text-[2.76rem]"
             style={{ fontFamily: 'var(--font-logo)' }}
           >
             <span className="block">{titleFirstWord}</span>
             {titleRemaining ? (
-              <span className="block text-white/92">{titleRemaining}</span>
+              <span className="block whitespace-nowrap text-white/92">{titleRemaining}</span>
             ) : null}
           </h1>
 
@@ -330,20 +320,28 @@ export function ProductRight({
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
-
-            <div className="shrink-0 border border-white/[0.08] px-2.5 py-1 text-[10px] font-medium text-white/62">
-              No inventory needed
-            </div>
           </div>
 
           <div className="mt-5 text-sm">
             {typeof stock === "number" ? (
               stock > 0 ? (
-                <span className="font-bold text-[#22c55e]">
-                  In stock ({stock})
-                </span>
+                <div
+                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52"
+                  aria-label={`In stock (${stock})`}
+                  title={`In stock (${stock})`}
+                >
+                  <span>Stock</span>
+                  <span className="inline-flex h-3 w-3 rounded-full bg-[#22c55e]" />
+                </div>
               ) : (
-                <span className="font-bold text-[#ef4444]">Out of stock</span>
+                <div
+                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52"
+                  aria-label="Out of stock"
+                  title="Out of stock"
+                >
+                  <span>Stock</span>
+                  <span className="inline-flex h-3 w-3 rounded-full bg-[#ef4444]" />
+                </div>
               )
             ) : (
               <span className="text-white/50">Select variant</span>
@@ -385,27 +383,46 @@ export function ProductRight({
           </div>
         </div>
 
-        <div className="space-y-2.5">
+        <div className="mt-3 border border-white/[0.10] bg-white px-3 py-2 text-[#111111] shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
+          <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#6b7280]">
+            <span>Shipping from</span>
+            <span className="grid h-4 w-4 place-items-center border border-[#cfd4dc] text-[9px] leading-none">i</span>
+          </div>
+
+          <div className="mt-0.5 text-[1.45rem] font-black leading-none tracking-[-0.04em] text-[#111111]">
+            €7.65
+          </div>
+
+          <div className="mt-1 text-[10px] font-medium text-[#6b7280]">
+            5-6 business days
+          </div>
+
+          <div className="mt-2">
+            <div className="text-[10px] font-medium text-[#6b7280]">Delivery to</div>
+            <div className="mt-1 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-[10px] font-semibold text-[#111111]">
+                <span className="text-base leading-none">🇦🇺</span>
+                <span>Australia</span>
+              </div>
+              <span className="text-[10px] leading-none text-[#6b7280]">▾</span>
+            </div>
+          </div>
+
+          <div className="mt-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">Available</div>
+        </div>
+
+        <div className="mt-3 flex gap-2.5">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex h-[56px] w-full items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-5 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[56px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-5 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
-              {loading ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              ) : (
-                <ShoppingCart size={15} />
-              )}
+              {loading ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <ShoppingCart size={15} />}
             </span>
-
-            <span className="relative">
-              {loading ? "Adding..." : "Add to cart"}
-            </span>
-
+            <span className="relative">{loading ? "Adding..." : "Add to cart"}</span>
             {!loading && <Zap className="relative text-yellow-200" size={14} />}
           </button>
 
@@ -413,14 +430,12 @@ export function ProductRight({
             type="button"
             disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex h-[56px] w-full items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-5 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[56px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-5 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
-
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
               <Palette size={15} />
             </span>
-
             <span className="relative">Start Designing</span>
           </button>
         </div>
@@ -429,58 +444,14 @@ export function ProductRight({
           <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="text-sm font-black text-white">Verified reviews</p>
-
               <div className="flex items-center gap-1 text-yellow-300">
                 {[1, 2, 3, 4, 5].map((item) => (
                   <Star key={item} size={13} fill="currentColor" />
                 ))}
               </div>
             </div>
-
-            <div className="space-y-3">
-              {verifiedReviews.map((review: any) => (
-                <div
-                  key={review.id}
-                  className="rounded-2xl border border-white/[0.08] bg-[#1b1424] p-3"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-fuchsia-500 text-xs font-black text-white">
-                      {review.name?.[0]?.toUpperCase() ?? "U"}
-                    </div>
-
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-white">
-                        {review.name ?? "Verified customer"}
-                      </p>
-                      <p className="text-[11px] font-bold text-emerald-300">
-                        verified account
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs leading-relaxed text-white/58">
-                    {review.message}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
         )}
-
-        <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            Secure checkout
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            Quality tested
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            Fast production
-          </span>
-          <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            Worldwide shipping
-          </span>
-        </div>
       </div>
     </>
   );
