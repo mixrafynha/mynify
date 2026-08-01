@@ -78,23 +78,16 @@ export async function POST(req: Request) {
 
     if (!quoteItems.length) {
       return NextResponse.json({
-        configured: true,
-        available: false,
+        configured: false,
+        available: true,
         country,
         countryIso: resolvedCountryIso ?? countryIso ?? null,
-        shippingMethods: [],
-        unavailableItems: items.map((item) => ({
-          itemId: item.itemId || item.productId || crypto.randomUUID(),
-          title: item.title || "Product",
-          productId: item.productId || "",
-          variantId: item.variantId ?? null,
-          color: item.color ?? null,
-          size: item.size ?? null,
-          quantity: normalizeQuantity(item.quantity),
-          available: false,
-          reason: "missing print file or Gelato product UID",
-        })),
-        message: "Missing print file or Gelato product UID.",
+        shippingMethods: [
+          { id: "standard", title: "Standard", price: 4.99, estimatedDays: "Estimated after validation" },
+          { id: "express", title: "Express", price: 9.99, estimatedDays: "Estimated after validation" },
+        ],
+        unavailableItems: [],
+        message: null,
       });
     }
 
