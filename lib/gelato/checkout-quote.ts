@@ -58,6 +58,7 @@ type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string
 
 const GELATO_QUOTE_URL = "https://api.gelato.com/v2/quote";
 const TEMPORARY_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524]);
+const GELATO_QUOTE_TIMEOUT_MS = 15_000;
 
 function cleanString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -96,18 +97,21 @@ function isTemporaryStatus(status: number): boolean {
   return TEMPORARY_STATUS_CODES.has(status);
 }
 
-async function readGelatoJson(response: Response): Promise<JsonValue | null> {
-  const text = await response.text();
-  if (!text.trim()) return null;
+function getQuoteUrl(): string {
+  return process.env.GELATO_QUOTE_URL?.trim() || GELATO_QUOTE_URL;
+}
+
+function safeJsonString(value: unknown) {
   try {
-    return toJsonValue(JSON.parse(text));
+    return JSON.stringify(value);
   } catch {
-    return text as unknown as JsonValue;
+    return null;
   }
 }
 
-function getQuoteUrl(): string {
-  return process.env.GELATO_QUOTE_URL?.trim() || GELATO_QUOTE_URL;
+function logLine(prefix: string, payload: unknown) {
+  const serialized = safeJsonString(payload);
+  console.log(`${prefix} ${serialized ?? "\"[unserializable]\""}`);
 }
 
 function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
@@ -208,6 +212,47 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Normal
   };
 }
 
+function classifyGelatoHttpFailure(status: number): {
+  ok: boolean;
+  retryable: boolean;
+  code: string;
+  reason: NormalizedGelatoQuote["reason"];
+} {
+  if (status === 401 || status === 403) {
+    return {
+      ok: false,
+      retryable: false,
+      code: "GELATO_QUOTE_REJECTED",
+      reason: "invalid_quote_response",
+    };
+  }
+
+  if (status === 404) {
+    return {
+      ok: false,
+      retryable: false,
+      code: "GELATO_QUOTE_REJECTED",
+      reason: "invalid_quote_response",
+    };
+  }
+
+  if (status === 429 || (status >= 500 && status <= 504) || isTemporaryStatus(status)) {
+    return {
+      ok: false,
+      retryable: true,
+      code: "GELATO_TEMPORARILY_UNAVAILABLE",
+      reason: "temporary_gelato_error",
+    };
+  }
+
+  return {
+    ok: false,
+    retryable: false,
+    code: "GELATO_QUOTE_REJECTED",
+    reason: "invalid_quote_response",
+  };
+}
+
 export async function getGelatoCheckoutQuote(
   input: GelatoCheckoutQuoteInput,
 ): Promise<NormalizedGelatoQuote> {
@@ -261,8 +306,28 @@ export async function getGelatoCheckoutQuote(
           : [],
   };
 
+  const url = new URL(getQuoteUrl());
+  const startedAt = Date.now();
+  const endpointDetails = {
+    host: url.host,
+    path: url.pathname,
+    method: "POST",
+    itemsCount: input.items?.length ?? (input.printFiles.length > 0 ? 1 : 0),
+    countryCode: normalizeCountryCode(input.shippingAddress.countryCode) ?? input.shippingAddress.countryCode.trim().toUpperCase(),
+    postalCodePresent: Boolean(input.shippingAddress.postalCode?.trim()),
+    printFilesCount: input.items?.reduce((count, item) => count + (item.printFiles?.length ?? 0), 0) ?? input.printFiles.length,
+  };
+
+  logLine("[GELATO_QUOTE_CALL_START]", {
+    ...endpointDetails,
+    startedAt: new Date(startedAt).toISOString(),
+  });
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new Error("GELATO_QUOTE_TIMEOUT")), GELATO_QUOTE_TIMEOUT_MS);
+
   try {
-    const response = await fetch(getQuoteUrl(), {
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -270,23 +335,90 @@ export async function getGelatoCheckoutQuote(
       },
       body: JSON.stringify(payload),
       cache: "no-store",
+      signal: controller.signal,
     });
 
-    const raw = await readGelatoJson(response);
+    const rawText = await response.text();
+    const rawPreview = rawText.slice(0, 500);
+    let rawJson: JsonValue | null = null;
+    let jsonParseFailed = false;
 
-    if (!response.ok) {
-      return classifyQuoteFailure(response.status, raw);
+    if (rawText.trim()) {
+      try {
+        rawJson = toJsonValue(JSON.parse(rawText));
+      } catch {
+        jsonParseFailed = true;
+      }
     }
 
-    return normalizeQuoteResponse(raw);
-  } catch {
+    logLine("[GELATO_QUOTE_HTTP_RESPONSE]", {
+      httpStatus: response.status,
+      ok: response.ok,
+      durationMs: Date.now() - startedAt,
+      contentType: response.headers.get("content-type"),
+      bodyLength: rawText.length,
+      bodyPreview: rawPreview,
+    });
+
+    if (jsonParseFailed) {
+      logLine("[GELATO_QUOTE_JSON_PARSE_ERROR]", {
+        httpStatus: response.status,
+        bodyPreview: rawPreview,
+      });
+    }
+
+    if (!response.ok) {
+      const classification = classifyGelatoHttpFailure(response.status);
+      return {
+        available: false,
+        retryable: classification.retryable,
+        productCost: null,
+        productCurrency: null,
+        shippingOptions: [],
+        reason: classification.reason,
+      };
+    }
+
+    const normalized = normalizeQuoteResponse(rawJson);
+
+    logLine("[GELATO_QUOTE_CALL_END]", {
+      httpStatus: response.status,
+      shippingMethodsCount: normalized.shippingOptions.length,
+      available: normalized.available,
+      retryable: normalized.retryable,
+      reason: normalized.reason,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return normalized;
+  } catch (error) {
+    const isTimeout =
+      error instanceof Error &&
+      (error.name === "AbortError" || error.message.includes("GELATO_QUOTE_TIMEOUT"));
+
+    logLine("[GELATO_QUOTE_CALL_ERROR]", {
+      durationMs: Date.now() - startedAt,
+      name: error instanceof Error ? error.name : "UnknownError",
+      message: error instanceof Error ? error.message : String(error),
+      cause:
+        error instanceof Error && "cause" in error && error.cause
+          ? String(error.cause)
+          : null,
+      timeout: isTimeout,
+    });
+
     return {
       available: false,
       retryable: true,
       productCost: null,
       productCurrency: null,
       shippingOptions: [],
-      reason: "temporary_gelato_error",
+      reason: isTimeout ? "temporary_gelato_error" : "temporary_gelato_error",
     };
+  } finally {
+    clearTimeout(timeoutId);
+    logLine("[GELATO_QUOTE_CALL_FINALLY]", {
+      durationMs: Date.now() - startedAt,
+    });
   }
 }
