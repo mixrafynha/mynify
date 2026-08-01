@@ -253,6 +253,8 @@ export async function POST(req: Request) {
       const productUidFromVariant = variantId ? variantMap.get(variantId) ?? null : null;
       const productUidFromFrontend = safeText(item.productUid) || null;
       const resolvedProductUid = productUidFromVariant || productUidFromFrontend || null;
+      const designLookupAttempted = Boolean(designId || cartItemId);
+      const designFound = Boolean(designId && userProductMap.has(designId));
 
       const userProductRecord = designId ? userProductMap.get(designId) ?? null : null;
       const serverFiles = extractPrintableFiles(
@@ -272,24 +274,20 @@ export async function POST(req: Request) {
             }))
             .filter((file) => isPublicHttpsUrl(file.url));
 
-      const reason =
-        !variantId
-          ? "MISSING_VARIANT"
-          : !productUidFromVariant && !productUidFromFrontend
-            ? "VARIANT_NOT_FOUND"
-            : !resolvedProductUid
-              ? "MISSING_PRODUCT_UID"
-              : !designId && !cartItemId
-        ? "PRINT_FILE_NOT_FOUND"
-          : !userProductRecord && (designId || cartItemId)
-                  ? "DESIGN_NOT_FOUND"
-                  : frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))
-                    ? "INVALID_PRINT_FILE_URL"
-                    : !resolvedPrintFiles.length
-                      ? "MISSING_PRINT_FILES"
-                      : quantity === null
-                        ? "INVALID_QUANTITY"
-                        : "";
+      let reason = "";
+      if (!variantId) {
+        reason = "MISSING_VARIANT";
+      } else if (!productUidFromVariant && !productUidFromFrontend) {
+        reason = "VARIANT_NOT_FOUND";
+      } else if (!resolvedProductUid) {
+        reason = "MISSING_PRODUCT_UID";
+      } else if (quantity === null) {
+        reason = "INVALID_QUANTITY";
+      } else if (frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))) {
+        reason = "INVALID_PRINT_FILE_URL";
+      } else if (!resolvedPrintFiles.length) {
+        reason = designLookupAttempted && !designFound ? "DESIGN_NOT_FOUND" : "MISSING_PRINT_FILES";
+      }
 
       console.log(
         `[CHECKOUT_ITEM_RESOLVED] ${JSON.stringify({
