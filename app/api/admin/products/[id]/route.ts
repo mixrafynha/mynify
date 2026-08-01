@@ -82,6 +82,16 @@ export async function PATCH(
   if (body.title !== undefined) updatePayload.title = body.title;
   if (body.description !== undefined) updatePayload.description = body.description;
   if (body.price !== undefined) updatePayload.price = body.price;
+  if (body.profit_markup_percentage !== undefined) {
+    const markup = Number(body.profit_markup_percentage);
+    if (!Number.isFinite(markup) || markup < 0 || markup > 500) {
+      return NextResponse.json(
+        { error: "Profit markup percentage must be between 0 and 500." },
+        { status: 400 },
+      );
+    }
+    updatePayload.profit_markup_percentage = markup;
+  }
   if (body.image !== undefined) updatePayload.image = body.image;
   if (body.is_active !== undefined) updatePayload.is_active = body.is_active;
 

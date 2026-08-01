@@ -2,6 +2,8 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { convertMoneyToCents, normalizeCheckoutCurrency } from "./currency";
+import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { calculateSellingPrice } from "@/lib/gelato/pricing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +32,10 @@ const supabase = createClient(
 type CheckoutBody = {
   // Novo formato seguro vindo do carrinho.
   cartItemIds?: string[];
+  customer?: {
+    country?: string | null;
+    countryIso?: string | null;
+  };
 
   // Compatibilidade temporária com o checkout antigo.
   id?: string;
@@ -55,6 +61,7 @@ type ProductRow = {
   title: string;
   price: number | string | null;
   currency: string | null;
+  profit_markup_percentage?: number | string | null;
 };
 
 type VariantRow = {
@@ -65,6 +72,15 @@ type VariantRow = {
   sku: string | null;
   product_color_id: string | null;
   gelato_product_uid: string | null;
+};
+
+type VariantMarketRow = {
+  product_variant_id: string;
+  country_code: string;
+  currency: string;
+  is_available: boolean;
+  product_price: number | string | null;
+  quantity: number;
 };
 
 function isUuid(value: unknown): value is string {
@@ -121,6 +137,14 @@ function safeQuantity(value: unknown): number | null {
   }
 
   return quantity;
+}
+
+function resolveCheckoutCountryCode(body: CheckoutBody): string | null {
+  return (
+    resolveCountryCode(body.customer?.countryIso) ??
+    resolveCountryCode(body.customer?.country) ??
+    null
+  );
 }
 
 function getBearerToken(req: Request): string | null {
@@ -246,7 +270,7 @@ export async function POST(req: Request) {
       const { data: productRows, error: productsError } =
         await supabase
           .from("products")
-          .select("id, title, price, currency")
+          .select("id, title, price, currency, profit_markup_percentage")
           .in("id", productIds);
 
       if (productsError) {
@@ -291,6 +315,31 @@ export async function POST(req: Request) {
         variants = (variantRows ?? []) as VariantRow[];
       }
 
+      const shippingCountryCode = resolveCheckoutCountryCode(body);
+      let variantMarkets: VariantMarketRow[] = [];
+
+      if (variantIds.length > 0 && shippingCountryCode) {
+        const { data: marketRows, error: marketsError } = await supabase
+          .from("gelato_variant_markets")
+          .select("product_variant_id, country_code, currency, is_available, product_price, quantity")
+          .in("product_variant_id", variantIds)
+          .eq("country_code", shippingCountryCode)
+          .eq("quantity", 1);
+
+        if (marketsError) {
+          console.error("CHECKOUT_VARIANT_MARKETS_ERROR", {
+            code: marketsError.code,
+          });
+
+          return NextResponse.json(
+            { error: "Failed to validate Gelato variant markets" },
+            { status: 500 },
+          );
+        }
+
+        variantMarkets = (marketRows ?? []) as VariantMarketRow[];
+      }
+
       const productMap = new Map(
         ((productRows ?? []) as ProductRow[]).map((product) => [
           product.id,
@@ -301,6 +350,9 @@ export async function POST(req: Request) {
      const variantMap = new Map(
       variants.map((variant) => [variant.id, variant]),
     );
+      const variantMarketMap = new Map(
+        variantMarkets.map((market) => [market.product_variant_id, market]),
+      );
 
     type StripeSessionParams = NonNullable<
       Parameters<typeof stripe.checkout.sessions.create>[0]
@@ -386,7 +438,53 @@ export async function POST(req: Request) {
          * cart_items.price é deliberadamente ignorado.
          * Qualquer price enviado pelo editor/browser também é ignorado.
          */
-        const officialPrice = Number(variant?.price ?? product.price);
+        let officialPrice = Number(variant?.price ?? product.price);
+        let officialBaseCurrency = normalizeBaseCurrency(product.currency).toUpperCase();
+        const gelatoMarket = variant?.gelato_product_uid && shippingCountryCode
+          ? variantMarketMap.get(variant.id)
+          : null;
+
+        if (variant?.gelato_product_uid && !shippingCountryCode) {
+          return NextResponse.json(
+            {
+              error: "Delivery country is required to validate Gelato availability.",
+              variantId: variant.id,
+            },
+            { status: 400 },
+          );
+        }
+
+        if (variant?.gelato_product_uid && shippingCountryCode) {
+          if (!gelatoMarket || !gelatoMarket.is_available) {
+            return NextResponse.json(
+              {
+                error: "Selected variant is not available for this destination.",
+                variantId: variant.id,
+                countryCode: shippingCountryCode,
+              },
+              { status: 409 },
+            );
+          }
+
+          const sellingPrice = calculateSellingPrice({
+            productionCost: gelatoMarket.product_price,
+            markupPercentage: product.profit_markup_percentage,
+          });
+
+          if (sellingPrice === null) {
+            return NextResponse.json(
+              {
+                error: "Invalid Gelato production cost for selected variant.",
+                variantId: variant.id,
+                countryCode: shippingCountryCode,
+              },
+              { status: 400 },
+            );
+          }
+
+          officialPrice = sellingPrice;
+          officialBaseCurrency = normalizeBaseCurrency(gelatoMarket.currency).toUpperCase();
+        }
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
           return NextResponse.json(
@@ -397,7 +495,7 @@ export async function POST(req: Request) {
           );
         }
 
-        const baseCurrency = normalizeBaseCurrency(product.currency).toUpperCase();
+        const baseCurrency = officialBaseCurrency;
         const currency = normalizeCheckoutCurrency(cartItem.currency);
 
         if (

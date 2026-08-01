@@ -94,6 +94,12 @@ type GelatoVariantMarketRow = {
   updated_at: string;
 };
 
+type GelatoMarketAvailability = {
+  isAvailable: boolean;
+  reason: string | null;
+  source: string;
+};
+
 type GelatoColorImages = {
   mockup_front: string | null;
   mockup_back: string | null;
@@ -1049,6 +1055,113 @@ function extractNotSupportedCountries(product: GelatoProductDetails): string[] {
   return normalizeCountryCodes(rawCountries);
 }
 
+function extractGelatoProductStatus(product: GelatoProductDetails): string | null {
+  return (
+    cleanString(product.attributes?.ProductStatus) ??
+    cleanString(product.attributes?.State) ??
+    cleanString(product.ProductStatus) ??
+    cleanString(product.productStatus) ??
+    cleanString(product.status) ??
+    cleanString(product.state)
+  );
+}
+
+function extractGelatoIsPrintable(product: GelatoProductDetails): boolean | null {
+  const raw =
+    product.isPrintable ??
+    product.printable ??
+    product.attributes?.isPrintable ??
+    product.attributes?.IsPrintable;
+
+  if (typeof raw === "boolean") return raw;
+  if (typeof raw === "string") {
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  return null;
+}
+
+export function resolveGelatoMarketAvailability(input: {
+  countryCode: unknown;
+  productStatus: unknown;
+  supportedCountries: unknown[];
+  notSupportedCountries: unknown[];
+  hasValidPrice: boolean;
+  isPrintable?: boolean | null;
+}): GelatoMarketAvailability {
+  const countryCode = cleanCountryIso(input.countryCode);
+  const productStatus = cleanString(input.productStatus)?.toLowerCase() ?? null;
+  const supportedCountries = normalizeCountryCodes(input.supportedCountries);
+  const notSupportedCountries = normalizeCountryCodes(input.notSupportedCountries);
+
+  if (productStatus !== "activated") {
+    return {
+      isAvailable: false,
+      reason: "product_not_active",
+      source: "gelato_product_details",
+    };
+  }
+
+  if (input.isPrintable === false) {
+    return {
+      isAvailable: false,
+      reason: "product_not_printable",
+      source: "gelato_product_details",
+    };
+  }
+
+  const explicitlySupported = Boolean(countryCode && supportedCountries.includes(countryCode));
+  const explicitlyBlocked = Boolean(countryCode && notSupportedCountries.includes(countryCode));
+
+  if (explicitlySupported && explicitlyBlocked) {
+    return {
+      isAvailable: false,
+      reason: "availability_conflict",
+      source: "gelato_product_details",
+    };
+  }
+
+  if (explicitlyBlocked) {
+    return {
+      isAvailable: false,
+      reason: "country_not_supported",
+      source: "gelato_product_details",
+    };
+  }
+
+  if (explicitlySupported && input.hasValidPrice) {
+    return {
+      isAvailable: true,
+      reason: null,
+      source: "gelato_product_details",
+    };
+  }
+
+  if (explicitlySupported && !input.hasValidPrice) {
+    return {
+      isAvailable: false,
+      reason: "price_unavailable",
+      source: "gelato_product_details",
+    };
+  }
+
+  if (!explicitlySupported && !explicitlyBlocked && input.hasValidPrice) {
+    return {
+      isAvailable: false,
+      reason: "availability_not_confirmed",
+      source: "price_only",
+    };
+  }
+
+  return {
+    isAvailable: false,
+    reason: "availability_not_confirmed",
+    source: "gelato_product_details",
+  };
+}
+
 function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[] {
   const normalizedPrices: JsonValue[] = [];
 
@@ -1187,13 +1300,7 @@ export async function searchGelatoProductFamily(
 }
 
 function isGelatoProductAvailable(product: GelatoProductDetails): boolean {
-  const status =
-    cleanString(product.attributes?.ProductStatus) ??
-    cleanString(product.attributes?.State) ??
-    cleanString(product.status) ??
-    cleanString(product.state);
-
-  return String(status ?? "").trim().toLowerCase() === "activated";
+  return String(extractGelatoProductStatus(product) ?? "").trim().toLowerCase() === "activated";
 }
 
 function nowIso() {
@@ -1269,6 +1376,44 @@ function isMissingGelatoMarketConflictConstraint(error: { message?: string } | n
   );
 }
 
+const GELATO_MARKET_DIAGNOSTIC_COUNTRIES = new Set([
+  "FR",
+  "PT",
+  "ES",
+  "DE",
+  "NL",
+  "IT",
+  "BE",
+  "US",
+  "GB",
+]);
+
+function logGelatoMarketAvailabilityDiagnostic(input: {
+  productUid: string;
+  countryCode: string;
+  productStatus: string | null;
+  supportedCountries: string[];
+  notSupportedCountries: string[];
+  hasValidPrice: boolean;
+  availability: GelatoMarketAvailability;
+}) {
+  if (!GELATO_MARKET_DIAGNOSTIC_COUNTRIES.has(input.countryCode)) return;
+
+  console.info({
+    event: "gelato_market_availability_resolved",
+    productUid: input.productUid,
+    productStatus: input.productStatus,
+    normalizedSupportedCountries: input.supportedCountries,
+    normalizedNotSupportedCountries: input.notSupportedCountries,
+    countryCode: input.countryCode,
+    supported: input.supportedCountries.includes(input.countryCode),
+    blocked: input.notSupportedCountries.includes(input.countryCode),
+    hasValidPrice: input.hasValidPrice,
+    resolvedAvailability: input.availability.isAvailable,
+    resolvedReason: input.availability.reason,
+  });
+}
+
 export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[]) {
   const preferredCountries = [
     cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
@@ -1313,6 +1458,8 @@ export function buildGelatoVariantMarketRows(input: {
   explicitSupportedCountries: string[];
   hasExplicitSupportedCountries: boolean;
   productIsAvailable: boolean;
+  productStatus?: string | null;
+  isPrintable?: boolean | null;
   syncedAt: string;
   logAvailabilityConflicts?: boolean;
 }): GelatoVariantMarketRow[] {
@@ -1327,6 +1474,9 @@ export function buildGelatoVariantMarketRows(input: {
       .filter((country): country is string => Boolean(country)),
   );
   const marketsByCountry = new Map<string, GelatoVariantMarketRow>();
+  const normalizedSupportedCountries = Array.from(explicitSupportedCountries);
+  const normalizedNotSupportedCountries = Array.from(notSupportedCountries);
+  const productStatus = input.productStatus ?? (input.productIsAvailable ? "activated" : "inactive");
 
   for (const price of input.prices) {
     const country = resolveCountryCode(price);
@@ -1342,26 +1492,19 @@ export function buildGelatoVariantMarketRows(input: {
 
     const hasValidPrice = amount !== null && amount > 0;
     const productPrice = hasValidPrice ? roundMoney(amount) : null;
-    const explicitlySupported =
-      input.hasExplicitSupportedCountries && explicitSupportedCountries.has(country);
+    const availability = resolveGelatoMarketAvailability({
+      countryCode: country,
+      productStatus,
+      supportedCountries: input.hasExplicitSupportedCountries
+        ? normalizedSupportedCountries
+        : [],
+      notSupportedCountries: normalizedNotSupportedCountries,
+      hasValidPrice,
+      isPrintable: input.isPrintable,
+    });
+    const explicitlySupported = explicitSupportedCountries.has(country);
     const explicitlyUnsupported = notSupportedCountries.has(country);
     const availabilityConflict = explicitlySupported && explicitlyUnsupported;
-    const unavailableReason = (() => {
-      if (!input.productIsAvailable) return "product_not_active";
-      if (availabilityConflict) return "availability_conflict";
-      if (explicitlyUnsupported) return "country_not_supported";
-      if (explicitlySupported && !hasValidPrice) return "price_unavailable";
-      if (explicitlySupported && hasValidPrice) return null;
-      return null;
-    })();
-    const isAvailable =
-      input.productIsAvailable &&
-      explicitlySupported &&
-      hasValidPrice &&
-      !explicitlyUnsupported;
-    const effectiveUnavailableReason = unavailableReason ?? (
-      isAvailable ? null : "availability_not_confirmed"
-    );
 
     if (availabilityConflict && input.logAvailabilityConflicts) {
       console.warn({
@@ -1371,18 +1514,26 @@ export function buildGelatoVariantMarketRows(input: {
       });
     }
 
+    logGelatoMarketAvailabilityDiagnostic({
+      productUid: input.productUid,
+      countryCode: country,
+      productStatus,
+      supportedCountries: input.hasExplicitSupportedCountries ? normalizedSupportedCountries : [],
+      notSupportedCountries: normalizedNotSupportedCountries,
+      hasValidPrice,
+      availability,
+    });
+
     marketsByCountry.set(country, {
       product_variant_id: input.productVariantId,
       country_code: country,
       currency,
-      is_available: isAvailable,
+      is_available: availability.isAvailable,
       product_price: productPrice,
       quantity: 1,
-      availability_source: effectiveUnavailableReason === "availability_not_confirmed"
-        ? "price_only"
-        : "gelato_product_details",
+      availability_source: availability.source,
       price_source: "gelato_product_prices",
-      unavailable_reason: effectiveUnavailableReason,
+      unavailable_reason: availability.reason,
       price_checked_at: input.syncedAt,
       availability_checked_at: input.syncedAt,
       updated_at: nowIso(),
@@ -1401,6 +1552,8 @@ async function saveGelatoVariantMarkets(input: {
   explicitSupportedCountries: string[];
   hasExplicitSupportedCountries: boolean;
   productIsAvailable: boolean;
+  productStatus?: string | null;
+  isPrintable?: boolean | null;
   syncedAt: string;
 }): Promise<GelatoVariantMarketRow[]> {
   const supabase = createSupabaseAdmin();
@@ -1409,6 +1562,15 @@ async function saveGelatoVariantMarkets(input: {
     logAvailabilityConflicts: true,
   });
   const syncedCountries = marketRows.map((market) => market.country_code);
+
+  if (marketRows.length > 0 && !marketRows.some((market) => market.is_available)) {
+    console.warn({
+      event: "NO_AVAILABLE_MARKETS_FOUND",
+      productUid: input.productUid,
+      productVariantId: input.productVariantId,
+      countries: syncedCountries,
+    });
+  }
 
   if (marketRows.length > 0) {
     const { error } = await supabase
@@ -1697,6 +1859,8 @@ export async function syncGelatoProductFamily(
       const entryExplicitSupportedCountries = entrySupportedResult.countries;
       const entryNotSupportedCountries = extractNotSupportedCountries(entryDetails);
       const entryProductIsAvailable = isGelatoProductAvailable(entryDetails);
+      const entryProductStatus = extractGelatoProductStatus(entryDetails);
+      const entryIsPrintable = extractGelatoIsPrintable(entryDetails);
       const gelatoVariantUid =
         extractVariantUidFromAttributes(entry.product.attributes) ?? entry.product.productUid;
       const variantName = `${entry.colorName} / ${entry.sizeName}`;
@@ -1708,6 +1872,8 @@ export async function syncGelatoProductFamily(
         explicitSupportedCountries: entryExplicitSupportedCountries,
         hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
         productIsAvailable: entryProductIsAvailable,
+        productStatus: entryProductStatus,
+        isPrintable: entryIsPrintable,
         syncedAt: syncStartedAt,
       });
 
@@ -1756,6 +1922,8 @@ export async function syncGelatoProductFamily(
           explicitSupportedCountries: entryExplicitSupportedCountries,
           hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
           productIsAvailable: entryProductIsAvailable,
+          productStatus: entryProductStatus,
+          isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
         });
         variantsUpdated += 1;
@@ -1774,6 +1942,8 @@ export async function syncGelatoProductFamily(
           explicitSupportedCountries: entryExplicitSupportedCountries,
           hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
           productIsAvailable: entryProductIsAvailable,
+          productStatus: entryProductStatus,
+          isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
         });
         variantsCreated += 1;
@@ -1897,6 +2067,8 @@ export async function syncGelatoCatalog(
     const gelatoBaseVariantPrice = selectedGelatoBaseVariantPrice?.price ?? null;
     const gelatoProductName = getGelatoProductName(matchedProductDetails);
     const gelatoAvailable = isGelatoProductAvailable(matchedProductDetails);
+    const gelatoProductStatus = extractGelatoProductStatus(matchedProductDetails);
+    const gelatoIsPrintable = extractGelatoIsPrintable(matchedProductDetails);
     const supabase = createSupabaseAdmin();
     const { error: variantPriceMetadataProbeError } = await supabase
       .from("product_variants")
@@ -2055,6 +2227,8 @@ export async function syncGelatoCatalog(
           explicitSupportedCountries,
           hasExplicitSupportedCountries: supportedCountriesResult.hasExplicitSupportedCountries,
           productIsAvailable: gelatoAvailable,
+          productStatus: gelatoProductStatus,
+          isPrintable: gelatoIsPrintable,
           syncedAt: startedAt,
         });
         const variantGelatoAvailable = variantMarketPreview.some(
@@ -2109,6 +2283,8 @@ export async function syncGelatoCatalog(
             explicitSupportedCountries,
             hasExplicitSupportedCountries: supportedCountriesResult.hasExplicitSupportedCountries,
             productIsAvailable: gelatoAvailable,
+            productStatus: gelatoProductStatus,
+            isPrintable: gelatoIsPrintable,
             syncedAt: startedAt,
           });
           variantsUpdated += 1;
@@ -2132,6 +2308,8 @@ export async function syncGelatoCatalog(
             explicitSupportedCountries,
             hasExplicitSupportedCountries: supportedCountriesResult.hasExplicitSupportedCountries,
             productIsAvailable: gelatoAvailable,
+            productStatus: gelatoProductStatus,
+            isPrintable: gelatoIsPrintable,
             syncedAt: startedAt,
           });
           variantsCreated += 1;

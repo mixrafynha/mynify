@@ -40,6 +40,7 @@ type ProductForm = {
   description: string;
   price: number;
   discount_price: number | "";
+  profit_markup_percentage: number;
   image: string;
   images: string[];
   category: string;
@@ -93,6 +94,7 @@ export default function EditProductPage() {
     description: "",
     price: 0,
     discount_price: "",
+    profit_markup_percentage: 30,
     image: "",
     images: [],
     category: "",
@@ -107,11 +109,27 @@ export default function EditProductPage() {
       Boolean(form.title.trim()) &&
       Boolean(form.slug.trim()) &&
       form.price > 0 &&
+      form.profit_markup_percentage >= 0 &&
+      form.profit_markup_percentage <= 500 &&
       Boolean(form.image || form.images.length || localImages.length) &&
       !saving &&
       !uploading
     );
-  }, [form.title, form.slug, form.price, form.image, form.images.length, localImages.length, saving, uploading]);
+  }, [form.title, form.slug, form.price, form.profit_markup_percentage, form.image, form.images.length, localImages.length, saving, uploading]);
+
+  const gelatoCostPreview = useMemo(() => {
+    const variantPrices = form.variants
+      .map((variant) => Number(variant.price))
+      .filter((price) => Number.isFinite(price) && price > 0);
+    return variantPrices.length > 0 ? Math.min(...variantPrices) : null;
+  }, [form.variants]);
+
+  const sellingPricePreview = useMemo(() => {
+    if (gelatoCostPreview === null) return null;
+    return Math.round(
+      (gelatoCostPreview * (1 + form.profit_markup_percentage / 100) + Number.EPSILON) * 100,
+    ) / 100;
+  }, [gelatoCostPreview, form.profit_markup_percentage]);
 
   const updateField = <K extends keyof ProductForm>(
     key: K,
@@ -163,6 +181,7 @@ export default function EditProductPage() {
             product.discount_price === null || product.discount_price === undefined
               ? ""
               : Number(product.discount_price),
+          profit_markup_percentage: Number(product.profit_markup_percentage ?? 30),
           image: product.image || "",
           images: Array.isArray(product.images) ? product.images : [],
           category: product.category || "",
@@ -299,6 +318,9 @@ export default function EditProductPage() {
     if (!form.title.trim()) return setError("Product title is required.");
     if (!form.slug.trim()) return setError("Slug is required.");
     if (form.price <= 0) return setError("Price must be greater than 0.");
+    if (form.profit_markup_percentage < 0 || form.profit_markup_percentage > 500) {
+      return setError("Profit markup percentage must be between 0 and 500.");
+    }
 
     try {
       setSaving(true);
@@ -346,6 +368,7 @@ export default function EditProductPage() {
           price: form.price,
           discount_price:
             form.discount_price === "" ? null : Number(form.discount_price),
+          profit_markup_percentage: form.profit_markup_percentage,
           image: mainImage,
           images: allImages,
           variants,
@@ -456,6 +479,19 @@ export default function EditProductPage() {
                 />
 
                 <Input
+                  icon={<Percent size={14} />}
+                  label="Profit markup (%)"
+                  type="number"
+                  value={form.profit_markup_percentage}
+                  onChange={(v) =>
+                    updateField(
+                      "profit_markup_percentage",
+                      Math.min(500, Math.max(0, Number(v) || 0)),
+                    )
+                  }
+                />
+
+                <Input
                   label="Category"
                   value={form.category}
                   onChange={(v) => updateField("category", v)}
@@ -467,6 +503,13 @@ export default function EditProductPage() {
                   value={form.tags.join(", ")}
                   onChange={setTags}
                 />
+              </div>
+
+              <div className="rounded-[22px] border border-cyan-300/15 bg-cyan-400/10 p-4 text-xs font-bold leading-5 text-cyan-50/80">
+                <p>Custo Gelato FR: {gelatoCostPreview === null ? "sem custo sincronizado" : gelatoCostPreview.toFixed(2)}</p>
+                <p>Margem: {form.profit_markup_percentage}%</p>
+                <p>Preco estimado: {sellingPricePreview === null ? "indisponivel" : sellingPricePreview.toFixed(2)}</p>
+                <p className="mt-1 text-cyan-50/55">Shipping continua calculado separadamente no checkout.</p>
               </div>
 
               {error && (
