@@ -281,15 +281,21 @@ export async function POST(req: Request) {
         };
       });
 
+    const rejectedItems = quoteItems
+      .filter((item) => !item._quoteItem)
+      .map(({ _quoteItem, ...item }) => item);
+
     console.log(
       "[CHECKOUT_QUOTE_ITEMS_BUILT]",
-      safeLog({
-        receivedItems: items.length,
-        quoteItemsCount: quoteItems.filter((item) => item._quoteItem).length,
-        rejectedItems: quoteItems
-          .filter((item) => !item._quoteItem)
-          .map(({ _quoteItem, ...item }) => item),
-      }),
+      JSON.stringify(
+        {
+          receivedItems: items.length,
+          quoteItemsCount: quoteItems.filter((item) => item._quoteItem).length,
+          rejectedItems,
+        },
+        null,
+        2,
+      ),
     );
 
     const validQuoteItems = quoteItems
