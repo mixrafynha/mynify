@@ -40,9 +40,12 @@ export type NormalizedGelatoQuote = {
     price: number;
     currency: string;
     fulfillmentCountry: string | null;
+    estimatedDaysMin: number | null;
+    estimatedDaysMax: number | null;
     estimatedDeliveryMin: string | null;
     estimatedDeliveryMax: string | null;
     promiseUid: string | null;
+    carrierUid: string | null;
     serviceType: string | null;
   }>;
   reason:
@@ -128,12 +131,15 @@ function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
 
   const record = raw as Record<string, unknown>;
   const production = record.production && typeof record.production === "object" ? (record.production as Record<string, unknown>) : null;
-  const shipments = Array.isArray(production?.shipments) ? production?.shipments as Record<string, unknown>[] : [];
+  const shipments = Array.isArray(production?.shipments) ? (production.shipments as Record<string, unknown>[]) : [];
+  const requestCurrency = normalizeCurrency(record.currencyIsoCode ?? record.currency ?? null);
+  const productionCurrency = normalizeCurrency(production?.currency ?? null);
+  const currency = requestCurrency ?? productionCurrency ?? "USD";
 
   const shippingOptions = shipments
     .map((shipment) => {
       const price = normalizeNumber(shipment.price);
-      const currency = normalizeCurrency(shipment.currency) ?? null;
+      const shipmentCurrency = normalizeCurrency(shipment.currency ?? null) ?? currency;
       const fulfillmentCountry = normalizeCountryCode(shipment.fulfillmentCountry ?? production?.productionCountry ?? null);
       const id = cleanString(shipment.promiseUid) ?? cleanString(shipment.uid) ?? cleanString(shipment.name) ?? "";
       const name = cleanString(shipment.name) ?? cleanString(shipment.uid) ?? id;
@@ -141,21 +147,24 @@ function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
         id,
         name,
         price: price ?? 0,
-        currency: currency ?? "",
+        currency: shipmentCurrency,
         fulfillmentCountry,
+        estimatedDaysMin: Number.isFinite(Number(shipment.minDeliveryDays)) ? Number(shipment.minDeliveryDays) : null,
+        estimatedDaysMax: Number.isFinite(Number(shipment.maxDeliveryDays)) ? Number(shipment.maxDeliveryDays) : null,
         estimatedDeliveryMin: normalizeDate(shipment.minDeliveryDate),
         estimatedDeliveryMax: normalizeDate(shipment.maxDeliveryDate),
         promiseUid: cleanString(shipment.promiseUid),
+        carrierUid: cleanString(shipment.uid),
         serviceType: cleanString(shipment.serviceType)?.toLowerCase() ?? null,
       };
     })
-    .filter((option) => Boolean(option.id) && Number.isFinite(option.price) && option.price > 0 && Boolean(option.currency));
+    .filter((option) => Boolean(option.id) && Number.isFinite(option.price) && option.price >= 0 && Boolean(option.currency));
 
   return {
     available: shippingOptions.length > 0,
     retryable: false,
     productCost: null,
-    productCurrency: normalizeCurrency(record.currencyIsoCode ?? record.currency ?? null),
+    productCurrency: currency,
     shippingOptions,
     reason:
       shippingOptions.length > 0
