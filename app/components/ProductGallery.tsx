@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { ArrowRight, Box } from "lucide-react";
 
 const PLACEHOLDER_IMAGE = "/placeholder.png";
 
@@ -73,8 +74,12 @@ export default function ProductGallery({
 
   return (
     <div className="space-y-3">
-      {/* MAIN IMAGE */}
-      <div className="relative h-[460px] w-full overflow-hidden rounded-2xl bg-[#f3f3f1] sm:h-[560px] lg:h-[680px]">
+      <div className="relative h-[460px] w-full overflow-hidden rounded-[22px] border border-[#dfdfe8] bg-[#f3f3f1] sm:h-[560px] lg:h-[680px]">
+        <div className="absolute left-4 top-4 z-10 flex h-14 w-14 flex-col items-center justify-center rounded-[18px] border border-black/10 bg-[#1c1a26] text-white shadow-[0_18px_40px_rgba(0,0,0,0.16)]">
+          <Box size={17} strokeWidth={1.8} />
+          <span className="mt-1 text-[11px] font-black tracking-[-0.02em]">3D</span>
+        </div>
+
         <Image
           key={activeImageSrc}
           src={activeImageSrc}
@@ -92,14 +97,13 @@ export default function ProductGallery({
             type="button"
             onClick={handleNextImage}
             aria-label="Show next product image"
-            className="absolute bottom-4 right-4 rounded-full bg-black px-4 py-2 text-sm font-semibold text-white"
+            className="absolute right-5 top-1/2 z-10 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full border border-white/60 bg-[#1c1a26] text-white shadow-[0_18px_40px_rgba(0,0,0,0.2)] transition hover:scale-[1.02]"
           >
-            Next
+            <ArrowRight size={22} strokeWidth={1.9} />
           </button>
         )}
       </div>
 
-      {/* THUMBNAILS */}
       {safeImages.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {safeImages.map((image, index) => {
@@ -114,10 +118,10 @@ export default function ProductGallery({
                 onClick={() => setActiveIndex(index)}
                 aria-label={`Show product image ${index + 1}`}
                 aria-pressed={index === activeIndex}
-                className={`relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-lg border bg-[#f3f3f1] ${
+                className={`relative h-[82px] w-[82px] flex-shrink-0 overflow-hidden rounded-[16px] border bg-[#f3f3f1] transition ${
                   index === activeIndex
-                    ? "border-black"
-                    : "border-black/10"
+                    ? "border-fuchsia-400 shadow-[0_0_0_1px_rgba(232,121,249,0.45)]"
+                    : "border-white/10"
                 }`}
               >
                 <Image

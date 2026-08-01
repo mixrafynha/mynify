@@ -4,12 +4,12 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Minus,
+  Palette,
   Plus,
+  ShoppingCart,
   Sparkles,
   Star,
   Zap,
-  ShoppingCart,
-  Palette,
 } from "lucide-react";
 
 export function ProductRight({
@@ -198,7 +198,7 @@ export function ProductRight({
         // Storage can fail in private mode; navigation should still work.
       }
 
-            const params = new URLSearchParams({
+      const params = new URLSearchParams({
         productId: product.id,
         product_id: product.id,
         variantId: selectedVariant.id,
@@ -257,7 +257,7 @@ export function ProductRight({
                   </p>
 
                   {toast.type === "success" && (
-                    <span className="rounded-full bg-[#1b1424] border border-emerald-300/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
+                    <span className="rounded-full border border-emerald-300/20 bg-[#1b1424] px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.15em] text-emerald-300">
                       success
                     </span>
                   )}
@@ -294,24 +294,24 @@ export function ProductRight({
 
       <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/20 bg-[#1b1424] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
+          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/30 bg-[#1b1424] px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
             <Sparkles size={13} aria-hidden="true" />
             Made on demand
           </div>
 
-          <h1 className="text-3xl font-black uppercase leading-[0.95] tracking-[-0.04em] text-white sm:text-4xl lg:text-5xl">
+          <h1 className="max-w-[12ch] text-3xl font-black uppercase leading-[0.95] tracking-[-0.055em] text-white sm:text-4xl lg:text-[4.1rem]">
             {product?.title ?? "Untitled product"}
           </h1>
 
-          <p className="text-sm leading-relaxed text-white/58 sm:text-base">
+          <p className="max-w-[34rem] text-sm leading-relaxed text-white/58 sm:text-base">
             Premium customizable products made for creators, online brands and RYFIO stores.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
+        <div className="rounded-[26px] border border-white/[0.07] bg-[#1b1424] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
-              <div className="text-3xl font-black tracking-tight text-white sm:text-4xl">
+              <div className="text-3xl font-black tracking-tight text-white sm:text-[3.15rem]">
                 €{price.toFixed(2)}
               </div>
 
@@ -321,21 +321,21 @@ export function ProductRight({
                 </div>
               )}
 
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50 ">
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-fuchsia-300 " />
+              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50">
+                <span className="text-base leading-none text-fuchsia-300">+</span>
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
 
-            <div className="shrink-0 rounded-full border border-cyan-300/20 bg-[#1b1424] px-3 py-1 text-[11px] font-bold text-cyan-100">
+            <div className="shrink-0 rounded-full border border-white/[0.1] bg-white/[0.02] px-3 py-1.5 text-[11px] font-medium text-white/72">
               No inventory needed
             </div>
           </div>
 
-          <div className="mt-4 text-sm">
+          <div className="mt-5 text-sm">
             {typeof stock === "number" ? (
               stock > 0 ? (
-                <span className="font-bold text-emerald-300">
+                <span className="font-bold text-emerald-400">
                   ● In stock ({stock})
                 </span>
               ) : (
@@ -347,7 +347,7 @@ export function ProductRight({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/[0.07] bg-[#1b1424] p-4">
+        <div className="rounded-[22px] border border-white/[0.07] bg-[#1b1424] px-4 py-3.5">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-white/75">Quantity</span>
 
@@ -381,17 +381,16 @@ export function ProductRight({
           </div>
         </div>
 
-
         <div className="space-y-3">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 py-5 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[74px] w-full items-center justify-center gap-3 overflow-hidden rounded-[18px] border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-black/25">
+            <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
               {loading ? (
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
               ) : (
@@ -410,7 +409,7 @@ export function ProductRight({
             type="button"
             disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-2xl border border-fuchsia-300/25 bg-[#1b1424] px-7 py-5 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
+            className="group relative flex h-[74px] w-full items-center justify-center gap-3 overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#1b1424] px-7 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
@@ -466,16 +465,16 @@ export function ProductRight({
 
         <div className="flex flex-wrap gap-2 text-[11px] font-bold text-white/65">
           <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Secure checkout
+            Secure checkout
           </span>
           <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Quality tested
+            Quality tested
           </span>
           <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Fast production
+            Fast production
           </span>
           <span className="rounded-full border border-white/[0.08] bg-[#1b1424] px-3 py-1">
-            ✔ Worldwide shipping
+            Worldwide shipping
           </span>
         </div>
       </div>

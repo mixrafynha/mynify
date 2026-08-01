@@ -33,10 +33,17 @@ export default function ColorSelector({
   const colors = Array.from(colorMap.values());
 
   return (
-    <div className="mt-6">
-      <p className="text-sm font-medium">Colors</p>
+    <div>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[13px] font-bold text-white/90">Colors</p>
+          <p className="mt-3 text-sm font-medium text-white/78">
+            {selectedColor || selectedVariant?.color || "Choose a color"}
+          </p>
+        </div>
+      </div>
 
-      <div className="flex flex-wrap gap-3 mt-2">
+      <div className="mt-4 flex flex-wrap gap-3">
         {colors.map((c: any, i: number) => {
           const normalizedColor = normalize(c.label);
 
@@ -81,10 +88,10 @@ export default function ColorSelector({
               className="flex flex-col items-center cursor-pointer disabled:cursor-not-allowed"
             >
               <div
-                className={`w-8 h-8 rounded-full border-2 transition ${
+                className={`h-10 w-10 rounded-full border-[1.5px] transition ${
                   isActive
-                    ? "border-black scale-110 shadow-md"
-                    : "border-gray-300 hover:scale-105"
+                    ? "border-fuchsia-300 shadow-[0_0_0_2px_rgba(168,85,247,0.5)]"
+                    : "border-white/30 hover:scale-105"
                 } ${!hasStock ? "opacity-30" : ""}`}
                 style={{
                   backgroundColor: colorHex,
