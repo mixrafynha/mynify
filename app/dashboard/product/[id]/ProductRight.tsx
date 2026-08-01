@@ -17,6 +17,9 @@ export function ProductRight({
   selectedVariant,
 }: any) {
   const router = useRouter();
+  const title = String(product?.title ?? "Untitled product").trim();
+  const [titleFirstWord, ...titleRemainingWords] = title.split(/\s+/);
+  const titleRemaining = titleRemainingWords.join(" ");
 
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -292,26 +295,27 @@ export function ProductRight({
         }
       `}</style>
 
-      <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
-        <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-300/30 bg-[#1b1424] px-3.5 py-1.5 text-[10px] font-black uppercase tracking-[0.22em] text-fuchsia-100">
-            <Sparkles size={13} aria-hidden="true" />
-            Made on demand
-          </div>
-
-          <h1 className="max-w-[12ch] text-3xl font-black uppercase leading-[0.95] tracking-[-0.055em] text-white sm:text-4xl lg:text-[4.1rem]">
-            {product?.title ?? "Untitled product"}
+      <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
+        <div className="space-y-2 text-left">
+          <h1
+            className="max-w-[11ch] text-[1.95rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.4rem] lg:text-[3rem]"
+            style={{ fontFamily: 'var(--font-logo)' }}
+          >
+            <span className="block">{titleFirstWord}</span>
+            {titleRemaining ? (
+              <span className="block text-white/92">{titleRemaining}</span>
+            ) : null}
           </h1>
 
-          <p className="max-w-[34rem] text-sm leading-relaxed text-white/58 sm:text-base">
+          <p className="max-w-[30rem] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/42 sm:text-[12px]">
             Premium customizable products made for creators, online brands and RYFIO stores.
           </p>
         </div>
 
-        <div className="rounded-[26px] border border-white/[0.07] bg-[#1b1424] p-4 sm:p-5">
+        <div className="border border-white/[0.07] bg-[#1b1424] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
-              <div className="text-3xl font-black tracking-tight text-white sm:text-[3.15rem]">
+              <div className="text-[1.85rem] font-black tracking-tight text-white sm:text-[2.2rem]">
                 €{price.toFixed(2)}
               </div>
 
@@ -321,13 +325,13 @@ export function ProductRight({
                 </div>
               )}
 
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-fuchsia-300/30 bg-fuchsia-400/[0.10] px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.12em] text-fuchsia-50">
-                <span className="text-base leading-none text-fuchsia-300">+</span>
+              <div className="inline-flex max-w-full items-center gap-1.5 border border-fuchsia-300/24 bg-fuchsia-400/[0.08] px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.1em] text-fuchsia-50">
+                <span className="text-sm leading-none text-fuchsia-300">+</span>
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
 
-            <div className="shrink-0 rounded-full border border-white/[0.1] bg-white/[0.02] px-3 py-1.5 text-[11px] font-medium text-white/72">
+            <div className="shrink-0 border border-white/[0.08] px-2.5 py-1 text-[10px] font-medium text-white/62">
               No inventory needed
             </div>
           </div>
@@ -335,33 +339,33 @@ export function ProductRight({
           <div className="mt-5 text-sm">
             {typeof stock === "number" ? (
               stock > 0 ? (
-                <span className="font-bold text-emerald-400">
-                  ● In stock ({stock})
+                <span className="font-bold text-[#22c55e]">
+                  In stock ({stock})
                 </span>
               ) : (
-                <span className="font-bold text-red-300">● Out of stock</span>
+                <span className="font-bold text-[#ef4444]">Out of stock</span>
               )
             ) : (
               <span className="text-white/50">Select variant</span>
             )}
           </div>
-        </div>
 
-        <div className="rounded-[22px] border border-white/[0.07] bg-[#1b1424] px-4 py-3.5">
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-bold text-white/75">Quantity</span>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/48">
+              Quantity
+            </span>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={decreaseQuantity}
                 disabled={quantity <= 1 || loading}
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
-                <Minus size={16} />
+                <Minus size={14} />
               </button>
 
-              <span className="min-w-8 text-center text-sm font-black text-white">
+              <span className="min-w-7 text-center text-sm font-black text-white">
                 {quantity}
               </span>
 
@@ -373,28 +377,28 @@ export function ProductRight({
                   isOutOfStock ||
                   (typeof stock === "number" && quantity >= stock)
                 }
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
               >
-                <Plus size={16} />
+                <Plus size={14} />
               </button>
             </div>
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex h-[74px] w-full items-center justify-center gap-3 overflow-hidden rounded-[18px] border border-fuchsia-300/30 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-7 text-base font-black uppercase tracking-[0.14em] text-white shadow-lg transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[56px] w-full items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-5 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
 
-            <span className="relative flex h-11 w-11 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
               {loading ? (
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
               ) : (
-                <ShoppingCart size={20} />
+                <ShoppingCart size={15} />
               )}
             </span>
 
@@ -402,19 +406,19 @@ export function ProductRight({
               {loading ? "Adding..." : "Add to cart"}
             </span>
 
-            {!loading && <Zap className="relative text-yellow-200" size={20} />}
+            {!loading && <Zap className="relative text-yellow-200" size={14} />}
           </button>
 
           <button
             type="button"
             disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex h-[74px] w-full items-center justify-center gap-3 overflow-hidden rounded-[18px] border border-white/[0.08] bg-[#1b1424] px-7 text-base font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:border-fuchsia-300/40 md:hover:bg-white/[0.06]"
+            className="group relative flex h-[56px] w-full items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-5 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
-            <span className="absolute inset-0 bg-gradient-to-r from-violet-600/20 via-fuchsia-500/20 to-cyan-400/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
 
-            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-fuchsia-300/20">
-              <Palette size={20} />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
+              <Palette size={15} />
             </span>
 
             <span className="relative">Start Designing</span>

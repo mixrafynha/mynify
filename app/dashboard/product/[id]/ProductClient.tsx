@@ -205,14 +205,14 @@ export default function ProductClient({
   return (
     <div className="w-full min-w-0 space-y-5 bg-transparent">
       <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] xl:gap-5">
-        <div className="min-w-0 rounded-2xl border border-white/10 bg-[#15101d] p-2 sm:p-3">
+        <div className="min-w-0">
           <ProductLeft
             images={safeImages}
             product={product}
           />
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-white/10 bg-[#15101d] p-4 lg:sticky lg:top-20">
+        <div className="min-w-0 p-4 lg:sticky lg:top-20">
           <ProductRight
             product={product}
             selectedVariant={selectedVariant}
