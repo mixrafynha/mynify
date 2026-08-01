@@ -82,12 +82,9 @@ export async function POST(req: Request) {
         available: true,
         country,
         countryIso: resolvedCountryIso ?? countryIso ?? null,
-        shippingMethods: [
-          { id: "standard", title: "Standard", price: 4.99, estimatedDays: "Estimated after validation" },
-          { id: "express", title: "Express", price: 9.99, estimatedDays: "Estimated after validation" },
-        ],
+        shippingMethods: [],
         unavailableItems: [],
-        message: null,
+        message: "Complete your shipping address to see available delivery methods.",
       });
     }
 
@@ -106,17 +103,17 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           configured: true,
-          available: false,
-          retryable: true,
-          country,
-          countryIso: resolvedCountryIso ?? countryIso ?? null,
-          shippingMethods: [],
-          unavailableItems: [],
-          message: "Shipping could not be calculated right now.",
-        },
-        { status: 503 },
-      );
-    }
+        available: false,
+        retryable: true,
+        country,
+        countryIso: resolvedCountryIso ?? countryIso ?? null,
+        shippingMethods: [],
+        unavailableItems: [],
+        message: "We couldn't calculate shipping. Check the address and try again.",
+      },
+      { status: 503 },
+    );
+  }
 
     if (!quote.available) {
       return NextResponse.json({

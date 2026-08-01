@@ -78,6 +78,18 @@ type GelatoDraftTestResult = {
   durationMs?: number;
 };
 
+type CheckoutShippingMethod = {
+  id: string;
+  title: string;
+  price?: number | null;
+  currency?: string | null;
+  estimatedDays?: string | null;
+  fulfillmentCountry?: string | null;
+  promiseUid?: string | null;
+  serviceType?: string | null;
+  description?: string | null;
+};
+
 function getObjectValue(source: unknown, keys: string[]): unknown {
   if (!source || typeof source !== "object") return null;
 
@@ -168,6 +180,8 @@ export default function CheckoutPage() {
   const selectedAddressLock = useRef("");
   const addressSessionToken = useRef(createAddressSessionToken());
   const availabilityLookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const availabilityAbortController = useRef<AbortController | null>(null);
+  const availabilityRequestId = useRef(0);
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -203,6 +217,14 @@ export default function CheckoutPage() {
       country: "",
       shippingMethod: "standard",
     },
+  );
+
+  const hasCompleteShippingAddress = Boolean(
+    form.country.trim() &&
+      form.postalCode.trim() &&
+      form.city.trim() &&
+      form.address.trim() &&
+      items.length > 0,
   );
 
   const { subtotal, totalItems } = useMemo(() => {
@@ -351,23 +373,28 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
+    availabilityAbortController.current?.abort();
 
     const country = form.country.trim();
     const countryData = resolveCheckoutCountry(country);
 
-    if (!country || !items.length) {
+    if (!hasCompleteShippingAddress) {
       setProductAvailability({
         loading: false,
         checked: false,
         configured: false,
         available: true,
         unavailableItems: [],
-        message: null,
+        message: "Complete your shipping address to see available delivery methods.",
       });
       return;
     }
 
     availabilityLookupTimer.current = setTimeout(async () => {
+      const requestId = ++availabilityRequestId.current;
+      const controller = new AbortController();
+      availabilityAbortController.current = controller;
+
       setProductAvailability((current) => ({ ...current, loading: true, message: null }));
 
       try {
@@ -375,9 +402,16 @@ export default function CheckoutPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
+          signal: controller.signal,
           body: JSON.stringify({
             country,
             countryIso: countryData?.iso ?? null,
+            addressLine1: form.address.trim(),
+            addressLine2: form.apartment.trim() || null,
+            city: form.city.trim(),
+            postalCode: form.postalCode.trim(),
+            state: null,
+            currency: "EUR",
             items: items.map((item) => ({
               itemId: item.id,
               title: item.title,
@@ -390,10 +424,12 @@ export default function CheckoutPage() {
           }),
         });
 
+        if (requestId !== availabilityRequestId.current) return;
+
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || "Availability check failed");
 
-        const methods = safeArray<{ id: string; title: string; price?: number | null; estimatedDays?: string | null; currency?: string | null; fulfillmentCountry?: string | null; promiseUid?: string | null; serviceType?: string | null }>(data?.shippingMethods);
+        const methods = safeArray<CheckoutShippingMethod>(data?.shippingMethods).filter((method) => Boolean(method.id));
 
         setProductAvailability({
           loading: false,
@@ -407,10 +443,15 @@ export default function CheckoutPage() {
           message: data?.message ?? null,
         });
 
-        if (methods.length && !methods.some((method) => method.id === form.shippingMethod)) {
-          setForm((prev) => ({ ...prev, shippingMethod: methods[0].id as CheckoutForm["shippingMethod"] }));
+        if (methods.length) {
+          setForm((prev) => {
+            if (methods.some((method) => method.id === prev.shippingMethod)) return prev;
+            const cheapest = [...methods].sort((a, b) => (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY))[0];
+            return cheapest ? { ...prev, shippingMethod: cheapest.id as CheckoutForm["shippingMethod"] } : prev;
+          });
         }
-      } catch {
+      } catch (error) {
+        if (controller.signal.aborted || requestId !== availabilityRequestId.current) return;
         setProductAvailability({
           loading: false,
           checked: true,
@@ -419,15 +460,18 @@ export default function CheckoutPage() {
           country,
           countryIso: countryData?.iso ?? null,
           unavailableItems: [],
-          message: "Shipping could not be calculated right now.",
+          message: error instanceof Error && error.name === "AbortError"
+            ? "Calculating delivery options..."
+            : "We couldn't calculate shipping. Check the address and try again.",
         });
       }
-    }, 350);
+    }, 500);
 
     return () => {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
+      availabilityAbortController.current?.abort();
     };
-  }, [form.country, form.shippingMethod, items]);
+  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
@@ -989,12 +1033,19 @@ export default function CheckoutPage() {
                           const active = form.shippingMethod === method.id;
                           return (
                             <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
-                              <span className="flex items-center justify-between gap-3">
-                                <span className="text-sm font-black">{method.title}</span>
-                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? money(method.price) : "Calculated"}</span>
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-black">{method.title}</span>
+                                  <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">{method.id}</span>
+                                </span>
+                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? new Intl.NumberFormat(undefined, { style: "currency", currency: method.currency || "EUR" }).format(method.price) : "Calculated"}</span>
                               </span>
                               <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || "Estimated delivery"}</span>
+                              {method.description ? <span className="mt-1 block text-[11px] leading-5 text-white/30">{method.description}</span> : null}
                               {method.fulfillmentCountry ? <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/25">Fulfillment {method.fulfillmentCountry}</span> : null}
+                              <span className="mt-3 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
+                                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
+                              </span>
                             </button>
                           );
                         })}
@@ -1003,9 +1054,13 @@ export default function CheckoutPage() {
                       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
                         {productAvailability.message || "This product cannot be delivered to the selected country."}
                       </div>
+                    ) : productAvailability.checked && productAvailability.available && !validatedShippingMethods?.length ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                        {productAvailability.message || "No delivery methods are available for this address."}
+                      </div>
                     ) : (
                       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
-                        Select a country to load live shipping options from Gelato.
+                        Complete your shipping address to see available delivery methods.
                       </div>
                     )}
                   </div>

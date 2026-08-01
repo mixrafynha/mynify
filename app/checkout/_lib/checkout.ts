@@ -568,6 +568,7 @@ export type ProductAvailability = {
     currency?: string | null;
     promiseUid?: string | null;
     serviceType?: string | null;
+    description?: string | null;
   }>;
   unavailableItems: ProductAvailabilityItem[];
   message?: string | null;
