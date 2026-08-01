@@ -103,6 +103,67 @@ function extractPrintableFiles(source: unknown): Array<{ type: string; url: stri
   return files;
 }
 
+async function resolveCartItemSources(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  userId: string | null,
+  items: AvailabilityItem[],
+) {
+  const variantIds = [...new Set(items.map((item) => safeText(item.variantId)).filter(Boolean))];
+  const cartItemIds = [...new Set(items.map((item) => safeText(item.cartItemId) || safeText(item.itemId)).filter(Boolean))];
+  const userProductIds = [...new Set(items.map((item) => safeText(item.userProductId) || safeText(item.designId)).filter(Boolean))];
+
+  const variantMap = new Map<string, string>();
+  if (variantIds.length) {
+    const { data: variantRows } = await supabase
+      .from("product_variants")
+      .select("id, gelato_product_uid")
+      .in("id", variantIds);
+
+    (variantRows ?? []).forEach((row) => {
+      const record = row as { id?: string | null; gelato_product_uid?: string | null };
+      if (record.id && record.gelato_product_uid) {
+        variantMap.set(record.id, record.gelato_product_uid);
+      }
+    });
+  }
+
+  const userProductMap = new Map<string, Record<string, unknown>>();
+  const cartItemMap = new Map<string, { user_product_id: string | null; design_id: string | null; variant_id: string | null }>();
+  if (userId && userProductIds.length) {
+    const { data: userProductRows } = await supabase
+      .from("user_products")
+      .select("id, print_files, design_data, mockups, production")
+      .eq("user_id", userId)
+      .in("id", userProductIds);
+
+    (userProductRows ?? []).forEach((row) => {
+      const record = row as Record<string, unknown> & { id?: string };
+      if (record.id) userProductMap.set(record.id, record);
+    });
+  }
+
+  if (userId && cartItemIds.length) {
+    const { data: cartRows } = await supabase
+      .from("cart_items")
+      .select("id, user_id, user_product_id, design_id, variant_id, product_id")
+      .eq("user_id", userId)
+      .in("id", cartItemIds);
+
+    (cartRows ?? []).forEach((row) => {
+      const record = row as { id?: string | null; user_product_id?: string | null; design_id?: string | null; variant_id?: string | null };
+      if (record.id) {
+        cartItemMap.set(record.id, {
+          user_product_id: record.user_product_id ?? null,
+          design_id: record.design_id ?? null,
+          variant_id: record.variant_id ?? null,
+        });
+      }
+    });
+  }
+
+  return { variantMap, userProductMap, cartItemMap };
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = createSupabaseServer();
@@ -160,149 +221,124 @@ export async function POST(req: Request) {
       phone: safeText(body?.phone) || undefined,
     };
 
-    const variantIds = [...new Set(items.map((item) => safeText(item.variantId)).filter(Boolean))];
-    const cartItemIds = [...new Set(items.map((item) => safeText(item.cartItemId) || safeText(item.itemId)).filter(Boolean))];
-    const userProductIds = [...new Set(items.map((item) => safeText(item.userProductId) || safeText(item.designId)).filter(Boolean))];
-    const directProductUids = new Map(
-      items
-        .map((item) => [safeText(item.itemId) || safeText(item.cartItemId) || safeText(item.variantId) || crypto.randomUUID(), safeText(item.productUid)] as const)
-        .filter(([, value]) => Boolean(value)),
-    );
+    const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, authData?.user?.id ?? null, items);
 
-    const variantMap = new Map<string, string>();
-    if (variantIds.length) {
-      const { data: variantRows } = await supabase
-        .from("product_variants")
-        .select("id, gelato_product_uid")
-        .in("id", variantIds);
+    const quoteItems: Array<{
+      itemReferenceId: string;
+      productUid: string;
+      quantity: number;
+      printFiles: Array<{ type: string; url: string }>;
+    }> = [];
+    const rejectedItems: Array<{
+      productId: string | null;
+      variantId: string | null;
+      designId: string | null;
+      cartItemId: string | null;
+      productUid: string | null;
+      productUidPresent: boolean;
+      quantity: number | null;
+      printFilesCount: number;
+      printFiles: Array<{ type: string | null; hasUrl: boolean; protocol: string | null }>;
+      reason: string;
+    }> = [];
 
-      (variantRows ?? []).forEach((row) => {
-        const record = row as { id?: string | null; gelato_product_uid?: string | null };
-        if (record.id && record.gelato_product_uid) {
-          variantMap.set(record.id, record.gelato_product_uid);
-        }
-      });
-    }
+    for (const item of items) {
+      const itemReferenceId = safeText(item.itemId) || safeText(item.cartItemId) || "availability";
+      const variantId = safeText(item.variantId);
+      const cartItemId = safeText(item.cartItemId) || safeText(item.itemId) || null;
+      const cartItemRow = cartItemId ? cartItemMap.get(cartItemId) ?? null : null;
+      const designId = safeText(item.designId) || safeText(item.userProductId) || (cartItemRow?.design_id ?? cartItemRow?.user_product_id ?? null);
+      const productId = safeText(item.productId) || null;
+      const quantity = Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity) || 1)) : null;
+      const productUidFromVariant = variantId ? variantMap.get(variantId) ?? null : null;
+      const productUidFromFrontend = safeText(item.productUid) || null;
+      const resolvedProductUid = productUidFromVariant || productUidFromFrontend || null;
 
-    const userProductMap = new Map<string, Record<string, unknown>>();
-    if (userProductIds.length && authData?.user) {
-      const { data: userProductRows } = await supabase
-        .from("user_products")
-        .select("id, print_files, design_data, mockups, production")
-        .in("id", userProductIds)
-        .eq("user_id", authData.user.id);
+      const userProductRecord = designId ? userProductMap.get(designId) ?? null : null;
+      const serverFiles = extractPrintableFiles(
+        userProductRecord?.print_files ??
+          userProductRecord?.printFiles ??
+          userProductRecord?.design_data ??
+          userProductRecord?.designData ??
+          userProductRecord?.production,
+      );
+      const frontendFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
+      const resolvedPrintFiles = serverFiles.length > 0
+        ? serverFiles
+        : frontendFiles
+            .map((file) => ({
+              type: safeText(file?.type) || "default",
+              url: safeText(file?.url),
+            }))
+            .filter((file) => isPublicHttpsUrl(file.url));
 
-      (userProductRows ?? []).forEach((row) => {
-        const record = row as Record<string, unknown> & { id?: string };
-        if (record.id) userProductMap.set(record.id, record);
-      });
-    }
+      const reason =
+        !variantId
+          ? "MISSING_VARIANT"
+          : !productUidFromVariant && !productUidFromFrontend
+            ? "VARIANT_NOT_FOUND"
+            : !resolvedProductUid
+              ? "MISSING_PRODUCT_UID"
+              : !designId && !cartItemId
+        ? "PRINT_FILE_NOT_FOUND"
+          : !userProductRecord && (designId || cartItemId)
+                  ? "DESIGN_NOT_FOUND"
+                  : frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))
+                    ? "INVALID_PRINT_FILE_URL"
+                    : !resolvedPrintFiles.length
+                      ? "MISSING_PRINT_FILES"
+                      : quantity === null
+                        ? "INVALID_QUANTITY"
+                        : "";
 
-    if (cartItemIds.length && authData?.user) {
-      const { data: cartRows } = await supabase
-        .from("cart_items")
-        .select("id, user_id, user_product_id, design_id, variant_id, product_id")
-        .eq("user_id", authData.user.id)
-        .in("id", cartItemIds);
+      console.log(
+        `[CHECKOUT_ITEM_RESOLVED] ${JSON.stringify({
+          variantId,
+          productUidSource: productUidFromVariant ? "database" : productUidFromFrontend ? "frontend" : "missing",
+          productUidPresent: Boolean(resolvedProductUid),
+          printFilesSource: serverFiles.length > 0 ? "user_product" : frontendFiles.length > 0 ? "frontend" : "missing",
+          printFilesCount: resolvedPrintFiles.length,
+          quantity,
+        })}`,
+      );
 
-      (cartRows ?? []).forEach((row) => {
-        const record = row as { id?: string | null; user_product_id?: string | null; design_id?: string | null; variant_id?: string | null };
-        const relatedId = record.user_product_id ?? record.design_id;
-        if (record.id && relatedId && !userProductMap.has(relatedId)) {
-          // fetch happens by userProductIds; this map is only used for lookups.
-        }
-        if (record.variant_id && record.id && variantMap.has(record.variant_id) === false) {
-          // variant map handled separately
-        }
-      });
-    }
-
-    const quoteItems = items
-      .map((item, index) => {
-        const itemReferenceId = safeText(item.itemId) || safeText(item.cartItemId) || `availability-${index}`;
-        const variantId = safeText(item.variantId);
-        const cartItemId = safeText(item.cartItemId) || safeText(item.itemId);
-        const designId = safeText(item.designId) || safeText(item.userProductId);
-        const explicitProductUid = safeText(item.productUid);
-        const productUidFromVariant = variantId ? variantMap.get(variantId) ?? null : null;
-        const productUid = productUidFromVariant || explicitProductUid || null;
-
-        const userProductRecord = designId ? userProductMap.get(designId) ?? null : null;
-        const serverFiles = extractPrintableFiles(
-          userProductRecord?.print_files ??
-            userProductRecord?.printFiles ??
-            userProductRecord?.design_data ??
-            userProductRecord?.designData ??
-            userProductRecord?.production,
-        );
-        const frontendFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
-        const files = serverFiles.length > 0
-          ? serverFiles
-          : frontendFiles
-              .map((file) => ({
-                type: safeText(file?.type) || "default",
-                url: safeText(file?.url),
-              }))
-              .filter((file) => isPublicHttpsUrl(file.url));
-
-        const reasons: string[] = [];
-        if (!variantId) reasons.push("MISSING_VARIANT");
-        if (variantId && !productUidFromVariant && !explicitProductUid) reasons.push("VARIANT_NOT_FOUND");
-        if (!productUid) reasons.push("MISSING_PRODUCT_UID");
-        if (!designId && !cartItemId) reasons.push("PRINT_FILE_NOT_FOUND");
-        if (!userProductRecord && (designId || cartItemId)) reasons.push("DESIGN_NOT_FOUND");
-        if (!files.length) reasons.push("MISSING_PRINT_FILES");
-        if (frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))) reasons.push("INVALID_PRINT_FILE_URL");
-        if (normalizeQuantity(item.quantity) <= 0) reasons.push("INVALID_QUANTITY");
-
-        return {
-          itemReferenceId,
+      if (reason) {
+        const rejection = {
+          productId,
           variantId: variantId || null,
-          cartItemId,
           designId,
-          productId: safeText(item.productId) || null,
-          productUidPresent: Boolean(productUid),
-          productUid,
-          quantity: normalizeQuantity(item.quantity),
-          printFilesPresent: files.length > 0,
-          printFilesCount: files.length,
-          printFiles: files.map((file) => ({
-            type: file.type,
-            urlPresent: Boolean(file.url),
-            urlProtocol: safeProtocol(file.url),
+          cartItemId,
+          productUid: resolvedProductUid,
+          productUidPresent: Boolean(resolvedProductUid),
+          quantity,
+          printFilesCount: Array.isArray(frontendFiles) ? frontendFiles.length : 0,
+          printFiles: (Array.isArray(frontendFiles) ? frontendFiles : []).map((file) => ({
+            type: typeof file?.type === "string" ? file.type : null,
+            hasUrl: Boolean(file?.url),
+            protocol: typeof file?.url === "string" ? safeProtocol(file.url) : null,
           })),
-          rejectionReason: reasons.length ? reasons.join(",") : null,
-          _quoteItem: productUid && files.length ? {
-            itemReferenceId,
-            productUid,
-            quantity: normalizeQuantity(item.quantity),
-            printFiles: files,
-          } : null,
+          reason,
         };
+        rejectedItems.push(rejection);
+        console.error(`[CHECKOUT_ITEM_REJECTED] ${JSON.stringify(rejection)}`);
+        continue;
+      }
+
+      quoteItems.push({
+        itemReferenceId,
+        productUid: resolvedProductUid!,
+        quantity: quantity ?? 1,
+        printFiles: resolvedPrintFiles,
       });
+    }
 
-    const rejectedItems = quoteItems
-      .filter((item) => !item._quoteItem)
-      .map(({ _quoteItem, ...item }) => item);
+    console.log(`[CHECKOUT_QUOTE_ITEMS_BUILT_JSON] ${JSON.stringify({
+      receivedItems: items.length,
+      quoteItemsCount: quoteItems.length,
+      rejectedItems,
+    })}`);
 
-    console.log(
-      "[CHECKOUT_QUOTE_ITEMS_BUILT]",
-      JSON.stringify(
-        {
-          receivedItems: items.length,
-          quoteItemsCount: quoteItems.filter((item) => item._quoteItem).length,
-          rejectedItems,
-        },
-        null,
-        2,
-      ),
-    );
-
-    const validQuoteItems = quoteItems
-      .map((item) => item._quoteItem)
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-
-    if (!validQuoteItems.length) {
+    if (!quoteItems.length) {
       return NextResponse.json(
         {
           ok: false,
@@ -310,7 +346,7 @@ export async function POST(req: Request) {
           message: "No valid Gelato quote items could be created.",
           diagnostics: {
             receivedItems: items.length,
-            rejectedItems: quoteItems.filter((item) => !item._quoteItem).map(({ _quoteItem, ...item }) => item),
+            rejectedItems,
           },
         },
         { status: 400 },
@@ -327,11 +363,11 @@ export async function POST(req: Request) {
     );
 
     const quote = await getGelatoCheckoutQuote({
-      productUid: validQuoteItems[0].productUid,
-      quantity: validQuoteItems[0].quantity,
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
       shippingAddress,
-      printFiles: validQuoteItems[0].printFiles,
-      items: validQuoteItems,
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
       currencyIsoCode: safeText(body?.currency) || "EUR",
       customerReferenceId: safeText(body?.customerReferenceId) || undefined,
       orderReferenceId: safeText(body?.orderReferenceId) || undefined,
