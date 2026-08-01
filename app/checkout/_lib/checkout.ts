@@ -564,6 +564,10 @@ export type ProductAvailability = {
     title: string;
     price?: number | null;
     estimatedDays?: string | null;
+    fulfillmentCountry?: string | null;
+    currency?: string | null;
+    promiseUid?: string | null;
+    serviceType?: string | null;
   }>;
   unavailableItems: ProductAvailabilityItem[];
   message?: string | null;

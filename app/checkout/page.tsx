@@ -220,8 +220,11 @@ export default function CheckoutPage() {
 
   const validatedShippingMethods = productAvailability.shippingMethods?.length ? productAvailability.shippingMethods : null;
   const selectedShippingMethod = validatedShippingMethods?.find((method) => method.id === form.shippingMethod);
-  const shipping = subtotal > 0 ? selectedShippingMethod?.price ?? (form.shippingMethod === "express" ? 9.99 : 4.99) : 0;
-  const totalBeforeTax = subtotal + shipping;
+  const shipping = subtotal > 0
+    ? (typeof selectedShippingMethod?.price === "number" ? selectedShippingMethod.price : null)
+    : 0;
+  const shippingDisplay = typeof shipping === "number" ? shipping : 0;
+  const totalBeforeTax = subtotal + (typeof shipping === "number" ? shipping : 0);
   const taxDisplay = form.country ? "Calculated at payment" : "Calculated after delivery country";
   const total = totalBeforeTax;
   const hasAvailabilityBlock = productAvailability.checked && productAvailability.configured && !productAvailability.available;
@@ -241,7 +244,7 @@ export default function CheckoutPage() {
       !hasAvailabilityBlock,
   );
 
-  const canPay = shippingComplete && items.length > 0;
+  const canPay = shippingComplete && items.length > 0 && !productAvailability.loading && productAvailability.available && Boolean(validatedShippingMethods?.length);
 
   const fetchVariantsForItems = useCallback(async (cartItems: CartItem[]) => {
     const lookupIds = Array.from(new Set(cartItems.flatMap((item) => getVariantLookupProductIds(item))));
@@ -390,7 +393,7 @@ export default function CheckoutPage() {
         const data = await res.json().catch(() => null);
         if (!res.ok) throw new Error(data?.error || "Availability check failed");
 
-        const methods = safeArray<{ id: string; title: string; price?: number | null; estimatedDays?: string | null }>(data?.shippingMethods);
+        const methods = safeArray<{ id: string; title: string; price?: number | null; estimatedDays?: string | null; currency?: string | null; fulfillmentCountry?: string | null; promiseUid?: string | null; serviceType?: string | null }>(data?.shippingMethods);
 
         setProductAvailability({
           loading: false,
@@ -412,11 +415,11 @@ export default function CheckoutPage() {
           loading: false,
           checked: true,
           configured: false,
-          available: true,
+          available: false,
           country,
           countryIso: countryData?.iso ?? null,
           unavailableItems: [],
-          message: "Delivery availability is temporarily estimated. Checkout will not block while live validation is not configured.",
+          message: "Shipping could not be calculated right now.",
         });
       }
     }, 350);
@@ -725,7 +728,7 @@ export default function CheckoutPage() {
         ...item,
         selectedVariant: item.selectedVariant ?? getCurrentVariant(item),
       })),
-      shipping,
+      typeof shipping === "number" ? shipping : 0,
     );
 
   // Payload mínimo para pagamento. O servidor recebe apenas os IDs do carrinho
@@ -975,23 +978,36 @@ export default function CheckoutPage() {
 
                   <div>
                     <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-white/40">Shipping method</p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {(validatedShippingMethods || [
-                        { id: "standard", title: "Standard", estimatedDays: "Balanced price", price: 4.99 },
-                        { id: "express", title: "Express", estimatedDays: "Faster delivery", price: 9.99 },
-                      ]).map((method) => {
-                        const active = form.shippingMethod === method.id;
-                        return (
-                          <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
-                            <span className="flex items-center justify-between gap-3">
-                              <span className="text-sm font-black">{method.title}</span>
-                              <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? money(method.price) : "Calculated"}</span>
-                            </span>
-                            <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || (productAvailability.configured ? "Verified shipping method" : "Estimated shipping")}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {productAvailability.loading ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+                      </div>
+                    ) : productAvailability.checked && productAvailability.available && validatedShippingMethods?.length ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {validatedShippingMethods.map((method) => {
+                          const active = form.shippingMethod === method.id;
+                          return (
+                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                              <span className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-black">{method.title}</span>
+                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? money(method.price) : "Calculated"}</span>
+                              </span>
+                              <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || "Estimated delivery"}</span>
+                              {method.fulfillmentCountry ? <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/25">Fulfillment {method.fulfillmentCountry}</span> : null}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : productAvailability.checked && !productAvailability.available ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                        {productAvailability.message || "This product cannot be delivered to the selected country."}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
+                        Select a country to load live shipping options from Gelato.
+                      </div>
+                    )}
                   </div>
 
                   <button type="button" disabled={!shippingComplete} onClick={goNext} className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">
@@ -1247,7 +1263,7 @@ export default function CheckoutPage() {
 
               <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Products</span><span className="font-black">{money(subtotal)}</span></div>
-                <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 font-semibold text-white/50"><Truck size={15} /> Shipping</span><span className="font-black">{money(shipping)}</span></div>
+                <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 font-semibold text-white/50"><Truck size={15} /> Shipping</span><span className="font-black">{money(shippingDisplay)}</span></div>
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Tax</span><span className="text-right text-xs font-black text-white/45">{taxDisplay}</span></div>
                 <div className="h-px bg-white/10" />
                 <div className="flex items-end justify-between gap-4"><span className="text-sm font-semibold text-white/50">Total before tax</span><span className="text-3xl font-black tracking-[-0.06em]">{money(totalBeforeTax)}</span></div>

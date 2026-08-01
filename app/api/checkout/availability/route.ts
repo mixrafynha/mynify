@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 
 type AvailabilityItem = {
   itemId?: string;
@@ -8,15 +10,18 @@ type AvailabilityItem = {
   color?: string | null;
   size?: string | null;
   quantity?: number;
+  productUid?: string | null;
+  printFiles?: Array<{ type?: string; url?: string }>;
+  files?: Array<{ type?: string; url?: string }>;
 };
-
-const DEFAULT_SHIPPING_METHODS = [
-  { id: "standard", title: "Standard", price: 4.99, estimatedDays: "Estimated shipping" },
-  { id: "express", title: "Express", price: 9.99, estimatedDays: "Faster shipping" },
-];
 
 function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeQuantity(value: unknown) {
+  const quantity = Math.max(1, Math.floor(Number(value) || 1));
+  return Number.isFinite(quantity) ? quantity : 1;
 }
 
 export async function POST(req: Request) {
@@ -29,82 +34,156 @@ export async function POST(req: Request) {
     if (!country && !countryIso) {
       return NextResponse.json({
         configured: false,
-        available: true,
+        available: false,
         country,
         countryIso,
-        shippingMethods: DEFAULT_SHIPPING_METHODS,
+        shippingMethods: [],
         unavailableItems: [],
-        message: "Select a delivery country to estimate availability.",
+        loading: false,
+        message: "Select a delivery country to calculate shipping.",
       });
     }
 
-    const endpoint = process.env.PRODUCT_AVAILABILITY_URL?.trim();
-    const apiKey = process.env.PRODUCT_AVAILABILITY_API_KEY?.trim();
+    const resolvedCountryIso = resolveCountryCode(countryIso ?? country);
+    const shippingAddress = {
+      firstName: "Customer",
+      lastName: ".",
+      addressLine1: safeText(body?.addressLine1) || safeText(body?.address) || "Address",
+      addressLine2: safeText(body?.addressLine2) || undefined,
+      city: safeText(body?.city) || "City",
+      state: safeText(body?.state) || undefined,
+      postalCode: safeText(body?.postalCode) || "0000",
+      countryCode: resolvedCountryIso ?? countryIso ?? country,
+      email: safeText(body?.email) || undefined,
+      phone: safeText(body?.phone) || undefined,
+    };
 
-    if (endpoint) {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
-        },
-        body: JSON.stringify({ country, countryIso, items }),
-        cache: "no-store",
-      });
+    const quoteItems = items
+      .map((item, index) => {
+        const productUid = safeText(item.productUid) || safeText(item.productId);
+        const printFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
+        return {
+          itemReferenceId: safeText(item.itemId) || `availability-${index}`,
+          productUid,
+          quantity: normalizeQuantity(item.quantity),
+          printFiles: printFiles
+            .map((file) => ({
+              type: safeText(file?.type) || "default",
+              url: safeText(file?.url),
+            }))
+            .filter((file) => Boolean(file.url)),
+        };
+      })
+      .filter((item) => Boolean(item.productUid) && item.printFiles.length > 0);
 
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        return NextResponse.json(
-          {
-            configured: true,
-            available: false,
-            country,
-            countryIso,
-            shippingMethods: [],
-            unavailableItems: items.map((item) => ({
-              itemId: item.itemId || item.productId || crypto.randomUUID(),
-              title: item.title || "Product",
-              productId: item.productId || "",
-              variantId: item.variantId ?? null,
-              color: item.color ?? null,
-              size: item.size ?? null,
-              quantity: Math.max(1, Number(item.quantity) || 1),
-              available: false,
-              reason: data?.error || "Availability check failed",
-            })),
-            message: data?.error || "Availability check failed",
-          },
-          { status: 200 },
-        );
-      }
-
+    if (!quoteItems.length) {
       return NextResponse.json({
         configured: true,
-        available: data?.available !== false,
-        country: data?.country || country,
-        countryIso: data?.countryIso || countryIso,
-        shippingMethods: Array.isArray(data?.shippingMethods) ? data.shippingMethods : DEFAULT_SHIPPING_METHODS,
-        unavailableItems: Array.isArray(data?.unavailableItems) ? data.unavailableItems : [],
-        message: data?.message || null,
+        available: false,
+        country,
+        countryIso: resolvedCountryIso ?? countryIso ?? null,
+        shippingMethods: [],
+        unavailableItems: items.map((item) => ({
+          itemId: item.itemId || item.productId || crypto.randomUUID(),
+          title: item.title || "Product",
+          productId: item.productId || "",
+          variantId: item.variantId ?? null,
+          color: item.color ?? null,
+          size: item.size ?? null,
+          quantity: normalizeQuantity(item.quantity),
+          available: false,
+          reason: "missing print file or Gelato product UID",
+        })),
+        message: "Missing print file or Gelato product UID.",
+      });
+    }
+
+    const quote = await getGelatoCheckoutQuote({
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress,
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: safeText(body?.currency) || "EUR",
+      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
+      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+    });
+
+    if (quote.retryable) {
+      return NextResponse.json(
+        {
+          configured: true,
+          available: false,
+          retryable: true,
+          country,
+          countryIso: resolvedCountryIso ?? countryIso ?? null,
+          shippingMethods: [],
+          unavailableItems: [],
+          message: "Shipping could not be calculated right now.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!quote.available) {
+      return NextResponse.json({
+        configured: true,
+        available: false,
+        retryable: false,
+        country,
+        countryIso: resolvedCountryIso ?? countryIso ?? null,
+        shippingMethods: [],
+        unavailableItems: items.map((item) => ({
+          itemId: item.itemId || item.productId || crypto.randomUUID(),
+          title: item.title || "Product",
+          productId: item.productId || "",
+          variantId: item.variantId ?? null,
+          color: item.color ?? null,
+          size: item.size ?? null,
+          quantity: normalizeQuantity(item.quantity),
+          available: false,
+          reason: quote.reason || "No shipping options available.",
+        })),
+        message: quote.reason === "no_shipping_options"
+          ? "This product cannot be delivered to the selected country."
+          : "This product cannot be delivered to the selected country.",
       });
     }
 
     return NextResponse.json({
-      configured: false,
+      configured: true,
       available: true,
+      retryable: false,
       country,
-      countryIso,
-      shippingMethods: DEFAULT_SHIPPING_METHODS,
+      countryIso: resolvedCountryIso ?? countryIso ?? null,
+      shippingMethods: quote.shippingOptions.map((option) => ({
+        id: option.id,
+        title: option.name,
+        price: option.price,
+        estimatedDays: option.estimatedDeliveryMin && option.estimatedDeliveryMax
+          ? `${option.estimatedDeliveryMin} - ${option.estimatedDeliveryMax}`
+          : option.estimatedDeliveryMin || option.estimatedDeliveryMax || null,
+        currency: option.currency,
+        fulfillmentCountry: option.fulfillmentCountry,
+        promiseUid: option.promiseUid,
+        serviceType: option.serviceType,
+      })),
       unavailableItems: [],
       message: null,
     });
-  } catch {
-    return NextResponse.json({
-      configured: false,
-      available: true,
-      shippingMethods: DEFAULT_SHIPPING_METHODS,
-      unavailableItems: [],
-      message: null,
-    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        configured: true,
+        available: false,
+        retryable: true,
+        country: null,
+        countryIso: null,
+        shippingMethods: [],
+        unavailableItems: [],
+        message: error instanceof Error ? error.message : "Shipping could not be calculated.",
+      },
+      { status: 503 },
+    );
   }
 }
