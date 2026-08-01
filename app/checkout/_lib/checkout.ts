@@ -370,7 +370,7 @@ function collectNestedPrintFiles(
   }
 }
 
-function resolveGelatoPrintFiles(item: CartItem): GelatoCheckoutPrintFile[] {
+export function resolveGelatoPrintFiles(item: CartItem): GelatoCheckoutPrintFile[] {
   const files: GelatoCheckoutPrintFile[] = [];
   collectPrintFilesFromUnknown(files, item.files);
   collectPrintFilesFromUnknown(files, item.printFiles);

@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 import { convertMoneyToCents, normalizeCheckoutCurrency } from "./currency";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { calculateSellingPrice } from "@/lib/gelato/pricing";
+import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { resolveGelatoPrintFiles } from "@/app/checkout/_lib/checkout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,8 +35,21 @@ type CheckoutBody = {
   // Novo formato seguro vindo do carrinho.
   cartItemIds?: string[];
   customer?: {
+    firstName?: string;
+    lastName?: string;
+    email?: string | null;
+    phone?: string | null;
     country?: string | null;
     countryIso?: string | null;
+    address?: string | null;
+    apartment?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postalCode?: string | null;
+    fullName?: string | null;
+  };
+  shipping?: {
+    method?: string | null;
   };
 
   // Compatibilidade temporária com o checkout antigo.
@@ -72,6 +87,7 @@ type VariantRow = {
   sku: string | null;
   product_color_id: string | null;
   gelato_product_uid: string | null;
+  gelato_variant_uid: string | null;
 };
 
 type VariantMarketRow = {
@@ -81,6 +97,13 @@ type VariantMarketRow = {
   is_available: boolean;
   product_price: number | string | null;
   quantity: number;
+};
+
+type UserProductRow = {
+  id: string;
+  print_files: Record<string, unknown> | null;
+  mockups: Record<string, unknown> | null;
+  design_data: Record<string, unknown> | null;
 };
 
 function isUuid(value: unknown): value is string {
@@ -145,6 +168,38 @@ function resolveCheckoutCountryCode(body: CheckoutBody): string | null {
     resolveCountryCode(body.customer?.country) ??
     null
   );
+}
+
+function normalizeAddressField(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function splitFullName(fullName: string): { firstName: string; lastName: string } {
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  if (parts.length <= 1) return { firstName: parts[0] || "Customer", lastName: "." };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) || "." };
+}
+
+function buildShippingRecipient(body: CheckoutBody) {
+  const customer = body.customer ?? {};
+  const fullName = normalizeAddressField(customer.fullName);
+  const fromFullName = fullName ? splitFullName(fullName) : null;
+  const email = normalizeAddressField(customer.email);
+  const phone = normalizeAddressField(customer.phone)?.replace(/\s+/g, "");
+  const countryCode = resolveCheckoutCountryCode(body);
+
+  return {
+    firstName: normalizeAddressField(customer.firstName) ?? fromFullName?.firstName ?? "Customer",
+    lastName: normalizeAddressField(customer.lastName) ?? fromFullName?.lastName ?? ".",
+    addressLine1: normalizeAddressField(customer.address) ?? "",
+    addressLine2: normalizeAddressField(customer.apartment) ?? undefined,
+    city: normalizeAddressField(customer.city) ?? "",
+    state: normalizeAddressField(customer.state) ?? undefined,
+    postalCode: normalizeAddressField(customer.postalCode) ?? "",
+    countryCode: countryCode ?? "",
+    email: email ?? undefined,
+    phone: phone ?? undefined,
+  };
 }
 
 function getBearerToken(req: Request): string | null {
@@ -315,6 +370,27 @@ export async function POST(req: Request) {
         variants = (variantRows ?? []) as VariantRow[];
       }
 
+      const designIds = [
+        ...new Set(
+          cartItems
+            .map((item) => item.design_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const { data: userProductRows, error: userProductsError } = designIds.length
+        ? await supabase
+            .from("user_products")
+            .select("id, print_files, mockups, design_data")
+            .in("id", designIds)
+        : { data: [], error: null };
+
+      if (userProductsError) {
+        return NextResponse.json(
+          { error: "Failed to load design assets" },
+          { status: 500 },
+        );
+      }
+
       const shippingCountryCode = resolveCheckoutCountryCode(body);
       let variantMarkets: VariantMarketRow[] = [];
 
@@ -346,6 +422,9 @@ export async function POST(req: Request) {
           product,
         ]),
       );
+      const userProductMap = new Map(
+        ((userProductRows ?? []) as UserProductRow[]).map((row) => [row.id, row]),
+      );
 
      const variantMap = new Map(
       variants.map((variant) => [variant.id, variant]),
@@ -362,7 +441,16 @@ export async function POST(req: Request) {
       StripeSessionParams["line_items"]
     >[number];
 
-    const stripeLineItems: StripeLineItem[] = [];
+      const stripeLineItems: StripeLineItem[] = [];
+      const gelatoQuoteItems: Array<{
+        itemReferenceId: string;
+        productUid: string;
+        files: Array<{ type: string; url: string }>;
+        printFiles: Array<{ type: string; url: string }>;
+        quantity: number;
+      }> = [];
+      let totalShippingFromGelato: number | null = null;
+      let selectedShippingOptionId = normalizeAddressField(body.shipping?.method)?.toLowerCase() ?? null;
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
@@ -455,7 +543,7 @@ export async function POST(req: Request) {
         }
 
         if (variant?.gelato_product_uid && shippingCountryCode) {
-          if (!gelatoMarket || !gelatoMarket.is_available) {
+          if (!gelatoMarket) {
             return NextResponse.json(
               {
                 error: "Selected variant is not available for this destination.",
@@ -484,6 +572,57 @@ export async function POST(req: Request) {
 
           officialPrice = sellingPrice;
           officialBaseCurrency = normalizeBaseCurrency(gelatoMarket.currency).toUpperCase();
+
+          const userProduct = cartItem.design_id ? userProductMap.get(cartItem.design_id) ?? null : null;
+          const printFilesSource = userProduct
+            ? {
+                id: cartItem.id,
+                print_files: userProduct.print_files,
+                printFiles: userProduct.print_files,
+                mockups: userProduct.mockups,
+                design_data: userProduct.design_data,
+                designData: userProduct.design_data,
+                production: userProduct.design_data,
+                product: {
+                  print_files: userProduct.print_files,
+                  printFiles: userProduct.print_files,
+                  mockups: userProduct.mockups,
+                  design_data: userProduct.design_data,
+                  production: userProduct.design_data,
+                },
+              }
+            : { id: cartItem.id, product: {}, production: null, print_files: null, printFiles: null, mockups: null, design_data: null, designData: null };
+
+          const printFiles = resolveGelatoPrintFiles(printFilesSource as never);
+          const productUid = variant.gelato_product_uid;
+
+          if (!printFiles.length) {
+            return NextResponse.json(
+              {
+                error: "Missing print file for Gelato checkout.",
+                variantId: variant.id,
+              },
+              { status: 400 },
+            );
+          }
+
+          if (!productUid) {
+            return NextResponse.json(
+              {
+                error: "Missing Gelato product UID for selected variant.",
+                variantId: variant.id,
+              },
+              { status: 400 },
+            );
+          }
+
+          gelatoQuoteItems.push({
+            itemReferenceId: cartItem.id,
+            productUid,
+            files: printFiles,
+            printFiles,
+            quantity,
+          });
         }
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
@@ -588,6 +727,65 @@ export async function POST(req: Request) {
         });
       }
 
+      const shippingAddress = buildShippingRecipient(body);
+      const shippingMethod = normalizeAddressField(body.shipping?.method)?.toLowerCase() ?? "standard";
+
+      const gelatoQuoteResult = gelatoQuoteItems.length
+        ? await getGelatoCheckoutQuote({
+            productUid: gelatoQuoteItems[0].productUid,
+            quantity: gelatoQuoteItems[0].quantity,
+            shippingAddress,
+            printFiles: gelatoQuoteItems[0].files,
+            items: gelatoQuoteItems,
+            currencyIsoCode: checkoutCurrency ?? "EUR",
+            customerReferenceId: user.id,
+            orderReferenceId: createdOrderId ?? `ryfio-checkout-${Date.now()}`,
+          })
+        : {
+            available: true,
+            retryable: false,
+            productCost: null,
+            productCurrency: null,
+            shippingOptions: [],
+            reason: null,
+          };
+
+      if (!gelatoQuoteResult.available) {
+        const status = gelatoQuoteResult.retryable ? 503 : 400;
+        return NextResponse.json(
+          {
+            ok: false,
+            retryable: gelatoQuoteResult.retryable,
+            code: gelatoQuoteResult.retryable ? "GELATO_TEMPORARILY_UNAVAILABLE" : "PRODUCT_NOT_AVAILABLE_FOR_ADDRESS",
+            message: gelatoQuoteResult.retryable
+              ? "Shipping could not be calculated. Please try again."
+              : "This product cannot be delivered to this address.",
+            reason: gelatoQuoteResult.reason,
+          },
+          { status },
+        );
+      }
+
+      const selectedQuoteOption =
+        gelatoQuoteResult.shippingOptions.find((option) => option.serviceType === shippingMethod) ??
+        gelatoQuoteResult.shippingOptions.find((option) => option.id === shippingMethod) ??
+        gelatoQuoteResult.shippingOptions[0] ??
+        null;
+
+      if (!selectedQuoteOption) {
+        return NextResponse.json(
+          {
+            ok: false,
+            retryable: false,
+            code: "PRODUCT_NOT_AVAILABLE_FOR_ADDRESS",
+            message: "This product cannot be delivered to this address.",
+          },
+          { status: 400 },
+        );
+      }
+
+      totalShippingFromGelato = selectedQuoteOption.price;
+
       const baseUrl =
         process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
         new URL(req.url).origin;
@@ -612,6 +810,13 @@ export async function POST(req: Request) {
           total + item.unit_amount * item.quantity,
         0,
       );
+      const shippingAmount = totalShippingFromGelato
+        ? convertMoneyToCents(
+            totalShippingFromGelato,
+            normalizeBaseCurrency(selectedQuoteOption.currency),
+            checkoutCurrency ?? "EUR",
+          )
+        : 0;
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
@@ -622,7 +827,7 @@ export async function POST(req: Request) {
             orderItems.length === 1
               ? firstItem.title
               : `${orderItems.length} products`,
-          product_price: totalAmount / 100,
+          product_price: (totalAmount + shippingAmount) / 100,
           product_currency: checkoutCurrency ?? "eur",
           status: "pending",
           created_at: new Date().toISOString(),
@@ -646,7 +851,23 @@ export async function POST(req: Request) {
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         customer_email: user.email ?? undefined,
-        line_items: stripeLineItems,
+        line_items: [
+          ...stripeLineItems,
+          ...(shippingAmount > 0
+            ? [
+                {
+                  price_data: {
+                    currency: (checkoutCurrency ?? "EUR").toLowerCase(),
+                    product_data: {
+                      name: `Shipping (${selectedQuoteOption.name})`,
+                    },
+                    unit_amount: shippingAmount,
+                  },
+                  quantity: 1,
+                } as StripeLineItem,
+              ]
+            : []),
+        ],
 
         metadata: {
           order_id: order.id,
@@ -654,6 +875,11 @@ export async function POST(req: Request) {
           source: "ryfio_checkout",
           cart_item_ids: requestedCartItemIds.join(",").slice(0, 500),
           item_count: String(orderItems.length),
+          shipping_option_id: selectedQuoteOption.id,
+          shipping_price: String(selectedQuoteOption.price),
+          shipping_currency: selectedQuoteOption.currency,
+          shipping_country: shippingCountryCode ?? "",
+          quote_checked_at: new Date().toISOString(),
         },
 
         payment_intent_data: {
