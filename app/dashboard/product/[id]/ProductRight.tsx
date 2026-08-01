@@ -363,10 +363,6 @@ export function ProductRight({
 
       setQuantity(1);
       showToast("success", "Product added to cart!");
-
-      setTimeout(() => {
-        router.refresh();
-      }, 700);
     } catch (error) {
       console.error("Error adding to cart:", error);
       showToast("error", "Error adding to cart.");
