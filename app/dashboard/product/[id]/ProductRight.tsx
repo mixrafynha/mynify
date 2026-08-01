@@ -92,6 +92,26 @@ export function ProductRight({
   const shippingPrice = shippingMethods[0]?.price ?? null;
   const shippingEta = shippingMethods[0]?.estimatedDays ?? null;
   const shippingMethodLabel = shippingMethods[0]?.title ?? "Shipping";
+  const shippingProductUid =
+    selectedVariant?.gelato_product_uid ||
+    selectedVariant?.gelatoProductUid ||
+    product?.gelato_product_uid ||
+    product?.gelatoProductUid ||
+    null;
+  const shippingPrintFiles = useMemo(() => {
+    const files = product?.print_files ?? product?.printFiles ?? null;
+
+    if (Array.isArray(files)) {
+      return files
+        .map((file: any) => ({
+          type: String(file?.type ?? "default"),
+          url: String(file?.url ?? "").trim(),
+        }))
+        .filter((file: { url: string }) => Boolean(file.url));
+    }
+
+    return [];
+  }, [product?.printFiles, product?.print_files]);
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
@@ -132,8 +152,16 @@ export function ProductRight({
     async function loadShipping() {
       if (!selectedVariant?.id) {
         setShippingMethods([]);
-        setShippingAvailable(false);
-        setShippingError("Select a variant to calculate shipping.");
+        setShippingAvailable(true);
+        setShippingError(null);
+        return;
+      }
+
+      if (!shippingProductUid || shippingPrintFiles.length === 0) {
+        setShippingMethods([]);
+        setShippingAvailable(true);
+        setShippingError(null);
+        setShippingLoading(false);
         return;
       }
 
@@ -156,9 +184,11 @@ export function ProductRight({
                 title: String(product?.title ?? "Product"),
                 productId: String(product?.id ?? ""),
                 variantId: String(selectedVariant.id),
+                productUid: shippingProductUid,
                 color: selectedVariant.color ?? null,
                 size: selectedVariant.size ?? null,
                 quantity: 1,
+                printFiles: shippingPrintFiles,
               },
             ],
           }),
@@ -219,6 +249,8 @@ export function ProductRight({
   }, [
     product?.id,
     product?.title,
+    shippingProductUid,
+    shippingPrintFiles,
     selectedShippingCountry?.country,
     selectedShippingCountry?.iso,
     selectedVariant?.id,
@@ -570,10 +602,6 @@ export function ProductRight({
                 i
               </span>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-none border border-emerald-500/20 bg-emerald-500/[0.06] px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-600">
-              <Truck size={11} />
-              Powered by Gelato
-            </span>
           </div>
 
           <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
