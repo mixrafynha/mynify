@@ -314,6 +314,7 @@ export default function GelatoSyncPage() {
           value={productId}
           onChange={setProductId}
           placeholder="UUID do produto"
+          inputClassName="font-mono text-[13px] tracking-[-0.02em] text-black/90 placeholder:font-semibold placeholder:tracking-normal"
           onBlur={() => {
             void loadState();
             void resumeJobFromStorage();
@@ -464,12 +465,14 @@ function Field({
   onChange,
   onBlur,
   placeholder,
+  inputClassName,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
   placeholder?: string;
+  inputClassName?: string;
 }) {
   return (
     <div>
@@ -479,7 +482,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         onBlur={onBlur}
         placeholder={placeholder}
-        className="mt-2 h-12 w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 text-sm font-semibold text-black outline-none"
+        className={`mt-2 h-12 w-full rounded-2xl border border-black/10 bg-black/[0.02] px-4 text-sm font-semibold text-black outline-none transition focus:border-black/15 focus:bg-white ${inputClassName ?? ""}`}
       />
     </div>
   );
