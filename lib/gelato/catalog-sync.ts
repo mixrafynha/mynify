@@ -148,6 +148,7 @@ type ProductRow = {
   image: string | null;
   price?: number | string | null;
   currency?: string | null;
+  category?: string | null;
   profit_markup_percentage?: number | string | null;
 };
 
@@ -690,7 +691,7 @@ async function getProductOrThrow(productId: string): Promise<ProductRow> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("products")
-    .select("id, image, price, currency, profit_markup_percentage")
+    .select("id, image, price, currency, category, profit_markup_percentage")
     .eq("id", productId)
     .maybeSingle();
 
@@ -699,6 +700,42 @@ async function getProductOrThrow(productId: string): Promise<ProductRow> {
   }
 
   return data as ProductRow;
+}
+
+const CATEGORY_MARKUP_BY_KEY: Record<string, number> = {
+  tshirt: 100,
+  tshirts: 100,
+  hoodie: 80,
+  hoodies: 80,
+  sweatshirt: 80,
+  sweatshirts: 80,
+  cap: 100,
+  caps: 100,
+  bag: 100,
+  bags: 100,
+  accessory: 100,
+  accessories: 100,
+  poster: 150,
+  posters: 150,
+  mug: 120,
+  mugs: 120,
+};
+
+function resolveCategoryMarkupPercentage(category: string | null | undefined): number {
+  const key = normalizeKey(category ?? "");
+  return CATEGORY_MARKUP_BY_KEY[key] ?? 100;
+}
+
+function resolveProductMarkupPercentage(product: ProductRow): number {
+  const manualMarkup = cleanString(product.profit_markup_percentage);
+  if (manualMarkup !== null && manualMarkup !== "") {
+    const parsed = Number(manualMarkup);
+    if (Number.isFinite(parsed)) {
+      return normalizeProfitMarkupPercentage(parsed);
+    }
+  }
+
+  return resolveCategoryMarkupPercentage(product.category);
 }
 
 export async function listGelatoCatalogs(): Promise<GelatoCatalogListItem[]> {
@@ -1736,7 +1773,22 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
 }> {
   const supabase = createSupabaseAdmin();
   const product = await getProductOrThrow(productId);
-  const markupPercentage = normalizeProfitMarkupPercentage(product.profit_markup_percentage);
+  const manualMarkup = cleanString(product.profit_markup_percentage);
+  const markupPercentage =
+    manualMarkup !== null && manualMarkup !== ""
+      ? normalizeProfitMarkupPercentage(manualMarkup)
+      : resolveCategoryMarkupPercentage(product.category);
+
+  if (manualMarkup === null || manualMarkup === "") {
+    const { error: markupUpdateError } = await supabase
+      .from("products")
+      .update({
+        profit_markup_percentage: markupPercentage,
+        updated_at: nowIso(),
+      })
+      .eq("id", productId);
+    if (markupUpdateError) throw new Error(markupUpdateError.message);
+  }
 
   const { data: variantRows, error: variantError } = await supabase
     .from("product_variants")
@@ -2241,6 +2293,8 @@ export async function syncGelatoProductFamily(
     failed: 0,
   });
 
+  await refreshProductVariantSellingPrices(productId);
+
   return result;
 }
 
@@ -2629,6 +2683,8 @@ export async function syncGelatoCatalog(
         result.variantsCreated + result.variantsUpdated - result.variantsDeactivated,
     });
 
+    await refreshProductVariantSellingPrices(productId);
+
     return result;
   } catch (error) {
     const message =
@@ -3011,6 +3067,10 @@ export async function syncGelatoCatalogPage(
       synced_colors_count: colorsCreated + colorsUpdated,
       synced_variants_count: variantsCreated + variantsUpdated,
     });
+
+    if (completed) {
+      await refreshProductVariantSellingPrices(productId);
+    }
 
     return result;
   } catch (error) {

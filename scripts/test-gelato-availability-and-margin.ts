@@ -3,6 +3,7 @@ import {
   buildGelatoVariantMarketRows,
   resolveGelatoMarketAvailability,
 } from "../lib/gelato/catalog-sync";
+import { GELATO_COUNTRIES } from "../app/checkout/_lib/checkout";
 import {
   calculateSellingPrice,
   normalizeProfitMarkupPercentage,
@@ -101,6 +102,18 @@ assert.equal(
     isPrintable: false,
   }).reason,
   "product_not_printable",
+);
+
+assert.equal(
+  resolveGelatoMarketAvailability({
+    countryCode: "FR",
+    productStatus: activated,
+    supportedCountries: [],
+    notSupportedCountries: GELATO_COUNTRIES.map((country) => country.iso).slice(0, 201),
+    hasValidPrice: true,
+    isPrintable: true,
+  }).reason,
+  "availability_requires_quote",
 );
 
 const rows = buildGelatoVariantMarketRows({
