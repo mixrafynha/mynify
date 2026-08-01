@@ -56,6 +56,7 @@ import {
   GELATO_COUNTRIES,
   createCheckoutRequestPayload,
   createSecureCheckoutRequestPayload,
+  resolveGelatoPrintFiles,
 } from "./_lib/checkout";
 import type {
   AddressSuggestion,
@@ -416,10 +417,12 @@ export default function CheckoutPage() {
               itemId: item.id,
               title: item.title,
               productId: getCartProductId(item),
+              productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
               variantId: item.variant_id ?? null,
               color: item.color ?? null,
               size: item.size ?? null,
               quantity: Math.max(1, Number(item.quantity) || 1),
+              printFiles: resolveGelatoPrintFiles(item),
             })),
           }),
         });
