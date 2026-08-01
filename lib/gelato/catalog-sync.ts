@@ -94,6 +94,12 @@ type GelatoVariantMarketRow = {
   updated_at: string;
 };
 
+type GelatoColorImages = {
+  mockup_front: string | null;
+  mockup_back: string | null;
+  thumbnail: string | null;
+};
+
 type GelatoSupportedCountriesResult = {
   countries: string[];
   hasSupportedCountriesField: boolean;
@@ -219,6 +225,54 @@ function cleanNumber(value: unknown): number | null {
 
 function roundMoney(value: number): number {
   return Number(value.toFixed(4));
+}
+
+function cleanImageUrl(value: unknown): string | null {
+  const cleaned = cleanString(value);
+  if (!cleaned) return null;
+
+  try {
+    const url = new URL(cleaned);
+    return url.protocol === "https:" || url.protocol === "http:" ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
+
+function collectGelatoImageUrls(value: unknown, path: string[] = []): Array<{ path: string[]; url: string }> {
+  const directUrl = cleanImageUrl(value);
+  if (directUrl) return [{ path, url: directUrl }];
+
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => collectGelatoImageUrls(entry, [...path, String(index)]));
+  }
+
+  if (!isPlainObject(value)) return [];
+
+  return Object.entries(value).flatMap(([key, entry]) =>
+    collectGelatoImageUrls(entry, [...path, key]),
+  );
+}
+
+function scoreGelatoImageUrl(entry: { path: string[]; url: string }, terms: string[]) {
+  const path = entry.path.join(" ").toLowerCase();
+  return terms.reduce((score, term) => score + (path.includes(term) ? 1 : 0), 0);
+}
+
+export function extractGelatoColorImages(products: GelatoCatalogSearchProduct[]): GelatoColorImages {
+  const urls = products.flatMap((product) => collectGelatoImageUrls(product));
+
+  const pick = (terms: string[]) =>
+    urls
+      .map((entry) => ({ ...entry, score: scoreGelatoImageUrl(entry, terms) }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score)[0]?.url ?? null;
+
+  return {
+    mockup_front: pick(["front", "mockup"]) ?? pick(["front"]) ?? pick(["mockup"]),
+    mockup_back: pick(["back", "mockup"]) ?? pick(["back"]),
+    thumbnail: pick(["thumbnail"]) ?? pick(["preview"]) ?? pick(["image"]),
+  };
 }
 
 function cleanBaseUrl(value: string) {
@@ -1589,6 +1643,7 @@ export async function syncGelatoProductFamily(
     const existingColor =
       existingColorsByFamilyKey.get(`${familyAttributes.familyKey}::${colorKey}`) ??
       existingColorsByColorKey.get(colorKey);
+    const gelatoColorImages = extractGelatoColorImages(entries.map((entry) => entry.product));
     let colorId = existingColor?.id ?? null;
     const colorPayload = {
       product_id: productId,
@@ -1598,9 +1653,9 @@ export async function syncGelatoProductFamily(
         colorName: firstEntry.colorName,
         gelatoHex: existingColor?.color_hex ?? firstEntry.colorHex,
       }),
-      mockup_front: existingColor?.mockup_front ?? null,
-      mockup_back: existingColor?.mockup_back ?? null,
-      thumbnail: existingColor?.thumbnail ?? null,
+      mockup_front: existingColor?.mockup_front ?? gelatoColorImages.mockup_front,
+      mockup_back: existingColor?.mockup_back ?? gelatoColorImages.mockup_back,
+      thumbnail: existingColor?.thumbnail ?? gelatoColorImages.thumbnail,
       position: existingColor?.position ?? colorIdByKey.size,
       gelato_color_key: colorKey,
       ...(hasGelatoFamilyKeyColumn ? { gelato_family_key: familyAttributes.familyKey } : {}),

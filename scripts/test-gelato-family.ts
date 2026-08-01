@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import type { GelatoCatalogSearchProduct } from "../lib/gelato/catalog-sync";
 import {
   buildGelatoFamilyKey,
+  extractGelatoColorImages,
   filterGelatoProductsByFamilyKey,
 } from "../lib/gelato/catalog-sync";
 
@@ -61,5 +63,24 @@ assert.deepEqual(
   filtered.map((product) => product.productUid).sort(),
   ["red-l", "white-s"],
 );
+
+const colorImages = extractGelatoColorImages([
+  {
+    productUid: "black-s",
+    attributes: {
+      ...referenceAttributes,
+      GarmentColor: "black",
+    },
+    mockups: {
+      front: "https://cdn.example.test/black-front.png",
+      back: "https://cdn.example.test/black-back.png",
+    },
+    thumbnailUrl: "https://cdn.example.test/black-thumb.png",
+  } as unknown as GelatoCatalogSearchProduct,
+]);
+
+assert.equal(colorImages.mockup_front, "https://cdn.example.test/black-front.png");
+assert.equal(colorImages.mockup_back, "https://cdn.example.test/black-back.png");
+assert.equal(colorImages.thumbnail, "https://cdn.example.test/black-thumb.png");
 
 console.log("gelato family helpers tests passed");
