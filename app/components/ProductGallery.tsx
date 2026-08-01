@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Box } from "lucide-react";
+import { ArrowRight, Expand } from "lucide-react";
 
 const PLACEHOLDER_IMAGE = "/placeholder.png";
 
@@ -73,11 +73,11 @@ export default function ProductGallery({
   };
 
   return (
-    <div className="space-y-3">
-      <div className="relative h-[460px] w-full overflow-hidden rounded-[22px] border border-[#dfdfe8] bg-[#f3f3f1] sm:h-[560px] lg:h-[680px]">
-        <div className="absolute left-4 top-4 z-10 flex h-14 w-14 flex-col items-center justify-center rounded-[18px] border border-black/10 bg-[#1c1a26] text-white shadow-[0_18px_40px_rgba(0,0,0,0.16)]">
-          <Box size={17} strokeWidth={1.8} />
-          <span className="mt-1 text-[11px] font-black tracking-[-0.02em]">3D</span>
+    <div className="space-y-2.5">
+      <div className="relative h-[455px] w-full overflow-hidden rounded-[20px] border border-[#dfdfe8] bg-[#f3f3f1] sm:h-[555px] lg:h-[675px]">
+        <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-2 rounded-full bg-[#1c1a26]/92 px-3 py-2 text-[11px] font-bold tracking-[0.02em] text-white shadow-[0_18px_40px_rgba(0,0,0,0.16)] backdrop-blur-sm">
+          <Expand size={14} strokeWidth={2} />
+          <span>Full screen</span>
         </div>
 
         <Image
@@ -97,9 +97,9 @@ export default function ProductGallery({
             type="button"
             onClick={handleNextImage}
             aria-label="Show next product image"
-            className="absolute right-5 top-1/2 z-10 grid h-14 w-14 -translate-y-1/2 place-items-center rounded-full border border-white/60 bg-[#1c1a26] text-white shadow-[0_18px_40px_rgba(0,0,0,0.2)] transition hover:scale-[1.02]"
+            className="absolute right-4 top-1/2 z-10 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-[#1c1a26]/92 text-white shadow-[0_18px_40px_rgba(0,0,0,0.18)] transition hover:scale-[1.02]"
           >
-            <ArrowRight size={22} strokeWidth={1.9} />
+            <ArrowRight size={18} strokeWidth={2.1} />
           </button>
         )}
       </div>
@@ -118,10 +118,10 @@ export default function ProductGallery({
                 onClick={() => setActiveIndex(index)}
                 aria-label={`Show product image ${index + 1}`}
                 aria-pressed={index === activeIndex}
-                className={`relative h-[82px] w-[82px] flex-shrink-0 overflow-hidden rounded-[16px] border bg-[#f3f3f1] transition ${
+                className={`relative h-[74px] w-[74px] flex-shrink-0 overflow-hidden rounded-[14px] bg-[#f3f3f1] transition ${
                   index === activeIndex
-                    ? "border-fuchsia-400 shadow-[0_0_0_1px_rgba(232,121,249,0.45)]"
-                    : "border-white/10"
+                    ? "ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
+                    : "opacity-88 hover:opacity-100"
                 }`}
               >
                 <Image
