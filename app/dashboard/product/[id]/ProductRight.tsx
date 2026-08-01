@@ -1,16 +1,37 @@
-﻿"use client";
+"use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Check,
+  ChevronDown,
+  Globe2,
   Minus,
   Palette,
   Plus,
   ShoppingCart,
   Sparkles,
   Star,
+  Truck,
   Zap,
 } from "lucide-react";
+import { COUNTRY_DIALS, resolveCheckoutCountry } from "@/app/checkout/_lib/checkout";
+
+type ShippingMethod = {
+  id: string;
+  title: string;
+  price: number | null;
+  estimatedDays: string | null;
+};
+
+function flagForIso(iso?: string | null) {
+  if (!iso || iso.length !== 2) return "🏳️";
+  const chars = iso
+    .toUpperCase()
+    .split("")
+    .map((char) => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...chars);
+}
 
 export function ProductRight({
   product,
@@ -27,6 +48,12 @@ export function ProductRight({
     type: "success" | "error";
     message: string;
   }>(null);
+  const [shippingLoading, setShippingLoading] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
+  const [shippingCountryIso, setShippingCountryIso] = useState("PT");
+  const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
+  const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
+  const [shippingAvailable, setShippingAvailable] = useState(true);
 
   const stock = selectedVariant?.stock ?? null;
   const isOutOfStock = typeof stock === "number" && stock <= 0;
@@ -52,6 +79,20 @@ export function ProductRight({
       .slice(0, 3);
   }, [product?.reviews]);
 
+  const shippingCountries = COUNTRY_DIALS;
+  const selectedShippingCountry = useMemo(() => {
+    return (
+      shippingCountries.find((country) => country.iso === shippingCountryIso) ||
+      resolveCheckoutCountry("Portugal") ||
+      shippingCountries[0] ||
+      null
+    );
+  }, [shippingCountryIso, shippingCountries]);
+
+  const shippingPrice = shippingMethods[0]?.price ?? null;
+  const shippingEta = shippingMethods[0]?.estimatedDays ?? null;
+  const shippingMethodLabel = shippingMethods[0]?.title ?? "Shipping";
+
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
 
@@ -71,6 +112,127 @@ export function ProductRight({
     }
 
     setQuantity((prev) => prev + 1);
+  };
+
+  useEffect(() => {
+    const productCountry =
+      resolveCheckoutCountry(product?.shipping_country) ||
+      resolveCheckoutCountry(product?.country) ||
+      resolveCheckoutCountry(product?.origin_country) ||
+      null;
+
+    if (productCountry?.iso) {
+      setShippingCountryIso(productCountry.iso);
+    }
+  }, [product?.shipping_country, product?.country, product?.origin_country]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadShipping() {
+      if (!selectedVariant?.id) {
+        setShippingMethods([]);
+        setShippingAvailable(false);
+        setShippingError("Select a variant to calculate shipping.");
+        return;
+      }
+
+      setShippingLoading(true);
+      setShippingError(null);
+
+      try {
+        const response = await fetch("/api/checkout/availability", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            country: selectedShippingCountry?.country ?? "Portugal",
+            countryIso: selectedShippingCountry?.iso ?? "PT",
+            items: [
+              {
+                itemId: String(selectedVariant.id),
+                title: String(product?.title ?? "Product"),
+                productId: String(product?.id ?? ""),
+                variantId: String(selectedVariant.id),
+                color: selectedVariant.color ?? null,
+                size: selectedVariant.size ?? null,
+                quantity: 1,
+              },
+            ],
+          }),
+        });
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(data?.error || "Shipping unavailable");
+        }
+
+        const normalizedMethods = Array.isArray(data?.shippingMethods)
+          ? data.shippingMethods
+              .map((method: any) => ({
+                id: String(method.id ?? method.code ?? method.title ?? "shipping"),
+                title: String(method.title ?? method.name ?? "Shipping"),
+                price:
+                  typeof method.price === "number"
+                    ? method.price
+                    : typeof method.amount === "number"
+                      ? method.amount
+                      : null,
+                estimatedDays:
+                  typeof method.estimatedDays === "string"
+                    ? method.estimatedDays
+                    : typeof method.eta === "string"
+                      ? method.eta
+                      : typeof method.deliveryTime === "string"
+                        ? method.deliveryTime
+                        : null,
+              }))
+              .filter((method: ShippingMethod) => method.id)
+          : [];
+
+        setShippingMethods(normalizedMethods);
+        setShippingAvailable(Boolean(data?.available !== false));
+        setShippingError(
+          typeof data?.message === "string" && data.message.trim()
+            ? data.message
+            : null
+        );
+      } catch (error) {
+        if ((error as Error)?.name !== "AbortError") {
+          setShippingMethods([]);
+          setShippingAvailable(false);
+          setShippingError("Shipping could not be calculated right now.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setShippingLoading(false);
+        }
+      }
+    }
+
+    loadShipping();
+
+    return () => controller.abort();
+  }, [
+    product?.id,
+    product?.title,
+    selectedShippingCountry?.country,
+    selectedShippingCountry?.iso,
+    selectedVariant?.id,
+    selectedVariant?.color,
+    selectedVariant?.size,
+  ]);
+
+  const formatShippingPrice = (value: number | null) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "EUR",
+      maximumFractionDigits: 2,
+    }).format(value);
   };
 
   const getMockup = () => {
@@ -283,17 +445,29 @@ export function ProductRight({
         </div>
       )}
 
-      <style jsx global>{`\n        @keyframes toastBar {\n          from {\n            width: 100%;\n          }\n\n          to {\n            width: 0%;\n          }\n        }\n      `}</style>
+      <style jsx global>{`
+        @keyframes toastBar {
+          from {
+            width: 100%;
+          }
+
+          to {
+            width: 0%;
+          }
+        }
+      `}</style>
 
       <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
         <div className="space-y-2 text-left">
           <h1
-            className="max-w-[11ch] text-[1.79rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.21rem] lg:text-[2.76rem]"
-            style={{ fontFamily: 'var(--font-logo)' }}
+            className="max-w-[11ch] text-[1.73rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.13rem] lg:text-[2.66rem]"
+            style={{ fontFamily: "var(--font-logo)" }}
           >
             <span className="block">{titleFirstWord}</span>
             {titleRemaining ? (
-              <span className="block whitespace-nowrap text-white/92">{titleRemaining}</span>
+              <span className="block whitespace-nowrap text-white/92">
+                {titleRemaining}
+              </span>
             ) : null}
           </h1>
 
@@ -305,7 +479,7 @@ export function ProductRight({
         <div className="border border-white/[0.07] bg-[#1b1424] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
-              <div className="text-[1.85rem] font-black tracking-tight text-white sm:text-[2.2rem]">
+              <div className="text-[1.8rem] font-black tracking-tight text-white sm:text-[2.2rem]">
                 €{price.toFixed(2)}
               </div>
 
@@ -320,107 +494,177 @@ export function ProductRight({
                 <span className="truncate">{selectedVariantLabel}</span>
               </div>
             </div>
+
+            <div className="min-w-[9rem] text-right">
+              <div className="text-[9px] font-black uppercase tracking-[0.18em] text-white/44">
+                Available in
+              </div>
+              <div className="mt-1 text-sm font-black uppercase tracking-[0.12em] text-white">
+                20+ countries
+              </div>
+            </div>
           </div>
 
-          <div className="mt-5 text-sm">
-            {typeof stock === "number" ? (
-              stock > 0 ? (
-                <div
-                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52"
-                  aria-label={`In stock (${stock})`}
-                  title={`In stock (${stock})`}
-                >
-                  <span>Stock</span>
-                  <span className="inline-flex h-3 w-3 rounded-full bg-[#22c55e]" />
-                </div>
-              ) : (
-                <div
-                  className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52"
-                  aria-label="Out of stock"
-                  title="Out of stock"
-                >
-                  <span>Stock</span>
-                  <span className="inline-flex h-3 w-3 rounded-full bg-[#ef4444]" />
-                </div>
-              )
-            ) : (
-              <span className="text-white/50">Select variant</span>
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/48">
-              Quantity
-            </span>
+          <div className="mt-5 flex items-center justify-between gap-4">
+            <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52">
+              <span>Stock</span>
+              <span
+                className={`inline-flex h-3 w-3 rounded-full ${
+                  typeof stock === "number" && stock > 0
+                    ? "bg-[#22c55e]"
+                    : "bg-[#ef4444]"
+                }`}
+              />
+              <span className="normal-case tracking-normal text-white/72">
+                {typeof stock === "number"
+                  ? stock > 0
+                    ? `In stock (${stock})`
+                    : "Out of stock"
+                  : "Select variant"}
+              </span>
+            </div>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={decreaseQuantity}
-                disabled={quantity <= 1 || loading}
-                className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
-              >
-                <Minus size={14} />
-              </button>
-
-              <span className="min-w-7 text-center text-sm font-black text-white">
-                {quantity}
+              <span className="text-[10px] font-black uppercase tracking-[0.14em] text-white/48">
+                Quantity
               </span>
 
+              <div className="flex items-center gap-0 border border-white/[0.08] bg-black/10">
+                <button
+                  type="button"
+                  onClick={decreaseQuantity}
+                  disabled={quantity <= 1 || loading}
+                  aria-label="Decrease quantity"
+                  className="flex h-9 w-9 items-center justify-center text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:bg-white/[0.03]"
+                >
+                  <Minus size={14} />
+                </button>
+
+                <span className="min-w-7 px-2 text-center text-sm font-black text-white">
+                  {quantity}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={increaseQuantity}
+                  disabled={
+                    loading ||
+                    isOutOfStock ||
+                    (typeof stock === "number" && quantity >= stock)
+                  }
+                  aria-label="Increase quantity"
+                  className="flex h-9 w-9 items-center justify-center text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:bg-white/[0.03]"
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border border-white/[0.08] bg-white px-3 py-3 text-[#111111]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[10px] font-medium text-[#6b7280]">
+              <span>Shipping from</span>
+              <span className="grid h-4 w-4 place-items-center border border-[#cfd4dc] text-[9px] leading-none">
+                i
+              </span>
+            </div>
+            <span className="inline-flex items-center gap-1.5 rounded-none border border-emerald-500/20 bg-emerald-500/[0.06] px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-emerald-600">
+              <Truck size={11} />
+              Powered by Gelato
+            </span>
+          </div>
+
+          <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
+            <div className="min-w-0">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#6b7280]">
+                Delivery to
+              </div>
+
               <button
                 type="button"
-                onClick={increaseQuantity}
-                disabled={
-                  loading ||
-                  isOutOfStock ||
-                  (typeof stock === "number" && quantity >= stock)
-                }
-                className="flex h-9 w-9 items-center justify-center border border-white/[0.08] bg-[#1b1424] text-white transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 md:hover:border-fuchsia-300/20"
+                onClick={() => setShippingMenuOpen((prev) => !prev)}
+                className="mt-1 flex h-11 w-full items-center justify-between gap-3 border border-[#d8dde5] px-3 text-left text-sm font-semibold text-[#111111]"
               >
-                <Plus size={14} />
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="text-base leading-none">
+                    {flagForIso(selectedShippingCountry?.iso)}
+                  </span>
+                  <span className="truncate">
+                    {selectedShippingCountry?.country ?? "Portugal"}
+                  </span>
+                </span>
+                <ChevronDown size={15} className="shrink-0 text-[#6b7280]" />
               </button>
+
+              {shippingMenuOpen && (
+                <div className="mt-1 max-h-52 overflow-y-auto border border-[#d8dde5] bg-white">
+                  {shippingCountries.map((country) => (
+                    <button
+                      key={country.iso}
+                      type="button"
+                      onClick={() => {
+                        setShippingCountryIso(country.iso);
+                        setShippingMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-black/[0.03] ${
+                        selectedShippingCountry?.iso === country.iso
+                          ? "font-black text-[#111111]"
+                          : "text-[#333333]"
+                      }`}
+                    >
+                      <span className="text-base leading-none">
+                        {flagForIso(country.iso)}
+                      </span>
+                      <span className="truncate">{country.country}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          </div>
-        </div>
 
-        <div className="mt-3 border border-white/[0.10] bg-white px-3 py-2 text-[#111111] shadow-[0_1px_0_rgba(255,255,255,0.5)_inset]">
-          <div className="flex items-center gap-1.5 text-[10px] font-medium text-[#6b7280]">
-            <span>Shipping from</span>
-            <span className="grid h-4 w-4 place-items-center border border-[#cfd4dc] text-[9px] leading-none">i</span>
-          </div>
-
-          <div className="mt-0.5 text-[1.45rem] font-black leading-none tracking-[-0.04em] text-[#111111]">
-            €7.65
-          </div>
-
-          <div className="mt-1 text-[10px] font-medium text-[#6b7280]">
-            5-6 business days
-          </div>
-
-          <div className="mt-2">
-            <div className="text-[10px] font-medium text-[#6b7280]">Delivery to</div>
-            <div className="mt-1 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-[#111111]">
-                <span className="text-base leading-none">🇦🇺</span>
-                <span>Australia</span>
+            <div className="min-w-[8rem] text-right">
+              <div className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#6b7280]">
+                {shippingLoading ? "Calculating" : shippingMethodLabel}
               </div>
-              <span className="text-[10px] leading-none text-[#6b7280]">▾</span>
+              <div className="mt-1 text-[1.45rem] font-black leading-none tracking-[-0.04em] text-[#111111]">
+                {shippingLoading ? "…" : formatShippingPrice(shippingPrice)}
+              </div>
+              <div className="mt-1 text-[10px] font-medium text-[#6b7280]">
+                {shippingLoading ? "Please wait" : shippingEta ?? "Estimated at checkout"}
+              </div>
             </div>
           </div>
 
-          <div className="mt-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">Available</div>
+          <div className="mt-3 border-t border-[#e8ebf1] pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
+            {shippingError ? (
+              <span className="text-[#d94660]">{shippingError}</span>
+            ) : shippingAvailable ? (
+              <span className="inline-flex items-center gap-1.5 text-[#0f9d58]">
+                <Check size={12} />
+                Available
+              </span>
+            ) : (
+              <span className="text-[#d94660]">Not available</span>
+            )}
+          </div>
         </div>
 
-        <div className="mt-3 flex gap-2.5">
+        <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading}
             onClick={handleAddToCart}
-            className="group relative flex h-[56px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-5 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
-              {loading ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : <ShoppingCart size={15} />}
+              {loading ? (
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+              ) : (
+                <ShoppingCart size={15} />
+              )}
             </span>
             <span className="relative">{loading ? "Adding..." : "Add to cart"}</span>
             {!loading && <Zap className="relative text-yellow-200" size={14} />}
@@ -430,7 +674,7 @@ export function ProductRight({
             type="button"
             disabled={loading}
             onClick={handleStartDesigning}
-            className="group relative flex h-[56px] flex-1 items-center justify-center gap-2 overflow-hidden rounded-[12px] border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-5 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-4 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
             <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
@@ -438,6 +682,21 @@ export function ProductRight({
             </span>
             <span className="relative">Start Designing</span>
           </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+            <Sparkles size={12} className="text-fuchsia-300" />
+            Secure checkout
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+            <Globe2 size={12} className="text-emerald-300" />
+            Worldwide shipping
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+            <Check size={12} className="text-cyan-300" />
+            Quality guaranteed
+          </span>
         </div>
 
         {verifiedReviews.length > 0 && (
