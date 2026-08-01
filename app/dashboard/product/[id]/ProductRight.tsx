@@ -24,13 +24,42 @@ type ShippingMethod = {
   estimatedDays: string | null;
 };
 
-function flagForIso(iso?: string | null) {
-  if (!iso || iso.length !== 2) return "🏳️";
-  const chars = iso
-    .toUpperCase()
-    .split("")
-    .map((char) => 127397 + char.charCodeAt(0));
-  return String.fromCodePoint(...chars);
+function CountryFlag({
+  iso,
+  country,
+}: {
+  iso?: string | null;
+  country?: string | null;
+}) {
+  const code = (iso || "").trim().toLowerCase();
+  const label = country || iso || "Country";
+
+  if (!code || code.length !== 2) {
+    return (
+      <span
+        aria-hidden="true"
+        className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.06)]"
+      >
+        <span className="h-2.5 w-2.5 rounded-full bg-zinc-300" />
+      </span>
+    );
+  }
+
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex h-5 w-5 items-center justify-center overflow-hidden rounded-full border border-black/10 bg-white shadow-[0_0_0_1px_rgba(0,0,0,0.06)]"
+      title={label}
+    >
+      <img
+        src={`https://flagcdn.com/${code}.svg`}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    </span>
+  );
 }
 
 export function ProductRight({
@@ -617,7 +646,7 @@ export function ProductRight({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="text-base leading-none">
-                    {flagForIso(selectedShippingCountry?.iso)}
+                    <CountryFlag iso={selectedShippingCountry?.iso} country={selectedShippingCountry?.country} />
                   </span>
                   <span className="truncate">
                     {selectedShippingCountry?.country ?? "Portugal"}
@@ -643,7 +672,7 @@ export function ProductRight({
                       }`}
                     >
                       <span className="text-base leading-none">
-                        {flagForIso(country.iso)}
+                        <CountryFlag iso={country.iso} country={country.country} />
                       </span>
                       <span className="truncate">{country.country}</span>
                     </button>
