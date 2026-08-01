@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { requireAdmin } from "@/lib/requireAdmin";
+import { refreshProductVariantSellingPrices } from "@/lib/gelato/catalog-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,11 @@ export async function PATCH(
       { error: error.message },
       { status: 500 }
     );
+  }
+
+  if (body.profit_markup_percentage !== undefined) {
+    const refreshResult = await refreshProductVariantSellingPrices(id);
+    return NextResponse.json({ data, pricing: refreshResult });
   }
 
   return NextResponse.json({ data });

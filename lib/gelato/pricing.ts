@@ -26,3 +26,10 @@ export function calculateSellingPrice(input: {
   const markupPercentage = normalizeProfitMarkupPercentage(input.markupPercentage);
   return roundSellingPrice(productionCost * (1 + markupPercentage / 100));
 }
+
+export function pricesAlmostEqual(left: unknown, right: unknown, tolerance = 0.0001): boolean {
+  const leftNumber = cleanNumber(left);
+  const rightNumber = cleanNumber(right);
+  if (leftNumber === null || rightNumber === null) return false;
+  return Math.abs(leftNumber - rightNumber) < tolerance;
+}
