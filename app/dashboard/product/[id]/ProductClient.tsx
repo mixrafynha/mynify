@@ -220,7 +220,7 @@ export default function ProductClient({
         </div>
       </div>
 
-      <section className="rounded-[28px] border border-white/10 bg-[#15101d] px-5 py-5 sm:px-6">
+      <section className="rounded-[30px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-5 py-5 sm:px-6">
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] lg:items-start">
           <div className="min-w-0">
             <SizeSelector
@@ -242,7 +242,7 @@ export default function ProductClient({
         </div>
       </section>
 
-      <section className="grid gap-3 rounded-[28px] border border-white/10 bg-[#15101d] p-3 sm:grid-cols-3 sm:p-4">
+      <section className="grid gap-3 rounded-[30px] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-3 sm:grid-cols-3 sm:p-4">
         <DeliveryPill
           icon={CheckCircle}
           title="Production"
@@ -468,9 +468,9 @@ function DeliveryPill({
   tone: string;
 }) {
   return (
-    <div className="rounded-[22px] border border-white/[0.08] bg-white/[0.025] px-5 py-5">
+    <div className="rounded-[24px] bg-white/[0.03] px-5 py-5 backdrop-blur-sm">
       <div className="flex items-center gap-4">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-fuchsia-300/20 bg-fuchsia-400/[0.06]">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-fuchsia-400/[0.08]">
           <Icon size={18} className={tone} />
         </div>
         <div>

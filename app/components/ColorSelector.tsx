@@ -1,11 +1,17 @@
 "use client";
 
+import { useMemo, useState } from "react";
+
+const VISIBLE_COLOR_COUNT = 9;
+
 export default function ColorSelector({
   variants,
   selectedColor,
   selectedVariant,
   onChange,
 }: any) {
+  const [expanded, setExpanded] = useState(false);
+
   const normalize = (v: string) =>
     String(v ?? "")
       .trim()
@@ -13,8 +19,6 @@ export default function ColorSelector({
       .replace(/\s+/g, " ");
 
   const safeVariants = variants ?? [];
-
-  // 🔥 cores únicas REALMENTE normalizadas (sem duplicação escondida)
   const colorMap = new Map();
 
   safeVariants.forEach((v: any) => {
@@ -31,36 +35,44 @@ export default function ColorSelector({
   });
 
   const colors = Array.from(colorMap.values());
+  const visibleColors = useMemo(
+    () => (expanded ? colors : colors.slice(0, VISIBLE_COLOR_COUNT)),
+    [colors, expanded]
+  );
+  const hiddenCount = Math.max(0, colors.length - VISIBLE_COLOR_COUNT);
 
   return (
-    <div>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[13px] font-bold text-white/90">Colors</p>
-          <p className="mt-3 text-sm font-medium text-white/78">
+    <div className="min-w-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-[0.02em] text-white/72">
+            Colors
+          </p>
+          <p className="mt-3 truncate text-sm font-medium text-white">
             {selectedColor || selectedVariant?.color || "Choose a color"}
           </p>
         </div>
+
+        {hiddenCount > 0 && !expanded && (
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="shrink-0 rounded-full bg-white/[0.05] px-3 py-1 text-sm font-bold tracking-[0.18em] text-white/64 transition hover:bg-white/[0.08] hover:text-white"
+            aria-label="Show all colors"
+          >
+            ...
+          </button>
+        )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        {colors.map((c: any, i: number) => {
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {visibleColors.map((c: any, i: number) => {
           const normalizedColor = normalize(c.label);
-
-          // 🔥 match seguro
           const available = safeVariants.filter(
-            (v: any) =>
-              normalize(v.color) === normalizedColor
+            (v: any) => normalize(v.color) === normalizedColor
           );
-
-          const hasStock = available.some(
-            (v: any) => Number(v.stock ?? 0) > 0
-          );
-
-          const isActive =
-            normalize(selectedColor || "") === normalizedColor;
-
-          // 🔥 fallback seguro de cor
+          const hasStock = available.some((v: any) => Number(v.stock ?? 0) > 0);
+          const isActive = normalize(selectedColor || "") === normalizedColor;
           const colorHex =
             available.find((v: any) => v.color_hex)?.color_hex ||
             available[0]?.color_hex ||
@@ -77,30 +89,36 @@ export default function ColorSelector({
                   available.find(
                     (v: any) =>
                       selectedVariant?.size &&
-                      normalize(v.size) ===
-                        normalize(selectedVariant.size)
+                      normalize(v.size) === normalize(selectedVariant.size)
                   ) || available[0] || null;
 
                 if (!next) return;
-
                 onChange(c.label, next);
               }}
-              className="flex flex-col items-center cursor-pointer disabled:cursor-not-allowed"
+              className="flex items-center justify-center disabled:cursor-not-allowed"
             >
               <div
-                className={`h-10 w-10 rounded-full border-[1.5px] transition ${
+                className={`h-8 w-8 rounded-full transition ${
                   isActive
-                    ? "border-fuchsia-300 shadow-[0_0_0_2px_rgba(168,85,247,0.5)]"
-                    : "border-white/30 hover:scale-105"
+                    ? "scale-110 ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
+                    : "ring-1 ring-white/20 hover:scale-105"
                 } ${!hasStock ? "opacity-30" : ""}`}
-                style={{
-                  backgroundColor: colorHex,
-                }}
+                style={{ backgroundColor: colorHex }}
               />
             </button>
           );
         })}
       </div>
+
+      {expanded && hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-4 text-xs font-semibold text-white/46 transition hover:text-white/72"
+        >
+          Show less
+        </button>
+      )}
     </div>
   );
 }

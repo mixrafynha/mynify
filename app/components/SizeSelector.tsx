@@ -12,19 +12,14 @@ export default function SizeSelector({
       .toLowerCase()
       .replace(/\s+/g, " ");
 
-  const safeVariants = Array.isArray(variants)
-    ? variants
-    : [];
+  const safeVariants = Array.isArray(variants) ? variants : [];
 
-  // 🔥 filtra por cor (se existir)
   const filteredByColor = selectedColor
     ? safeVariants.filter(
-        (v: any) =>
-          normalize(v.color) === normalize(selectedColor)
+        (v: any) => normalize(v.color) === normalize(selectedColor)
       )
     : safeVariants;
 
-  // 🔥 remove sizes duplicados (IMPORTANTE)
   const uniqueSizesMap = new Map();
 
   filteredByColor.forEach((v: any) => {
@@ -40,16 +35,16 @@ export default function SizeSelector({
   const sizes = Array.from(uniqueSizesMap.values());
 
   return (
-    <div>
-      <p className="text-[13px] font-bold text-white/90">Variants (Size)</p>
+    <div className="min-w-0">
+      <p className="text-[13px] font-semibold tracking-[0.02em] text-white/72">
+        Variants (Size)
+      </p>
 
-      <div className="mt-4 flex flex-wrap gap-2.5">
+      <div className="mt-4 flex flex-wrap gap-2">
         {sizes.map((v: any, i: number) => {
           const disabled = Number(v.stock ?? 0) <= 0;
-
           const isActive =
-            normalize(selectedVariant?.size) ===
-            normalize(v.size);
+            normalize(selectedVariant?.size) === normalize(v.size);
 
           return (
             <button
@@ -60,12 +55,12 @@ export default function SizeSelector({
                 if (disabled) return;
                 onChange(v);
               }}
-              className={`min-w-[44px] rounded-[10px] border px-3 py-2 text-xs font-black tracking-[0.04em] transition ${
+              className={`min-w-[40px] rounded-full px-3 py-1.5 text-[11px] font-bold tracking-[0.06em] transition ${
                 disabled
-                  ? "cursor-not-allowed opacity-30"
+                  ? "cursor-not-allowed bg-white/[0.03] text-white/25"
                   : isActive
-                  ? "border-fuchsia-400 bg-fuchsia-400/10 text-white shadow-[0_0_0_1px_rgba(232,121,249,0.35)]"
-                  : "border-white/10 bg-white/[0.02] text-white/78 hover:border-white/20 hover:bg-white/[0.04]"
+                  ? "bg-white text-[#16131d]"
+                  : "bg-white/[0.05] text-white/76 hover:bg-white/[0.1] hover:text-white"
               }`}
             >
               {v.size}
