@@ -19,6 +19,14 @@ function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function safeLog(value: unknown) {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return "[unserializable]";
+  }
+}
+
 function normalizeQuantity(value: unknown) {
   const quantity = Math.max(1, Math.floor(Number(value) || 1));
   return Number.isFinite(quantity) ? quantity : 1;
@@ -31,17 +39,38 @@ export async function POST(req: Request) {
     const countryIso = safeText(body?.countryIso).toUpperCase() || null;
     const items = Array.isArray(body?.items) ? (body.items as AvailabilityItem[]) : [];
 
+    console.log(
+      "[CHECKOUT_AVAILABILITY_RECEIVED]",
+      safeLog({
+        itemsCount: items.length,
+        countryCode: body?.shippingAddress?.countryCode ?? body?.countryIso ?? body?.country ?? null,
+        postalCodePresent: Boolean(body?.shippingAddress?.postalCode ?? body?.postalCode),
+        cityPresent: Boolean(body?.shippingAddress?.city ?? body?.city),
+        addressLine1Present: Boolean(body?.shippingAddress?.addressLine1 ?? body?.addressLine1 ?? body?.address),
+        items: items.map((item) => ({
+          productId: item.productId ?? null,
+          variantId: item.variantId ?? null,
+          productUid: item.productUid ?? null,
+          quantity: item.quantity ?? null,
+          printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : Array.isArray(item.files) ? item.files.length : 0,
+        })),
+      }),
+    );
+
     if (!country && !countryIso) {
-      return NextResponse.json({
-        configured: false,
-        available: false,
-        country,
-        countryIso,
-        shippingMethods: [],
-        unavailableItems: [],
-        loading: false,
-        message: "Select a delivery country to calculate shipping.",
-      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "MISSING_COUNTRY",
+          message: "Select a delivery country to calculate shipping.",
+          diagnostics: {
+            itemsReceived: items.length,
+            quoteItemsCreated: 0,
+            missingFields: ["country"],
+          },
+        },
+        { status: 400 },
+      );
     }
 
     const resolvedCountryIso = resolveCountryCode(countryIso ?? country);
@@ -76,17 +105,66 @@ export async function POST(req: Request) {
       })
       .filter((item) => Boolean(item.productUid) && item.printFiles.length > 0);
 
+    console.log(
+      "[CHECKOUT_QUOTE_ITEMS_BUILT]",
+      safeLog({
+        receivedItems: items.length,
+        quoteItemsCount: quoteItems.length,
+        rejectedItems: items
+          .map((item, index) => {
+            const productUid = safeText(item.productUid) || safeText(item.productId);
+            const printFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
+            const missing: string[] = [];
+            if (!productUid) missing.push("productUid");
+            if (!printFiles.length) missing.push("printFiles");
+            return missing.length
+              ? {
+                  itemReferenceId: safeText(item.itemId) || `availability-${index}`,
+                  variantId: item.variantId ?? null,
+                  reason: missing.join(","),
+                }
+              : null;
+          })
+          .filter(Boolean),
+      }),
+    );
+
     if (!quoteItems.length) {
-      return NextResponse.json({
-        configured: false,
-        available: true,
-        country,
-        countryIso: resolvedCountryIso ?? countryIso ?? null,
-        shippingMethods: [],
-        unavailableItems: [],
-        message: "Complete your shipping address to see available delivery methods.",
-      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "NO_VALID_QUOTE_ITEMS",
+          message: "No valid Gelato quote items could be created.",
+          diagnostics: {
+            receivedItems: items.length,
+            rejectedItems: items.map((item, index) => ({
+              itemReferenceId: safeText(item.itemId) || `availability-${index}`,
+              variantId: item.variantId ?? null,
+              reason: [
+                !safeText(item.productUid) && !safeText(item.productId) ? "missing_product_uid" : null,
+                !(
+                  (Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : []).length
+                )
+                  ? "missing_print_files"
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(","),
+            })),
+          },
+        },
+        { status: 400 },
+      );
     }
+
+    console.log(
+      "[GELATO_QUOTE_CALL_START]",
+      safeLog({
+        quoteItemsCount: quoteItems.length,
+        countryCode: countryIso ?? country,
+        postalCodePresent: Boolean(body?.postalCode || body?.shippingAddress?.postalCode),
+      }),
+    );
 
     const quote = await getGelatoCheckoutQuote({
       productUid: quoteItems[0].productUid,
@@ -99,53 +177,42 @@ export async function POST(req: Request) {
       orderReferenceId: safeText(body?.orderReferenceId) || undefined,
     });
 
+    console.log(
+      "[GELATO_QUOTE_CALL_END]",
+      safeLog({
+        available: quote.available,
+        retryable: quote.retryable,
+        reason: quote.reason,
+        shippingMethodsCount: quote.shippingOptions.length,
+      }),
+    );
+
     if (quote.retryable) {
       return NextResponse.json(
         {
-          configured: true,
-        available: false,
-        retryable: true,
-        country,
-        countryIso: resolvedCountryIso ?? countryIso ?? null,
-        shippingMethods: [],
-        unavailableItems: [],
-        message: "We couldn't calculate shipping. Check the address and try again.",
-      },
-      { status: 503 },
-    );
-  }
+          ok: false,
+          code: "GELATO_QUOTE_FAILED",
+          retryable: true,
+          message: "We couldn't calculate shipping. Check the address and try again.",
+        },
+        { status: 503 },
+      );
+    }
 
     if (!quote.available) {
-      return NextResponse.json({
-        configured: true,
-        available: false,
-        retryable: false,
-        country,
-        countryIso: resolvedCountryIso ?? countryIso ?? null,
-        shippingMethods: [],
-        unavailableItems: items.map((item) => ({
-          itemId: item.itemId || item.productId || crypto.randomUUID(),
-          title: item.title || "Product",
-          productId: item.productId || "",
-          variantId: item.variantId ?? null,
-          color: item.color ?? null,
-          size: item.size ?? null,
-          quantity: normalizeQuantity(item.quantity),
-          available: false,
-          reason: quote.reason || "No shipping options available.",
-        })),
-        message: quote.reason === "no_shipping_options"
-          ? "This product cannot be delivered to the selected country."
-          : "This product cannot be delivered to the selected country.",
-      });
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "NO_SHIPPING_METHODS_PARSED",
+          message: "The Gelato response did not contain recognized shipping methods.",
+          responseKeys: [],
+        },
+        { status: 422 },
+      );
     }
 
     return NextResponse.json({
-      configured: true,
-      available: true,
-      retryable: false,
-      country,
-      countryIso: resolvedCountryIso ?? countryIso ?? null,
+      ok: true,
       shippingMethods: quote.shippingOptions.map((option) => ({
         id: option.id,
         title: option.name,
@@ -158,19 +225,13 @@ export async function POST(req: Request) {
         promiseUid: option.promiseUid,
         serviceType: option.serviceType,
       })),
-      unavailableItems: [],
-      message: null,
     });
   } catch (error) {
     return NextResponse.json(
       {
-        configured: true,
-        available: false,
+        ok: false,
+        code: "GELATO_QUOTE_FAILED",
         retryable: true,
-        country: null,
-        countryIso: null,
-        shippingMethods: [],
-        unavailableItems: [],
         message: error instanceof Error ? error.message : "Shipping could not be calculated.",
       },
       { status: 503 },
