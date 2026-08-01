@@ -83,43 +83,8 @@ export default function ProductGallery({
     <>
       <div className="space-y-2.5">
         <div className="relative rounded-[20px] border border-[#dfdfe8] bg-[#f3f3f1] p-2 sm:p-3">
-          <div className="relative flex min-h-[455px] gap-3 sm:min-h-[555px] lg:min-h-[675px]">
-            {safeImages.length > 1 && (
-              <div className="hidden w-[76px] shrink-0 flex-col gap-2 overflow-y-auto pr-1 md:flex">
-                {safeImages.map((image, index) => {
-                  const thumbnailSrc = failedImages[image]
-                    ? PLACEHOLDER_IMAGE
-                    : image;
-
-                  return (
-                    <button
-                      key={`${image}-${index}`}
-                      type="button"
-                      onClick={() => setActiveIndex(index)}
-                      aria-label={`Show product image ${index + 1}`}
-                      aria-pressed={index === activeIndex}
-                      className={`relative h-[92px] w-[76px] overflow-hidden rounded-[12px] bg-[#efefee] transition ${
-                        index === activeIndex
-                          ? "ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#f3f3f1]"
-                          : "opacity-80 hover:opacity-100"
-                      }`}
-                    >
-                      <Image
-                        src={thumbnailSrc}
-                        alt={`${title?.trim() || "Product"} image ${index + 1}`}
-                        fill
-                        unoptimized
-                        sizes="76px"
-                        className="object-contain object-center"
-                        onError={() => handleImageError(image)}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="relative min-w-0 flex-1 overflow-hidden rounded-[16px] bg-[#f3f3f1]">
+          <div className="relative min-h-[455px] sm:min-h-[555px] lg:min-h-[675px]">
+            <div className="relative min-w-0 overflow-hidden rounded-[16px] bg-[#f3f3f1]">
               <button
                 type="button"
                 onClick={() => setFullscreenOpen(true)}
@@ -168,7 +133,7 @@ export default function ProductGallery({
         </div>
 
         {safeImages.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 md:hidden">
+          <div className="flex gap-2 overflow-x-auto pb-1">
             {safeImages.map((image, index) => {
               const thumbnailSrc = failedImages[image]
                 ? PLACEHOLDER_IMAGE
@@ -177,14 +142,14 @@ export default function ProductGallery({
               return (
                 <button
                   key={`${image}-${index}`}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  aria-label={`Show product image ${index + 1}`}
-                  aria-pressed={index === activeIndex}
-                  className={`relative h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-[14px] bg-[#f3f3f1] transition ${
-                    index === activeIndex
-                      ? "ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
-                      : "opacity-88 hover:opacity-100"
+                type="button"
+                onClick={() => setActiveIndex(index)}
+                aria-label={`Show product image ${index + 1}`}
+                aria-pressed={index === activeIndex}
+                className={`relative h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-[14px] bg-[#f3f3f1] transition sm:h-[76px] sm:w-[76px] ${
+                  index === activeIndex
+                    ? "ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
+                    : "opacity-88 hover:opacity-100"
                   }`}
                 >
                   <Image
