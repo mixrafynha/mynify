@@ -765,6 +765,20 @@ export default function EditorPage() {
         throw new Error("The design was saved, but its ID was not returned");
       }
 
+      const mockupRoot = previewCanvasRef.current?.querySelector(
+        "#mockup-export-root",
+      ) as HTMLElement | null;
+      const checkoutThumbnailPromise = (async () => {
+        try {
+          const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
+          if (!checkoutThumbnail) return null;
+
+          return checkoutThumbnail;
+        } catch {
+          return null;
+        }
+      })();
+
       setSaveNotice("Design saved. Adding it to your cart...");
 
       const cartResponse = await fetch("/api/cart/add", {
@@ -800,12 +814,9 @@ export default function EditorPage() {
         "Design saved and added to cart. Redirecting you to checkout...",
       );
 
-      const mockupRoot = previewCanvasRef.current?.querySelector(
-        "#mockup-export-root",
-      ) as HTMLElement | null;
       void (async () => {
         try {
-          const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
+          const checkoutThumbnail = await checkoutThumbnailPromise;
           if (!checkoutThumbnail) return;
 
           await fetch("/api/user-products/checkout-thumbnail", {
