@@ -227,11 +227,13 @@ function resolveUsedDesignSides(front: ElementType[], back: ElementType[]) {
   return usedSides;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   return Promise.race([
     promise,
-    new Promise<T>((resolve) => {
-      window.setTimeout(() => resolve(fallback), timeoutMs);
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
     }),
   ]);
 }
@@ -764,8 +766,19 @@ export default function EditorPage() {
       const stageRef = targetSide === "front" ? frontStageRef : backStageRef;
       const stageRoot = stageRef.current;
 
+      console.info("[preview] stage state", {
+        side: targetSide,
+        exists: Boolean(stageRoot),
+        connected: stageRoot?.isConnected ?? false,
+        width: stageRoot?.clientWidth ?? 0,
+        height: stageRoot?.clientHeight ?? 0,
+      });
+
       if (!stageRoot) {
         throw new Error(`${targetSide}StageRef.current is null`);
+      }
+      if (!stageRoot.isConnected) {
+        throw new Error(`${targetSide} stage is detached from the DOM`);
       }
       console.info(`[preview] ${targetSide} stage found`);
 
@@ -778,7 +791,11 @@ export default function EditorPage() {
         console.error("[preview] failed", error);
       });
       await nextFrame();
-      const dataUrl = await captureVisualMockupPreview(exportNode);
+      const dataUrl = await withTimeout(
+        captureVisualMockupPreview(exportNode),
+        8000,
+        `${targetSide} preview export`,
+      );
       if (!dataUrl) {
         throw new Error(`${targetSide} capture returned null`);
       }
@@ -918,10 +935,20 @@ export default function EditorPage() {
 
       setSaveNotice("Design saved. Adding it to your cart...");
 
-      const frontPreview = await exportEditorPreview("front");
+      console.info("[save-design] started", { userProductId: savedUserProductId });
+
+      const frontPreview = await withTimeout(
+        exportEditorPreview("front"),
+        8000,
+        "Front preview export",
+      );
 
       const backPreview = usedSides.includes("back")
-        ? await exportEditorPreview("back")
+        ? await withTimeout(
+            exportEditorPreview("back"),
+            8000,
+            "Back preview export",
+          )
         : null;
 
       const previewFormData = new FormData();
@@ -931,12 +958,16 @@ export default function EditorPage() {
         previewFormData.set("back", backPreview, "back.webp");
       }
 
-      const previewResponse = await fetch("/api/user-products/save-design/mockup-preview", {
+      const previewResponse = await withTimeout(
+        fetch("/api/user-products/save-design/mockup-preview", {
         method: "POST",
         credentials: "include",
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: previewFormData,
-      });
+        }),
+        10000,
+        "Preview upload",
+      );
       let previewData: { mockups?: { front?: unknown; back?: unknown }; error?: string; message?: string } | null = null;
       try {
         previewData = await previewResponse.json();
@@ -997,9 +1028,14 @@ export default function EditorPage() {
         cartItemId,
         designId: savedUserProductId,
       });
+      console.info("[save-design] completed", {
+        userProductId: savedUserProductId,
+        cartItemId,
+      });
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;
     } catch (error) {
+      console.error("[save-design] failed", error);
       console.error("[preview] failed", error);
       alert("Error saving design");
     } finally {
