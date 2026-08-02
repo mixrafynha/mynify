@@ -142,6 +142,54 @@ function collectSavedTextFonts(...groups: ElementType[][]) {
   return Array.from(families);
 }
 
+function isRenderableDesignElement(element: unknown) {
+  if (!element || typeof element !== "object") return false;
+
+  const value = element as {
+    type?: unknown;
+    meta?: { hidden?: unknown };
+    src?: unknown;
+    content?: unknown;
+    text?: unknown;
+  };
+
+  if (value.meta?.hidden === true) return false;
+
+  const type = String(value.type || "").toLowerCase();
+  const hasText = typeof value.text === "string" && value.text.trim().length > 0;
+  const hasSource =
+    typeof value.src === "string" && value.src.trim().length > 0 ||
+    typeof value.content === "string" && value.content.trim().length > 0;
+
+  return (
+    ["image", "text", "shape", "group", "svg", "path", "raster", "bitmap"].includes(type) ||
+    hasText ||
+    hasSource
+  );
+}
+
+function hasRenderableDesignForSide(elements: ElementType[]) {
+  return Array.isArray(elements) && elements.some(isRenderableDesignElement);
+}
+
+function resolveUsedDesignSides(front: ElementType[], back: ElementType[]) {
+  const usedSides: Side[] = [];
+
+  if (hasRenderableDesignForSide(front)) usedSides.push("front");
+  if (hasRenderableDesignForSide(back)) usedSides.push("back");
+
+  return usedSides;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T) {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      window.setTimeout(() => resolve(fallback), timeoutMs);
+    }),
+  ]);
+}
+
 async function hydrateSavedTextFonts(...groups: ElementType[][]) {
   const families = collectSavedTextFonts(...groups);
 
@@ -765,52 +813,167 @@ export default function EditorPage() {
         throw new Error("The design was saved, but its ID was not returned");
       }
 
+      const usedSides = resolveUsedDesignSides(frontElements, backElements);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "[THUMBNAIL_USED_SIDES]",
+          JSON.stringify({
+            usedSides,
+            frontElementsCount: frontElements.length,
+            backElementsCount: backElements.length,
+          }),
+        );
+      }
+
       const captureCheckoutThumbnailForSide = async (targetSide: Side) => {
-        if (targetSide === "front" ? frontElements.length === 0 : backElements.length === 0) {
-          return null;
+        const captureStageFound = Boolean(
+          previewCanvasRef.current?.querySelector(
+            `[data-production-capture-stage="${targetSide}"]`,
+          ),
+        );
+
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            "[THUMBNAIL_SIDE_RESOLVED]",
+            JSON.stringify({
+              side: targetSide,
+              includedInUsedSides: usedSides.includes(targetSide),
+              legacyElementsCount:
+                targetSide === "front" ? frontElements.length : backElements.length,
+              captureStageFound,
+            }),
+          );
+        }
+
+        if (!usedSides.includes(targetSide)) {
+          return { side: targetSide, dataUrl: null, reason: "SIDE_NOT_USED" as const };
+        }
+
+        if (!captureStageFound) {
+          return { side: targetSide, dataUrl: null, reason: "CAPTURE_STAGE_NOT_FOUND" as const };
+        }
+
+        const captureNode = previewCanvasRef.current?.querySelector(
+          `[data-production-capture-stage="${targetSide}"]`,
+        ) as HTMLElement | null;
+        if (!captureNode) {
+          return { side: targetSide, dataUrl: null, reason: "CAPTURE_STAGE_NOT_FOUND" as const };
         }
 
         try {
-          const captureNode = previewCanvasRef.current?.querySelector(
-            `[data-production-capture-stage="${targetSide}"]`,
-          ) as HTMLElement | null;
-          if (!captureNode) return null;
+          const dataUrl = await withTimeout(
+            captureVisualMockupPreview(captureNode),
+            12_000,
+            null,
+          );
 
-          return await captureVisualMockupPreview(captureNode);
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              "[THUMBNAIL_CAPTURE_RESULT]",
+              JSON.stringify({
+                side: targetSide,
+                dataUrlPresent: Boolean(dataUrl),
+                dataUrlLength: typeof dataUrl === "string" ? dataUrl.length : 0,
+              }),
+            );
+          }
+
+          if (!dataUrl) {
+            return { side: targetSide, dataUrl: null, reason: "CAPTURE_RETURNED_NULL" as const };
+          }
+
+          return { side: targetSide, dataUrl, reason: null as string | null };
         } catch {
-          return null;
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              "[THUMBNAIL_CAPTURE_RESULT]",
+              JSON.stringify({
+                side: targetSide,
+                dataUrlPresent: false,
+                dataUrlLength: 0,
+              }),
+            );
+          }
+
+          return { side: targetSide, dataUrl: null, reason: "CAPTURE_RETURNED_NULL" as const };
         }
       };
 
-      const checkoutThumbnailFront = await captureCheckoutThumbnailForSide("front");
-      const checkoutThumbnailBack = await captureCheckoutThumbnailForSide("back");
       const uploadThumbnail = async (dataUrl: string | null, thumbSide: Side) => {
-        if (!dataUrl) return null;
-        const uploadResponse = await fetch("/api/user-products/checkout-thumbnail", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          body: JSON.stringify({
-            dataUrl,
-            userProductId: savedUserProductId,
-            designId: savedUserProductId,
-            side: thumbSide,
-          }),
-        });
-
-        if (!uploadResponse.ok) {
-          throw new Error(`Thumbnail upload failed (${uploadResponse.status})`);
+        if (!dataUrl) {
+          return { side: thumbSide, status: "skipped", saved: false as const };
         }
 
-        return uploadResponse;
+        if (process.env.NODE_ENV === "development") {
+          console.log(`[UPLOAD_STARTED_${thumbSide.toUpperCase()}]`);
+        }
+
+        try {
+          const uploadResponse = await withTimeout(
+            fetch("/api/user-products/checkout-thumbnail", {
+              method: "POST",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+                ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              },
+              body: JSON.stringify({
+                dataUrl,
+                userProductId: savedUserProductId,
+                designId: savedUserProductId,
+                side: thumbSide,
+              }),
+            }),
+            15_000,
+            null,
+          );
+
+          const saved = Boolean(uploadResponse?.ok);
+
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[UPLOAD_COMPLETED_${thumbSide.toUpperCase()}]`,
+              JSON.stringify({
+                status: uploadResponse ? uploadResponse.status : "timeout",
+                saved,
+              }),
+            );
+          }
+
+          if (!uploadResponse || !uploadResponse.ok) {
+            return { side: thumbSide, status: uploadResponse ? uploadResponse.status : "timeout", saved: false as const };
+          }
+
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[THUMBNAIL_SAVED_${thumbSide.toUpperCase()}]`);
+          }
+
+          return { side: thumbSide, status: uploadResponse.status, saved: true as const };
+        } catch {
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[UPLOAD_COMPLETED_${thumbSide.toUpperCase()}]`,
+              JSON.stringify({
+                status: "error",
+                saved: false,
+              }),
+            );
+          }
+          return { side: thumbSide, status: "error", saved: false as const };
+        }
       };
 
       setSaveNotice("Design saved. Adding it to your cart...");
 
-      const [cartResponse] = await Promise.all([
+      const [frontCapture, backCapture] = await Promise.all([
+        captureCheckoutThumbnailForSide("front"),
+        captureCheckoutThumbnailForSide("back"),
+      ]);
+
+      const [frontUpload, backUpload, cartResponse] = await Promise.all([
+        uploadThumbnail(frontCapture.dataUrl, "front"),
+        uploadThumbnail(backCapture.dataUrl, "back"),
         fetch("/api/cart/add", {
           method: "POST",
           credentials: "include",
@@ -826,10 +989,6 @@ export default function EditorPage() {
             quantity: 1,
           }),
         }),
-        Promise.allSettled([
-          uploadThumbnail(checkoutThumbnailFront, "front"),
-          uploadThumbnail(checkoutThumbnailBack, "back"),
-        ]),
       ]);
 
       const cartData = await cartResponse.json().catch(() => null);
@@ -848,6 +1007,25 @@ export default function EditorPage() {
       setSaveNotice(
         "Design saved and added to cart. Redirecting you to checkout...",
       );
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          "[THUMBNAIL_UPLOAD_RESULT]",
+          JSON.stringify({
+            side: frontUpload.side,
+            status: frontUpload.status,
+            saved: frontUpload.saved,
+          }),
+        );
+        console.log(
+          "[THUMBNAIL_UPLOAD_RESULT]",
+          JSON.stringify({
+            side: backUpload.side,
+            status: backUpload.status,
+            saved: backUpload.saved,
+          }),
+        );
+      }
 
       const checkoutParams = new URLSearchParams({
         cartItemId,
