@@ -82,6 +82,11 @@ export async function POST(req: Request) {
       contentType: "image/webp",
     });
 
+    const side =
+      typeof body?.side === "string" && body.side.trim().toLowerCase() === "back"
+        ? "back"
+        : "front";
+
     const userProductId =
       typeof body?.userProductId === "string" && body.userProductId.trim()
         ? body.userProductId.trim()
@@ -107,13 +112,49 @@ export async function POST(req: Request) {
             design_data: {
               ...designData,
               checkout_thumbnail_url: uploaded.url,
+              checkout_thumbnail_front_url:
+                side === "front"
+                  ? uploaded.url
+                  : designData.checkout_thumbnail_front_url ?? null,
+              checkout_thumbnail_back_url:
+                side === "back"
+                  ? uploaded.url
+                  : designData.checkout_thumbnail_back_url ?? null,
               checkoutThumbnailStatus: "ready",
+              checkout_thumbnail_front_status:
+                side === "front" ? "ready" : designData.checkout_thumbnail_front_status ?? null,
+              checkout_thumbnail_back_status:
+                side === "back" ? "ready" : designData.checkout_thumbnail_back_status ?? null,
             },
             mockups: {
               ...mockups,
               checkout_thumbnail_url: uploaded.url,
+              checkout_thumbnail_front_url:
+                side === "front"
+                  ? uploaded.url
+                  : mockups.checkout_thumbnail_front_url ?? null,
+              checkout_thumbnail_back_url:
+                side === "back"
+                  ? uploaded.url
+                  : mockups.checkout_thumbnail_back_url ?? null,
               checkout_thumbnail_key: uploaded.key,
+              checkout_thumbnail_front_key:
+                side === "front"
+                  ? uploaded.key
+                  : mockups.checkout_thumbnail_front_key ?? null,
+              checkout_thumbnail_back_key:
+                side === "back"
+                  ? uploaded.key
+                  : mockups.checkout_thumbnail_back_key ?? null,
               checkout_thumbnail_status: "ready",
+              checkout_thumbnail_front_status:
+                side === "front"
+                  ? "ready"
+                  : mockups.checkout_thumbnail_front_status ?? null,
+              checkout_thumbnail_back_status:
+                side === "back"
+                  ? "ready"
+                  : mockups.checkout_thumbnail_back_status ?? null,
             },
             design_image_url: uploaded.url,
           })
@@ -122,7 +163,10 @@ export async function POST(req: Request) {
 
         await supabase
           .from("cart_items")
-          .update({ image: uploaded.url, mockup_url: uploaded.url })
+          .update({
+            image: uploaded.url,
+            mockup_url: uploaded.url,
+          })
           .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`);
       }
     }

@@ -765,19 +765,41 @@ export default function EditorPage() {
         throw new Error("The design was saved, but its ID was not returned");
       }
 
-      const mockupRoot = previewCanvasRef.current?.querySelector(
-        "#mockup-export-root",
-      ) as HTMLElement | null;
-      const checkoutThumbnailPromise = (async () => {
-        try {
-          const checkoutThumbnail = await captureVisualMockupPreview(mockupRoot);
-          if (!checkoutThumbnail) return null;
+      const waitForPaint = () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
 
-          return checkoutThumbnail;
-        } catch {
+      const captureCheckoutThumbnailForSide = async (targetSide: Side) => {
+        if (targetSide === "front" ? frontElements.length === 0 : backElements.length === 0) {
           return null;
         }
-      })();
+
+        const previousSide = side;
+        if (previousSide !== targetSide) {
+          setSide(targetSide);
+          await waitForPaint();
+        }
+
+        try {
+          const mockupRoot = previewCanvasRef.current?.querySelector(
+            "#mockup-export-root",
+          ) as HTMLElement | null;
+          if (!mockupRoot) return null;
+
+          return await captureVisualMockupPreview(mockupRoot);
+        } catch {
+          return null;
+        } finally {
+          if (previousSide !== targetSide) {
+            setSide(previousSide);
+            await waitForPaint();
+          }
+        }
+      };
+
+      const checkoutThumbnailFront = await captureCheckoutThumbnailForSide("front");
+      const checkoutThumbnailBack = await captureCheckoutThumbnailForSide("back");
 
       setSaveNotice("Design saved. Adding it to your cart...");
 
@@ -816,23 +838,44 @@ export default function EditorPage() {
 
       void (async () => {
         try {
-          const checkoutThumbnail = await checkoutThumbnailPromise;
-          if (!checkoutThumbnail) return;
+          const uploads = [
+            checkoutThumbnailFront
+              ? fetch("/api/user-products/checkout-thumbnail", {
+                  method: "POST",
+                  credentials: "include",
+                  keepalive: true,
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    dataUrl: checkoutThumbnailFront,
+                    userProductId: savedUserProductId,
+                    designId: savedUserProductId,
+                    side: "front",
+                  }),
+                })
+              : null,
+            checkoutThumbnailBack
+              ? fetch("/api/user-products/checkout-thumbnail", {
+                  method: "POST",
+                  credentials: "include",
+                  keepalive: true,
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+                  },
+                  body: JSON.stringify({
+                    dataUrl: checkoutThumbnailBack,
+                    userProductId: savedUserProductId,
+                    designId: savedUserProductId,
+                    side: "back",
+                  }),
+                })
+              : null,
+          ].filter(Boolean);
 
-          await fetch("/api/user-products/checkout-thumbnail", {
-            method: "POST",
-            credentials: "include",
-            keepalive: true,
-            headers: {
-              "Content-Type": "application/json",
-              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-            },
-            body: JSON.stringify({
-              dataUrl: checkoutThumbnail,
-              userProductId: savedUserProductId,
-              designId: savedUserProductId,
-            }),
-          });
+          await Promise.all(uploads as Promise<Response>[]);
         } catch {
           // Thumbnail upload is best-effort and must never block save/cart.
         }
@@ -863,6 +906,9 @@ export default function EditorPage() {
     productConfig,
     editorStorageKey,
     router,
+    side,
+    frontElements,
+    backElements,
   ]);
 
   const handleAuthSuccess = useCallback(() => {
