@@ -83,10 +83,6 @@ export type CartItem = {
   color?: string | null;
   size?: string | null;
   image?: string | null;
-  previewFrontUrl?: string | null;
-  previewBackUrl?: string | null;
-  checkoutThumbnailFrontUrl?: string | null;
-  checkoutThumbnailBackUrl?: string | null;
   stock?: number | null;
   sku?: string | null;
   product_uid?: string | null;

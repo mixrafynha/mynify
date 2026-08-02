@@ -170,23 +170,46 @@ function formatShipsFrom(countryCode: string | null | undefined) {
 }
 
 function resolvePreviewImageSources(item: CartItem) {
-  const mockups =
+  const designData = item.design_data ?? item.designData ?? {};
+  const directMockups =
     item.mockups && typeof item.mockups === "object" && !Array.isArray(item.mockups)
       ? (item.mockups as Record<string, unknown>)
       : {};
+  const mockups =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.mockups && typeof designData.mockups === "object"
+      ? (designData.mockups as Record<string, unknown>)
+      : {};
+  const mergedMockups = { ...directMockups, ...mockups };
+  const sides =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
+      ? (designData.sides as Record<string, unknown>)
+      : {};
+  const frontSide =
+    sides.front && typeof sides.front === "object" && !Array.isArray(sides.front)
+      ? (sides.front as Record<string, unknown>)
+      : {};
+  const backSide =
+    sides.back && typeof sides.back === "object" && !Array.isArray(sides.back)
+      ? (sides.back as Record<string, unknown>)
+      : {};
+
   const front =
-    cleanUrl(item.checkoutThumbnailFrontUrl) ||
-    cleanUrl(item.previewFrontUrl) ||
-    cleanUrl(mockups.checkout_thumbnail_url) ||
-    cleanUrl(mockups.front) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_url) ||
+    cleanUrl(mergedMockups.front) ||
+    cleanUrl(frontSide.mockupUrl) ||
+    cleanUrl(frontSide.mockup_url) ||
+    cleanUrl(item.front_print_file_url) ||
+    cleanUrl(item.frontPrintFileUrl) ||
     cleanUrl(item.image);
 
   const back =
-    cleanUrl(item.checkoutThumbnailBackUrl) ||
-    cleanUrl(item.previewBackUrl) ||
-    cleanUrl(mockups.checkout_thumbnail_back_url) ||
-    cleanUrl(mockups.back) ||
-    null;
+    cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
+    cleanUrl(mergedMockups.back) ||
+    cleanUrl(backSide.mockupUrl) ||
+    cleanUrl(backSide.mockup_url) ||
+    cleanUrl(item.back_print_file_url) ||
+    cleanUrl(item.backPrintFileUrl) ||
+    cleanUrl(item.image);
 
   return { front, back };
 }
@@ -1227,16 +1250,6 @@ export default function CheckoutPage() {
                         : variantPrice(current, Math.max(0, Number(item.price) || 0));
                       const busy = updatingItemId === item.id || removingItemId === item.id;
                       const previewImages = resolvePreviewImageSources(item);
-                      if (!isProduction) {
-                        console.log(
-                          "[CHECKOUT_PREVIEW_RENDER]",
-                          JSON.stringify({
-                            itemId: item.id,
-                            frontPresent: Boolean(previewImages.front),
-                            backPresent: Boolean(previewImages.back),
-                          }),
-                        );
-                      }
                       const currentSku = variantSku(current) || item.sku || null;
                       const currentStock = current ? variantStock(current) : null;
 

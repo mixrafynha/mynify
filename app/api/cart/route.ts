@@ -185,7 +185,6 @@ export async function GET() {
 
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
         const mockupImage = frontMockupUrl(userProductAssets.mockups);
-        const mockupBackImage = backMockupUrl(userProductAssets.mockups);
         const checkoutThumbnailFrontUrl =
           userProductAssets.mockups && typeof userProductAssets.mockups === "object"
             ? publicString(userProductAssets.mockups.checkout_thumbnail_url)
@@ -194,51 +193,13 @@ export async function GET() {
           userProductAssets.mockups && typeof userProductAssets.mockups === "object"
             ? publicString(userProductAssets.mockups.checkout_thumbnail_back_url)
             : null;
-        const previewFrontUrl =
-          checkoutThumbnailFrontUrl ??
-          publicString(userProductAssets.mockups?.front) ??
-          publicString(userProductAssets.mockups?.image) ??
-          publicString(item.image) ??
-          null;
-        const previewBackUrl =
-          checkoutThumbnailBackUrl ??
-          mockupBackImage ??
-          null;
-
-        if (process.env.NODE_ENV !== "production") {
-          console.log(
-            "[CART_PREVIEW_RESOLVED]",
-            JSON.stringify({
-              cartItemId: item.id,
-              userProductId: item.user_product_id ?? null,
-              frontPresent: Boolean(previewFrontUrl),
-              backPresent: Boolean(previewBackUrl),
-              frontSource: previewFrontUrl === checkoutThumbnailFrontUrl
-                ? "checkout_thumbnail_url"
-                : previewFrontUrl === publicString(userProductAssets.mockups?.front)
-                  ? "mockups.front"
-                  : previewFrontUrl === publicString(userProductAssets.mockups?.image)
-                    ? "mockups.image"
-                    : previewFrontUrl === publicString(item.image)
-                      ? "cart_item.image"
-                      : "missing",
-              backSource: previewBackUrl === checkoutThumbnailBackUrl
-                ? "checkout_thumbnail_back_url"
-                : previewBackUrl === mockupBackImage
-                  ? "mockups.back"
-                  : "missing",
-            }),
-          );
-        }
 
         return {
           ...item,
           ...userProductAssets,
           image: mockupImage ?? item.image,
-          previewFrontUrl,
-          previewBackUrl,
-          checkoutThumbnailFrontUrl: previewFrontUrl,
-          checkoutThumbnailBackUrl: previewBackUrl,
+          checkoutThumbnailFrontUrl,
+          checkoutThumbnailBackUrl,
           checkoutThumbnailFrontStatus:
             userProductAssets.mockups && typeof userProductAssets.mockups === "object"
               ? (userProductAssets.mockups.checkout_thumbnail_status as Record<string, any> | undefined)?.front ?? null
