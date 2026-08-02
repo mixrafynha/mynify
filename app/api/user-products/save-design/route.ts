@@ -245,22 +245,21 @@ export async function POST(req: Request) {
       );
     }
 
-    let backgroundJobs: Awaited<ReturnType<typeof queueDesignAssetJobs>> | null = null;
-    try {
-      backgroundJobs = await queueDesignAssetJobs({
-        userProductId: userProduct.id,
-        designData: userProduct.design_data,
-        designFront: userProduct.design_front,
-        designBack: userProduct.design_back,
-      });
+    const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
+      ? userProduct.design_data
+      : {};
+    const currentPrintFiles = userProduct.print_files && typeof userProduct.print_files === "object"
+      ? userProduct.print_files
+      : {};
 
-      if (backgroundJobs?.queued) {
-        const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
-          ? userProduct.design_data
-          : {};
-        const currentPrintFiles = userProduct.print_files && typeof userProduct.print_files === "object"
-          ? userProduct.print_files
-          : {};
+    void queueDesignAssetJobs({
+      userProductId: userProduct.id,
+      designData: userProduct.design_data,
+      designFront: userProduct.design_front,
+      designBack: userProduct.design_back,
+    })
+      .then(async (backgroundJobs) => {
+        if (!backgroundJobs?.queued) return;
 
         await supabase
           .from("user_products")
@@ -291,12 +290,10 @@ export async function POST(req: Request) {
             },
           })
           .eq("id", userProduct.id);
-      }
-    } catch (queueError) {
-      // Save must remain JSON-only and must never fail because Trigger.dev/R2 is down.
-      // The product row is already persisted with pending asset status.
-      console.error("DESIGN_ASSET_QUEUE_ERROR", queueError);
-    }
+      })
+      .catch((queueError) => {
+        console.error("DESIGN_ASSET_QUEUE_ERROR", queueError);
+      });
 
     const shouldAddToCart = body.addToCart !== false;
     let cartItem = null;
@@ -333,7 +330,7 @@ export async function POST(req: Request) {
       product: userProduct,
       cartItem,
       cartMode,
-      backgroundJobs,
+      backgroundJobs: null,
       redirectTo: "/cart",
     });
   } catch (error) {
