@@ -826,6 +826,7 @@ export default function EditorPage() {
     if (saving) return;
 
     console.info("[preview] save started");
+    console.info("[save-design] handler entered");
 
     const baseProductId = productId || category;
 

@@ -5,7 +5,6 @@ import BrandSection from "./components/BrandSection";
 import HistorySection from "./components/HistorySection";
 import PreviewButton from "./components/PreviewButton";
 import SaveButton from "./components/SaveButton";
-import SaveConfirmModal from "./components/SaveConfirmModal";
 import SideSwitcher from "./components/SideSwitcher";
 import ZoomSection from "./components/ZoomSection";
 import ProductionPreviewDrawer, { preloadProductionPreview } from "../preview/ProductionPreviewDrawer";
@@ -38,7 +37,6 @@ function TopBar({
   productConfig = null,
   selectedVariant = null,
 }: TopBarProps) {
-  const [confirmSave, setConfirmSave] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [drawerInput, setDrawerInput] = useState<PreviewPayloadInput | null>(null);
@@ -140,17 +138,18 @@ function TopBar({
       });
   }, [isBusy, onPreviewDesign, previewPayload]);
 
-  const openSaveConfirm = useCallback(() => {
-    if (!isBusy) setConfirmSave(true);
-  }, [isBusy]);
-
-  const handleConfirmSave = useCallback(async () => {
+  const handleSaveClick = useCallback(async () => {
+    console.info("[save-design] save button clicked", {
+      saving,
+      previewing,
+    });
     if (saving) return;
 
     try {
-      setConfirmSave(false);
+      console.info("[save-design] invoking save handler");
       await onSaveDesign();
-    } catch {
+    } catch (error) {
+      console.error("[preview] failed", error);
       alert("Error saving design.");
     }
   }, [onSaveDesign, saving]);
@@ -206,22 +205,10 @@ function TopBar({
               backElements={previewPayload.backElements}
             />
 
-            <SaveButton
-              saving={saving}
-              onClick={openSaveConfirm}
-              disabled={isBusy}
-              compact
-            />
+            <SaveButton saving={saving} onClick={handleSaveClick} disabled={saving} compact />
           </div>
         </div>
       </header>
-
-      <SaveConfirmModal
-        open={confirmSave}
-        saving={saving}
-        onCancel={() => setConfirmSave(false)}
-        onConfirm={handleConfirmSave}
-      />
 
       <ProductionPreviewDrawer
         open={previewOpen}
