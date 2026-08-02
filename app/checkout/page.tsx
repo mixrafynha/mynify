@@ -170,6 +170,7 @@ function formatShipsFrom(countryCode: string | null | undefined) {
 }
 
 function resolvePreviewImageSources(item: CartItem) {
+  const customDesignItem = isCustomDesignItem(item);
   const designData = item.design_data ?? item.designData ?? {};
   const directMockups =
     item.mockups && typeof item.mockups === "object" && !Array.isArray(item.mockups)
@@ -198,7 +199,7 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(mergedMockups.front) ||
     cleanUrl(frontSide.mockupUrl) ||
     cleanUrl(frontSide.mockup_url) ||
-    cleanUrl(item.image);
+    (customDesignItem ? null : cleanUrl(item.image));
 
   const back =
     cleanUrl(item.previewBack) ||
@@ -418,10 +419,12 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      console.info("[checkout] fetching cart");
       const res = await fetch("/api/cart", { method: "GET", cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Error loading cart");
       const nextItems = safeArray<CartItem>(data?.items);
+      console.info("[checkout] cart received", { itemCount: nextItems.length });
       setItems(nextItems);
       void fetchVariantsForItems(nextItems);
     } catch {
@@ -461,6 +464,7 @@ export default function CheckoutPage() {
   }, [items]);
 
   useEffect(() => {
+    console.info("[checkout] component mounted");
     loadCart();
   }, [loadCart]);
 
@@ -468,41 +472,6 @@ export default function CheckoutPage() {
     if (!items.length) return;
     void prepareCheckoutAssets();
   }, [items, step, prepareCheckoutAssets]);
-
-  useEffect(() => {
-    if (!items.some((item) => isCustomDesignItem(item))) return undefined;
-
-    const needsThumbnailRefresh = (item: CartItem) => {
-      if (!isCustomDesignItem(item)) return false;
-      const preview = resolvePreviewImageSources(item);
-      const designData = item.design_data ?? item.designData ?? {};
-      const sides =
-        designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
-          ? (designData.sides as Record<string, unknown>)
-          : {};
-      const backSide =
-        sides.back && typeof sides.back === "object" && !Array.isArray(sides.back)
-          ? (sides.back as Record<string, unknown>)
-          : {};
-      const backElements = Array.isArray(backSide.elements) ? backSide.elements : [];
-      const hasVisibleBack = backElements.some((element) => {
-        if (!element || typeof element !== "object") return false;
-        const value = element as Record<string, unknown>;
-        const meta = value.meta && typeof value.meta === "object" ? (value.meta as Record<string, unknown>) : null;
-        return meta?.hidden !== true && ["image", "text", "shape"].includes(String(value.type || ""));
-      });
-
-      return !preview.front || (hasVisibleBack && !preview.back);
-    };
-
-    if (!items.some(needsThumbnailRefresh)) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      void loadCart();
-    }, step === "review" ? 2000 : 2500);
-
-    return () => window.clearInterval(intervalId);
-  }, [items, loadCart]);
 
   useEffect(() => {
     try {
@@ -651,16 +620,6 @@ export default function CheckoutPage() {
       availabilityAbortController.current?.abort();
     };
   }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items, printFilesPending, step]);
-
-  useEffect(() => {
-    if (step !== "review" || !printFilesPending) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      void loadCart();
-    }, 2500);
-
-    return () => window.clearInterval(intervalId);
-  }, [loadCart, printFilesPending, step]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {

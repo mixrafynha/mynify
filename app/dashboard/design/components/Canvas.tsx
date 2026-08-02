@@ -444,7 +444,7 @@ export default function Canvas({
     (e: React.PointerEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
       const clickedCanvas = e.currentTarget === e.target;
-      const clickedMockupRoot = target.id === "mockup-export-root";
+      const clickedMockupRoot = target.dataset.mockupExportRoot === side;
 
       if (!clickedCanvas && !clickedMockupRoot) return;
 
@@ -524,7 +524,7 @@ export default function Canvas({
 
       <div
         ref={mockupRootRef}
-        id="mockup-export-root"
+        data-mockup-export-root={side}
         className="relative shrink-0 will-change-transform md:will-change-auto"
         style={{
           width: MOCKUP_AREA.width,
