@@ -27,6 +27,37 @@ function safePart(value: unknown) {
     .slice(0, 100) || "thumbnail";
 }
 
+function currentVersion(existing: Record<string, unknown> | null | undefined) {
+  const thumbnails =
+    existing?.checkoutThumbnails &&
+    typeof existing.checkoutThumbnails === "object" &&
+    !Array.isArray(existing.checkoutThumbnails)
+      ? (existing.checkoutThumbnails as Record<string, any>)
+      : {};
+
+  const frontVersion = Number(thumbnails.front?.version);
+  const backVersion = Number(thumbnails.back?.version);
+  const version = Math.max(
+    Number.isFinite(frontVersion) ? frontVersion : 0,
+    Number.isFinite(backVersion) ? backVersion : 0,
+  );
+
+  return version > 0 ? version + 1 : 1;
+}
+
+function checkoutThumbnailState(
+  mockups: Record<string, unknown> | null | undefined,
+  side: "front" | "back",
+) {
+  const checkoutThumbnails =
+    mockups?.checkoutThumbnails &&
+    typeof mockups.checkoutThumbnails === "object" &&
+    !Array.isArray(mockups.checkoutThumbnails)
+      ? (mockups.checkoutThumbnails as Record<string, any>)
+      : {};
+  return checkoutThumbnails[side] ?? null;
+}
+
 async function getAuthenticatedUser() {
   const cookieStore = await cookies();
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -97,69 +128,72 @@ export async function POST(req: Request) {
     if (userProductId) {
       const { data: record } = await supabase
         .from("user_products")
-        .select("id, user_id, design_data, mockups")
+        .select("id, user_id, mockups")
         .eq("id", userProductId)
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (record) {
-        const designData = parseJsonIfString<any>(record.design_data, {});
         const mockups = parseJsonIfString<any>(record.mockups, {});
+        const existingThumbnails =
+          mockups.checkoutThumbnails &&
+          typeof mockups.checkoutThumbnails === "object" &&
+          !Array.isArray(mockups.checkoutThumbnails)
+            ? (mockups.checkoutThumbnails as Record<string, any>)
+            : {};
+        const timestamp = new Date().toISOString();
+        const nextVersion = currentVersion(mockups);
+        const nextSideThumbnail = {
+          url: uploaded.url,
+          status: "ready",
+          version: nextVersion,
+          source: "editor",
+          updatedAt: timestamp,
+        };
 
         await supabase
           .from("user_products")
           .update({
-            design_data: {
-              ...designData,
-              checkout_thumbnail_url: uploaded.url,
-              checkout_thumbnail_front_url:
-                side === "front"
-                  ? uploaded.url
-                  : designData.checkout_thumbnail_front_url ?? null,
-              checkout_thumbnail_back_url:
-                side === "back"
-                  ? uploaded.url
-                  : designData.checkout_thumbnail_back_url ?? null,
-              checkoutThumbnailStatus: "ready",
-              checkout_thumbnail_front_status:
-                side === "front" ? "ready" : designData.checkout_thumbnail_front_status ?? null,
-              checkout_thumbnail_back_status:
-                side === "back" ? "ready" : designData.checkout_thumbnail_back_status ?? null,
-            },
             mockups: {
               ...mockups,
-              checkout_thumbnail_url: uploaded.url,
-              checkout_thumbnail_front_url:
+              checkoutThumbnails: {
+                ...existingThumbnails,
+                [side]: nextSideThumbnail,
+              },
+              checkout_thumbnail_url:
                 side === "front"
                   ? uploaded.url
-                  : mockups.checkout_thumbnail_front_url ?? null,
-              checkout_thumbnail_back_url:
-                side === "back"
-                  ? uploaded.url
-                  : mockups.checkout_thumbnail_back_url ?? null,
-              checkout_thumbnail_key: uploaded.key,
-              checkout_thumbnail_front_key:
-                side === "front"
-                  ? uploaded.key
-                  : mockups.checkout_thumbnail_front_key ?? null,
-              checkout_thumbnail_back_key:
-                side === "back"
-                  ? uploaded.key
-                  : mockups.checkout_thumbnail_back_key ?? null,
-              checkout_thumbnail_status: "ready",
-              checkout_thumbnail_front_status:
-                side === "front"
-                  ? "ready"
-                  : mockups.checkout_thumbnail_front_status ?? null,
-              checkout_thumbnail_back_status:
-                side === "back"
-                  ? "ready"
-                  : mockups.checkout_thumbnail_back_status ?? null,
+                  : mockups.checkout_thumbnail_url ?? existingThumbnails.front?.url ?? null,
+              checkout_thumbnail_status: side === "front" ? "ready" : mockups.checkout_thumbnail_status ?? "ready",
             },
-            design_image_url: uploaded.url,
           })
           .eq("id", userProductId)
           .eq("user_id", user.id);
+
+        const { data: updatedRecord } = await supabase
+          .from("user_products")
+          .select("id, mockups")
+          .eq("id", userProductId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        const savedMockups = parseJsonIfString<any>(updatedRecord?.mockups ?? {}, {});
+        const savedThumbnail = checkoutThumbnailState(savedMockups, side);
+        const frontReady = Boolean(checkoutThumbnailState(savedMockups, "front")?.url);
+        const backReady = Boolean(checkoutThumbnailState(savedMockups, "back")?.url);
+        const legacyReady = Boolean(savedMockups.checkout_thumbnail_url);
+
+        if (!savedThumbnail?.url) {
+          return NextResponse.json(
+            {
+              ok: false,
+              side,
+              code: "THUMBNAIL_PERSISTENCE_FAILED",
+              message: "Checkout thumbnail was uploaded but not persisted.",
+            },
+            { status: 500 },
+          );
+        }
 
         await supabase
           .from("cart_items")
@@ -168,14 +202,52 @@ export async function POST(req: Request) {
             mockup_url: uploaded.url,
           })
           .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`);
+
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            "[THUMB_DB_BEFORE]",
+            JSON.stringify({
+              userProductId,
+              side,
+              hasLegacyThumbnail: Boolean(mockups.checkout_thumbnail_url),
+              hasCheckoutThumbnails: Boolean(existingThumbnails.front || existingThumbnails.back),
+            }),
+          );
+          console.log(
+            "[THUMB_DB_AFTER]",
+            JSON.stringify({
+              userProductId,
+              side,
+              frontReady,
+              backReady,
+              legacyReady,
+            }),
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          side,
+          url: uploaded.url,
+          savedPath: `mockups.checkoutThumbnails.${side}`,
+          savedThumbnail,
+        });
       }
     }
 
-    return NextResponse.json({ url: uploaded.url, key: uploaded.key });
+    return NextResponse.json({
+      ok: true,
+      side,
+      url: uploaded.url,
+      savedPath: `mockups.checkoutThumbnails.${side}`,
+    });
   } catch (error) {
     console.error("CHECKOUT_THUMBNAIL_UPLOAD_ERROR", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unable to upload checkout thumbnail" },
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unable to upload checkout thumbnail",
+      },
       { status: 500 },
     );
   }

@@ -72,7 +72,12 @@ function getDesignImage(userProduct: UserProduct | null): string | null {
   if (!userProduct) return null;
   const mockups = userProduct.mockups;
   if (mockups && typeof mockups === "object") {
+    const checkoutThumbnails =
+      mockups.checkoutThumbnails && typeof mockups.checkoutThumbnails === "object"
+        ? (mockups.checkoutThumbnails as Record<string, any>)
+        : {};
     return (
+      publicUrl(checkoutThumbnails.front?.url) ??
       publicUrl(mockups.checkout_thumbnail_front_url) ??
       publicUrl(mockups.front) ??
       publicUrl(mockups.checkout_thumbnail_url) ??

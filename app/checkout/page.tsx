@@ -180,6 +180,12 @@ function resolvePreviewImageSources(item: CartItem) {
       ? (designData.mockups as Record<string, unknown>)
       : {};
   const mergedMockups = { ...directMockups, ...mockups };
+  const checkoutThumbnails =
+    mergedMockups.checkoutThumbnails &&
+    typeof mergedMockups.checkoutThumbnails === "object" &&
+    !Array.isArray(mergedMockups.checkoutThumbnails)
+      ? (mergedMockups.checkoutThumbnails as Record<string, any>)
+      : {};
   const sides =
     designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
       ? (designData.sides as Record<string, unknown>)
@@ -194,6 +200,7 @@ function resolvePreviewImageSources(item: CartItem) {
       : {};
 
   const front =
+    cleanUrl(checkoutThumbnails.front?.url) ||
     cleanUrl(mergedMockups.checkout_thumbnail_front_url) ||
     cleanUrl(mergedMockups.front) ||
     cleanUrl(mergedMockups.checkout_thumbnail_url) ||
@@ -204,6 +211,7 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(item.image);
 
   const back =
+    cleanUrl(checkoutThumbnails.back?.url) ||
     cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
     cleanUrl(mergedMockups.back) ||
     cleanUrl(mergedMockups.checkout_thumbnail_url) ||

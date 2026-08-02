@@ -66,12 +66,38 @@ function publicString(value: unknown): string | null {
 
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
+  const checkoutThumbnails =
+    mockups.checkoutThumbnails &&
+    typeof mockups.checkoutThumbnails === "object" &&
+    !Array.isArray(mockups.checkoutThumbnails)
+      ? (mockups.checkoutThumbnails as Record<string, any>)
+      : {};
   return (
+    publicString(checkoutThumbnails.front?.url) ??
     publicString(mockups.checkout_thumbnail_front_url) ??
     publicString(mockups.front) ??
     publicString(mockups.checkout_thumbnail_url) ??
     publicString(mockups.checkoutThumbnailUrl) ??
     publicString(mockups.mockup_front) ??
+    publicString(mockups.image)
+  );
+}
+
+function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
+  if (!mockups) return null;
+  const checkoutThumbnails =
+    mockups.checkoutThumbnails &&
+    typeof mockups.checkoutThumbnails === "object" &&
+    !Array.isArray(mockups.checkoutThumbnails)
+      ? (mockups.checkoutThumbnails as Record<string, any>)
+      : {};
+  return (
+    publicString(checkoutThumbnails.back?.url) ??
+    publicString(mockups.checkout_thumbnail_back_url) ??
+    publicString(mockups.back) ??
+    publicString(mockups.checkout_thumbnail_url) ??
+    publicString(mockups.checkoutThumbnailUrl) ??
+    publicString(mockups.mockup_back) ??
     publicString(mockups.image)
   );
 }
@@ -178,11 +204,25 @@ export async function GET() {
 
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
         const mockupImage = frontMockupUrl(userProductAssets.mockups);
+        const checkoutThumbnailFrontUrl =
+          userProductAssets.mockups && typeof userProductAssets.mockups === "object"
+            ? publicString(
+                (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.front?.url,
+              )
+            : null;
+        const checkoutThumbnailBackUrl =
+          userProductAssets.mockups && typeof userProductAssets.mockups === "object"
+            ? publicString(
+                (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.back?.url,
+              )
+            : null;
 
         return {
           ...item,
           ...userProductAssets,
           image: mockupImage ?? item.image,
+          checkoutThumbnailFrontUrl,
+          checkoutThumbnailBackUrl,
           product_variants: variantRelation,
           product_uid: gelatoProductUid,
           productUid: gelatoProductUid,
