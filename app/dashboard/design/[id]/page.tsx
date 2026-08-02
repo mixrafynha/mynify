@@ -983,7 +983,12 @@ export default function EditorPage() {
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
-        throw new Error("The design was saved, but it could not be added to the cart");
+        console.warn("[save-design] cart item missing in response", {
+          userProductId: savedUserProductId,
+          redirectTo: data?.redirectTo ?? "/cart",
+        });
+        router.push(data?.redirectTo ?? "/cart");
+        return;
       }
 
       sessionStorage.removeItem(editorStorageKey);
