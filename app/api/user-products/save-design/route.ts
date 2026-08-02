@@ -10,6 +10,10 @@ import {
   uploadPreviewImageToR2,
 } from "./save-design-payload";
 import { queueDesignAssetJobs } from "./queue-design-assets";
+import {
+  normalizeSavedElements,
+  resolveSavedDesignSides,
+} from "./design-sides";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -157,6 +161,17 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
+    const receivedDesignData = body?.design_data || body?.designData || {};
+    const receivedSides = body?.sides || receivedDesignData?.sides || {};
+    const receivedFront = receivedSides?.front || null;
+    const receivedBack = receivedSides?.back || null;
+    console.log("[save-design] received design structure", {
+      topLevelKeys: receivedDesignData && typeof receivedDesignData === "object"
+        ? Object.keys(receivedDesignData)
+        : [],
+      frontKeys: receivedFront && typeof receivedFront === "object" ? Object.keys(receivedFront) : [],
+      backKeys: receivedBack && typeof receivedBack === "object" ? Object.keys(receivedBack) : [],
+    });
     if (containsInvalidInlineImage(body)) {
       return NextResponse.json(
         { error: "Invalid save payload: inline image data is not allowed." },
@@ -289,6 +304,20 @@ export async function POST(req: Request) {
     const currentPrintFiles = userProduct.print_files && typeof userProduct.print_files === "object"
       ? userProduct.print_files
       : {};
+
+    const savedFrontElements = (currentDesignData as Record<string, any>)?.sides?.front?.elements;
+    const savedBackElements = (currentDesignData as Record<string, any>)?.sides?.back?.elements;
+    const selectedSides = resolveSavedDesignSides({
+      frontElements: savedFrontElements,
+      backElements: savedBackElements,
+    });
+    console.log("[save-design] side detection", {
+      frontHasDesign: selectedSides.includes("front"),
+      backHasDesign: selectedSides.includes("back"),
+      frontElementsCount: normalizeSavedElements(savedFrontElements).length,
+      backElementsCount: normalizeSavedElements(savedBackElements).length,
+      selectedSides,
+    });
 
     void queueDesignAssetJobs({
       userProductId: userProduct.id,

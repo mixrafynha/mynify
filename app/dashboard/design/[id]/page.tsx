@@ -886,11 +886,14 @@ export default function EditorPage() {
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
       const usedSides = resolveUsedDesignSides(frontElements, backElements);
 
-      const frontPreviewBlob = await withTimeout(
-        exportEditorPreview("front"),
-        8000,
-        "Front preview export",
-      );
+      let frontPreviewBlob: Blob | null = null;
+      if (usedSides.includes("front")) {
+        frontPreviewBlob = await withTimeout(
+          exportEditorPreview("front"),
+          8000,
+          "Front preview export",
+        );
+      }
 
       let backPreviewBlob: Blob | null = null;
       if (usedSides.includes("back")) {
@@ -905,11 +908,13 @@ export default function EditorPage() {
         }
       }
 
-      console.info("[editor-preview] local preview ready", {
-        side: "front",
-        blobSize: frontPreviewBlob.size,
-        blobType: frontPreviewBlob.type,
-      });
+      if (frontPreviewBlob) {
+        console.info("[editor-preview] local preview ready", {
+          side: "front",
+          blobSize: frontPreviewBlob.size,
+          blobType: frontPreviewBlob.type,
+        });
+      }
       if (backPreviewBlob) {
         console.info("[editor-preview] local preview ready", {
           side: "back",
@@ -918,8 +923,24 @@ export default function EditorPage() {
         });
       }
 
-      const previewFrontDataUrl = await blobToDataUrl(frontPreviewBlob);
+      const previewFrontDataUrl = frontPreviewBlob ? await blobToDataUrl(frontPreviewBlob) : null;
       const previewBackDataUrl = backPreviewBlob ? await blobToDataUrl(backPreviewBlob) : null;
+
+      const parsedDesignPayload = JSON.parse(designPayloadJson);
+      const frontData = parsedDesignPayload?.design_data?.sides?.front ?? null;
+      const backData = parsedDesignPayload?.design_data?.sides?.back ?? null;
+      const requestPayload = {
+        ...parsedDesignPayload,
+        previewFrontDataUrl,
+        previewBackDataUrl,
+      };
+      console.log("[editor-save] payload inspection", {
+        hasFront: Boolean(frontData),
+        hasBack: Boolean(backData),
+        frontElementsCount: Array.isArray(frontData?.elements) ? frontData.elements.length : 0,
+        backElementsCount: Array.isArray(backData?.elements) ? backData.elements.length : 0,
+        payloadSize: JSON.stringify(requestPayload).length,
+      });
 
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
@@ -928,11 +949,7 @@ export default function EditorPage() {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: JSON.stringify({
-          ...JSON.parse(designPayloadJson),
-          previewFrontDataUrl,
-          previewBackDataUrl,
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       const rawResponseText = await response.text().catch(() => "");

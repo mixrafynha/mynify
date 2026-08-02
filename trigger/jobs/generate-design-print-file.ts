@@ -86,8 +86,13 @@ export const generateDesignPrintFile = task({
     const sides = payload.sides?.length
       ? payload.sides
       : (["front", "back"] as DesignSide[]);
+    console.log("[design-assets] received job payload", {
+      userProductId: payload.userProductId,
+      sides,
+    });
     const urls: Partial<Record<DesignSide, string | null>> = {};
     const keys: Partial<Record<DesignSide, string | null>> = {};
+    const sideErrors: Partial<Record<DesignSide, string>> = {};
 
     await supabase
       .from(USER_PRODUCTS_TABLE)
@@ -107,23 +112,31 @@ export const generateDesignPrintFile = task({
 
     try {
       for (const side of sides) {
-        const png = await renderPrintFilePng({ designData, side });
-        if (!png) {
-          urls[side] = null;
-          keys[side] = null;
-          continue;
-        }
+        try {
+          const png = await renderPrintFilePng({ designData, side });
+          if (!png) {
+            urls[side] = null;
+            keys[side] = null;
+            continue;
+          }
 
-        const key = `user-products/${payload.userProductId}/print/${side}-${Date.now()}.png`;
-        urls[side] = await uploadR2Object({
-          key,
-          body: png,
-          contentType: "image/png",
-        });
-        keys[side] = key;
+          const key = `user-products/${payload.userProductId}/print/${side}-${Date.now()}.png`;
+          urls[side] = await uploadR2Object({
+            key,
+            body: png,
+            contentType: "image/png",
+          });
+          keys[side] = key;
+        } catch (error) {
+          sideErrors[side] = serializeError(error);
+        }
       }
 
       const primaryPrintUrl = urls.front || urls.back || null;
+      const failedSides = Object.keys(sideErrors) as DesignSide[];
+      const status = primaryPrintUrl
+        ? (failedSides.length ? "partial" : "ready")
+        : (failedSides.length ? "failed" : "skipped");
       const nextPrintFiles = {
         ...existingPrintFiles,
         front: urls.front ?? existingPrintFiles.front ?? null,
@@ -133,8 +146,8 @@ export const generateDesignPrintFile = task({
           front: keys.front ?? existingPrintFiles.keys?.front ?? null,
           back: keys.back ?? existingPrintFiles.keys?.back ?? null,
         },
-        status: primaryPrintUrl ? "ready" : "skipped",
-        error: null,
+        status,
+        error: failedSides.length ? sideErrors : null,
         updated_at: new Date().toISOString(),
       };
 
@@ -145,6 +158,7 @@ export const generateDesignPrintFile = task({
         backUrl: nextPrintFiles.back,
         urls,
         keys,
+        sideErrors,
         updatedAt: new Date().toISOString(),
         error: null,
       });
@@ -159,7 +173,11 @@ export const generateDesignPrintFile = task({
 
       if (updateError) throw updateError;
 
-      return { userProductId: payload.userProductId, urls, keys };
+      if (failedSides.length && !primaryPrintUrl) {
+        throw new Error(failedSides.map((side) => `${side}: ${sideErrors[side]}`).join("; "));
+      }
+
+      return { userProductId: payload.userProductId, urls, keys, sideErrors };
     } catch (jobError) {
       const message = serializeError(jobError);
       await supabase

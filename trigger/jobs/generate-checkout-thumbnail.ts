@@ -6,6 +6,7 @@ import { getServiceSupabase, USER_PRODUCTS_TABLE } from "../shared/supabase";
 type Payload = {
   userProductId: string;
   side?: DesignSide;
+  sides?: DesignSide[];
 };
 
 function parseJsonIfString<T>(value: unknown, fallback: T): T {
@@ -86,6 +87,14 @@ export const generateCheckoutThumbnail = task({
   run: async (payload: Payload) => {
     if (!payload.userProductId) throw new Error("Missing userProductId");
 
+    const sides = payload.sides?.length
+      ? payload.sides
+      : [payload.side || "front"];
+    console.log("[design-assets] received job payload", {
+      userProductId: payload.userProductId,
+      sides,
+    });
+
     const supabase = getServiceSupabase();
     const { data: record, error } = await supabase
       .from(USER_PRODUCTS_TABLE)
@@ -116,25 +125,33 @@ export const generateCheckoutThumbnail = task({
       .eq("id", payload.userProductId);
 
     try {
-      const webp = await renderCheckoutThumbnailWebp({
-        designData,
-        side: payload.side,
-        size: 1024,
-      });
+      const sidePatch: Record<string, unknown> = {};
+      const generated: Partial<Record<DesignSide, { url: string; key: string }>> = {};
+      const sideErrors: Partial<Record<DesignSide, string>> = {};
 
-      const key = `user-products/${payload.userProductId}/checkout-thumbnail-${Date.now()}.webp`;
-      const url = await uploadR2Object({
-        key,
-        body: webp,
-        contentType: "image/webp",
-      });
-      const sidePatch = sideUrlPatch(payload.side, url, key);
+      for (const side of sides) {
+        try {
+          const webp = await renderCheckoutThumbnailWebp({ designData, side, size: 1024 });
+          const key = `user-products/${payload.userProductId}/checkout-thumbnail-${side}-${Date.now()}.webp`;
+          const url = await uploadR2Object({ key, body: webp, contentType: "image/webp" });
+          Object.assign(sidePatch, sideUrlPatch(side, url, key));
+          generated[side] = { url, key };
+        } catch (error) {
+          sideErrors[side] = serializeError(error);
+        }
+      }
+
+      const primary = generated.front || generated.back;
+      const failedSides = Object.keys(sideErrors) as DesignSide[];
+      const thumbnailStatus = primary
+        ? (failedSides.length ? "partial" : "ready")
+        : "failed";
 
       const nextMockups = {
         ...existingMockups,
         ...sidePatch,
-        checkout_thumbnail_status: "ready",
-        checkout_thumbnail_error: null,
+        checkout_thumbnail_status: thumbnailStatus,
+        checkout_thumbnail_error: failedSides.length ? sideErrors : null,
         checkout_thumbnail_width: 1024,
         checkout_thumbnail_height: 1024,
         checkout_thumbnail_format: "webp",
@@ -142,18 +159,16 @@ export const generateCheckoutThumbnail = task({
       };
 
       const nextDesignData = withThumbnailState(designData, {
-        status: "ready",
-        url: payload.side === "back"
-          ? (designData.checkout_thumbnail_url ?? existingMockups.checkout_thumbnail_url ?? null)
-          : url,
-        key,
+        status: thumbnailStatus,
+        url: generated.front?.url ?? designData.checkout_thumbnail_url ?? existingMockups.checkout_thumbnail_url ?? generated.back?.url ?? null,
+        key: primary?.key ?? null,
         width: 1024,
         height: 1024,
         format: "webp",
-        side: payload.side ?? "front",
-        sideUrl: url,
+        sides,
+        sideErrors,
         updatedAt: new Date().toISOString(),
-        error: null,
+        error: failedSides.length ? sideErrors : null,
       });
 
       const { error: updateError } = await supabase
@@ -161,22 +176,28 @@ export const generateCheckoutThumbnail = task({
         .update({
           design_data: nextDesignData,
           mockups: nextMockups,
-          design_image_url: url,
+          ...(primary ? { design_image_url: primary.url } : {}),
         })
         .eq("id", payload.userProductId);
 
       if (updateError) throw updateError;
 
-      const { error: cartUpdateError } = await supabase
-        .from("cart_items")
-        .update({ image: url, mockup_url: url })
-        .or(`user_product_id.eq.${payload.userProductId},design_id.eq.${payload.userProductId}`);
+      if (primary) {
+        const { error: cartUpdateError } = await supabase
+          .from("cart_items")
+          .update({ image: primary.url, mockup_url: primary.url })
+          .or(`user_product_id.eq.${payload.userProductId},design_id.eq.${payload.userProductId}`);
 
-      if (cartUpdateError) {
-        console.warn("CHECKOUT_THUMBNAIL_CART_UPDATE_SKIPPED", cartUpdateError.message);
+        if (cartUpdateError) {
+          console.warn("CHECKOUT_THUMBNAIL_CART_UPDATE_SKIPPED", cartUpdateError.message);
+        }
       }
 
-      return { userProductId: payload.userProductId, url, key };
+      if (!primary) {
+        throw new Error(failedSides.map((side) => `${side}: ${sideErrors[side]}`).join("; "));
+      }
+
+      return { userProductId: payload.userProductId, generated, sideErrors };
     } catch (jobError) {
       const message = serializeError(jobError);
       await supabase

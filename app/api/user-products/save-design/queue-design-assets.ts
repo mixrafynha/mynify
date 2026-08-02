@@ -1,5 +1,9 @@
 import { tasks } from "@trigger.dev/sdk/v3";
 import type { DesignSide } from "../../../../trigger/shared/design-renderer";
+import {
+  normalizeSavedElements,
+  resolveSavedDesignSides,
+} from "./design-sides";
 
 type QueueDesignAssetsInput = {
   userProductId: string;
@@ -8,46 +12,12 @@ type QueueDesignAssetsInput = {
   designBack?: any;
 };
 
-function parseJsonIfString<T>(value: unknown, fallback: T): T {
-  if (typeof value !== "string") return (value ?? fallback) as T;
-
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function normalizeElements(value: unknown) {
-  const parsed = parseJsonIfString<unknown>(value, value);
-  return Array.isArray(parsed) ? parsed : [];
-}
-
-function elementHasArtwork(el: any) {
-  if (!el || typeof el !== "object" || el.meta?.hidden) return false;
-
-  const type = String(el.type || "");
-  if (type === "text") return String(el.text ?? el.content ?? "").trim().length > 0;
-  if (type === "image") return true;
-  if (type === "shape") return true;
-
-  return false;
-}
-
-function elementsHaveArtwork(elements: unknown) {
-  return normalizeElements(elements).some(elementHasArtwork);
-}
-
 function sideElements(input: QueueDesignAssetsInput, side: DesignSide) {
   if (side === "front") {
     return input.designData?.sides?.front?.elements ?? input.designFront;
   }
 
   return input.designData?.sides?.back?.elements ?? input.designBack;
-}
-
-function sideHasArtwork(input: QueueDesignAssetsInput, side: DesignSide) {
-  return elementsHaveArtwork(sideElements(input, side));
 }
 
 function serializeQueueError(error: unknown) {
@@ -63,16 +33,16 @@ function serializeQueueError(error: unknown) {
 export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   if (!input.userProductId) throw new Error("Missing userProductId");
 
-  const sides = (["front", "back"] as DesignSide[]).filter((side) =>
-    sideHasArtwork(input, side),
-  );
+  const frontElements = sideElements(input, "front");
+  const backElements = sideElements(input, "back");
+  const sides = resolveSavedDesignSides({ frontElements, backElements });
   if (!sides.length) {
     console.info("[save-design] trigger queue skipped: no artwork", {
       userProductId: input.userProductId,
       hasDesignDataFrontElements: Array.isArray(input.designData?.sides?.front?.elements),
       hasDesignDataBackElements: Array.isArray(input.designData?.sides?.back?.elements),
-      designFrontCount: normalizeElements(input.designFront).length,
-      designBackCount: normalizeElements(input.designBack).length,
+      designFrontCount: normalizeSavedElements(input.designFront).length,
+      designBackCount: normalizeSavedElements(input.designBack).length,
     });
 
     return { queued: false, reason: "no-artwork", sides: [] as DesignSide[] };
@@ -84,21 +54,41 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   });
 
   try {
-    const printRun = await tasks.trigger("generate-design-print-file", {
-      userProductId: input.userProductId,
-      sides,
-    });
+    const [printResult, thumbnailResult] = await Promise.allSettled([
+      tasks.trigger("generate-design-print-file", {
+        userProductId: input.userProductId,
+        sides,
+      }),
+      tasks.trigger("generate-checkout-thumbnail", {
+        userProductId: input.userProductId,
+        sides,
+      }),
+    ]);
+    const printRun = printResult.status === "fulfilled" ? printResult.value : null;
+    const thumbnailRun = thumbnailResult.status === "fulfilled" ? thumbnailResult.value : null;
+    const triggerErrors = {
+      printFile: printResult.status === "rejected" ? serializeQueueError(printResult.reason) : null,
+      thumbnail: thumbnailResult.status === "rejected" ? serializeQueueError(thumbnailResult.reason) : null,
+    };
+
+    if (!printRun && !thumbnailRun) {
+      throw new Error(`Print file: ${triggerErrors.printFile}; thumbnail: ${triggerErrors.thumbnail}`);
+    }
 
     console.info("[save-design] design asset jobs triggered", {
       userProductId: input.userProductId,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
+      thumbnailRunId: (thumbnailRun as any)?.id ?? null,
+      triggerErrors,
     });
 
     return {
       queued: true,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
+      thumbnailRunId: (thumbnailRun as any)?.id ?? null,
+      triggerErrors,
     };
   } catch (error) {
     const message = serializeQueueError(error);
