@@ -174,6 +174,68 @@ function resolvePreviewImageSources(item: CartItem) {
   return { front, back };
 }
 
+type PrintFileReadiness = {
+  status: "pending" | "processing" | "ready" | "failed" | "missing";
+  source: "user_product" | "cart_item" | "design_data" | "frontend" | "missing";
+};
+
+function normalizePrintFileStatus(value: unknown): PrintFileReadiness["status"] | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "pending" || normalized === "processing" || normalized === "ready" || normalized === "failed") {
+    return normalized;
+  }
+  return null;
+}
+
+function resolvePrintFileReadiness(item: CartItem): PrintFileReadiness {
+  const designData = item.design_data ?? item.designData ?? {};
+  const directPrintFiles = item.print_files ?? item.printFiles ?? null;
+  const designPrintFiles =
+    designData && typeof designData === "object" && !Array.isArray(designData)
+      ? ((designData as Record<string, unknown>).print_files ??
+          (designData as Record<string, unknown>).printFiles ??
+          null)
+      : null;
+
+  const sources: Array<{ source: PrintFileReadiness["source"]; value: unknown }> = [
+    { source: "user_product", value: directPrintFiles },
+    { source: "design_data", value: designPrintFiles },
+    { source: "cart_item", value: item.files ?? null },
+    { source: "frontend", value: resolveGelatoPrintFiles(item) },
+  ];
+
+  for (const candidate of sources) {
+    const value = candidate.value;
+    const status =
+      value && typeof value === "object" && !Array.isArray(value)
+        ? normalizePrintFileStatus((value as Record<string, unknown>).status ?? (value as Record<string, unknown>).checkout_thumbnail_status)
+        : null;
+
+    const hasResolvedUrl = Array.isArray(value)
+      ? value.some((entry) => {
+          if (!entry || typeof entry !== "object") return false;
+          const record = entry as Record<string, unknown>;
+          const url = record.url ?? record.fileUrl ?? record.printFileUrl ?? record.print_file_url ?? record.output_url ?? record.export_url ?? record.final_design_url ?? record.artwork_url ?? record.design_file_url;
+          return typeof url === "string" && url.trim().startsWith("https://");
+        })
+      : candidate.source === "frontend"
+        ? resolveGelatoPrintFiles(item).length > 0
+        : Boolean(value && typeof value === "object");
+
+    if (status === "failed") return { status: "failed", source: candidate.source };
+    if (status === "ready" || hasResolvedUrl) return { status: "ready", source: candidate.source };
+    if (status === "processing") return { status: "processing", source: candidate.source };
+    if (status === "pending") return { status: "pending", source: candidate.source };
+  }
+
+  return { status: "missing", source: "missing" };
+}
+
+function isPrintFileReady(item: CartItem) {
+  return resolvePrintFileReadiness(item).status === "ready";
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
   const addressLookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -224,9 +286,12 @@ export default function CheckoutPage() {
     form.country.trim() &&
       form.postalCode.trim() &&
       form.city.trim() &&
-      form.address.trim() &&
-      items.length > 0,
+      form.address.trim(),
   );
+
+  const customDesignItems = useMemo(() => items.filter((item) => isCustomDesignItem(item)), [items]);
+  const printFilesReady = useMemo(() => customDesignItems.every((item) => isPrintFileReady(item)), [customDesignItems]);
+  const printFilesPending = customDesignItems.length > 0 && !printFilesReady;
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -243,10 +308,13 @@ export default function CheckoutPage() {
 
   const validatedShippingMethods = productAvailability.shippingMethods?.length ? productAvailability.shippingMethods : null;
   const selectedShippingMethod = validatedShippingMethods?.find((method) => method.id === form.shippingMethod);
-  const shipping = subtotal > 0
-    ? (typeof selectedShippingMethod?.price === "number" ? selectedShippingMethod.price : null)
-    : 0;
-  const shippingDisplay = typeof shipping === "number" ? shipping : 0;
+  const shipping =
+    subtotal > 0 && step !== "shipping" && printFilesReady
+      ? typeof selectedShippingMethod?.price === "number"
+        ? selectedShippingMethod.price
+        : null
+      : null;
+  const shippingDisplay = typeof shipping === "number" ? shipping : null;
   const totalBeforeTax = subtotal + (typeof shipping === "number" ? shipping : 0);
   const taxDisplay = form.country ? "Calculated at payment" : "Calculated after delivery country";
   const total = totalBeforeTax;
@@ -264,6 +332,7 @@ export default function CheckoutPage() {
       form.postalCode.trim() &&
       form.country.trim() &&
       !productAvailability.loading &&
+      (step === "shipping" || printFilesReady) &&
       !hasAvailabilityBlock,
   );
 
@@ -379,6 +448,18 @@ export default function CheckoutPage() {
     const country = form.country.trim();
     const countryData = resolveCheckoutCountry(country);
 
+    if (step !== "review") {
+      setProductAvailability({
+        loading: false,
+        checked: false,
+        configured: false,
+        available: true,
+        unavailableItems: [],
+        message: step === "shipping" ? null : "Shipping methods are calculated in review.",
+      });
+      return;
+    }
+
     if (!hasCompleteShippingAddress) {
       setProductAvailability({
         loading: false,
@@ -386,7 +467,19 @@ export default function CheckoutPage() {
         configured: false,
         available: true,
         unavailableItems: [],
-        message: "Complete your shipping address to see available delivery methods.",
+        message: "Complete your shipping address in the previous step.",
+      });
+      return;
+    }
+
+    if (printFilesPending) {
+      setProductAvailability({
+        loading: false,
+        checked: false,
+        configured: false,
+        available: true,
+        unavailableItems: [],
+        message: "Preparing your design for printing...",
       });
       return;
     }
@@ -477,7 +570,17 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
+  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items, printFilesPending, step]);
+
+  useEffect(() => {
+    if (step !== "review" || !printFilesPending) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      void loadCart();
+    }, 2500);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadCart, printFilesPending, step]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
@@ -1026,51 +1129,6 @@ export default function CheckoutPage() {
 
                   <div className="h-px bg-white/10" />
 
-                  <div>
-                    <p className="mb-3 text-xs font-black uppercase tracking-[0.18em] text-white/40">Shipping method</p>
-                    {productAvailability.loading ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
-                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
-                      </div>
-                    ) : productAvailability.checked && productAvailability.available && validatedShippingMethods?.length ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {validatedShippingMethods.map((method) => {
-                          const active = form.shippingMethod === method.id;
-                          return (
-                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
-                              <span className="flex items-start justify-between gap-3">
-                                <span className="min-w-0">
-                                  <span className="block text-sm font-black">{method.title}</span>
-                                  <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">{method.id}</span>
-                                </span>
-                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? new Intl.NumberFormat(undefined, { style: "currency", currency: method.currency || "EUR" }).format(method.price) : "Calculated"}</span>
-                              </span>
-                              <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || "Estimated delivery"}</span>
-                              {method.description ? <span className="mt-1 block text-[11px] leading-5 text-white/30">{method.description}</span> : null}
-                              {method.fulfillmentCountry ? <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/25">Fulfillment {method.fulfillmentCountry}</span> : null}
-                              <span className="mt-3 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
-                                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : productAvailability.checked && !productAvailability.available ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
-                        {productAvailability.message || "This product cannot be delivered to the selected country."}
-                      </div>
-                    ) : productAvailability.checked && productAvailability.available && !validatedShippingMethods?.length ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
-                        {productAvailability.message || "No delivery methods are available for this address."}
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
-                        Complete your shipping address to see available delivery methods.
-                      </div>
-                    )}
-                  </div>
-
                   <button type="button" disabled={!shippingComplete} onClick={goNext} className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">
                     {step === "shipping" ? "Continue to review" : "Continue"} <ArrowRight size={15} />
                   </button>
@@ -1244,6 +1302,59 @@ export default function CheckoutPage() {
                     })}
                   </div>
                 )}
+
+                {step === "review" && (
+                  <div className="mt-6 space-y-4 rounded-3xl border border-white/10 bg-white/[0.025] p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.18em] text-white/40">Shipping & delivery</p>
+
+                    {printFilesPending ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
+                        <p className="text-sm font-black text-white">Preparing your design for printing…</p>
+                        <p className="mt-2 text-sm font-medium text-white/45">This usually takes a few seconds.</p>
+                      </div>
+                    ) : productAvailability.loading ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+                        <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
+                      </div>
+                    ) : productAvailability.checked && productAvailability.available && validatedShippingMethods?.length ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {validatedShippingMethods.map((method) => {
+                          const active = form.shippingMethod === method.id;
+                          return (
+                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                              <span className="flex items-start justify-between gap-3">
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-black">{method.title}</span>
+                                  <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">{method.id}</span>
+                                </span>
+                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? new Intl.NumberFormat(undefined, { style: "currency", currency: method.currency || "EUR" }).format(method.price) : "Calculated"}</span>
+                              </span>
+                              <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || "Estimated delivery"}</span>
+                              {method.description ? <span className="mt-1 block text-[11px] leading-5 text-white/30">{method.description}</span> : null}
+                              {method.fulfillmentCountry ? <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/25">Fulfillment {method.fulfillmentCountry}</span> : null}
+                              <span className="mt-3 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
+                                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : productAvailability.checked && !productAvailability.available ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                        {productAvailability.message || "This product cannot be delivered to the selected country."}
+                      </div>
+                    ) : productAvailability.checked && productAvailability.available && !validatedShippingMethods?.length ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                        {productAvailability.message || "No delivery methods are available for this address."}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
+                        {productAvailability.message || "Complete your shipping address in the previous step."}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -1324,7 +1435,16 @@ export default function CheckoutPage() {
 
               <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Products</span><span className="font-black">{money(subtotal)}</span></div>
-                <div className="flex items-center justify-between text-sm"><span className="flex items-center gap-2 font-semibold text-white/50"><Truck size={15} /> Shipping</span><span className="font-black">{money(shippingDisplay)}</span></div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 font-semibold text-white/50"><Truck size={15} /> Shipping</span>
+                  <span className="font-black">
+                    {step === "shipping" || !printFilesReady
+                      ? "Calculated in review"
+                      : typeof shippingDisplay === "number"
+                        ? money(shippingDisplay)
+                        : "Select a method"}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Tax</span><span className="text-right text-xs font-black text-white/45">{taxDisplay}</span></div>
                 <div className="h-px bg-white/10" />
                 <div className="flex items-end justify-between gap-4"><span className="text-sm font-semibold text-white/50">Total before tax</span><span className="text-3xl font-black tracking-[-0.06em]">{money(totalBeforeTax)}</span></div>
