@@ -15,6 +15,8 @@ type CartItem = {
   color?: string | null;
   size?: string | null;
   image?: string | null;
+  previewFront?: string | null;
+  previewBack?: string | null;
   stock?: number | null;
 };
 
@@ -263,6 +265,11 @@ export default function CartDrawer({
                     const maxStock =
                       typeof item.stock === "number" ? item.stock : Infinity;
 
+                    const frontImage =
+                      item.previewFront ||
+                      item.image ||
+                      "/placeholder.png";
+
                     return (
                       <article
                         key={item.id}
@@ -276,10 +283,10 @@ export default function CartDrawer({
 
                         <div className="flex gap-3">
                           <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl bg-white/[0.06]">
-                            {item.image ? (
+                            {frontImage ? (
                               <img
-                                src={item.image}
-                                alt={item.title}
+                                src={frontImage}
+                                alt={`${item.title} - Front`}
                                 loading="lazy"
                                 decoding="async"
                                 className="h-full w-full object-cover"

@@ -194,22 +194,17 @@ function resolvePreviewImageSources(item: CartItem) {
       : {};
 
   const front =
-    cleanUrl(mergedMockups.checkout_thumbnail_url) ||
+    cleanUrl(item.previewFront) ||
     cleanUrl(mergedMockups.front) ||
     cleanUrl(frontSide.mockupUrl) ||
     cleanUrl(frontSide.mockup_url) ||
-    cleanUrl(item.front_print_file_url) ||
-    cleanUrl(item.frontPrintFileUrl) ||
     cleanUrl(item.image);
 
   const back =
-    cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
+    cleanUrl(item.previewBack) ||
     cleanUrl(mergedMockups.back) ||
     cleanUrl(backSide.mockupUrl) ||
-    cleanUrl(backSide.mockup_url) ||
-    cleanUrl(item.back_print_file_url) ||
-    cleanUrl(item.backPrintFileUrl) ||
-    cleanUrl(item.image);
+    cleanUrl(backSide.mockup_url);
 
   return { front, back };
 }

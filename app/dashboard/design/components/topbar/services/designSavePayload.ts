@@ -465,11 +465,6 @@ export async function buildDesignSavePayload(
     status: "pending",
   } as const;
 
-  const checkoutThumbnail = {
-    checkout_thumbnail_url: null,
-    checkout_thumbnail_status: "pending",
-  } as const;
-
   const designData = {
     schemaVersion: 4,
     productId,
@@ -585,7 +580,6 @@ export async function buildDesignSavePayload(
       },
     },
     printFiles: pendingPrintFiles,
-    ...checkoutThumbnail,
   };
 
   const payload = {
@@ -661,7 +655,6 @@ export async function buildDesignSavePayload(
     production: designData.production,
     editorVersion: "json-only-save-v4",
     updatedAt: new Date().toISOString(),
-    ...checkoutThumbnail,
   };
 
   assertJsonOnlySavePayload(payload);

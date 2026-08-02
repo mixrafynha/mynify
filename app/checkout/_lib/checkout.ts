@@ -83,6 +83,8 @@ export type CartItem = {
   color?: string | null;
   size?: string | null;
   image?: string | null;
+  previewFront?: string | null;
+  previewBack?: string | null;
   stock?: number | null;
   sku?: string | null;
   product_uid?: string | null;

@@ -28,6 +28,8 @@ type CartItem = {
   size: string | null;
   sku: string | null;
   image: string | null;
+  previewFront?: string | null;
+  previewBack?: string | null;
   created_at: string | null;
   product_variants?: CartVariantRelation | CartVariantRelation[] | null;
 };
@@ -64,10 +66,27 @@ function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
 
+function parseMockups(value: unknown): Record<string, unknown> | null {
+  if (!value) return null;
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  return typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
-    publicString(mockups.checkout_thumbnail_url) ??
     publicString(mockups.front) ??
     publicString(mockups.image) ??
     publicString(mockups.mockup_front)
@@ -77,7 +96,6 @@ function frontMockupUrl(mockups: Record<string, unknown> | null): string | null 
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
-    publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.back) ??
     null
   );
@@ -122,7 +140,7 @@ async function resolveUserProductAssets(
     base_product_id: data.base_product_id,
     print_files: data.print_files,
     printFiles: data.print_files,
-    mockups: data.mockups,
+    mockups: parseMockups(data.mockups),
     design_data: data.design_data,
     designData: data.design_data,
   };
@@ -184,30 +202,15 @@ export async function GET() {
         const userProductAssets = await resolveUserProductAssets(supabase, item.user_product_id);
 
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
-        const mockupImage = frontMockupUrl(userProductAssets.mockups);
-        const checkoutThumbnailFrontUrl =
-          userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-            ? publicString(userProductAssets.mockups.checkout_thumbnail_url)
-            : null;
-        const checkoutThumbnailBackUrl =
-          userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-            ? publicString(userProductAssets.mockups.checkout_thumbnail_back_url)
-            : null;
+        const previewFront = frontMockupUrl(userProductAssets.mockups);
+        const previewBack = backMockupUrl(userProductAssets.mockups);
 
         return {
           ...item,
           ...userProductAssets,
-          image: mockupImage ?? item.image,
-          checkoutThumbnailFrontUrl,
-          checkoutThumbnailBackUrl,
-          checkoutThumbnailFrontStatus:
-            userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-              ? (userProductAssets.mockups.checkout_thumbnail_status as Record<string, any> | undefined)?.front ?? null
-              : null,
-          checkoutThumbnailBackStatus:
-            userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-              ? (userProductAssets.mockups.checkout_thumbnail_status as Record<string, any> | undefined)?.back ?? null
-              : null,
+          image: previewFront ?? item.image,
+          previewFront,
+          previewBack,
           product_variants: variantRelation,
           product_uid: gelatoProductUid,
           productUid: gelatoProductUid,

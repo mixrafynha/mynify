@@ -452,16 +452,6 @@ export async function buildUserProductSavePayload(args: {
   const incomingPrintFiles = objectValue<any>(body.printFiles || body.print_files, {});
   const incomingMockups = objectValue<any>(body.mockups || body.mockupFiles, {});
   const incomingSides = objectValue<any>(body.sides || incomingDesignData.sides, {});
-  const checkoutThumbnailUrl = firstValue(
-    body.checkout_thumbnail_url,
-    body.checkoutThumbnailUrl,
-    incomingMockups.checkout_thumbnail_url,
-    incomingMockups.checkoutThumbnailUrl,
-    incomingDesignData.checkout_thumbnail_url,
-  );
-  const savedCheckoutThumbnailUrl = isHttpUrl(checkoutThumbnailUrl)
-    ? checkoutThumbnailUrl
-    : null;
 
   const frontElements = arrayValue(
     body.designFront || body.design_front || incomingSides?.front?.elements,
@@ -704,8 +694,6 @@ export async function buildUserProductSavePayload(args: {
     gelatoVariantUid: selectedVariant?.gelatoVariantUid || incomingDesignData.gelatoVariantUid || incomingDesignData.gelato_variant_uid || null,
     gelato_variant_uid: selectedVariant?.gelato_variant_uid || incomingDesignData.gelato_variant_uid || incomingDesignData.gelatoVariantUid || null,
     status: body.status || incomingDesignData.status || "draft",
-    checkout_thumbnail_url: savedCheckoutThumbnailUrl,
-    checkoutThumbnailStatus: savedCheckoutThumbnailUrl ? "ready" : "pending",
     sides: {
       front: {
         ...(incomingDesignData?.sides?.front || {}),
@@ -740,7 +728,6 @@ export async function buildUserProductSavePayload(args: {
   }) as any;
 
   const bestPreviewImage =
-    savedCheckoutThumbnailUrl ||
     mockupFront.url ||
     mockupBack.url ||
     baseProduct.image ||
@@ -785,8 +772,6 @@ export async function buildUserProductSavePayload(args: {
     mockups: {
       front: mockupFront.url,
       back: mockupBack.url,
-      checkout_thumbnail_url: savedCheckoutThumbnailUrl,
-      checkout_thumbnail_status: savedCheckoutThumbnailUrl ? "ready" : "pending",
       keys: {
         front: uploadedMockupFront.key,
         back: uploadedMockupBack.key,
@@ -794,7 +779,7 @@ export async function buildUserProductSavePayload(args: {
     },
     print_box: printBox,
     safe_area: safeArea,
-    design_image_url: savedCheckoutThumbnailUrl,
+    design_image_url: null,
     ai_mockup_url: mockupFront.url || mockupBack.url || null,
     ai_mockup_images: [mockupFront.url, mockupBack.url].filter(Boolean),
     markup: productMarkup,
