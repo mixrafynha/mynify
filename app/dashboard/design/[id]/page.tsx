@@ -822,6 +822,36 @@ export default function EditorPage() {
     [],
   );
 
+  const getSaveAccessToken = useCallback(async () => {
+    const maxAttempts = 5;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const accessToken = session?.access_token || null;
+      if (accessToken) {
+        console.info("[save-design] access token ready", {
+          attempt,
+          hasToken: true,
+        });
+        return accessToken;
+      }
+
+      console.info("[save-design] access token not ready", {
+        attempt,
+        maxAttempts,
+      });
+
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => window.setTimeout(resolve, 150));
+      }
+    }
+
+    return null;
+  }, []);
+
   const handleSaveDesign = useCallback(async () => {
     if (saving) return;
 
@@ -871,10 +901,10 @@ export default function EditorPage() {
 
       const designPayload = await designPayloadPromise;
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const accessToken = session?.access_token || null;
+      const accessToken = await getSaveAccessToken();
+      if (!accessToken) {
+        console.warn("[save-design] continuing without access token");
+      }
       const usedSides = resolveUsedDesignSides(frontElements, backElements);
 
       const frontPreviewBlob = await withTimeout(
@@ -1029,6 +1059,7 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     exportEditorPreview,
+    getSaveAccessToken,
   ]);
 
   const handleAuthSuccess = useCallback(() => {
