@@ -91,6 +91,13 @@ type CheckoutShippingMethod = {
   description?: string | null;
 };
 
+const isProduction = process.env.NODE_ENV === "production";
+
+const countryDisplayNames =
+  typeof Intl !== "undefined" && "DisplayNames" in Intl
+    ? new Intl.DisplayNames(["en"], { type: "region" })
+    : null;
+
 function getObjectValue(source: unknown, keys: string[]): unknown {
   if (!source || typeof source !== "object") return null;
 
@@ -125,6 +132,41 @@ function stringifyForDisplay(value: unknown) {
 
 function cleanUrl(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatShippingCurrency(amount: number | null | undefined, currency?: string | null) {
+  if (typeof amount !== "number" || !Number.isFinite(amount)) return "Calculated";
+  return new Intl.NumberFormat(undefined, {
+    style: "currency",
+    currency: currency || "USD",
+    currencyDisplay: currency === "USD" ? "symbol" : "narrowSymbol",
+  }).format(amount);
+}
+
+function formatEstimatedDelivery(value: string | null | undefined) {
+  if (!value) return "Estimated delivery";
+  const cleaned = value.trim().replace(/\s+/g, " ");
+  const rangeMatch = cleaned.match(/^(\d{4}-\d{2}-\d{2})\s*[-–]\s*(\d{4}-\d{2}-\d{2})$/);
+  if (!rangeMatch) return cleaned;
+
+  const start = new Date(`${rangeMatch[1]}T00:00:00`);
+  const end = new Date(`${rangeMatch[2]}T00:00:00`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return cleaned;
+
+  const sameMonth = start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear();
+  const monthDay = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  if (sameMonth) {
+    return `${monthDay.format(start)}–${end.getDate()}`;
+  }
+
+  const longDate = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" });
+  return `${longDate.format(start)} – ${longDate.format(end)}`;
+}
+
+function formatShipsFrom(countryCode: string | null | undefined) {
+  if (!countryCode) return null;
+  const label = countryDisplayNames?.of(countryCode.toUpperCase()) ?? countryCode.toUpperCase();
+  return `Ships from ${label}`;
 }
 
 function resolvePreviewImageSources(item: CartItem) {
@@ -307,7 +349,18 @@ export default function CheckoutPage() {
   }, [items]);
 
   const validatedShippingMethods = productAvailability.shippingMethods?.length ? productAvailability.shippingMethods : null;
-  const selectedShippingMethod = validatedShippingMethods?.find((method) => method.id === form.shippingMethod);
+  const shippingMethodsForDisplay = useMemo(() => {
+    if (!validatedShippingMethods?.length) return null;
+    return [...validatedShippingMethods].sort((a, b) => {
+      const priceA = typeof a.price === "number" ? a.price : Number.POSITIVE_INFINITY;
+      const priceB = typeof b.price === "number" ? b.price : Number.POSITIVE_INFINITY;
+      return priceA - priceB;
+    });
+  }, [validatedShippingMethods]);
+  const selectedShippingMethod =
+    shippingMethodsForDisplay?.find((method) => method.id === form.shippingMethod) ??
+    shippingMethodsForDisplay?.[0] ??
+    validatedShippingMethods?.find((method) => method.id === form.shippingMethod);
   const shipping =
     subtotal > 0 && step !== "shipping" && printFilesReady
       ? typeof selectedShippingMethod?.price === "number"
@@ -1197,7 +1250,7 @@ export default function CheckoutPage() {
 
                       return (
                         <article key={item.id} className="py-5">
-                          <div className="grid grid-cols-[132px_1fr] gap-4 sm:grid-cols-[168px_1fr] sm:gap-6">
+                          <div className="grid grid-cols-[124px_1fr] gap-4 sm:grid-cols-[152px_1fr] sm:gap-5">
   <ProductPreviewImage
     title={item.title}
     frontImage={previewImages.front}
@@ -1207,14 +1260,12 @@ export default function CheckoutPage() {
                             <div className="min-w-0">
                               <div className="flex items-start gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 text-[15px] font-black leading-5 sm:text-base">{item.title}</p>
+                                  <p className="line-clamp-2 text-base font-black leading-5 sm:text-lg">{item.title}</p>
                                   <p className="mt-1 text-xs font-bold text-white/35">{[currentColor, currentSize].filter(Boolean).join(" / ") || "Custom product"}</p>
-                                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-bold text-white/35 sm:text-[11px]">
-                                    <span>Variant price {money(Math.max(0, price - secondPrintCharge))}</span>
+                                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium text-white/35 sm:text-[11px]">
+                                    <span>{`Variant: ${[currentColor, currentSize].filter(Boolean).join(" / ") || "Custom product"}`}</span>
                                     {secondPrintCharge > 0 ? <span className="text-purple-200">Second print side +{money(secondPrintCharge)}</span> : null}
                                     <span>Excl. tax</span>
-                                    {currentSku ? <span>SKU {currentSku}</span> : null}
-                                    {typeof currentStock === "number" && currentStock > 0 ? <span>{currentStock} in stock</span> : null}
                                   </div>
                                 </div>
                                 <button type="button" onClick={() => removeItem(item.id)} disabled={busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white/42 transition hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40" aria-label="Remove item">
@@ -1317,39 +1368,43 @@ export default function CheckoutPage() {
                         <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
                         <div className="h-[110px] animate-pulse rounded-2xl border border-white/10 bg-white/[0.03]" />
                       </div>
-                    ) : productAvailability.checked && productAvailability.available && validatedShippingMethods?.length ? (
+                    ) : productAvailability.checked && productAvailability.available && shippingMethodsForDisplay?.length ? (
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {validatedShippingMethods.map((method) => {
+                        {shippingMethodsForDisplay.map((method, index) => {
                           const active = form.shippingMethod === method.id;
+                          const isCheapest = index === 0;
+                          const isFastest = index === shippingMethodsForDisplay.length - 1;
                           return (
-                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-2xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
                               <span className="flex items-start justify-between gap-3">
                                 <span className="min-w-0">
-                                  <span className="block text-sm font-black">{method.title}</span>
-                                  <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/30">{method.id}</span>
+                                  <span className="block text-sm font-black leading-5">{method.title}</span>
+                                  <span className="mt-1 block text-sm font-bold text-white/80">{formatShippingCurrency(method.price ?? null, method.currency)}</span>
                                 </span>
-                                <span className="text-sm font-black text-purple-100">{typeof method.price === "number" ? new Intl.NumberFormat(undefined, { style: "currency", currency: method.currency || "EUR" }).format(method.price) : "Calculated"}</span>
+                                <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
+                                  <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
+                                </span>
                               </span>
-                              <span className="mt-1 block text-xs font-semibold text-white/40">{method.estimatedDays || "Estimated delivery"}</span>
-                              {method.description ? <span className="mt-1 block text-[11px] leading-5 text-white/30">{method.description}</span> : null}
-                              {method.fulfillmentCountry ? <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.18em] text-white/25">Fulfillment {method.fulfillmentCountry}</span> : null}
-                              <span className="mt-3 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
-                                <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
-                              </span>
+                              <span className="mt-2 block text-xs font-medium text-white/45">{`Estimated delivery: ${formatEstimatedDelivery(method.estimatedDays || null)}`}</span>
+                              {method.fulfillmentCountry ? <span className="mt-1 block text-[11px] font-medium text-white/35">{formatShipsFrom(method.fulfillmentCountry)}</span> : null}
+                              <div className="mt-2 flex items-center gap-2">
+                                {isCheapest ? <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Cheapest</span> : null}
+                                {isFastest ? <span className="rounded-full bg-purple-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-purple-100">Fastest</span> : null}
+                              </div>
                             </button>
                           );
                         })}
                       </div>
                     ) : productAvailability.checked && !productAvailability.available ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
-                        {productAvailability.message || "This product cannot be delivered to the selected country."}
+                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                        {productAvailability.message || "This product cannot currently be delivered to this address."}
                       </div>
-                    ) : productAvailability.checked && productAvailability.available && !validatedShippingMethods?.length ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
+                    ) : productAvailability.checked && productAvailability.available && !shippingMethodsForDisplay?.length ? (
+                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
                         {productAvailability.message || "No delivery methods are available for this address."}
                       </div>
                     ) : (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
                         {productAvailability.message || "Complete your shipping address in the previous step."}
                       </div>
                     )}
@@ -1387,33 +1442,29 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
-                  <button type="button" disabled={!canPay || submitting || testingGelato || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleGelatoDraftOrderTest} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
-                    {testingGelato ? <><Loader2 size={16} className="animate-spin" /> Testing Gelato...</> : <>Test Gelato</>}
-                  </button>
+                  {!isProduction && (
+                    <>
+                      <button type="button" disabled={!canPay || submitting || testingGelato || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleGelatoDraftOrderTest} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                        {testingGelato ? <><Loader2 size={16} className="animate-spin" /> Testing Gelato...</> : <>Test Gelato</>}
+                      </button>
 
-                  {gelatoTestResult ? (
-                    <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-5 text-xs font-semibold leading-5 text-white/60">
-                      {gelatoTestResult.ok ? (
-                        <div className="space-y-2">
-                          <p className="text-sm font-black text-emerald-200">Draft Order created successfully</p>
-                          <p>Draft Order ID: {String(getObjectValue(gelatoTestResult.responsePayload, ["id", "orderId", "draftOrderId"]) ?? "Not returned")}</p>
-                          <p>Gelato Status: {String(getObjectValue(gelatoTestResult.responsePayload, ["status", "gelatoStatus"]) ?? "Not returned")}</p>
-                          <p>Fulfillment Status: {String(getObjectValue(gelatoTestResult.responsePayload, ["fulfillmentStatus", "fulfillment_status"]) ?? "Not returned")}</p>
-                          <p>Country: {form.country}</p>
-                          <p>Variant: {items.map((item) => [item.color, item.size].filter(Boolean).join(" / ") || item.variant_id || item.title).join(", ")}</p>
-                          <p>SKU: {items.map((item) => item.sku || "Not returned").join(", ")}</p>
-                          <p>Print Provider: {String(getObjectValue(gelatoTestResult.responsePayload, ["printProvider", "print_provider", "printProviderName"]) ?? "Not returned")}</p>
-                          <p>Production Country: {String(getObjectValue(gelatoTestResult.responsePayload, ["productionCountry", "production_country"]) ?? "Not returned")}</p>
+                      {gelatoTestResult ? (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-xs font-semibold leading-5 text-white/60">
+                          {gelatoTestResult.ok ? (
+                            <div className="space-y-2">
+                              <p className="text-sm font-black text-emerald-200">Draft Order created successfully</p>
+                              <p>Production test completed.</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-sm font-black text-red-200">Gelato test failed</p>
+                              <p>HTTP status: {gelatoTestResult.status ?? "Unknown"}</p>
+                            </div>
+                          )}
                         </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <p className="text-sm font-black text-red-200">Gelato rejected the Draft Order</p>
-                          <p>HTTP status: {gelatoTestResult.status ?? "Unknown"}</p>
-                          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/30 p-3 text-[11px] leading-5 text-white/70">{stringifyForDisplay(gelatoTestResult.responsePayload ?? gelatoTestResult)}</pre>
-                        </div>
-                      )}
-                    </div>
-                  ) : null}
+                      ) : null}
+                    </>
+                  )}
 
                   <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}

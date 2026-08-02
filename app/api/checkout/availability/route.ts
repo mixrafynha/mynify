@@ -24,6 +24,7 @@ function safeText(value: unknown) {
 }
 
 function safeLog(value: unknown) {
+  if (process.env.NODE_ENV === "production") return "[redacted]";
   try {
     return JSON.stringify(value, null, 2);
   } catch {
@@ -173,23 +174,25 @@ export async function POST(req: Request) {
     const countryIso = safeText(body?.countryIso).toUpperCase() || null;
     const items = Array.isArray(body?.items) ? (body.items as AvailabilityItem[]) : [];
 
-    console.log(
-      "[CHECKOUT_AVAILABILITY_RECEIVED]",
-      safeLog({
-        itemsCount: items.length,
-        countryCode: body?.shippingAddress?.countryCode ?? body?.countryIso ?? body?.country ?? null,
-        postalCodePresent: Boolean(body?.shippingAddress?.postalCode ?? body?.postalCode),
-        cityPresent: Boolean(body?.shippingAddress?.city ?? body?.city),
-        addressLine1Present: Boolean(body?.shippingAddress?.addressLine1 ?? body?.addressLine1 ?? body?.address),
-        items: items.map((item) => ({
-          productId: item.productId ?? null,
-          variantId: item.variantId ?? null,
-          productUid: item.productUid ?? null,
-          quantity: item.quantity ?? null,
-          printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : Array.isArray(item.files) ? item.files.length : 0,
-        })),
-      }),
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "[CHECKOUT_AVAILABILITY_RECEIVED]",
+        safeLog({
+          itemsCount: items.length,
+          countryCode: body?.shippingAddress?.countryCode ?? body?.countryIso ?? body?.country ?? null,
+          postalCodePresent: Boolean(body?.shippingAddress?.postalCode ?? body?.postalCode),
+          cityPresent: Boolean(body?.shippingAddress?.city ?? body?.city),
+          addressLine1Present: Boolean(body?.shippingAddress?.addressLine1 ?? body?.addressLine1 ?? body?.address),
+          items: items.map((item) => ({
+            productId: item.productId ?? null,
+            variantId: item.variantId ?? null,
+            productUid: item.productUid ?? null,
+            quantity: item.quantity ?? null,
+            printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : Array.isArray(item.files) ? item.files.length : 0,
+          })),
+        }),
+      );
+    }
 
     if (!country && !countryIso) {
       return NextResponse.json(
@@ -330,11 +333,13 @@ export async function POST(req: Request) {
       });
     }
 
-    console.log(`[CHECKOUT_QUOTE_ITEMS_BUILT_JSON] ${JSON.stringify({
-      receivedItems: items.length,
-      quoteItemsCount: quoteItems.length,
-      rejectedItems,
-    })}`);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[CHECKOUT_QUOTE_ITEMS_BUILT_JSON] ${JSON.stringify({
+        receivedItems: items.length,
+        quoteItemsCount: quoteItems.length,
+        rejectedItems,
+      })}`);
+    }
 
     if (!quoteItems.length) {
       return NextResponse.json(
@@ -351,14 +356,16 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log(
-      "[GELATO_QUOTE_CALL_START]",
-      safeLog({
-        quoteItemsCount: quoteItems.length,
-        countryCode: countryIso ?? country,
-        postalCodePresent: Boolean(body?.postalCode || body?.shippingAddress?.postalCode),
-      }),
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "[GELATO_QUOTE_CALL_START]",
+        safeLog({
+          quoteItemsCount: quoteItems.length,
+          countryCode: countryIso ?? country,
+          postalCodePresent: Boolean(body?.postalCode || body?.shippingAddress?.postalCode),
+        }),
+      );
+    }
 
     const quote = await getGelatoCheckoutQuote({
       productUid: quoteItems[0].productUid,
@@ -371,15 +378,17 @@ export async function POST(req: Request) {
       orderReferenceId: safeText(body?.orderReferenceId) || undefined,
     });
 
-    console.log(
-      "[GELATO_QUOTE_CALL_END]",
-      safeLog({
-        available: quote.available,
-        retryable: quote.retryable,
-        reason: quote.reason,
-        shippingMethodsCount: quote.shippingOptions.length,
-      }),
-    );
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "[GELATO_QUOTE_CALL_END]",
+        safeLog({
+          available: quote.available,
+          retryable: quote.retryable,
+          reason: quote.reason,
+          shippingMethodsCount: quote.shippingOptions.length,
+        }),
+      );
+    }
 
     if (quote.retryable) {
       return NextResponse.json(

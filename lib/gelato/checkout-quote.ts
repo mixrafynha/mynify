@@ -113,6 +113,7 @@ function safeJsonString(value: unknown) {
 }
 
 function logLine(prefix: string, payload: unknown) {
+  if (process.env.NODE_ENV === "production") return;
   const serialized = safeJsonString(payload);
   console.log(`${prefix} ${serialized ?? "\"[unserializable]\""}`);
 }
