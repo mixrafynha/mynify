@@ -17,7 +17,8 @@ function parseMockups(value: unknown): Record<string, unknown> {
       return parsed && typeof parsed === "object" && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
         : {};
-    } catch {
+    } catch (error) {
+      console.error("[preview] failed", error);
       return {};
     }
   }
@@ -81,10 +82,10 @@ export async function POST(req: Request) {
         key: previewKey(userProductId, "front"),
       });
     } catch (error) {
-      console.error("[editor-preview] Front upload failed", error);
+      console.error("[preview] failed", error);
       return NextResponse.json({ error: "Front preview upload failed" }, { status: 500 });
     }
-    console.info("[editor-preview] uploaded", {
+    console.info("[preview] front uploaded", {
       userProductId,
       side: "front",
       url: frontUpload.url,
@@ -98,10 +99,10 @@ export async function POST(req: Request) {
           key: previewKey(userProductId, "back"),
         });
       } catch (error) {
-        console.error("[editor-preview] Back upload failed", error);
+        console.error("[preview] failed", error);
         return NextResponse.json({ error: "Back preview upload failed" }, { status: 500 });
       }
-      console.info("[editor-preview] uploaded", {
+      console.info("[preview] back uploaded", {
         userProductId,
         side: "back",
         url: backUpload.url,
@@ -126,11 +127,11 @@ export async function POST(req: Request) {
       .single<{ id: string; mockups: Record<string, unknown> | string | null }>();
 
     if (updateError || !updated) {
-      console.error("[editor-preview] mockups update failed", updateError);
+      console.error("[preview] failed", updateError);
       return NextResponse.json({ error: "Preview persistence failed" }, { status: 500 });
     }
 
-    console.info("[save-design] mockups updated", {
+    console.info("[preview] mockups updated", {
       userProductId,
       sides,
       front: nextMockups.front ?? null,
@@ -143,7 +144,7 @@ export async function POST(req: Request) {
       mockups: parseMockups(updated.mockups),
     });
   } catch (error) {
-    console.error("[editor-preview] preview route failed", error);
+    console.error("[preview] failed", error);
     return NextResponse.json({ error: "Unable to save preview mockups" }, { status: 500 });
   }
 }

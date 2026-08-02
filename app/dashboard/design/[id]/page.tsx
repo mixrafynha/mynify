@@ -128,7 +128,9 @@ async function dataUrlToWebPBlob(
   maxSize = 600,
   quality = 0.85,
 ): Promise<Blob | null> {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    throw new Error("Preview blob conversion requires the browser window");
+  }
 
   return new Promise((resolve) => {
     const image = new Image();
@@ -758,45 +760,44 @@ export default function EditorPage() {
   }, [draftHydrated, saveDraftToSession]);
 
   const exportEditorPreview = useCallback(
-    async (targetSide: Side): Promise<Blob | null> => {
+    async (targetSide: Side): Promise<Blob> => {
       const stageRef = targetSide === "front" ? frontStageRef : backStageRef;
       const stageRoot = stageRef.current;
 
       if (!stageRoot) {
-        console.error(`[editor-preview] ${targetSide} stage not mounted`);
-        return null;
+        throw new Error(`${targetSide}StageRef.current is null`);
       }
+      console.info(`[preview] ${targetSide} stage found`);
 
       const exportNode = stageRoot.querySelector("#mockup-export-root");
       if (!(exportNode instanceof HTMLElement)) {
-        console.error(`[editor-preview] ${targetSide} export root not found`);
-        return null;
+        throw new Error(`${targetSide} export root not found`);
       }
 
-      try {
-        await document.fonts?.ready?.catch?.(() => undefined);
-        await nextFrame();
-        const dataUrl = await captureVisualMockupPreview(exportNode);
-        if (!dataUrl) {
-          throw new Error("Capture returned null");
-        }
-
-        const blob = await dataUrlToWebPBlob(dataUrl, 600, 0.85);
-        if (!blob) {
-          throw new Error("WebP conversion returned null");
-        }
-
-        return blob;
-      } catch (error) {
-        console.error(`[editor-preview] ${targetSide} export failed`, error);
-        return null;
+      await document.fonts?.ready?.catch((error) => {
+        console.error("[preview] failed", error);
+      });
+      await nextFrame();
+      const dataUrl = await captureVisualMockupPreview(exportNode);
+      if (!dataUrl) {
+        throw new Error(`${targetSide} capture returned null`);
       }
+
+      console.info(`[preview] ${targetSide} exported`);
+      const blob = await dataUrlToWebPBlob(dataUrl, 600, 0.85);
+      if (!blob) {
+        throw new Error(`${targetSide} WebP conversion returned null`);
+      }
+      console.info(`[preview] ${targetSide} blob created`, { size: blob.size });
+      return blob;
     },
     [],
   );
 
   const handleSaveDesign = useCallback(async () => {
     if (saving) return;
+
+    console.info("[preview] save started");
 
     const baseProductId = productId || category;
 
@@ -918,29 +919,10 @@ export default function EditorPage() {
       setSaveNotice("Design saved. Adding it to your cart...");
 
       const frontPreview = await exportEditorPreview("front");
-      if (!frontPreview) {
-        throw new Error("Front preview export failed");
-      }
-      console.info("[editor-preview] exported", {
-        userProductId: savedUserProductId,
-        side: "front",
-        size: frontPreview.size,
-      });
 
       const backPreview = usedSides.includes("back")
         ? await exportEditorPreview("back")
         : null;
-
-      if (usedSides.includes("back") && !backPreview) {
-        throw new Error("Back preview export failed");
-      }
-      if (backPreview) {
-        console.info("[editor-preview] exported", {
-          userProductId: savedUserProductId,
-          side: "back",
-          size: backPreview.size,
-        });
-      }
 
       const previewFormData = new FormData();
       previewFormData.set("userProductId", savedUserProductId);
@@ -955,7 +937,20 @@ export default function EditorPage() {
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
         body: previewFormData,
       });
-      const previewData = await previewResponse.json().catch(() => null);
+      let previewData: { mockups?: { front?: unknown; back?: unknown }; error?: string; message?: string } | null = null;
+      try {
+        previewData = await previewResponse.json();
+      } catch (error) {
+        console.error("[preview] failed", error);
+        throw error;
+      }
+
+      if (previewResponse.ok) {
+        console.info("[preview] API returned 200", {
+          userProductId: savedUserProductId,
+          mockups: previewData?.mockups,
+        });
+      }
 
       if (!previewResponse.ok || !previewData?.mockups?.front) {
         throw new Error(
@@ -1004,7 +999,8 @@ export default function EditorPage() {
       });
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;
-    } catch {
+    } catch (error) {
+      console.error("[preview] failed", error);
       alert("Error saving design");
     } finally {
       setSaving(false);
