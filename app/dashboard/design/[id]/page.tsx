@@ -892,13 +892,18 @@ export default function EditorPage() {
         "Front preview export",
       );
 
-      const backPreviewBlob = usedSides.includes("back")
-        ? await withTimeout(
+      let backPreviewBlob: Blob | null = null;
+      if (usedSides.includes("back")) {
+        try {
+          backPreviewBlob = await withTimeout(
             exportEditorPreview("back"),
             8000,
             "Back preview export",
-          )
-        : null;
+          );
+        } catch (error) {
+          console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
+        }
+      }
 
       console.info("[editor-preview] local preview ready", {
         side: "front",
