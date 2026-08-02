@@ -981,33 +981,10 @@ export default function EditorPage() {
         sides: usedSides,
       });
 
-      const cartResponse = await fetch("/api/cart/add", {
-          method: "POST",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-          },
-          body: JSON.stringify({
-            productId,
-            variantId: selectedVariant?.variantId || null,
-            userProductId: savedUserProductId,
-            currency: selectedVariant?.currency || null,
-            quantity: 1,
-          }),
-        });
-
-      const cartData = await cartResponse.json().catch(() => null);
-
-      if (!cartResponse.ok || !cartData?.data?.id) {
-        throw new Error(
-          cartData?.error ||
-            cartData?.message ||
-            "The design was saved, but it could not be added to the cart",
-        );
+      const cartItemId = String(data?.cartItem?.id || "").trim();
+      if (!cartItemId) {
+        throw new Error("The design was saved, but it could not be added to the cart");
       }
-
-      const cartItemId = String(cartData.data.id);
 
       sessionStorage.removeItem(editorStorageKey);
       setSaveNotice(
