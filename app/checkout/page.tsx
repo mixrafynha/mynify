@@ -301,6 +301,7 @@ export default function CheckoutPage() {
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressSuggestion, setAddressSuggestion] = useState<AddressSuggestion | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const prepareAssetsRequestKey = useRef("");
   const [productAvailability, setProductAvailability] = useState<ProductAvailability>({
     loading: false,
     checked: false,
@@ -438,9 +439,42 @@ export default function CheckoutPage() {
     }
   }, [fetchVariantsForItems]);
 
+  const prepareCheckoutAssets = useCallback(async () => {
+    if (!items.some((item) => isCustomDesignItem(item))) return;
+
+    const requestKey = items
+      .map((item) => [
+        item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? item.id,
+        item.design_data && typeof item.design_data === "object"
+          ? (item.design_data as Record<string, unknown>).printFileStatus ?? (item.design_data as Record<string, unknown>).printFileRunId ?? null
+          : null,
+        item.print_files && typeof item.print_files === "object"
+          ? (item.print_files as Record<string, unknown>).status ?? null
+          : null,
+      ].join(":"))
+      .join("|");
+
+    if (requestKey === prepareAssetsRequestKey.current) return;
+    prepareAssetsRequestKey.current = requestKey;
+
+    try {
+      await fetch("/api/checkout/prepare-assets", {
+        method: "POST",
+        cache: "no-store",
+      });
+    } catch {
+      // Best-effort prefetch only.
+    }
+  }, [items]);
+
   useEffect(() => {
     loadCart();
   }, [loadCart]);
+
+  useEffect(() => {
+    if (!items.length) return;
+    void prepareCheckoutAssets();
+  }, [items, step, prepareCheckoutAssets]);
 
   useEffect(() => {
     if (!items.some((item) => isCustomDesignItem(item))) return undefined;
@@ -472,7 +506,7 @@ export default function CheckoutPage() {
 
     const intervalId = window.setInterval(() => {
       void loadCart();
-    }, 2500);
+    }, step === "review" ? 2000 : 2500);
 
     return () => window.clearInterval(intervalId);
   }, [items, loadCart]);
@@ -1361,7 +1395,8 @@ export default function CheckoutPage() {
                     {printFilesPending ? (
                       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
                         <p className="text-sm font-black text-white">Preparing your design for printing…</p>
-                        <p className="mt-2 text-sm font-medium text-white/45">This usually takes a few seconds.</p>
+                        <p className="mt-2 text-sm font-medium text-white/45">Delivery options will appear automatically.</p>
+                        <p className="mt-2 text-sm font-medium text-white/35">This usually takes a few seconds.</p>
                       </div>
                     ) : productAvailability.loading ? (
                       <div className="grid gap-3 sm:grid-cols-2">

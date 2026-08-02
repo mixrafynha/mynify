@@ -253,6 +253,45 @@ export async function POST(req: Request) {
         designFront: userProduct.design_front,
         designBack: userProduct.design_back,
       });
+
+      if (backgroundJobs?.queued) {
+        const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
+          ? userProduct.design_data
+          : {};
+        const currentPrintFiles = userProduct.print_files && typeof userProduct.print_files === "object"
+          ? userProduct.print_files
+          : {};
+
+        await supabase
+          .from("user_products")
+          .update({
+            design_data: {
+              ...currentDesignData,
+              printFileStatus: "processing",
+              printFileRequestedAt: new Date().toISOString(),
+              printFileRunId: backgroundJobs.printFileRunId ?? currentDesignData?.printFileRunId ?? null,
+              production: {
+                ...(currentDesignData as Record<string, any>).production || {},
+                jobs: {
+                  ...((currentDesignData as Record<string, any>).production?.jobs || {}),
+                  printFile: {
+                    ...((currentDesignData as Record<string, any>).production?.jobs?.printFile || {}),
+                    status: "processing",
+                    requestedAt: new Date().toISOString(),
+                    runId: backgroundJobs.printFileRunId ?? null,
+                  },
+                },
+              },
+            },
+            print_files: {
+              ...currentPrintFiles,
+              status: "processing",
+              requested_at: new Date().toISOString(),
+              run_id: backgroundJobs.printFileRunId ?? currentPrintFiles?.run_id ?? null,
+            },
+          })
+          .eq("id", userProduct.id);
+      }
     } catch (queueError) {
       // Save must remain JSON-only and must never fail because Trigger.dev/R2 is down.
       // The product row is already persisted with pending asset status.
