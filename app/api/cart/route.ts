@@ -66,39 +66,20 @@ function publicString(value: unknown): string | null {
 
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
-  const checkoutThumbnails =
-    mockups.checkoutThumbnails &&
-    typeof mockups.checkoutThumbnails === "object" &&
-    !Array.isArray(mockups.checkoutThumbnails)
-      ? (mockups.checkoutThumbnails as Record<string, any>)
-      : {};
   return (
-    publicString(checkoutThumbnails.front?.url) ??
-    publicString(mockups.checkout_thumbnail_front_url) ??
-    publicString(mockups.front) ??
     publicString(mockups.checkout_thumbnail_url) ??
-    publicString(mockups.checkoutThumbnailUrl) ??
-    publicString(mockups.mockup_front) ??
-    publicString(mockups.image)
+    publicString(mockups.front) ??
+    publicString(mockups.image) ??
+    publicString(mockups.mockup_front)
   );
 }
 
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
-  const checkoutThumbnails =
-    mockups.checkoutThumbnails &&
-    typeof mockups.checkoutThumbnails === "object" &&
-    !Array.isArray(mockups.checkoutThumbnails)
-      ? (mockups.checkoutThumbnails as Record<string, any>)
-      : {};
   return (
-    publicString(checkoutThumbnails.back?.url) ??
     publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.back) ??
-    publicString(mockups.checkout_thumbnail_url) ??
-    publicString(mockups.checkoutThumbnailUrl) ??
-    publicString(mockups.mockup_back) ??
-    publicString(mockups.image)
+    null
   );
 }
 
@@ -206,15 +187,11 @@ export async function GET() {
         const mockupImage = frontMockupUrl(userProductAssets.mockups);
         const checkoutThumbnailFrontUrl =
           userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-            ? publicString(
-                (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.front?.url,
-              )
+            ? publicString(userProductAssets.mockups.checkout_thumbnail_url)
             : null;
         const checkoutThumbnailBackUrl =
           userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-            ? publicString(
-                (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.back?.url,
-              )
+            ? publicString(userProductAssets.mockups.checkout_thumbnail_back_url)
             : null;
 
         return {
@@ -225,11 +202,11 @@ export async function GET() {
           checkoutThumbnailBackUrl,
           checkoutThumbnailFrontStatus:
             userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-              ? (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.front?.status ?? null
+              ? (userProductAssets.mockups.checkout_thumbnail_status as Record<string, any> | undefined)?.front ?? null
               : null,
           checkoutThumbnailBackStatus:
             userProductAssets.mockups && typeof userProductAssets.mockups === "object"
-              ? (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.back?.status ?? null
+              ? (userProductAssets.mockups.checkout_thumbnail_status as Record<string, any> | undefined)?.back ?? null
               : null,
           product_variants: variantRelation,
           product_uid: gelatoProductUid,

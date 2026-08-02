@@ -27,16 +27,16 @@ function safePart(value: unknown) {
     .slice(0, 100) || "thumbnail";
 }
 
-function currentVersion(existing: Record<string, unknown> | null | undefined) {
-  const thumbnails =
-    existing?.checkoutThumbnails &&
-    typeof existing.checkoutThumbnails === "object" &&
-    !Array.isArray(existing.checkoutThumbnails)
-      ? (existing.checkoutThumbnails as Record<string, any>)
-      : {};
+function statusObject(existing: Record<string, unknown> | null | undefined) {
+  const value = existing?.checkout_thumbnail_status;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, any>)
+    : {};
+}
 
-  const frontVersion = Number(thumbnails.front?.version);
-  const backVersion = Number(thumbnails.back?.version);
+function currentVersion(existing: Record<string, unknown> | null | undefined) {
+  const frontVersion = Number(existing?.checkout_thumbnail_front_version);
+  const backVersion = Number(existing?.checkout_thumbnail_back_version);
   const version = Math.max(
     Number.isFinite(frontVersion) ? frontVersion : 0,
     Number.isFinite(backVersion) ? backVersion : 0,
@@ -49,13 +49,23 @@ function checkoutThumbnailState(
   mockups: Record<string, unknown> | null | undefined,
   side: "front" | "back",
 ) {
-  const checkoutThumbnails =
-    mockups?.checkoutThumbnails &&
-    typeof mockups.checkoutThumbnails === "object" &&
-    !Array.isArray(mockups.checkoutThumbnails)
-      ? (mockups.checkoutThumbnails as Record<string, any>)
-      : {};
-  return checkoutThumbnails[side] ?? null;
+  if (side === "front") {
+    return {
+      url: typeof mockups?.checkout_thumbnail_url === "string" ? mockups.checkout_thumbnail_url : null,
+      status:
+        typeof mockups?.checkout_thumbnail_status === "object" && !Array.isArray(mockups.checkout_thumbnail_status)
+          ? (mockups.checkout_thumbnail_status as Record<string, any>).front ?? null
+          : null,
+    };
+  }
+
+  return {
+    url: typeof mockups?.checkout_thumbnail_back_url === "string" ? mockups.checkout_thumbnail_back_url : null,
+    status:
+      typeof mockups?.checkout_thumbnail_status === "object" && !Array.isArray(mockups.checkout_thumbnail_status)
+        ? (mockups.checkout_thumbnail_status as Record<string, any>).back ?? null
+        : null,
+  };
 }
 
 async function getAuthenticatedUser() {
@@ -155,36 +165,39 @@ export async function POST(req: Request) {
 
       if (record) {
         const mockups = parseJsonIfString<any>(record.mockups, {});
-        const existingThumbnails =
-          mockups.checkoutThumbnails &&
-          typeof mockups.checkoutThumbnails === "object" &&
-          !Array.isArray(mockups.checkoutThumbnails)
-            ? (mockups.checkoutThumbnails as Record<string, any>)
-            : {};
+        const existingStatus = statusObject(mockups);
         const timestamp = new Date().toISOString();
         const nextVersion = currentVersion(mockups);
-        const nextSideThumbnail = {
-          url: uploaded.url,
-          status: "ready",
-          version: nextVersion,
-          source: "editor",
-          updatedAt: timestamp,
-        };
 
         await supabase
           .from("user_products")
           .update({
             mockups: {
               ...mockups,
-              checkoutThumbnails: {
-                ...existingThumbnails,
-                [side]: nextSideThumbnail,
-              },
               checkout_thumbnail_url:
+                side === "front" ? uploaded.url : mockups.checkout_thumbnail_url ?? null,
+              checkout_thumbnail_back_url:
+                side === "back" ? uploaded.url : mockups.checkout_thumbnail_back_url ?? null,
+              checkout_thumbnail_status: {
+                ...existingStatus,
+                [side]: "ready",
+              },
+              checkout_thumbnail_front_version:
                 side === "front"
-                  ? uploaded.url
-                  : mockups.checkout_thumbnail_url ?? existingThumbnails.front?.url ?? null,
-              checkout_thumbnail_status: side === "front" ? "ready" : mockups.checkout_thumbnail_status ?? "ready",
+                  ? nextVersion
+                  : mockups.checkout_thumbnail_front_version ?? null,
+              checkout_thumbnail_back_version:
+                side === "back"
+                  ? nextVersion
+                  : mockups.checkout_thumbnail_back_version ?? null,
+              checkout_thumbnail_front_source:
+                side === "front" ? "editor" : mockups.checkout_thumbnail_front_source ?? null,
+              checkout_thumbnail_back_source:
+                side === "back" ? "editor" : mockups.checkout_thumbnail_back_source ?? null,
+              checkout_thumbnail_front_updated_at:
+                side === "front" ? timestamp : mockups.checkout_thumbnail_front_updated_at ?? null,
+              checkout_thumbnail_back_updated_at:
+                side === "back" ? timestamp : mockups.checkout_thumbnail_back_updated_at ?? null,
             },
           })
           .eq("id", userProductId)
@@ -199,8 +212,8 @@ export async function POST(req: Request) {
 
         const savedMockups = parseJsonIfString<any>(updatedRecord?.mockups ?? {}, {});
         const savedThumbnail = checkoutThumbnailState(savedMockups, side);
-        const frontReady = Boolean(checkoutThumbnailState(savedMockups, "front")?.url);
-        const backReady = Boolean(checkoutThumbnailState(savedMockups, "back")?.url);
+        const frontReady = Boolean(checkoutThumbnailState(savedMockups, "front").url);
+        const backReady = Boolean(checkoutThumbnailState(savedMockups, "back").url);
         const legacyReady = Boolean(savedMockups.checkout_thumbnail_url);
 
         if (!savedThumbnail?.url) {
@@ -230,7 +243,7 @@ export async function POST(req: Request) {
               userProductId,
               side,
               hasLegacyThumbnail: Boolean(mockups.checkout_thumbnail_url),
-              hasCheckoutThumbnails: Boolean(existingThumbnails.front || existingThumbnails.back),
+              hasCheckoutThumbnails: Boolean(mockups.checkout_thumbnail_back_url || mockups.checkout_thumbnail_url),
             }),
           );
           console.log(
@@ -249,7 +262,10 @@ export async function POST(req: Request) {
           ok: true,
           side,
           url: uploaded.url,
-          savedPath: `mockups.checkoutThumbnails.${side}`,
+          savedPath:
+            side === "front"
+              ? "mockups.checkout_thumbnail_url"
+              : "mockups.checkout_thumbnail_back_url",
           urlPresent: Boolean(savedThumbnail?.url),
         });
       }
@@ -259,7 +275,10 @@ export async function POST(req: Request) {
       ok: true,
       side,
       url: uploaded.url,
-      savedPath: `mockups.checkoutThumbnails.${side}`,
+      savedPath:
+        side === "front"
+          ? "mockups.checkout_thumbnail_url"
+          : "mockups.checkout_thumbnail_back_url",
     });
   } catch (error) {
     console.error("CHECKOUT_THUMBNAIL_UPLOAD_ERROR", error);
