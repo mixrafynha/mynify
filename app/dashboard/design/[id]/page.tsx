@@ -937,58 +937,63 @@ export default function EditorPage() {
 
       console.info("[save-design] started", { userProductId: savedUserProductId });
 
-      const frontPreview = await withTimeout(
-        exportEditorPreview("front"),
-        8000,
-        "Front preview export",
-      );
-
-      const backPreview = usedSides.includes("back")
-        ? await withTimeout(
-            exportEditorPreview("back"),
-            8000,
-            "Back preview export",
-          )
-        : null;
-
-      const previewFormData = new FormData();
-      previewFormData.set("userProductId", savedUserProductId);
-      previewFormData.set("front", frontPreview, "front.webp");
-      if (backPreview) {
-        previewFormData.set("back", backPreview, "back.webp");
-      }
-
-      const previewResponse = await withTimeout(
-        fetch("/api/user-products/save-design/mockup-preview", {
-        method: "POST",
-        credentials: "include",
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-        body: previewFormData,
-        }),
-        10000,
-        "Preview upload",
-      );
-      let previewData: { mockups?: { front?: unknown; back?: unknown }; error?: string; message?: string } | null = null;
       try {
-        previewData = await previewResponse.json();
+        const frontPreview = await withTimeout(
+          exportEditorPreview("front"),
+          8000,
+          "Front preview export",
+        );
+
+        const backPreview = usedSides.includes("back")
+          ? await withTimeout(
+              exportEditorPreview("back"),
+              8000,
+              "Back preview export",
+            )
+          : null;
+
+        const previewFormData = new FormData();
+        previewFormData.set("userProductId", savedUserProductId);
+        previewFormData.set("front", frontPreview, "front.webp");
+        if (backPreview) {
+          previewFormData.set("back", backPreview, "back.webp");
+        }
+
+        const previewResponse = await withTimeout(
+          fetch("/api/user-products/save-design/mockup-preview", {
+            method: "POST",
+            credentials: "include",
+            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+            body: previewFormData,
+          }),
+          10000,
+          "Preview upload",
+        );
+        let previewData: { mockups?: { front?: unknown; back?: unknown }; error?: string; message?: string } | null = null;
+        try {
+          previewData = await previewResponse.json();
+        } catch (error) {
+          console.error("[preview] failed", error);
+          throw error;
+        }
+
+        if (previewResponse.ok) {
+          console.info("[preview] API returned 200", {
+            userProductId: savedUserProductId,
+            mockups: previewData?.mockups,
+          });
+        }
+
+        if (!previewResponse.ok || !previewData?.mockups?.front) {
+          throw new Error(
+            previewData?.error ||
+              previewData?.message ||
+              "The design was saved, but preview persistence failed",
+          );
+        }
       } catch (error) {
         console.error("[preview] failed", error);
-        throw error;
-      }
-
-      if (previewResponse.ok) {
-        console.info("[preview] API returned 200", {
-          userProductId: savedUserProductId,
-          mockups: previewData?.mockups,
-        });
-      }
-
-      if (!previewResponse.ok || !previewData?.mockups?.front) {
-        throw new Error(
-          previewData?.error ||
-            previewData?.message ||
-            "The design was saved, but preview persistence failed",
-        );
+        setSaveNotice("Design saved. Preview update failed, but continuing to checkout...");
       }
 
       const cartResponse = await fetch("/api/cart/add", {
