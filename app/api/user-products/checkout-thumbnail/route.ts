@@ -98,6 +98,26 @@ export async function POST(req: Request) {
     const { user, supabase } = auth;
 
     const body = await req.json();
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "[THUMB_API_RECEIVED]",
+        JSON.stringify({
+          userProductId:
+            typeof body?.userProductId === "string" ? body.userProductId : null,
+          side:
+            typeof body?.side === "string" ? body.side : null,
+          payloadSize: JSON.stringify(body || {}).length,
+        }),
+      );
+    }
+
+    if (!body?.dataUrl || typeof body.dataUrl !== "string") {
+      return NextResponse.json(
+        { ok: false, code: "INVALID_PAYLOAD", error: "Missing imageData" },
+        { status: 400 },
+      );
+    }
+
     const parsed = dataUrlToBuffer(body?.dataUrl);
     if (parsed.byteLength > MAX_IMAGE_BYTES) {
       return NextResponse.json({ error: "Thumbnail exceeds 8 MB" }, { status: 413 });
@@ -230,7 +250,7 @@ export async function POST(req: Request) {
           side,
           url: uploaded.url,
           savedPath: `mockups.checkoutThumbnails.${side}`,
-          savedThumbnail,
+          urlPresent: Boolean(savedThumbnail?.url),
         });
       }
     }

@@ -223,6 +223,14 @@ export async function GET() {
           image: mockupImage ?? item.image,
           checkoutThumbnailFrontUrl,
           checkoutThumbnailBackUrl,
+          checkoutThumbnailFrontStatus:
+            userProductAssets.mockups && typeof userProductAssets.mockups === "object"
+              ? (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.front?.status ?? null
+              : null,
+          checkoutThumbnailBackStatus:
+            userProductAssets.mockups && typeof userProductAssets.mockups === "object"
+              ? (userProductAssets.mockups.checkoutThumbnails as Record<string, any> | undefined)?.back?.status ?? null
+              : null,
           product_variants: variantRelation,
           product_uid: gelatoProductUid,
           productUid: gelatoProductUid,

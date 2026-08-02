@@ -923,6 +923,7 @@ export default function EditorPage() {
                 userProductId: savedUserProductId,
                 designId: savedUserProductId,
                 side: thumbSide,
+                designVersion: Date.now(),
               }),
             }),
             15_000,
