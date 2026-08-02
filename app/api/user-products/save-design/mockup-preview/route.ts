@@ -69,6 +69,7 @@ export async function POST(req: Request) {
     }
 
     const backBuffer = await fileToBuffer(formData.get("back") as File | null);
+    const sides = backBuffer ? ["front", "back"] : ["front"];
 
     let frontUpload;
     let backUpload = null;
@@ -83,6 +84,11 @@ export async function POST(req: Request) {
       console.error("[editor-preview] Front upload failed", error);
       return NextResponse.json({ error: "Front preview upload failed" }, { status: 500 });
     }
+    console.info("[editor-preview] uploaded", {
+      userProductId,
+      side: "front",
+      url: frontUpload.url,
+    });
 
     if (backBuffer) {
       try {
@@ -95,6 +101,11 @@ export async function POST(req: Request) {
         console.error("[editor-preview] Back upload failed", error);
         return NextResponse.json({ error: "Back preview upload failed" }, { status: 500 });
       }
+      console.info("[editor-preview] uploaded", {
+        userProductId,
+        side: "back",
+        url: backUpload.url,
+      });
     }
 
     const currentMockups = parseMockups(userProduct.mockups);
@@ -118,6 +129,13 @@ export async function POST(req: Request) {
       console.error("[editor-preview] mockups update failed", updateError);
       return NextResponse.json({ error: "Preview persistence failed" }, { status: 500 });
     }
+
+    console.info("[save-design] mockups updated", {
+      userProductId,
+      sides,
+      front: nextMockups.front ?? null,
+      back: nextMockups.back ?? null,
+    });
 
     return NextResponse.json({
       success: true,

@@ -910,12 +910,22 @@ export default function EditorPage() {
         );
       }
 
+      console.info("[save-design] exporting editor previews", {
+        userProductId: savedUserProductId,
+        sides: usedSides,
+      });
+
       setSaveNotice("Design saved. Adding it to your cart...");
 
       const frontPreview = await exportEditorPreview("front");
       if (!frontPreview) {
         throw new Error("Front preview export failed");
       }
+      console.info("[editor-preview] exported", {
+        userProductId: savedUserProductId,
+        side: "front",
+        size: frontPreview.size,
+      });
 
       const backPreview = usedSides.includes("back")
         ? await exportEditorPreview("back")
@@ -923,6 +933,13 @@ export default function EditorPage() {
 
       if (usedSides.includes("back") && !backPreview) {
         throw new Error("Back preview export failed");
+      }
+      if (backPreview) {
+        console.info("[editor-preview] exported", {
+          userProductId: savedUserProductId,
+          side: "back",
+          size: backPreview.size,
+        });
       }
 
       const previewFormData = new FormData();

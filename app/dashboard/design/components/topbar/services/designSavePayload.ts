@@ -640,10 +640,7 @@ export async function buildDesignSavePayload(
     printFiles: pendingPrintFiles,
     printFileDiagnostics: designData.production.fileDiagnostics,
 
-    mockups: {
-      front: frontSideData.mockupUrl || null,
-      back: backSideData.mockupUrl || null,
-    },
+    mockups: {},
 
     mockupSource: input.productConfig?.__source || input.productConfig?.source || "local",
     mockupUrls: {

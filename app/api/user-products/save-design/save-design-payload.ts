@@ -478,24 +478,6 @@ export async function buildUserProductSavePayload(args: {
     side: "back",
     kind: "print",
   });
-  const frontMockupSource = pickSideImage({
-    body,
-    incomingDesignData,
-    incomingSides,
-    incomingPrintFiles,
-    incomingMockups,
-    side: "front",
-    kind: "mockup",
-  });
-  const backMockupSource = pickSideImage({
-    body,
-    incomingDesignData,
-    incomingSides,
-    incomingPrintFiles,
-    incomingMockups,
-    side: "back",
-    kind: "mockup",
-  });
   const frontEditorSource = pickSideImage({
     body,
     incomingDesignData,
@@ -606,33 +588,13 @@ export async function buildUserProductSavePayload(args: {
     storageKey: backEditorKey || backPrintKey,
   });
 
-  const uploadedMockupFront = await uploadDesignImageToR2({
-    userId,
-    designId,
-    side: "front",
-    kind: "mockups",
-    dataUrl: frontMockupSource,
-    storageKey: frontMockupKey,
-  });
-
-  const uploadedMockupBack = await uploadDesignImageToR2({
-    userId,
-    designId,
-    side: "back",
-    kind: "mockups",
-    dataUrl: backMockupSource,
-    storageKey: backMockupKey,
-  });
-
-  // mockups must be real product mockups/previews only.
-  // Do not fallback to transparent print files here, otherwise the cart thumbnail looks wrong.
   const mockupFront = {
-    key: uploadedMockupFront.key,
-    url: uploadedMockupFront.url || null,
+    key: frontMockupKey || null,
+    url: null,
   };
   const mockupBack = {
-    key: uploadedMockupBack.key,
-    url: uploadedMockupBack.url || null,
+    key: backMockupKey || null,
+    url: null,
   };
 
   const selectedColor = getSelectedColor(body, incomingDesignData);
@@ -728,8 +690,6 @@ export async function buildUserProductSavePayload(args: {
   }) as any;
 
   const bestPreviewImage =
-    mockupFront.url ||
-    mockupBack.url ||
     baseProduct.image ||
     editorFront.url ||
     editorBack.url ||
@@ -750,8 +710,6 @@ export async function buildUserProductSavePayload(args: {
     image: bestPreviewImage,
     images: Array.from(
       new Set([
-        mockupFront.url,
-        mockupBack.url,
         ...baseImages,
       ].filter(Boolean)),
     ),
@@ -770,18 +728,18 @@ export async function buildUserProductSavePayload(args: {
       status: "pending",
     },
     mockups: {
-      front: mockupFront.url,
-      back: mockupBack.url,
+      front: null,
+      back: null,
       keys: {
-        front: uploadedMockupFront.key,
-        back: uploadedMockupBack.key,
+        front: mockupFront.key,
+        back: mockupBack.key,
       },
     },
     print_box: printBox,
     safe_area: safeArea,
     design_image_url: null,
-    ai_mockup_url: mockupFront.url || mockupBack.url || null,
-    ai_mockup_images: [mockupFront.url, mockupBack.url].filter(Boolean),
+    ai_mockup_url: null,
+    ai_mockup_images: [],
     markup: productMarkup,
     final_price: finalPrice,
     status: body.status || "draft",
