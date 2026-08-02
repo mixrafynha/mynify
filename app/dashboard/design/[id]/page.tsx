@@ -164,6 +164,15 @@ async function dataUrlToWebPBlob(
   });
 }
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Failed to convert preview blob to data URL"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function cloneElementsForStorage(elements: ElementType[]) {
   if (!Array.isArray(elements)) return [];
 
@@ -865,6 +874,37 @@ export default function EditorPage() {
         data: { session },
       } = await supabase.auth.getSession();
       const accessToken = session?.access_token || null;
+      const usedSides = resolveUsedDesignSides(frontElements, backElements);
+
+      const frontPreviewBlob = await withTimeout(
+        exportEditorPreview("front"),
+        8000,
+        "Front preview export",
+      );
+
+      const backPreviewBlob = usedSides.includes("back")
+        ? await withTimeout(
+            exportEditorPreview("back"),
+            8000,
+            "Back preview export",
+          )
+        : null;
+
+      console.info("[editor-preview] local preview ready", {
+        side: "front",
+        blobSize: frontPreviewBlob.size,
+        blobType: frontPreviewBlob.type,
+      });
+      if (backPreviewBlob) {
+        console.info("[editor-preview] local preview ready", {
+          side: "back",
+          blobSize: backPreviewBlob.size,
+          blobType: backPreviewBlob.type,
+        });
+      }
+
+      const previewFrontDataUrl = await blobToDataUrl(frontPreviewBlob);
+      const previewBackDataUrl = backPreviewBlob ? await blobToDataUrl(backPreviewBlob) : null;
 
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
@@ -873,7 +913,11 @@ export default function EditorPage() {
           "Content-Type": "application/json",
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
-        body: designPayloadJson,
+        body: JSON.stringify({
+          ...JSON.parse(designPayloadJson),
+          previewFrontDataUrl,
+          previewBackDataUrl,
+        }),
       });
 
       const rawResponseText = await response.text().catch(() => "");
@@ -917,8 +961,6 @@ export default function EditorPage() {
         throw new Error("The design was saved, but its ID was not returned");
       }
 
-      const usedSides = resolveUsedDesignSides(frontElements, backElements);
-
       if (process.env.NODE_ENV === "development") {
         console.log(
           "[THUMBNAIL_USED_SIDES]",
@@ -930,73 +972,14 @@ export default function EditorPage() {
         );
       }
 
-      console.info("[save-design] exporting editor previews", {
-        userProductId: savedUserProductId,
-        sides: usedSides,
-      });
-
       setSaveNotice("Design saved. Adding it to your cart...");
 
       console.info("[save-design] started", { userProductId: savedUserProductId });
 
-      try {
-        const frontPreview = await withTimeout(
-          exportEditorPreview("front"),
-          8000,
-          "Front preview export",
-        );
-
-        const backPreview = usedSides.includes("back")
-          ? await withTimeout(
-              exportEditorPreview("back"),
-              8000,
-              "Back preview export",
-            )
-          : null;
-
-        const previewFormData = new FormData();
-        previewFormData.set("userProductId", savedUserProductId);
-        previewFormData.set("front", frontPreview, "front.webp");
-        if (backPreview) {
-          previewFormData.set("back", backPreview, "back.webp");
-        }
-
-        const previewResponse = await withTimeout(
-          fetch("/api/user-products/save-design/mockup-preview", {
-            method: "POST",
-            credentials: "include",
-            headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-            body: previewFormData,
-          }),
-          10000,
-          "Preview upload",
-        );
-        let previewData: { mockups?: { front?: unknown; back?: unknown }; error?: string; message?: string } | null = null;
-        try {
-          previewData = await previewResponse.json();
-        } catch (error) {
-          console.error("[preview] failed", error);
-          throw error;
-        }
-
-        if (previewResponse.ok) {
-          console.info("[preview] API returned 200", {
-            userProductId: savedUserProductId,
-            mockups: previewData?.mockups,
-          });
-        }
-
-        if (!previewResponse.ok || !previewData?.mockups?.front) {
-          throw new Error(
-            previewData?.error ||
-              previewData?.message ||
-              "The design was saved, but preview persistence failed",
-          );
-        }
-      } catch (error) {
-        console.error("[preview] failed", error);
-        setSaveNotice("Design saved. Preview update failed, but continuing to checkout...");
-      }
+      console.info("[save-design] exporting editor previews", {
+        userProductId: savedUserProductId,
+        sides: usedSides,
+      });
 
       const cartResponse = await fetch("/api/cart/add", {
           method: "POST",

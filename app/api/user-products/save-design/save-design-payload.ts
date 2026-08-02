@@ -405,6 +405,21 @@ export async function uploadDesignImageToR2(
   });
 }
 
+export async function uploadPreviewImageToR2(args: {
+  userId: string;
+  designId: string;
+  side: DesignSide;
+  dataUrl: string;
+}) {
+  return uploadDesignImageToR2({
+    userId: args.userId,
+    designId: args.designId,
+    side: args.side,
+    kind: "mockups",
+    dataUrl: args.dataUrl,
+  });
+}
+
 export async function getBaseProduct(args: {
   supabase: ReturnType<typeof createSupabaseServer>;
   baseProductId: string;

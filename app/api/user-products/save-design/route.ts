@@ -7,6 +7,7 @@ import {
   buildUserProductSavePayload,
   getBaseProduct,
   isUuid,
+  uploadPreviewImageToR2,
 } from "./save-design-payload";
 import { queueDesignAssetJobs } from "./queue-design-assets";
 
@@ -17,8 +18,12 @@ const INLINE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
 const INLINE_SVG_RE = /^data:image\/svg\+xml(?:;charset=utf-8)?,/i;
 const MAX_INLINE_SVG_CHARS = 120_000;
 
-function containsInvalidInlineImage(value: unknown): boolean {
+function containsInvalidInlineImage(value: unknown, path: string[] = []): boolean {
   if (typeof value === "string") {
+    const pathKey = path[path.length - 1] || "";
+    if (pathKey === "previewFrontDataUrl" || pathKey === "previewBackDataUrl") {
+      return false;
+    }
     if (!INLINE_IMAGE_RE.test(value)) return false;
 
     const trimmed = value.trim();
@@ -31,12 +36,12 @@ function containsInvalidInlineImage(value: unknown): boolean {
   }
 
   if (Array.isArray(value)) {
-    return value.some(containsInvalidInlineImage);
+    return value.some((entry, index) => containsInvalidInlineImage(entry, [...path, String(index)]));
   }
 
   if (value && typeof value === "object") {
-    return Object.values(value as Record<string, unknown>).some(
-      containsInvalidInlineImage,
+    return Object.entries(value as Record<string, unknown>).some(([key, entry]) =>
+      containsInvalidInlineImage(entry, [...path, key]),
     );
   }
 
@@ -227,6 +232,39 @@ export async function POST(req: Request) {
       designId,
       baseProduct,
     });
+
+    const previewFrontDataUrl = typeof body.previewFrontDataUrl === "string" ? body.previewFrontDataUrl : null;
+    const previewBackDataUrl = typeof body.previewBackDataUrl === "string" ? body.previewBackDataUrl : null;
+
+    if (previewFrontDataUrl || previewBackDataUrl) {
+      const currentMockups = savePayload.mockups && typeof savePayload.mockups === "object"
+        ? (savePayload.mockups as Record<string, unknown>)
+        : {};
+
+      const nextMockups: Record<string, unknown> = { ...currentMockups };
+
+      if (previewFrontDataUrl) {
+        const frontPreview = await uploadPreviewImageToR2({
+          userId: user.id,
+          designId,
+          side: "front",
+          dataUrl: previewFrontDataUrl,
+        });
+        nextMockups.front = frontPreview.url ?? null;
+      }
+
+      if (previewBackDataUrl) {
+        const backPreview = await uploadPreviewImageToR2({
+          userId: user.id,
+          designId,
+          side: "back",
+          dataUrl: previewBackDataUrl,
+        });
+        nextMockups.back = backPreview.url ?? null;
+      }
+
+      (savePayload as Record<string, any>).mockups = nextMockups;
+    }
 
     const { data: userProduct, error: saveError } = await supabase
       .from("user_products")
