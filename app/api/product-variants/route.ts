@@ -17,6 +17,7 @@ type ColorRow = {
   color: string | null;
   color_hex: string | null;
   mockup_front: string | null;
+  mockup_back: string | null;
   thumbnail: string | null;
   position: number | null;
 };
@@ -45,7 +46,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseServer();
     const { data: colorRows, error: colorsError } = await supabase
       .from("product_colors")
-      .select("id, product_id, color, color_hex, mockup_front, thumbnail, position")
+      .select("id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position")
       .eq("product_id", productId)
       .order("position", { ascending: true });
 

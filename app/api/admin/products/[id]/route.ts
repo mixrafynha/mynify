@@ -1,9 +1,37 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { refreshProductVariantSellingPrices } from "@/lib/gelato/catalog-sync";
 
 export const dynamic = "force-dynamic";
+
+type VariantInput = {
+  size?: string;
+  sku?: string;
+  stock?: number;
+  price?: number;
+  name?: string;
+};
+
+type ColorInput = {
+  name?: string;
+  color?: string;
+  hex?: string;
+  color_hex?: string;
+  mockup_front?: string;
+  mockup_back?: string;
+  thumbnail?: string;
+};
+
+function clean(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function cleanArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+}
 
 /* ================= GET PRODUCT ================= */
 export async function GET(
@@ -28,11 +56,17 @@ export async function GET(
     );
   }
 
-  const supabase = createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("products")
-    .select("*")
+    .select(`
+      *,
+      product_colors (
+        *,
+        product_variants (*)
+      )
+    `)
     .eq("id", id)
     .maybeSingle();
 
@@ -76,13 +110,21 @@ export async function PATCH(
   }
 
   const body = await req.json();
-  const supabase = createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   const updatePayload: Record<string, any> = {};
 
-  if (body.title !== undefined) updatePayload.title = body.title;
-  if (body.description !== undefined) updatePayload.description = body.description;
-  if (body.price !== undefined) updatePayload.price = body.price;
+  if (body.title !== undefined) updatePayload.title = clean(body.title);
+  if (body.slug !== undefined) updatePayload.slug = clean(body.slug);
+  if (body.description !== undefined) updatePayload.description = clean(body.description);
+  if (body.category !== undefined) updatePayload.category = clean(body.category) || null;
+  if (body.price !== undefined) updatePayload.price = Number(body.price);
+  if (body.discount_price !== undefined) {
+    updatePayload.discount_price =
+      body.discount_price === null || body.discount_price === ""
+        ? null
+        : Number(body.discount_price);
+  }
   if (body.profit_markup_percentage !== undefined) {
     const markup = Number(body.profit_markup_percentage);
     if (!Number.isFinite(markup) || markup < 0 || markup > 500) {
@@ -93,8 +135,42 @@ export async function PATCH(
     }
     updatePayload.profit_markup_percentage = markup;
   }
-  if (body.image !== undefined) updatePayload.image = body.image;
+  if (body.image !== undefined) updatePayload.image = clean(body.image) || null;
+  if (body.images !== undefined) updatePayload.images = cleanArray(body.images);
+  if (body.tags !== undefined) updatePayload.tags = cleanArray(body.tags);
   if (body.is_active !== undefined) updatePayload.is_active = body.is_active;
+  if (body.is_active !== undefined) {
+    updatePayload.status = body.is_active ? "active" : "draft";
+  }
+
+  if (updatePayload.price !== undefined && (!Number.isFinite(updatePayload.price) || updatePayload.price <= 0)) {
+    return NextResponse.json(
+      { error: "Invalid price" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    updatePayload.discount_price !== undefined &&
+    updatePayload.discount_price !== null &&
+    (!Number.isFinite(updatePayload.discount_price) || updatePayload.discount_price < 0)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid discount price" },
+      { status: 400 }
+    );
+  }
+
+  if (
+    body.image !== undefined &&
+    body.images !== undefined &&
+    (!updatePayload.image || updatePayload.images.length === 0)
+  ) {
+    return NextResponse.json(
+      { error: "At least one image is required" },
+      { status: 400 }
+    );
+  }
 
   const { data, error } = await supabase
     .from("products")
@@ -110,12 +186,190 @@ export async function PATCH(
     );
   }
 
-  if (body.profit_markup_percentage !== undefined) {
-    const refreshResult = await refreshProductVariantSellingPrices(id);
-    return NextResponse.json({ data, pricing: refreshResult });
+  const colors: ColorInput[] = Array.isArray(body.colors) ? body.colors : [];
+  const variants: VariantInput[] = Array.isArray(body.variants) ? body.variants : [];
+
+  if (body.colors !== undefined || body.variants !== undefined) {
+    const { data: existingColors, error: existingColorsError } = await supabase
+      .from("product_colors")
+      .select("id")
+      .eq("product_id", id);
+
+    if (existingColorsError) {
+      return NextResponse.json(
+        { error: existingColorsError.message },
+        { status: 500 }
+      );
+    }
+
+    const existingColorIds = (existingColors ?? []).map((color) => color.id);
+
+    if (existingColorIds.length > 0) {
+      const { error: deleteVariantsError } = await supabase
+        .from("product_variants")
+        .delete()
+        .in("product_color_id", existingColorIds);
+
+      if (deleteVariantsError) {
+        return NextResponse.json(
+          { error: deleteVariantsError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { error: deleteColorsError } = await supabase
+      .from("product_colors")
+      .delete()
+      .eq("product_id", id);
+
+    if (deleteColorsError) {
+      return NextResponse.json(
+        { error: deleteColorsError.message },
+        { status: 500 }
+      );
+    }
+
+    const image =
+      updatePayload.image ??
+      clean(body.image) ??
+      data?.image ??
+      null;
+    const images =
+      updatePayload.images ??
+      (body.images !== undefined
+        ? cleanArray(body.images)
+        : Array.isArray(data?.images)
+          ? data.images
+          : []);
+    const fallbackBackImage = images[1] || null;
+
+    const colorRows = colors
+      .map((color, index) => {
+        const colorName = clean(color.color) || clean(color.name);
+
+        return {
+          product_id: id,
+          color: colorName,
+          color_hex: clean(color.color_hex) || clean(color.hex) || "#ffffff",
+          mockup_front: clean(color.mockup_front) || image,
+          mockup_back: clean(color.mockup_back) || fallbackBackImage,
+          thumbnail: clean(color.thumbnail) || image,
+          position: index,
+        };
+      })
+      .filter((color) => color.color);
+
+    const finalColorRows =
+      colorRows.length > 0 && image
+        ? colorRows
+        : image
+          ? [
+              {
+                product_id: id,
+                color: "Default",
+                color_hex: "#ffffff",
+                mockup_front: image,
+                mockup_back: fallbackBackImage,
+                thumbnail: image,
+                position: 0,
+              },
+            ]
+          : [];
+
+    if (finalColorRows.length > 0) {
+      const { data: createdColors, error: colorsError } = await supabase
+        .from("product_colors")
+        .insert(finalColorRows)
+        .select("id");
+
+      if (colorsError || !createdColors) {
+        return NextResponse.json(
+          { error: colorsError?.message || "Failed to update product colors" },
+          { status: 500 }
+        );
+      }
+
+      const basePrice =
+        updatePayload.price ??
+        Number(data?.price ?? 0);
+
+      const cleanVariants = variants
+        .map((variant) => ({
+          size: clean(variant.size),
+          sku: clean(variant.sku) || null,
+          stock: Number.isFinite(Number(variant.stock)) ? Number(variant.stock) : 0,
+          price: Number.isFinite(Number(variant.price)) ? Number(variant.price) : basePrice,
+          name: clean(variant.name) || clean(variant.size),
+        }))
+        .filter((variant) => variant.size);
+
+      const finalVariants =
+        cleanVariants.length > 0
+          ? cleanVariants
+          : [
+              {
+                size: "Default",
+                sku: null,
+                stock: 0,
+                price: basePrice,
+                name: "Default",
+              },
+            ];
+
+      const variantRows = createdColors.flatMap((color) =>
+        finalVariants.map((variant) => ({
+          product_color_id: color.id,
+          size: variant.size,
+          sku: variant.sku,
+          stock: variant.stock,
+          price: variant.price,
+          name: variant.name,
+        }))
+      );
+
+      const { error: variantsError } = await supabase
+        .from("product_variants")
+        .insert(variantRows);
+
+      if (variantsError) {
+        return NextResponse.json(
+          { error: variantsError.message },
+          { status: 500 }
+        );
+      }
+    }
   }
 
-  return NextResponse.json({ data });
+  if (body.profit_markup_percentage !== undefined) {
+    const refreshResult = await refreshProductVariantSellingPrices(id);
+    const { data: fullProduct } = await supabase
+      .from("products")
+      .select(`
+        *,
+        product_colors (
+          *,
+          product_variants (*)
+        )
+      `)
+      .eq("id", id)
+      .maybeSingle();
+    return NextResponse.json({ data: fullProduct ?? data, pricing: refreshResult });
+  }
+
+  const { data: fullProduct } = await supabase
+    .from("products")
+    .select(`
+      *,
+      product_colors (
+        *,
+        product_variants (*)
+      )
+    `)
+    .eq("id", id)
+    .maybeSingle();
+
+  return NextResponse.json({ data: fullProduct ?? data });
 }
 
 /* ================= DELETE PRODUCT ================= */
@@ -141,7 +395,7 @@ export async function DELETE(
     );
   }
 
-  const supabase = createSupabaseServer();
+  const supabase = createSupabaseAdmin();
 
   const { error } = await supabase
     .from("products")
