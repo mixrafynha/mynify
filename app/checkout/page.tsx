@@ -210,6 +210,60 @@ function resolvePreviewImageSources(item: CartItem) {
   return { front, back };
 }
 
+type ThumbnailReadiness = "pending" | "processing" | "ready" | "failed" | "missing";
+
+function resolveThumbnailReadiness(item: CartItem): ThumbnailReadiness {
+  const previewImages = resolvePreviewImageSources(item);
+  if (previewImages.front) return "ready";
+
+  const designData = item.design_data ?? item.designData ?? {};
+  const designRecord =
+    designData && typeof designData === "object" && !Array.isArray(designData)
+      ? (designData as Record<string, unknown>)
+      : {};
+  const directMockups =
+    item.mockups && typeof item.mockups === "object" && !Array.isArray(item.mockups)
+      ? (item.mockups as Record<string, unknown>)
+      : {};
+  const designMockups =
+    designRecord.mockups && typeof designRecord.mockups === "object" && !Array.isArray(designRecord.mockups)
+      ? (designRecord.mockups as Record<string, unknown>)
+      : {};
+  const backgroundJobs =
+    designRecord.backgroundJobs && typeof designRecord.backgroundJobs === "object" && !Array.isArray(designRecord.backgroundJobs)
+      ? (designRecord.backgroundJobs as Record<string, unknown>)
+      : {};
+  const production =
+    designRecord.production && typeof designRecord.production === "object" && !Array.isArray(designRecord.production)
+      ? (designRecord.production as Record<string, unknown>)
+      : {};
+  const productionJobs =
+    production.jobs && typeof production.jobs === "object" && !Array.isArray(production.jobs)
+      ? (production.jobs as Record<string, unknown>)
+      : {};
+  const checkoutThumbnailJob =
+    productionJobs.checkoutThumbnail &&
+    typeof productionJobs.checkoutThumbnail === "object" &&
+    !Array.isArray(productionJobs.checkoutThumbnail)
+      ? (productionJobs.checkoutThumbnail as Record<string, unknown>)
+      : {};
+
+  const candidates = [
+    directMockups.checkout_thumbnail_status,
+    designMockups.checkout_thumbnail_status,
+    designRecord.checkoutThumbnailStatus,
+    backgroundJobs.checkoutThumbnail,
+    checkoutThumbnailJob.status ?? null,
+  ];
+
+  for (const candidate of candidates) {
+    const status = normalizePrintFileStatus(candidate);
+    if (status) return status;
+  }
+
+  return "missing";
+}
+
 type PrintFileReadiness = {
   status: "pending" | "processing" | "ready" | "failed" | "missing";
   source: "user_product" | "cart_item" | "design_data" | "frontend" | "missing";
@@ -414,9 +468,12 @@ export default function CheckoutPage() {
     });
   }, []);
 
-  const loadCart = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadCart = useCallback(async (options?: { background?: boolean }) => {
+    const background = options?.background === true;
+    if (!background) {
+      setLoading(true);
+      setError(null);
+    }
 
     try {
       console.info("[checkout] fetching cart");
@@ -428,10 +485,14 @@ export default function CheckoutPage() {
       setItems(nextItems);
       void fetchVariantsForItems(nextItems);
     } catch {
-      setItems([]);
-      setError("We could not load your cart. Please try again.");
+      if (!background) {
+        setItems([]);
+        setError("We could not load your cart. Please try again.");
+      }
     } finally {
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
     }
   }, [fetchVariantsForItems]);
 
@@ -472,6 +533,24 @@ export default function CheckoutPage() {
     if (!items.length) return;
     void prepareCheckoutAssets();
   }, [items, step, prepareCheckoutAssets]);
+
+  useEffect(() => {
+    const shouldPoll = items.some((item) => {
+      if (!isCustomDesignItem(item)) return false;
+      const thumbnailState = resolveThumbnailReadiness(item);
+      return thumbnailState === "pending" || thumbnailState === "processing" || thumbnailState === "missing";
+    });
+
+    if (!shouldPoll) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadCart({ background: true });
+    }, 2500);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [items, loadCart]);
 
   useEffect(() => {
     try {
