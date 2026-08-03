@@ -403,7 +403,6 @@ export function ProductRight({
         productColorId: selectedVariant.product_color_id ?? null,
         product_color_id: selectedVariant.product_color_id ?? null,
         title: product?.title ?? null,
-        image: product?.image ?? product?.images?.[0] ?? null,
         source: "product-page",
         savedAt: new Date().toISOString(),
       };

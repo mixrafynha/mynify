@@ -343,7 +343,7 @@ function buildVariantSelection(
     "selectedCurrency",
     "productCurrency",
   ])?.toUpperCase() || null;
-  const image = readSearchParam(params, ["variantImage", "image", "imageUrl"]);
+  const image = readSearchParam(params, ["variantImage"]);
 
   if (
     !variantId &&
@@ -370,8 +370,8 @@ function buildVariantSelection(
     price,
     variantPrice: price,
     currency,
-    image,
-    imageUrl: image,
+    image: null,
+    imageUrl: null,
   };
 }
 
@@ -1192,8 +1192,8 @@ export default function EditorPage() {
       price: option.price == null ? current?.price || null : String(option.price),
       variantPrice: option.price == null ? current?.variantPrice || null : String(option.price),
       currency: current?.currency || null,
-      image: option.imageUrl || current?.image || null,
-      imageUrl: option.imageUrl || current?.imageUrl || null,
+      image: null,
+      imageUrl: null,
     }));
 
     const frontUrl = option.frontUrl;
