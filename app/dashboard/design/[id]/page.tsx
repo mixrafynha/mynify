@@ -985,11 +985,18 @@ export default function EditorPage() {
       stepContext.step = "preview";
       let frontPreviewBlob: Blob | null = null;
       if (usedSides.includes("front")) {
-        frontPreviewBlob = await withTimeout(
-          exportEditorPreview("front"),
-          8000,
-          "Front preview export",
-        );
+        try {
+          frontPreviewBlob = await withTimeout(
+            exportEditorPreview("front"),
+            8000,
+            "Front preview export",
+          );
+        } catch (error) {
+          console.warn(
+            "[editor-preview] front preview export failed; continuing without front thumbnail",
+            error,
+          );
+        }
       }
 
       let backPreviewBlob: Blob | null = null;
