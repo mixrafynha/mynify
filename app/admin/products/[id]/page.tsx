@@ -421,13 +421,13 @@ export default function EditProductPage() {
         JSON.stringify(variants) !== initialVariantsRef.current;
       const colorsChanged =
         JSON.stringify(colors) !== initialColorsRef.current;
-
       const payload: Record<string, unknown> = {
-        ...form,
         title: form.title.trim(),
         slug: slugify(form.slug),
         description: form.description.trim(),
         category: form.category.trim(),
+        is_active: form.is_active,
+        tags: form.tags,
         price: form.price,
         discount_price:
           form.discount_price === "" ? null : Number(form.discount_price),
