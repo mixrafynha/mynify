@@ -145,7 +145,15 @@ export async function POST(req: Request) {
     const nextMockups = {
       ...currentMockups,
       front: frontUpload.url,
+      checkout_thumbnail_url: frontUpload.url,
+      checkout_thumbnail_front_url: frontUpload.url,
       ...(backUpload?.url ? { back: backUpload.url } : {}),
+      ...(backUpload?.url
+        ? {
+            checkout_thumbnail_back_url: backUpload.url,
+            checkout_thumbnail_back: backUpload.url,
+          }
+        : {}),
     };
     const nextDesignData = {
       ...currentDesignData,

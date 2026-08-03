@@ -290,6 +290,8 @@ export async function POST(req: Request) {
           dataUrl: previewFrontDataUrl,
         });
         nextMockups.front = frontPreview.url ?? null;
+        nextMockups.checkout_thumbnail_url = frontPreview.url ?? null;
+        nextMockups.checkout_thumbnail_front_url = frontPreview.url ?? null;
       }
 
       if (previewBackDataUrl) {
@@ -300,6 +302,8 @@ export async function POST(req: Request) {
           dataUrl: previewBackDataUrl,
         });
         nextMockups.back = backPreview.url ?? null;
+        nextMockups.checkout_thumbnail_back_url = backPreview.url ?? null;
+        nextMockups.checkout_thumbnail_back = backPreview.url ?? null;
       }
 
       (savePayload as Record<string, any>).mockups = nextMockups;
