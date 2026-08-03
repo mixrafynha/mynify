@@ -150,6 +150,25 @@ async function getAuthenticatedSupabase(req: Request) {
 
 
 export async function POST(req: Request) {
+  const saveContext: {
+    step:
+      | "auth"
+      | "payload"
+      | "base-product"
+      | "build-payload"
+      | "upload-preview"
+      | "persist-user-product"
+      | "queue-assets"
+      | "persist-job-state"
+      | "cart";
+    userProductId: string | null;
+    designId: string | null;
+  } = {
+    step: "auth",
+    userProductId: null,
+    designId: null,
+  };
+
   try {
     const { supabase, user } = await getAuthenticatedSupabase(req);
 
@@ -160,6 +179,7 @@ export async function POST(req: Request) {
       );
     }
 
+    saveContext.step = "payload";
     const body = await req.json();
     const receivedDesignData = body?.design_data || body?.designData || {};
     const receivedSides = body?.sides || receivedDesignData?.sides || {};
@@ -222,6 +242,7 @@ export async function POST(req: Request) {
       );
     }
 
+    saveContext.step = "base-product";
     const { baseProduct, productError } = await getBaseProduct({
       supabase,
       baseProductId: String(baseProductId),
@@ -239,7 +260,9 @@ export async function POST(req: Request) {
     const designId = isUuid(body.designId || body.id)
       ? String(body.designId || body.id)
       : crypto.randomUUID();
+    saveContext.designId = designId;
 
+    saveContext.step = "build-payload";
     const savePayload = await buildUserProductSavePayload({
       supabase,
       body,
@@ -252,6 +275,7 @@ export async function POST(req: Request) {
     const previewBackDataUrl = typeof body.previewBackDataUrl === "string" ? body.previewBackDataUrl : null;
 
     if (previewFrontDataUrl || previewBackDataUrl) {
+      saveContext.step = "upload-preview";
       const currentMockups = savePayload.mockups && typeof savePayload.mockups === "object"
         ? (savePayload.mockups as Record<string, unknown>)
         : {};
@@ -281,6 +305,13 @@ export async function POST(req: Request) {
       (savePayload as Record<string, any>).mockups = nextMockups;
     }
 
+    console.info("[save-design] started", {
+      userProductId: null,
+      designId,
+      activeSide: body?.side ?? null,
+    });
+
+    saveContext.step = "persist-user-product";
     const { data: userProduct, error: saveError } = await supabase
       .from("user_products")
       .upsert(savePayload, {
@@ -297,6 +328,7 @@ export async function POST(req: Request) {
         { status: 500 },
       );
     }
+    saveContext.userProductId = userProduct.id;
 
     const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
       ? userProduct.design_data
@@ -319,54 +351,91 @@ export async function POST(req: Request) {
       selectedSides,
     });
 
-    void queueDesignAssetJobs({
+    console.info("[save-design] record persisted", {
+      userProductId: userProduct.id,
+      designId,
+    });
+
+    saveContext.step = "queue-assets";
+    const backgroundJobs = await queueDesignAssetJobs({
       userProductId: userProduct.id,
       designData: userProduct.design_data,
       designFront: userProduct.design_front,
       designBack: userProduct.design_back,
-    })
-      .then(async (backgroundJobs) => {
-        if (!backgroundJobs?.queued) return;
+    });
 
-        await supabase
-          .from("user_products")
-          .update({
-            design_data: {
-              ...currentDesignData,
-              printFileStatus: "processing",
-              printFileRequestedAt: new Date().toISOString(),
-              printFileRunId: backgroundJobs.printFileRunId ?? currentDesignData?.printFileRunId ?? null,
-              production: {
-                ...(currentDesignData as Record<string, any>).production || {},
-                jobs: {
-                  ...((currentDesignData as Record<string, any>).production?.jobs || {}),
-                  printFile: {
-                    ...((currentDesignData as Record<string, any>).production?.jobs?.printFile || {}),
-                    status: "processing",
-                    requestedAt: new Date().toISOString(),
-                    runId: backgroundJobs.printFileRunId ?? null,
-                  },
-                },
-              },
-            },
-            print_files: {
-              ...currentPrintFiles,
+    if (backgroundJobs?.queued) {
+      saveContext.step = "persist-job-state";
+      const requestedAt = new Date().toISOString();
+      const nextDesignData = {
+        ...currentDesignData,
+        printFileStatus: "processing",
+        printFileRequestedAt: requestedAt,
+        printFileRunId: backgroundJobs.printFileRunId ?? currentDesignData?.printFileRunId ?? null,
+        checkoutThumbnailStatus:
+          backgroundJobs.thumbnailRunId || currentDesignData?.checkoutThumbnailRunId
+            ? "processing"
+            : currentDesignData?.checkoutThumbnailStatus ?? null,
+        checkoutThumbnailRequestedAt:
+          backgroundJobs.thumbnailRunId ? requestedAt : currentDesignData?.checkoutThumbnailRequestedAt ?? null,
+        checkoutThumbnailRunId:
+          backgroundJobs.thumbnailRunId ?? currentDesignData?.checkoutThumbnailRunId ?? null,
+        production: {
+          ...(currentDesignData as Record<string, any>).production || {},
+          jobs: {
+            ...((currentDesignData as Record<string, any>).production?.jobs || {}),
+            printFile: {
+              ...((currentDesignData as Record<string, any>).production?.jobs?.printFile || {}),
               status: "processing",
-              requested_at: new Date().toISOString(),
-              run_id: backgroundJobs.printFileRunId ?? currentPrintFiles?.run_id ?? null,
+              requestedAt,
+              runId: backgroundJobs.printFileRunId ?? null,
             },
-          })
-          .eq("id", userProduct.id);
-      })
-      .catch((queueError) => {
-        console.error("DESIGN_ASSET_QUEUE_ERROR", queueError);
-      });
+            checkoutThumbnail: {
+              ...((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail || {}),
+              status: backgroundJobs.thumbnailRunId ? "processing" : ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.status ?? null),
+              requestedAt: backgroundJobs.thumbnailRunId ? requestedAt : ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.requestedAt ?? null),
+              runId: backgroundJobs.thumbnailRunId ?? ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.runId ?? null),
+            },
+          },
+        },
+      };
+      const nextPrintFiles = {
+        ...currentPrintFiles,
+        status: backgroundJobs.printFileRunId ? "processing" : currentPrintFiles?.status ?? "pending",
+        requested_at: backgroundJobs.printFileRunId ? requestedAt : currentPrintFiles?.requested_at ?? null,
+        run_id: backgroundJobs.printFileRunId ?? currentPrintFiles?.run_id ?? null,
+      };
+      const nextMockups =
+        userProduct.mockups && typeof userProduct.mockups === "object"
+          ? { ...(userProduct.mockups as Record<string, unknown>) }
+          : {};
+
+      if (backgroundJobs.thumbnailRunId) {
+        nextMockups.checkout_thumbnail_status = "processing";
+        nextMockups.checkout_thumbnail_requested_at = requestedAt;
+        nextMockups.checkout_thumbnail_run_id = backgroundJobs.thumbnailRunId;
+      }
+
+      const { error: jobStateError } = await supabase
+        .from("user_products")
+        .update({
+          design_data: nextDesignData,
+          print_files: nextPrintFiles,
+          mockups: nextMockups,
+        })
+        .eq("id", userProduct.id);
+
+      if (jobStateError) {
+        throw new Error(`Failed to persist background job state: ${jobStateError.message}`);
+      }
+    }
 
     const shouldAddToCart = body.addToCart !== false;
     let cartItem = null;
     let cartMode: "extended" | "basic" | null = null;
 
     if (shouldAddToCart) {
+      saveContext.step = "cart";
       const cartResult = await addSavedDesignToCart({
         supabase,
         userId: user.id,
@@ -397,10 +466,16 @@ export async function POST(req: Request) {
       product: userProduct,
       cartItem,
       cartMode,
-      backgroundJobs: null,
+      backgroundJobs,
       redirectTo: "/cart",
     });
   } catch (error) {
+    console.error("[save-design] failed", {
+      step: saveContext.step,
+      userProductId: saveContext.userProductId,
+      designId: saveContext.designId,
+      error: error instanceof Error ? error.message : error,
+    });
     console.error("Erro ao guardar produto com design:", error);
 
     return NextResponse.json(

@@ -64,6 +64,7 @@ type EditorVariantSelection = {
 type SearchParamReader = { get: (name: string) => string | null };
 
 type StoredEditorDraft = {
+  designId?: string | null;
   side?: Side;
   zoom?: number;
   frontZoom?: number;
@@ -397,6 +398,30 @@ export default function EditorPage() {
   const isHistoryAction = useRef(false);
   const pendingSaveAfterAuthRef = useRef(false);
   const baseMockupsRef = useRef<ProductDisplayConfig["mockups"]>({});
+  const draftDesignIdRef = useRef<string | null>(null);
+  const latestStateRef = useRef<{
+    side: Side;
+    elements: ElementType[];
+    frontElements: ElementType[];
+    backElements: ElementType[];
+    mockupColor: string;
+    selectedVariant: EditorVariantSelection | null;
+    productConfig: ProductDisplayConfig | null;
+    productConfigLoaded: boolean;
+    draftHydrated: boolean;
+    saving: boolean;
+  }>({
+    side: "front",
+    elements: [],
+    frontElements: [],
+    backElements: [],
+    mockupColor: "#ffffff",
+    selectedVariant: null,
+    productConfig: null,
+    productConfigLoaded: false,
+    draftHydrated: false,
+    saving: false,
+  });
 
   useEffect(() => {
     setSelectedVariant(initialSelectedVariant);
@@ -640,6 +665,7 @@ export default function EditorPage() {
 
   const buildStoredDraft = useCallback(
     (): StoredEditorDraft => ({
+      designId: draftDesignIdRef.current,
       side,
       // Keep legacy `zoom` for old consumers, but store each side separately.
       zoom,
@@ -678,6 +704,14 @@ export default function EditorPage() {
     }
   }, [buildStoredDraft, editorStorageKey]);
 
+  const ensureDraftDesignId = useCallback(() => {
+    if (!draftDesignIdRef.current) {
+      draftDesignIdRef.current = crypto.randomUUID();
+    }
+
+    return draftDesignIdRef.current;
+  }, []);
+
   useEffect(() => {
     if (!productConfigLoaded) return;
 
@@ -705,6 +739,10 @@ export default function EditorPage() {
         }
 
         const parsed = JSON.parse(saved) as StoredEditorDraft;
+        draftDesignIdRef.current =
+          typeof parsed.designId === "string" && parsed.designId.trim()
+            ? parsed.designId.trim()
+            : null;
 
         const loadedFront = Array.isArray(parsed.frontElements)
           ? cloneElementsForStorage(parsed.frontElements)
@@ -744,6 +782,7 @@ export default function EditorPage() {
         if (cancelled) return;
 
         const empty = { frontElements: [], backElements: [] };
+        draftDesignIdRef.current = null;
         setFrontElements([]);
         setBackElements([]);
         setSelectedId(null);
@@ -769,6 +808,32 @@ export default function EditorPage() {
     if (!draftHydrated) return;
     saveDraftToSession();
   }, [draftHydrated, saveDraftToSession]);
+
+  useEffect(() => {
+    latestStateRef.current = {
+      side,
+      elements,
+      frontElements,
+      backElements,
+      mockupColor,
+      selectedVariant,
+      productConfig,
+      productConfigLoaded,
+      draftHydrated,
+      saving,
+    };
+  }, [
+    side,
+    elements,
+    frontElements,
+    backElements,
+    mockupColor,
+    selectedVariant,
+    productConfig,
+    productConfigLoaded,
+    draftHydrated,
+    saving,
+  ]);
 
   const exportEditorPreview = useCallback(
     async (targetSide: Side): Promise<Blob> => {
@@ -823,7 +888,7 @@ export default function EditorPage() {
   );
 
   const handleSaveDesign = useCallback(async () => {
-    if (saving) return;
+    if (latestStateRef.current.saving) return;
 
     console.info("[preview] save started");
     console.info("[save-design] handler entered");
@@ -838,6 +903,28 @@ export default function EditorPage() {
     }
 
     try {
+      const stepContext: {
+        step:
+          | "validate"
+          | "auth"
+          | "sync-state"
+          | "serialize"
+          | "preview"
+          | "request"
+          | "response";
+        userProductId: string | null;
+        designId: string | null;
+      } = {
+        step: "validate",
+        userProductId: null,
+        designId: draftDesignIdRef.current,
+      };
+
+      if (!latestStateRef.current.productConfigLoaded || !latestStateRef.current.draftHydrated) {
+        throw new Error("Editor is still preparing the current design. Please try again in a moment.");
+      }
+
+      stepContext.step = "auth";
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -853,20 +940,26 @@ export default function EditorPage() {
 
       setSaving(true);
       setSaveNotice(null);
+      stepContext.step = "sync-state";
+      await nextFrame();
+      const snapshot = latestStateRef.current;
+      const resolvedDesignId = ensureDraftDesignId();
+      stepContext.designId = resolvedDesignId;
       saveDraftToSession();
 
+      stepContext.step = "serialize";
       const designPayloadPromise = buildDesignSavePayload({
           productId: baseProductId,
           category,
-          side,
-          elements,
-          frontElements,
-          backElements,
-          mockupColor,
-          color: mockupColor,
-          variantId: selectedVariant?.variantId || null,
-          selectedVariant,
-          productConfig,
+          side: snapshot.side,
+          elements: snapshot.elements,
+          frontElements: snapshot.frontElements,
+          backElements: snapshot.backElements,
+          mockupColor: snapshot.mockupColor,
+          color: snapshot.mockupColor,
+          variantId: snapshot.selectedVariant?.variantId || null,
+          selectedVariant: snapshot.selectedVariant,
+          productConfig: snapshot.productConfig,
           onUploadInlineImage: async (dataUrl, elementId) => {
             const uploadResponse = await fetch("/api/user-products/design-element-image", {
               method: "POST",
@@ -884,8 +977,12 @@ export default function EditorPage() {
 
       const designPayload = await designPayloadPromise;
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
-      const usedSides = resolveUsedDesignSides(frontElements, backElements);
+      const usedSides = resolveUsedDesignSides(
+        snapshot.frontElements,
+        snapshot.backElements,
+      );
 
+      stepContext.step = "preview";
       let frontPreviewBlob: Blob | null = null;
       if (usedSides.includes("front")) {
         frontPreviewBlob = await withTimeout(
@@ -931,6 +1028,7 @@ export default function EditorPage() {
       const backData = parsedDesignPayload?.design_data?.sides?.back ?? null;
       const requestPayload = {
         ...parsedDesignPayload,
+        designId: resolvedDesignId,
         previewFrontDataUrl,
         previewBackDataUrl,
       };
@@ -942,6 +1040,18 @@ export default function EditorPage() {
         payloadSize: JSON.stringify(requestPayload).length,
       });
 
+      console.info("[save-design] started", {
+        userProductId: null,
+        designId: resolvedDesignId,
+        activeSide: snapshot.side,
+      });
+      console.info("[save-design] canvas serialized", {
+        designId: resolvedDesignId,
+        hasFront: Boolean(frontData),
+        hasBack: Boolean(backData),
+      });
+
+      stepContext.step = "request";
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
         credentials: "include",
@@ -980,6 +1090,7 @@ export default function EditorPage() {
         );
       }
 
+      stepContext.step = "response";
       const savedUserProductId = String(
         data?.designId ??
           data?.userProductId ??
@@ -992,6 +1103,8 @@ export default function EditorPage() {
       if (!savedUserProductId) {
         throw new Error("The design was saved, but its ID was not returned");
       }
+      stepContext.userProductId = savedUserProductId;
+      draftDesignIdRef.current = savedUserProductId;
 
       if (process.env.NODE_ENV === "development") {
         console.log(
@@ -1006,11 +1119,9 @@ export default function EditorPage() {
 
       setSaveNotice("Design saved. Adding it to your cart...");
 
-      console.info("[save-design] started", { userProductId: savedUserProductId });
-
-      console.info("[save-design] exporting editor previews", {
+      console.info("[save-design] record persisted", {
         userProductId: savedUserProductId,
-        sides: usedSides,
+        designId: resolvedDesignId,
       });
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
@@ -1039,24 +1150,23 @@ export default function EditorPage() {
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;
     } catch (error) {
-      console.error("[save-design] failed", error);
+      console.error("[save-design] failed", {
+        step: "client",
+        designId: draftDesignIdRef.current,
+        error: error instanceof Error ? error.message : error,
+      });
       console.error("[preview] failed", error);
-      alert("Error saving design");
+      const message = error instanceof Error ? error.message : "Error saving design";
+      setSaveNotice(message);
+      alert(message);
     } finally {
       setSaving(false);
     }
   }, [
     productId,
     category,
-    side,
-    elements,
-    saving,
     saveDraftToSession,
-    frontElements,
-    backElements,
-    mockupColor,
-    selectedVariant,
-    productConfig,
+    ensureDraftDesignId,
     editorStorageKey,
     router,
     exportEditorPreview,
