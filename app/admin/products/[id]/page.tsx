@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -55,6 +55,21 @@ type LocalImage = {
   preview: string;
 };
 
+type VariantPayload = {
+  size: string;
+  sku: string;
+  stock: number;
+  price: number;
+  name: string;
+};
+
+type ColorPayload = {
+  name: string;
+  color: string;
+  hex: string;
+  color_hex: string;
+};
+
 const emptyVariant: Variant = {
   size: "",
   sku: "",
@@ -97,6 +112,45 @@ function dedupeVariantsBySignature(variants: Variant[]) {
   });
 }
 
+function normalizeVariantPayload(
+  variants: Variant[],
+  fallbackPrice: number,
+): VariantPayload[] {
+  return dedupeVariantsBySignature(
+    variants
+      .map((variant) => ({
+        size: variant.size.trim(),
+        sku: variant.sku.trim(),
+        stock: Number(variant.stock) || 0,
+        price: Number(variant.price) || fallbackPrice,
+        name: (variant.name || variant.size).trim(),
+      }))
+      .filter((variant) => variant.size || variant.sku),
+  ).map((variant) => ({
+    size: variant.size,
+    sku: variant.sku,
+    stock: variant.stock,
+    price: variant.price,
+    name: variant.name || variant.size,
+  }));
+}
+
+function normalizeColorPayload(colors: ColorOption[]): ColorPayload[] {
+  return colors
+    .map((color) => {
+      const name = color.name.trim();
+      const hex = color.hex.trim();
+
+      return {
+        name,
+        color: name,
+        hex,
+        color_hex: hex,
+      };
+    })
+    .filter((color) => color.name);
+}
+
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -107,6 +161,8 @@ export default function EditProductPage() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
   const [localImages, setLocalImages] = useState<LocalImage[]>([]);
+  const initialVariantsRef = useRef("[]");
+  const initialColorsRef = useRef("[]");
 
   const [form, setForm] = useState<ProductForm>({
     title: "",
@@ -193,7 +249,7 @@ export default function EditProductPage() {
             })) ?? [{ ...emptyVariant }],
         );
 
-        setForm({
+        const nextForm: ProductForm = {
           title: product.title || "",
           slug: product.slug || "",
           description: product.description || "",
@@ -210,7 +266,15 @@ export default function EditProductPage() {
           tags: Array.isArray(product.tags) ? product.tags : [],
           colors: colors.length ? colors : [{ ...emptyColor }],
           variants: variants.length ? variants : [{ ...emptyVariant }],
-        });
+        };
+
+        setForm(nextForm);
+        initialVariantsRef.current = JSON.stringify(
+          normalizeVariantPayload(nextForm.variants, Number(product.price || 0)),
+        );
+        initialColorsRef.current = JSON.stringify(
+          normalizeColorPayload(nextForm.colors),
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : "Something went wrong.");
       } finally {
@@ -352,51 +416,42 @@ export default function EditProductPage() {
 
       if (!mainImage) throw new Error("Product image is required.");
 
-      const variants = dedupeVariantsBySignature(
-        form.variants
-          .map((v) => ({
-            id: v.id,
-            size: v.size.trim(),
-            sku: v.sku.trim(),
-            stock: Number(v.stock) || 0,
-            price: Number(v.price) || form.price,
-            name: v.name || v.size.trim(),
-          }))
-          .filter((v) => v.size || v.sku),
-      );
+      const variants = normalizeVariantPayload(form.variants, form.price);
+      const colors = normalizeColorPayload(form.colors);
+      const variantsChanged =
+        JSON.stringify(variants) !== initialVariantsRef.current;
+      const colorsChanged =
+        JSON.stringify(colors) !== initialColorsRef.current;
 
-      const colors = form.colors
-        .map((c) => ({
-          id: c.id,
-          name: c.name.trim(),
-          color: c.name.trim(),
-          hex: c.hex.trim(),
-          color_hex: c.hex.trim(),
+      const payload: Record<string, unknown> = {
+        ...form,
+        title: form.title.trim(),
+        slug: slugify(form.slug),
+        description: form.description.trim(),
+        category: form.category.trim(),
+        price: form.price,
+        discount_price:
+          form.discount_price === "" ? null : Number(form.discount_price),
+        profit_markup_percentage: form.profit_markup_percentage,
+        image: mainImage,
+        images: allImages,
+      };
+
+      if (variantsChanged || colorsChanged) {
+        payload.variants = variants;
+        payload.colors = colors.map((color) => ({
+          ...color,
           thumbnail: mainImage,
           mockup_front: mainImage,
           mockup_back: allImages[1] || null,
-        }))
-        .filter((c) => c.name);
+        }));
+      }
 
       const res = await fetch(`/api/admin/products/${productId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({
-          ...form,
-          title: form.title.trim(),
-          slug: slugify(form.slug),
-          description: form.description.trim(),
-          category: form.category.trim(),
-          price: form.price,
-          discount_price:
-            form.discount_price === "" ? null : Number(form.discount_price),
-          profit_markup_percentage: form.profit_markup_percentage,
-          image: mainImage,
-          images: allImages,
-          variants,
-          colors,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const json = await res.json().catch(() => null);
