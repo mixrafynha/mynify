@@ -91,7 +91,7 @@ export async function POST(req: Request) {
 
     const backBuffer = await fileToBuffer(formData.get("back") as File | null);
     const sides = backBuffer ? ["front", "back"] : ["front"];
-    console.info("[mockup-preview] request received", {
+    console.info("[mockup-preview] received", {
       userProductId,
       hasFront: Boolean(frontBuffer),
       hasBack: Boolean(backBuffer),
@@ -217,7 +217,7 @@ export async function POST(req: Request) {
       updatedCartItems = Array.isArray(updatedCartRows) ? updatedCartRows.length : 0;
     }
 
-    console.info("[mockup-preview] database updated", {
+    console.info("[mockup-preview] updated", {
       userProductId,
       cartItemsUpdated: updatedCartItems,
     });

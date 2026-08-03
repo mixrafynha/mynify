@@ -969,13 +969,16 @@ export default function EditorPage() {
         throw new Error(payload?.error || "Preview persistence failed");
       }
 
-      console.info("[canvas-preview] persisted", {
+      console.info("[preview-flow] persisted", {
         userProductId: args.userProductId,
         frontUrl: payload?.frontUrl ?? null,
         backUrl: payload?.backUrl ?? null,
       });
 
-      return true;
+      return {
+        frontUrl: typeof payload?.frontUrl === "string" ? payload.frontUrl : null,
+        backUrl: typeof payload?.backUrl === "string" ? payload.backUrl : null,
+      };
     },
     [exportEditorPreview],
   );
@@ -1277,18 +1280,30 @@ export default function EditorPage() {
       });
 
       try {
-        const capturedPreviews = await captureCheckoutPreviews({
+        const previews = await captureCheckoutPreviews({
           userProductId: savedUserProductId,
           frontPreviewBlob,
           backPreviewBlob,
           usedSides,
         });
 
-        await persistPreviewMockups({
+        console.info("[preview-flow] captured", {
           userProductId: savedUserProductId,
-          frontPreviewBlob: capturedPreviews.front,
-          backPreviewBlob: capturedPreviews.back,
+          hasFront: Boolean(previews.front),
+          hasBack: Boolean(previews.back),
+        });
+
+        const result = await persistPreviewMockups({
+          userProductId: savedUserProductId,
+          frontPreviewBlob: previews.front,
+          backPreviewBlob: previews.back,
           usedSides,
+        });
+
+        console.info("[preview-flow] persisted", {
+          userProductId: savedUserProductId,
+          frontUrl: result.frontUrl ?? null,
+          backUrl: result.backUrl ?? null,
         });
       } catch (error) {
         console.error("[canvas-preview] failed", {
