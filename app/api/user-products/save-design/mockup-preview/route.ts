@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function previewKey(userProductId: string, side: "front" | "back") {
-  return `user-products/${userProductId}/preview/${side}.webp`;
+  return `user-products/${userProductId}/mockups/${side}.webp`;
 }
 
 function parseMockups(value: unknown): Record<string, unknown> {
@@ -175,7 +175,12 @@ export async function POST(req: Request) {
         },
         back: {
           ...currentBack,
-          ...(backUpload?.url ? { mockupUrl: backUpload.url } : {}),
+          ...(backUpload?.url
+            ? {
+                mockupUrl: backUpload.url,
+                designImageUrl: backUpload.url,
+              }
+            : {}),
         },
       },
     };
@@ -205,6 +210,7 @@ export async function POST(req: Request) {
           image: frontUpload.url,
           mockup_url: frontUpload.url,
         })
+        .eq("user_id", user.id)
         .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`)
         .select("id");
 
