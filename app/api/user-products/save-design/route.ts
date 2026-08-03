@@ -372,14 +372,6 @@ export async function POST(req: Request) {
         printFileStatus: "processing",
         printFileRequestedAt: requestedAt,
         printFileRunId: backgroundJobs.printFileRunId ?? currentDesignData?.printFileRunId ?? null,
-        checkoutThumbnailStatus:
-          backgroundJobs.thumbnailRunId || currentDesignData?.checkoutThumbnailRunId
-            ? "processing"
-            : currentDesignData?.checkoutThumbnailStatus ?? null,
-        checkoutThumbnailRequestedAt:
-          backgroundJobs.thumbnailRunId ? requestedAt : currentDesignData?.checkoutThumbnailRequestedAt ?? null,
-        checkoutThumbnailRunId:
-          backgroundJobs.thumbnailRunId ?? currentDesignData?.checkoutThumbnailRunId ?? null,
         production: {
           ...(currentDesignData as Record<string, any>).production || {},
           jobs: {
@@ -389,12 +381,6 @@ export async function POST(req: Request) {
               status: "processing",
               requestedAt,
               runId: backgroundJobs.printFileRunId ?? null,
-            },
-            checkoutThumbnail: {
-              ...((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail || {}),
-              status: backgroundJobs.thumbnailRunId ? "processing" : ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.status ?? null),
-              requestedAt: backgroundJobs.thumbnailRunId ? requestedAt : ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.requestedAt ?? null),
-              runId: backgroundJobs.thumbnailRunId ?? ((currentDesignData as Record<string, any>).production?.jobs?.checkoutThumbnail?.runId ?? null),
             },
           },
         },
@@ -409,12 +395,6 @@ export async function POST(req: Request) {
         userProduct.mockups && typeof userProduct.mockups === "object"
           ? { ...(userProduct.mockups as Record<string, unknown>) }
           : {};
-
-      if (backgroundJobs.thumbnailRunId) {
-        nextMockups.checkout_thumbnail_status = "processing";
-        nextMockups.checkout_thumbnail_requested_at = requestedAt;
-        nextMockups.checkout_thumbnail_run_id = backgroundJobs.thumbnailRunId;
-      }
 
       const { error: jobStateError } = await supabase
         .from("user_products")

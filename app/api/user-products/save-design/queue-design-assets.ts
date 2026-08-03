@@ -54,32 +54,20 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
   });
 
   try {
-    const [printResult, thumbnailResult] = await Promise.allSettled([
-      tasks.trigger("generate-design-print-file", {
-        userProductId: input.userProductId,
-        sides,
-      }),
-      tasks.trigger("generate-checkout-thumbnail", {
-        userProductId: input.userProductId,
-        sides,
-      }),
-    ]);
-    const printRun = printResult.status === "fulfilled" ? printResult.value : null;
-    const thumbnailRun = thumbnailResult.status === "fulfilled" ? thumbnailResult.value : null;
+    const printRun = await tasks.trigger("generate-design-print-file", {
+      userProductId: input.userProductId,
+      sides,
+    });
     const triggerErrors = {
-      printFile: printResult.status === "rejected" ? serializeQueueError(printResult.reason) : null,
-      thumbnail: thumbnailResult.status === "rejected" ? serializeQueueError(thumbnailResult.reason) : null,
+      printFile: null,
+      thumbnail: "disabled",
     };
-
-    if (!printRun && !thumbnailRun) {
-      throw new Error(`Print file: ${triggerErrors.printFile}; thumbnail: ${triggerErrors.thumbnail}`);
-    }
 
     console.info("[save-design] design asset jobs triggered", {
       userProductId: input.userProductId,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
-      thumbnailRunId: (thumbnailRun as any)?.id ?? null,
+      thumbnailRunId: null,
       triggerErrors: JSON.stringify(triggerErrors),
     });
 
@@ -87,7 +75,7 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
       queued: true,
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
-      thumbnailRunId: (thumbnailRun as any)?.id ?? null,
+      thumbnailRunId: null,
       triggerErrors,
     };
   } catch (error) {
