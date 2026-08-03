@@ -99,8 +99,7 @@ function dedupeVariantsBySignature(variants: Variant[]) {
     const signature = [
       String(variant.size || "").trim().toLowerCase(),
       String(variant.sku || "").trim().toLowerCase(),
-      Number(variant.price || 0),
-      Number(variant.stock || 0),
+      String(variant.name || variant.size || "").trim().toLowerCase(),
     ].join("|");
 
     if (seen.has(signature)) {

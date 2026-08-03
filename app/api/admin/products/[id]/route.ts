@@ -48,8 +48,7 @@ function dedupeVariants(variants: NormalizedVariant[]) {
     const signature = [
       variant.size.trim().toLowerCase(),
       String(variant.sku || "").trim().toLowerCase(),
-      Number(variant.price || 0),
-      Number(variant.stock || 0),
+      variant.name.trim().toLowerCase(),
     ].join("|");
 
     if (seen.has(signature)) {
