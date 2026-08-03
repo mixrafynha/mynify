@@ -1274,24 +1274,31 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
-      const capturedPreviews = await captureCheckoutPreviews({
-        userProductId: savedUserProductId,
-        frontPreviewBlob,
-        backPreviewBlob,
-        usedSides,
-      });
+      try {
+        const capturedPreviews = await captureCheckoutPreviews({
+          userProductId: savedUserProductId,
+          frontPreviewBlob,
+          backPreviewBlob,
+          usedSides,
+        });
 
-      void persistPreviewMockups({
-        userProductId: savedUserProductId,
-        frontPreviewBlob: capturedPreviews.front,
-        backPreviewBlob: capturedPreviews.back,
-        usedSides,
-      }).catch((error) => {
+        void persistPreviewMockups({
+          userProductId: savedUserProductId,
+          frontPreviewBlob: capturedPreviews.front,
+          backPreviewBlob: capturedPreviews.back,
+          usedSides,
+        }).catch((error) => {
+          console.error("[canvas-preview] failed", {
+            userProductId: savedUserProductId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      } catch (error) {
         console.error("[canvas-preview] failed", {
           userProductId: savedUserProductId,
           error: error instanceof Error ? error.message : String(error),
         });
-      });
+      }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
