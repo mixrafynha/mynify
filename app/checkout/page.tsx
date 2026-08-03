@@ -213,9 +213,6 @@ function resolvePreviewImageSources(item: CartItem) {
 type ThumbnailReadiness = "pending" | "processing" | "ready" | "failed" | "missing";
 
 function resolveThumbnailReadiness(item: CartItem): ThumbnailReadiness {
-  const previewImages = resolvePreviewImageSources(item);
-  if (previewImages.front) return "ready";
-
   const designData = item.design_data ?? item.designData ?? {};
   const designRecord =
     designData && typeof designData === "object" && !Array.isArray(designData)
@@ -247,6 +244,14 @@ function resolveThumbnailReadiness(item: CartItem): ThumbnailReadiness {
     !Array.isArray(productionJobs.checkoutThumbnail)
       ? (productionJobs.checkoutThumbnail as Record<string, unknown>)
       : {};
+  const persistedFrontThumbnail =
+    cleanUrl(typeof directMockups.checkout_thumbnail_url === "string" ? directMockups.checkout_thumbnail_url : null) ||
+    cleanUrl(typeof directMockups.checkout_thumbnail_front_url === "string" ? directMockups.checkout_thumbnail_front_url : null) ||
+    cleanUrl(typeof designMockups.checkout_thumbnail_url === "string" ? designMockups.checkout_thumbnail_url : null) ||
+    cleanUrl(typeof designMockups.checkout_thumbnail_front_url === "string" ? designMockups.checkout_thumbnail_front_url : null) ||
+    cleanUrl(typeof item.previewFront === "string" ? item.previewFront : null);
+
+  if (persistedFrontThumbnail) return "ready";
 
   const candidates = [
     directMockups.checkout_thumbnail_status,
