@@ -174,6 +174,12 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function blobToPreviewFile(blob: Blob, side: Side) {
+  return new File([blob], `${side}-preview.webp`, {
+    type: blob.type || "image/webp",
+  });
+}
+
 function cloneElementsForStorage(elements: ElementType[]) {
   if (!Array.isArray(elements)) return [];
 
@@ -887,6 +893,77 @@ export default function EditorPage() {
     [],
   );
 
+  const persistPreviewMockups = useCallback(
+    async (args: {
+      userProductId: string;
+      frontPreviewBlob: Blob | null;
+      backPreviewBlob: Blob | null;
+      usedSides: Side[];
+    }) => {
+      let frontBlob = args.frontPreviewBlob;
+      let backBlob = args.backPreviewBlob;
+
+      if (!frontBlob && args.usedSides.includes("front")) {
+        try {
+          frontBlob = await withTimeout(
+            exportEditorPreview("front"),
+            12000,
+            "Front preview export retry",
+          );
+        } catch (error) {
+          console.warn("[editor-preview] front preview retry failed", error);
+        }
+      }
+
+      if (!backBlob && args.usedSides.includes("back")) {
+        try {
+          backBlob = await withTimeout(
+            exportEditorPreview("back"),
+            12000,
+            "Back preview export retry",
+          );
+        } catch (error) {
+          console.warn("[editor-preview] back preview retry failed", error);
+        }
+      }
+
+      if (!frontBlob) {
+        console.warn("[editor-preview] preview upload skipped: missing front preview", {
+          userProductId: args.userProductId,
+          usedSides: args.usedSides,
+        });
+        return false;
+      }
+
+      const formData = new FormData();
+      formData.append("userProductId", args.userProductId);
+      formData.append("front", blobToPreviewFile(frontBlob, "front"));
+      if (backBlob) {
+        formData.append("back", blobToPreviewFile(backBlob, "back"));
+      }
+
+      const response = await fetch("/api/user-products/save-design/mockup-preview", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "Preview persistence failed");
+      }
+
+      console.info("[editor-preview] preview mockups persisted", {
+        userProductId: args.userProductId,
+        hasFront: true,
+        hasBack: Boolean(backBlob),
+      });
+
+      return true;
+    },
+    [exportEditorPreview],
+  );
+
   const handleSaveDesign = useCallback(async () => {
     if (latestStateRef.current.saving) return;
 
@@ -1131,6 +1208,20 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
+      try {
+        await persistPreviewMockups({
+          userProductId: savedUserProductId,
+          frontPreviewBlob,
+          backPreviewBlob,
+          usedSides,
+        });
+      } catch (error) {
+        console.error("[editor-preview] preview mockup persistence failed", {
+          userProductId: savedUserProductId,
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
         console.warn("[save-design] cart item missing in response", {
@@ -1177,6 +1268,7 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     exportEditorPreview,
+    persistPreviewMockups,
   ]);
 
   const handleAuthSuccess = useCallback(() => {
