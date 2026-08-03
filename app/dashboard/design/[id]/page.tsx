@@ -9,6 +9,7 @@ import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
 import {
+  captureVisualMockupPreviewBlob,
   captureVisualMockupPreview,
 } from "@/app/dashboard/design/components/preview/services/previewCapture";
 import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
@@ -124,9 +125,9 @@ function nextFrame() {
   });
 }
 
-async function dataUrlToWebPBlob(
-  dataUrl: string,
-  maxSize = 600,
+async function imageBlobToWebPBlob(
+  sourceBlob: Blob,
+  maxSize = 1400,
   quality = 0.85,
 ): Promise<Blob | null> {
   if (typeof window === "undefined") {
@@ -161,7 +162,7 @@ async function dataUrlToWebPBlob(
       canvas.toBlob((blob) => resolve(blob), "image/webp", quality);
     };
     image.onerror = () => resolve(null);
-    image.src = dataUrl;
+    image.src = URL.createObjectURL(sourceBlob);
   });
 }
 
@@ -914,17 +915,24 @@ export default function EditorPage() {
         console.error("[preview] failed", error);
       });
       await nextFrame();
-      const dataUrl = await withTimeout(
-        captureVisualMockupPreview(exportNode),
+      const previewBlob = await withTimeout(
+        captureVisualMockupPreviewBlob(exportNode, {
+          maxDimension: 1400,
+          pixelRatio: 1.25,
+        }),
         PREVIEW_EXPORT_TIMEOUT_MS,
         `${targetSide} preview export`,
       );
-      if (!dataUrl) {
-        throw new Error(`${targetSide} capture returned null`);
+      if (!previewBlob) {
+        throw new Error(`${targetSide} capture returned an empty blob`);
       }
 
-      console.info(`[preview] ${targetSide} exported`);
-      const blob = await dataUrlToWebPBlob(dataUrl, 600, 0.85);
+      console.info(`[preview] ${targetSide} exported`, {
+        width: 1400,
+        pixelRatio: 1.25,
+        blobSize: previewBlob.size,
+      });
+      const blob = await imageBlobToWebPBlob(previewBlob, 1400, 0.82);
       if (!blob) {
         throw new Error(`${targetSide} WebP conversion returned null`);
       }

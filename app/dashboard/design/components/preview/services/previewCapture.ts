@@ -1,4 +1,4 @@
-import { toPng } from "html-to-image";
+import { toBlob, toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
 import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
@@ -137,6 +137,8 @@ function waitForImages(container: HTMLElement, strict = false) {
 }
 
 function shouldCaptureNode(target: HTMLElement) {
+  if (target.dataset.excludeFromPreview !== undefined) return false;
+
   return !CAPTURE_HIDDEN_SELECTORS.some(
     (selector) => target.matches(selector) || Boolean(target.closest(selector)),
   );
@@ -352,6 +354,88 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
     return await toPng(container, {
       cacheBust: true,
       pixelRatio: 1,
+      backgroundColor: "transparent",
+      width,
+      height,
+      canvasWidth: width,
+      canvasHeight: height,
+      style: {
+        margin: "0",
+        transform: "none",
+        transformOrigin: "top left",
+      },
+      filter: (target) => {
+        if (!(target instanceof HTMLElement)) return true;
+        return shouldCaptureNode(target);
+      },
+    });
+  } catch {
+    return null;
+  } finally {
+    container.remove();
+  }
+}
+
+export async function captureVisualMockupPreviewBlob(
+  node: HTMLElement | null,
+  options?: {
+    maxDimension?: number;
+    pixelRatio?: number;
+  },
+) {
+  if (!node) return null;
+
+  const maxDimension = Math.max(1, Math.min(options?.maxDimension ?? 1400, 1400));
+  const pixelRatio = Math.max(1, Math.min(options?.pixelRatio ?? 1.25, 1.5));
+  const rect = node.getBoundingClientRect();
+  const sourceWidth = positiveNumber(rect.width, EXPORT_MOCKUP_AREA.width);
+  const sourceHeight = positiveNumber(rect.height, EXPORT_MOCKUP_AREA.height);
+  const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * scale));
+  const height = Math.max(1, Math.round(sourceHeight * scale));
+
+  const container = document.createElement("div");
+  container.setAttribute("data-visual-mockup-capture", "true");
+  container.style.position = "fixed";
+  container.style.left = "0";
+  container.style.top = "0";
+  container.style.width = `${width}px`;
+  container.style.height = `${height}px`;
+  container.style.overflow = "hidden";
+  container.style.background = "transparent";
+  container.style.pointerEvents = "none";
+  container.style.zIndex = "-2147483647";
+  container.style.isolation = "isolate";
+  container.style.contain = "layout paint style size";
+
+  const clone = node.cloneNode(true) as HTMLElement;
+  clone.removeAttribute("id");
+  clone.setAttribute("data-visual-mockup-root-clone", "true");
+  clone.style.position = "absolute";
+  clone.style.left = "0";
+  clone.style.top = "0";
+  clone.style.width = `${width}px`;
+  clone.style.height = `${height}px`;
+  clone.style.transform = "none";
+  clone.style.transformOrigin = "top left";
+  clone.style.margin = "0";
+  clone.style.pointerEvents = "none";
+  clone.style.contain = "layout paint style size";
+
+  prepareClonedImages(clone);
+  container.appendChild(clone);
+  document.body.appendChild(container);
+
+  try {
+    await ensureRuntimeGoogleFonts(container);
+    await waitForFonts();
+    await nextFrame();
+    await waitForImages(container);
+    await nextFrame();
+
+    return await toBlob(container, {
+      cacheBust: false,
+      pixelRatio,
       backgroundColor: "transparent",
       width,
       height,
