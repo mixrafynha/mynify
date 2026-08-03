@@ -87,9 +87,9 @@ function parseMockups(value: unknown): Record<string, unknown> | null {
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
+    publicString(mockups.front) ??
     publicString(mockups.checkout_thumbnail_url) ??
     publicString(mockups.checkout_thumbnail_front_url) ??
-    publicString(mockups.front) ??
     publicString(mockups.image) ??
     publicString(mockups.mockup_front)
   );
@@ -98,9 +98,9 @@ function frontMockupUrl(mockups: Record<string, unknown> | null): string | null 
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
+    publicString(mockups.back) ??
     publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.checkout_thumbnail_back) ??
-    publicString(mockups.back) ??
     null
   );
 }

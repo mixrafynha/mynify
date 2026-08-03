@@ -76,6 +76,10 @@ function sideUrlPatch(side: DesignSide | undefined, url: string, key: string) {
   };
 }
 
+function publicString(value: unknown) {
+  return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
+}
+
 export const generateCheckoutThumbnail = task({
   id: "generate-checkout-thumbnail",
   retry: {
@@ -183,9 +187,15 @@ export const generateCheckoutThumbnail = task({
       if (updateError) throw updateError;
 
       if (primary) {
+        const persistedCanvasFront = publicString(existingMockups.front);
+        const persistedCanvasBack = publicString(existingMockups.back);
+        const preferredCartImage =
+          persistedCanvasFront ||
+          persistedCanvasBack ||
+          primary.url;
         const { error: cartUpdateError } = await supabase
           .from("cart_items")
-          .update({ image: primary.url, mockup_url: primary.url })
+          .update({ image: preferredCartImage, mockup_url: preferredCartImage })
           .or(`user_product_id.eq.${payload.userProductId},design_id.eq.${payload.userProductId}`);
 
         if (cartUpdateError) {
