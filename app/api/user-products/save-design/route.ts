@@ -193,6 +193,7 @@ export async function POST(req: Request) {
         nextMockups.front = frontPreview.url ?? null;
         nextMockups.checkout_thumbnail_url = frontPreview.url ?? null;
         nextMockups.checkout_thumbnail_front_url = frontPreview.url ?? null;
+        (savePayload as Record<string, any>).design_image_url = frontPreview.url ?? null;
       }
 
       if (previewBackDataUrl) {

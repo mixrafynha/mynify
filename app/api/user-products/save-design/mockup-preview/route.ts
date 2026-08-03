@@ -166,7 +166,12 @@ export async function POST(req: Request) {
         ...currentSides,
         front: {
           ...currentFront,
-          ...(frontUpload.url ? { mockupUrl: frontUpload.url } : {}),
+          ...(frontUpload.url
+            ? {
+                mockupUrl: frontUpload.url,
+                designImageUrl: frontUpload.url,
+              }
+            : {}),
         },
         back: {
           ...currentBack,
@@ -180,6 +185,7 @@ export async function POST(req: Request) {
       .update({
         mockups: nextMockups,
         design_data: nextDesignData,
+        ...(frontUpload.url ? { design_image_url: frontUpload.url } : {}),
       })
       .eq("id", userProductId)
       .eq("user_id", user.id)
