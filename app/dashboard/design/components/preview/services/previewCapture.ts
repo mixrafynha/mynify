@@ -1,4 +1,4 @@
-import { toBlob, toPng } from "html-to-image";
+import { toBlob, toCanvas, toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
 import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
@@ -383,16 +383,51 @@ export async function captureVisualMockupPreviewBlob(
     pixelRatio?: number;
   },
 ) {
-  if (!node) return null;
+  if (!node) {
+    throw new Error("Front preview element not found");
+  }
+
+  if (!node.isConnected) {
+    throw new Error("Front preview element is detached from the DOM");
+  }
+
+  const computedStyle = window.getComputedStyle(node);
+  if (
+    computedStyle.display === "none" ||
+    computedStyle.visibility === "hidden" ||
+    computedStyle.opacity === "0"
+  ) {
+    throw new Error("Front preview element is not visible");
+  }
 
   const maxDimension = Math.max(1, Math.min(options?.maxDimension ?? 1400, 1400));
   const pixelRatio = Math.max(1, Math.min(options?.pixelRatio ?? 1.25, 1.5));
   const rect = node.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    throw new Error(`Front preview has invalid dimensions: ${rect.width}x${rect.height}`);
+  }
+
   const sourceWidth = positiveNumber(rect.width, EXPORT_MOCKUP_AREA.width);
   const sourceHeight = positiveNumber(rect.height, EXPORT_MOCKUP_AREA.height);
   const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
   const width = Math.max(1, Math.round(sourceWidth * scale));
   const height = Math.max(1, Math.round(sourceHeight * scale));
+
+  const sourceImages = Array.from(node.querySelectorAll("img"));
+  await document.fonts.ready;
+  await Promise.all(
+    sourceImages.map(async (image) => {
+      if (image.complete && image.naturalWidth > 0) return;
+      await image.decode().catch(() => undefined);
+    }),
+  );
+
+  console.info("[preview-capture] node ready", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    width: rect.width,
+    height: rect.height,
+    imageCount: sourceImages.length,
+  });
 
   const container = document.createElement("div");
   container.setAttribute("data-visual-mockup-capture", "true");
@@ -433,7 +468,7 @@ export async function captureVisualMockupPreviewBlob(
     await waitForImages(container);
     await nextFrame();
 
-    return await toBlob(container, {
+    const captureOptions = {
       cacheBust: false,
       pixelRatio,
       backgroundColor: "transparent",
@@ -446,13 +481,55 @@ export async function captureVisualMockupPreviewBlob(
         transform: "none",
         transformOrigin: "top left",
       },
-      filter: (target) => {
+      filter: (target: HTMLElement) => {
+        if (target === container) return true;
         if (!(target instanceof HTMLElement)) return true;
+        if (target.dataset.visualMockupRootClone === "true") return true;
         return shouldCaptureNode(target);
       },
+    } as const;
+
+    let blob = await toBlob(container, captureOptions);
+
+    if (!blob) {
+      const canvas = await toCanvas(container, captureOptions);
+      blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/webp", 0.82);
+      });
+    }
+
+    if (!blob || blob.size === 0) {
+      throw new Error("Front preview capture returned an empty blob");
+    }
+
+    console.info("[preview-capture] blob created", {
+      side: (node.dataset.mockupExportRoot || "front") as string,
+      size: blob.size,
+      type: blob.type,
     });
-  } catch {
-    return null;
+
+    return blob;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/Front preview element not found/i.test(message)) {
+      throw error;
+    }
+    if (/invalid dimensions/i.test(message)) {
+      throw error;
+    }
+    if (/not visible/i.test(message)) {
+      throw error;
+    }
+    if (/empty blob/i.test(message)) {
+      throw error;
+    }
+    if (/tainted|cors|cross-origin/i.test(message)) {
+      throw new Error(`Front preview capture failed due to image CORS: ${message}`);
+    }
+    if (/blob/i.test(message)) {
+      throw new Error(`Front preview capture failed during toBlob: ${message}`);
+    }
+    throw error;
   } finally {
     container.remove();
   }
