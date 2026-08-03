@@ -254,6 +254,9 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   ]);
 }
 
+const PREVIEW_EXPORT_TIMEOUT_MS = 20_000;
+const PREVIEW_EXPORT_MAX_ATTEMPTS = 2;
+
 async function hydrateSavedTextFonts(...groups: ElementType[][]) {
   const families = collectSavedTextFonts(...groups);
 
@@ -273,6 +276,44 @@ function normalizeSideMap(value: any) {
 function normalizeMockupVisualScale(value: any) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value;
+}
+
+async function waitForPreviewAssets(root: HTMLElement) {
+  await (document.fonts?.ready ?? Promise.resolve());
+
+  const images = Array.from(root.querySelectorAll("img"));
+  await Promise.all(
+    images.map(async (image) => {
+      if (image.complete && image.naturalWidth > 0) return;
+
+      if (typeof image.decode === "function") {
+        try {
+          await image.decode();
+          return;
+        } catch {
+          // Fall through to load/error events below.
+        }
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const handleLoad = () => {
+          cleanup();
+          resolve();
+        };
+        const handleError = () => {
+          cleanup();
+          reject(new Error(`Preview image failed to load: ${image.currentSrc || image.src || "unknown"}`));
+        };
+        const cleanup = () => {
+          image.removeEventListener("load", handleLoad);
+          image.removeEventListener("error", handleError);
+        };
+
+        image.addEventListener("load", handleLoad, { once: true });
+        image.addEventListener("error", handleError, { once: true });
+      });
+    }),
+  );
 }
 
 function buildProductDisplayConfig(
@@ -869,13 +910,13 @@ export default function EditorPage() {
         throw new Error(`${targetSide} export root not found`);
       }
 
-      await document.fonts?.ready?.catch((error) => {
+      await waitForPreviewAssets(exportNode).catch((error) => {
         console.error("[preview] failed", error);
       });
       await nextFrame();
       const dataUrl = await withTimeout(
         captureVisualMockupPreview(exportNode),
-        8000,
+        PREVIEW_EXPORT_TIMEOUT_MS,
         `${targetSide} preview export`,
       );
       if (!dataUrl) {
@@ -891,6 +932,44 @@ export default function EditorPage() {
       return blob;
     },
     [],
+  );
+
+  const exportPreviewWithRetry = useCallback(
+    async (sideToExport: Side): Promise<Blob> => {
+      let lastError: unknown;
+
+      for (let attempt = 1; attempt <= PREVIEW_EXPORT_MAX_ATTEMPTS; attempt += 1) {
+        const startedAt = Date.now();
+
+        try {
+          const result = await exportEditorPreview(sideToExport);
+
+          console.info("[preview-export] completed", {
+            side: sideToExport,
+            attempt,
+            durationMs: Date.now() - startedAt,
+          });
+
+          return result;
+        } catch (error) {
+          lastError = error;
+
+          console.warn("[preview-export] failed", {
+            side: sideToExport,
+            attempt,
+            durationMs: Date.now() - startedAt,
+            error: error instanceof Error ? error.message : String(error),
+          });
+
+          if (attempt === PREVIEW_EXPORT_MAX_ATTEMPTS) {
+            throw error;
+          }
+        }
+      }
+
+      throw lastError;
+    },
+    [exportEditorPreview],
   );
 
   const persistPreviewMockups = useCallback(
@@ -1000,19 +1079,11 @@ export default function EditorPage() {
       });
 
       if (!frontBlob && args.usedSides.includes("front")) {
-        frontBlob = await withTimeout(
-          exportEditorPreview("front"),
-          12000,
-          "Front preview export retry",
-        );
+        frontBlob = await exportPreviewWithRetry("front");
       }
 
       if (!backBlob && args.usedSides.includes("back")) {
-        backBlob = await withTimeout(
-          exportEditorPreview("back"),
-          12000,
-          "Back preview export retry",
-        );
+        backBlob = await exportPreviewWithRetry("back");
       }
 
       console.info("[canvas-preview] captured", {
@@ -1133,21 +1204,13 @@ export default function EditorPage() {
       stepContext.step = "preview";
       let frontPreviewBlob: Blob | null = null;
       if (usedSides.includes("front")) {
-        frontPreviewBlob = await withTimeout(
-          exportEditorPreview("front"),
-          8000,
-          "Front preview export",
-        );
+        frontPreviewBlob = await exportPreviewWithRetry("front");
       }
 
       let backPreviewBlob: Blob | null = null;
       if (usedSides.includes("back")) {
         try {
-          backPreviewBlob = await withTimeout(
-            exportEditorPreview("back"),
-            8000,
-            "Back preview export",
-          );
+          backPreviewBlob = await exportPreviewWithRetry("back");
         } catch (error) {
           console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
         }
@@ -1357,6 +1420,7 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     captureCheckoutPreviews,
+    exportPreviewWithRetry,
     exportEditorPreview,
     persistPreviewMockups,
   ]);
