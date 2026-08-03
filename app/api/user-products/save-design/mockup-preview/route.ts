@@ -90,15 +90,16 @@ export async function POST(req: Request) {
 
     const backBuffer = await fileToBuffer(formData.get("back") as File | null);
     const sides = backBuffer ? ["front", "back"] : ["front"];
+    console.info("[canvas-preview-api] request received", {
+      userProductId,
+      hasFront: Boolean(frontBuffer),
+      hasBack: Boolean(backBuffer),
+    });
 
     let frontUpload;
     let backUpload = null;
 
     try {
-      console.info("[canvas-preview] capture started", {
-        userProductId,
-        side: "front",
-      });
       frontUpload = await uploadBufferToR2({
         buffer: frontBuffer,
         contentType: "image/webp",
@@ -108,24 +109,8 @@ export async function POST(req: Request) {
       console.error("[canvas-preview] failed", error);
       return NextResponse.json({ error: "Front preview upload failed" }, { status: 500 });
     }
-    console.info("[canvas-preview] capture completed", {
-      userProductId,
-      side: "front",
-      hasBlob: true,
-      blobSize: frontBuffer.length,
-    });
-    console.info("[canvas-preview] uploaded", {
-      userProductId,
-      side: "front",
-      url: frontUpload.url,
-    });
-
     if (backBuffer) {
       try {
-        console.info("[canvas-preview] capture started", {
-          userProductId,
-          side: "back",
-        });
         backUpload = await uploadBufferToR2({
           buffer: backBuffer,
           contentType: "image/webp",
@@ -135,18 +120,12 @@ export async function POST(req: Request) {
         console.error("[canvas-preview] failed", error);
         return NextResponse.json({ error: "Back preview upload failed" }, { status: 500 });
       }
-      console.info("[canvas-preview] capture completed", {
-        userProductId,
-        side: "back",
-        hasBlob: true,
-        blobSize: backBuffer.length,
-      });
-      console.info("[canvas-preview] uploaded", {
-        userProductId,
-        side: "back",
-        url: backUpload.url,
-      });
     }
+    console.info("[canvas-preview-api] uploaded", {
+      userProductId,
+      frontUrl: frontUpload.url,
+      backUrl: backUpload?.url ?? null,
+    });
 
     const currentMockups = parseMockups(userProduct.mockups);
     const currentDesignData = parseDesignData(userProduct.design_data);
@@ -199,15 +178,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Preview persistence failed" }, { status: 500 });
     }
 
+    let updatedCartItems = 0;
     if (frontUpload.url) {
-      await supabase
+      const { data: updatedCartRows } = await supabase
         .from("cart_items")
         .update({
           image: frontUpload.url,
           mockup_url: frontUpload.url,
         })
-        .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`);
+        .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`)
+        .select("id");
+
+      updatedCartItems = Array.isArray(updatedCartRows) ? updatedCartRows.length : 0;
     }
+
+    console.info("[canvas-preview-api] database updated", {
+      userProductId,
+      updatedCartItems,
+    });
 
     console.info("[canvas-preview] persisted", {
       userProductId,
@@ -218,6 +206,8 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       userProductId,
+      frontUrl: frontUpload.url,
+      backUrl: backUpload?.url ?? null,
       mockups: parseMockups(updated.mockups),
       designData: parseDesignData(updated.design_data),
     });

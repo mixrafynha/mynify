@@ -80,7 +80,7 @@ export async function queueDesignAssetJobs(input: QueueDesignAssetsInput) {
       sides,
       printFileRunId: (printRun as any)?.id ?? null,
       thumbnailRunId: (thumbnailRun as any)?.id ?? null,
-      triggerErrors,
+      triggerErrors: JSON.stringify(triggerErrors),
     });
 
     return {

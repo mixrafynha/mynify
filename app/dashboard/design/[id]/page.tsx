@@ -903,6 +903,12 @@ export default function EditorPage() {
       let frontBlob = args.frontPreviewBlob;
       let backBlob = args.backPreviewBlob;
 
+      console.info("[canvas-preview] preparing", {
+        userProductId: args.userProductId,
+        hasFrontDesign: args.usedSides.includes("front"),
+        hasBackDesign: args.usedSides.includes("back"),
+      });
+
       if (!frontBlob && args.usedSides.includes("front")) {
         try {
           frontBlob = await withTimeout(
@@ -927,13 +933,21 @@ export default function EditorPage() {
         }
       }
 
+      console.info("[canvas-preview] captured", {
+        userProductId: args.userProductId,
+        hasFront: Boolean(frontBlob),
+        hasBack: Boolean(backBlob),
+        frontSize: frontBlob?.size ?? null,
+        backSize: backBlob?.size ?? null,
+      });
+
       if (!frontBlob) {
-        console.warn("[editor-preview] preview upload skipped: missing front preview", {
-          userProductId: args.userProductId,
-          usedSides: args.usedSides,
-        });
-        return false;
+        throw new Error("Front canvas preview capture returned no blob");
       }
+
+      console.info("[canvas-preview] sending", {
+        userProductId: args.userProductId,
+      });
 
       const formData = new FormData();
       formData.append("userProductId", args.userProductId);
@@ -953,13 +967,65 @@ export default function EditorPage() {
         throw new Error(payload?.error || "Preview persistence failed");
       }
 
-      console.info("[editor-preview] preview mockups persisted", {
+      console.info("[canvas-preview] completed", {
         userProductId: args.userProductId,
-        hasFront: true,
-        hasBack: Boolean(backBlob),
+        frontUrl: payload?.frontUrl ?? null,
+        backUrl: payload?.backUrl ?? null,
       });
 
       return true;
+    },
+    [exportEditorPreview],
+  );
+
+  const captureCheckoutPreviews = useCallback(
+    async (args: {
+      userProductId: string;
+      frontPreviewBlob: Blob | null;
+      backPreviewBlob: Blob | null;
+      usedSides: Side[];
+    }) => {
+      let frontBlob = args.frontPreviewBlob;
+      let backBlob = args.backPreviewBlob;
+
+      console.info("[canvas-preview] preparing", {
+        userProductId: args.userProductId,
+        hasFrontDesign: args.usedSides.includes("front"),
+        hasBackDesign: args.usedSides.includes("back"),
+      });
+
+      if (!frontBlob && args.usedSides.includes("front")) {
+        frontBlob = await withTimeout(
+          exportEditorPreview("front"),
+          12000,
+          "Front preview export retry",
+        );
+      }
+
+      if (!backBlob && args.usedSides.includes("back")) {
+        backBlob = await withTimeout(
+          exportEditorPreview("back"),
+          12000,
+          "Back preview export retry",
+        );
+      }
+
+      console.info("[canvas-preview] captured", {
+        userProductId: args.userProductId,
+        hasFront: Boolean(frontBlob),
+        hasBack: Boolean(backBlob),
+        frontSize: frontBlob?.size ?? null,
+        backSize: backBlob?.size ?? null,
+      });
+
+      if (!frontBlob) {
+        throw new Error("Front canvas preview capture returned no blob");
+      }
+
+      return {
+        front: frontBlob,
+        back: backBlob,
+      };
     },
     [exportEditorPreview],
   );
@@ -1208,19 +1274,24 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
-      try {
-        await persistPreviewMockups({
+      const capturedPreviews = await captureCheckoutPreviews({
+        userProductId: savedUserProductId,
+        frontPreviewBlob,
+        backPreviewBlob,
+        usedSides,
+      });
+
+      void persistPreviewMockups({
+        userProductId: savedUserProductId,
+        frontPreviewBlob: capturedPreviews.front,
+        backPreviewBlob: capturedPreviews.back,
+        usedSides,
+      }).catch((error) => {
+        console.error("[canvas-preview] failed", {
           userProductId: savedUserProductId,
-          frontPreviewBlob,
-          backPreviewBlob,
-          usedSides,
+          error: error instanceof Error ? error.message : String(error),
         });
-      } catch (error) {
-        console.error("[editor-preview] preview mockup persistence failed", {
-          userProductId: savedUserProductId,
-          error: error instanceof Error ? error.message : error,
-        });
-      }
+      });
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
@@ -1267,6 +1338,7 @@ export default function EditorPage() {
     ensureDraftDesignId,
     editorStorageKey,
     router,
+    captureCheckoutPreviews,
     exportEditorPreview,
     persistPreviewMockups,
   ]);
