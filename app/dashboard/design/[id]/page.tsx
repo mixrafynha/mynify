@@ -945,8 +945,10 @@ export default function EditorPage() {
         throw new Error("Front canvas preview capture returned no blob");
       }
 
-      console.info("[canvas-preview] sending", {
+      console.info("[canvas-preview] persisting before navigation", {
         userProductId: args.userProductId,
+        hasFront: Boolean(frontBlob),
+        hasBack: Boolean(backBlob),
       });
 
       const formData = new FormData();
@@ -967,7 +969,7 @@ export default function EditorPage() {
         throw new Error(payload?.error || "Preview persistence failed");
       }
 
-      console.info("[canvas-preview] completed", {
+      console.info("[canvas-preview] persisted", {
         userProductId: args.userProductId,
         frontUrl: payload?.frontUrl ?? null,
         backUrl: payload?.backUrl ?? null,
@@ -1282,16 +1284,11 @@ export default function EditorPage() {
           usedSides,
         });
 
-        void persistPreviewMockups({
+        await persistPreviewMockups({
           userProductId: savedUserProductId,
           frontPreviewBlob: capturedPreviews.front,
           backPreviewBlob: capturedPreviews.back,
           usedSides,
-        }).catch((error) => {
-          console.error("[canvas-preview] failed", {
-            userProductId: savedUserProductId,
-            error: error instanceof Error ? error.message : String(error),
-          });
         });
       } catch (error) {
         console.error("[canvas-preview] failed", {
@@ -1305,6 +1302,9 @@ export default function EditorPage() {
         console.warn("[save-design] cart item missing in response", {
           userProductId: savedUserProductId,
           redirectTo: data?.redirectTo ?? "/cart",
+        });
+        console.info("[canvas-preview] navigating to checkout", {
+          userProductId: savedUserProductId,
         });
         router.push(data?.redirectTo ?? "/cart");
         return;
@@ -1322,6 +1322,9 @@ export default function EditorPage() {
       console.info("[save-design] completed", {
         userProductId: savedUserProductId,
         cartItemId,
+      });
+      console.info("[canvas-preview] navigating to checkout", {
+        userProductId: savedUserProductId,
       });
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;

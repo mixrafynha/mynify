@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServer } from "@/lib/supabase-server";
+import { getAuthenticatedSupabase } from "../auth";
 import { uploadBufferToR2 } from "../r2";
 
 export const runtime = "nodejs";
@@ -55,13 +55,9 @@ async function fileToBuffer(file: File | null) {
 
 export async function POST(req: Request) {
   try {
-    const supabase = createSupabaseServer();
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const { supabase, user } = await getAuthenticatedSupabase(req);
 
-    if (authError || !user) {
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -71,6 +67,11 @@ export async function POST(req: Request) {
     if (!userProductId) {
       return NextResponse.json({ error: "userProductId is required" }, { status: 400 });
     }
+
+    console.info("[mockup-preview] authenticated", {
+      userProductId,
+      userId: user.id,
+    });
 
     const { data: userProduct, error: productError } = await supabase
       .from("user_products")
@@ -90,7 +91,7 @@ export async function POST(req: Request) {
 
     const backBuffer = await fileToBuffer(formData.get("back") as File | null);
     const sides = backBuffer ? ["front", "back"] : ["front"];
-    console.info("[canvas-preview-api] request received", {
+    console.info("[mockup-preview] request received", {
       userProductId,
       hasFront: Boolean(frontBuffer),
       hasBack: Boolean(backBuffer),
@@ -121,10 +122,10 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Back preview upload failed" }, { status: 500 });
       }
     }
-    console.info("[canvas-preview-api] uploaded", {
+    console.info("[mockup-preview] uploaded", {
       userProductId,
-      frontUrl: frontUpload.url,
-      backUrl: backUpload?.url ?? null,
+      hasFrontUrl: Boolean(frontUpload.url),
+      hasBackUrl: Boolean(backUpload?.url),
     });
 
     const currentMockups = parseMockups(userProduct.mockups);
@@ -144,9 +145,13 @@ export async function POST(req: Request) {
 
     const nextMockups = {
       ...currentMockups,
-      front: frontUpload.url,
-      checkout_thumbnail_url: frontUpload.url,
-      checkout_thumbnail_front_url: frontUpload.url,
+      ...(frontUpload.url
+        ? {
+            front: frontUpload.url,
+            checkout_thumbnail_url: frontUpload.url,
+            checkout_thumbnail_front_url: frontUpload.url,
+          }
+        : {}),
       ...(backUpload?.url ? { back: backUpload.url } : {}),
       ...(backUpload?.url
         ? {
@@ -161,7 +166,7 @@ export async function POST(req: Request) {
         ...currentSides,
         front: {
           ...currentFront,
-          mockupUrl: frontUpload.url,
+          ...(frontUpload.url ? { mockupUrl: frontUpload.url } : {}),
         },
         back: {
           ...currentBack,
@@ -200,9 +205,9 @@ export async function POST(req: Request) {
       updatedCartItems = Array.isArray(updatedCartRows) ? updatedCartRows.length : 0;
     }
 
-    console.info("[canvas-preview-api] database updated", {
+    console.info("[mockup-preview] database updated", {
       userProductId,
-      updatedCartItems,
+      cartItemsUpdated: updatedCartItems,
     });
 
     console.info("[canvas-preview] persisted", {
