@@ -23,6 +23,14 @@ type ColorInput = {
   thumbnail?: string;
 };
 
+type NormalizedVariant = {
+  size: string;
+  sku: string | null;
+  stock: number;
+  price: number;
+  name: string;
+};
+
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -31,6 +39,26 @@ function cleanArray(value: unknown) {
   return Array.isArray(value)
     ? value.map((item) => String(item).trim()).filter(Boolean)
     : [];
+}
+
+function dedupeVariants(variants: NormalizedVariant[]) {
+  const seen = new Set<string>();
+
+  return variants.filter((variant) => {
+    const signature = [
+      variant.size.trim().toLowerCase(),
+      String(variant.sku || "").trim().toLowerCase(),
+      Number(variant.price || 0),
+      Number(variant.stock || 0),
+    ].join("|");
+
+    if (seen.has(signature)) {
+      return false;
+    }
+
+    seen.add(signature);
+    return true;
+  });
 }
 
 /* ================= GET PRODUCT ================= */
@@ -294,15 +322,17 @@ export async function PATCH(
         updatePayload.price ??
         Number(data?.price ?? 0);
 
-      const cleanVariants = variants
-        .map((variant) => ({
-          size: clean(variant.size),
-          sku: clean(variant.sku) || null,
-          stock: Number.isFinite(Number(variant.stock)) ? Number(variant.stock) : 0,
-          price: Number.isFinite(Number(variant.price)) ? Number(variant.price) : basePrice,
-          name: clean(variant.name) || clean(variant.size),
-        }))
-        .filter((variant) => variant.size);
+      const cleanVariants = dedupeVariants(
+        variants
+          .map((variant) => ({
+            size: clean(variant.size),
+            sku: clean(variant.sku) || null,
+            stock: Number.isFinite(Number(variant.stock)) ? Number(variant.stock) : 0,
+            price: Number.isFinite(Number(variant.price)) ? Number(variant.price) : basePrice,
+            name: clean(variant.name) || clean(variant.size),
+          }))
+          .filter((variant) => variant.size),
+      );
 
       const finalVariants =
         cleanVariants.length > 0

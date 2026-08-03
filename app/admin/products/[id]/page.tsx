@@ -77,6 +77,26 @@ function slugify(value: string) {
     .slice(0, 80);
 }
 
+function dedupeVariantsBySignature(variants: Variant[]) {
+  const seen = new Set<string>();
+
+  return variants.filter((variant) => {
+    const signature = [
+      String(variant.size || "").trim().toLowerCase(),
+      String(variant.sku || "").trim().toLowerCase(),
+      Number(variant.price || 0),
+      Number(variant.stock || 0),
+    ].join("|");
+
+    if (seen.has(signature)) {
+      return false;
+    }
+
+    seen.add(signature);
+    return true;
+  });
+}
+
 export default function EditProductPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -160,7 +180,7 @@ export default function EditProductPage() {
             hex: c.color_hex || "#ffffff",
           })) ?? [{ ...emptyColor }];
 
-        const variants =
+        const variants = dedupeVariantsBySignature(
           product.product_colors
             ?.flatMap((c: any) => c.product_variants ?? [])
             ?.map((v: any) => ({
@@ -170,7 +190,8 @@ export default function EditProductPage() {
               stock: Number(v.stock || 0),
               price: Number(v.price || product.price || 0),
               name: v.name || v.size || "",
-            })) ?? [{ ...emptyVariant }];
+            })) ?? [{ ...emptyVariant }],
+        );
 
         setForm({
           title: product.title || "",
@@ -331,16 +352,18 @@ export default function EditProductPage() {
 
       if (!mainImage) throw new Error("Product image is required.");
 
-      const variants = form.variants
-        .map((v) => ({
-          id: v.id,
-          size: v.size.trim(),
-          sku: v.sku.trim(),
-          stock: Number(v.stock) || 0,
-          price: Number(v.price) || form.price,
-          name: v.name || v.size.trim(),
-        }))
-        .filter((v) => v.size || v.sku);
+      const variants = dedupeVariantsBySignature(
+        form.variants
+          .map((v) => ({
+            id: v.id,
+            size: v.size.trim(),
+            sku: v.sku.trim(),
+            stock: Number(v.stock) || 0,
+            price: Number(v.price) || form.price,
+            name: v.name || v.size.trim(),
+          }))
+          .filter((v) => v.size || v.sku),
+      );
 
       const colors = form.colors
         .map((c) => ({
