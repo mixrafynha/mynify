@@ -1196,36 +1196,13 @@ export default function EditorPage() {
       imageUrl: null,
     }));
 
-    const frontUrl = option.frontUrl;
-    const backUrl = option.backUrl;
-    if (!frontUrl || !backUrl) {
-      setProductConfig((current) => current ? {
-        ...current,
-        mockups: baseMockupsRef.current,
-        useVariantMockups: false,
-      } : current);
-      return;
-    }
-
+    // Variant images are product previews, not editor mockups. Keep the
+    // configured print-area mockup fixed and apply only the selected colour.
     setProductConfig((current) => current ? {
       ...current,
-      mockups: {
-        ...(current.mockups || {}),
-        front: frontUrl,
-        back: backUrl,
-      },
-      useVariantMockups: true,
+      mockups: baseMockupsRef.current,
+      useVariantMockups: false,
     } : current);
-
-    // Warm both browser caches, but never block the visible variant switch on
-    // remote image load events (some CDNs leave those events pending).
-    const preload = (url: string) => {
-      const image = new Image();
-      image.decoding = "async";
-      image.src = url;
-    };
-    preload(frontUrl);
-    preload(backUrl);
   }, []);
 
   if (!productConfigLoaded) {
