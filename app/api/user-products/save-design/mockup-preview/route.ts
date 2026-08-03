@@ -28,6 +28,25 @@ function parseMockups(value: unknown): Record<string, unknown> {
     : {};
 }
 
+function parseDesignData(value: unknown): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch (error) {
+      console.error("[canvas-preview] failed", error);
+      return {};
+    }
+  }
+
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 async function fileToBuffer(file: File | null) {
   if (!file) return null;
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -55,10 +74,10 @@ export async function POST(req: Request) {
 
     const { data: userProduct, error: productError } = await supabase
       .from("user_products")
-      .select("id, user_id, mockups")
+      .select("id, user_id, mockups, design_data")
       .eq("id", userProductId)
       .eq("user_id", user.id)
-      .maybeSingle<{ id: string; user_id: string; mockups: Record<string, unknown> | string | null }>();
+      .maybeSingle<{ id: string; user_id: string; mockups: Record<string, unknown> | string | null; design_data: Record<string, unknown> | string | null }>();
 
     if (productError || !userProduct) {
       return NextResponse.json({ error: "Saved design not found" }, { status: 404 });
@@ -76,16 +95,26 @@ export async function POST(req: Request) {
     let backUpload = null;
 
     try {
+      console.info("[canvas-preview] capture started", {
+        userProductId,
+        side: "front",
+      });
       frontUpload = await uploadBufferToR2({
         buffer: frontBuffer,
         contentType: "image/webp",
         key: previewKey(userProductId, "front"),
       });
     } catch (error) {
-      console.error("[preview] failed", error);
+      console.error("[canvas-preview] failed", error);
       return NextResponse.json({ error: "Front preview upload failed" }, { status: 500 });
     }
-    console.info("[preview] front uploaded", {
+    console.info("[canvas-preview] capture completed", {
+      userProductId,
+      side: "front",
+      hasBlob: true,
+      blobSize: frontBuffer.length,
+    });
+    console.info("[canvas-preview] uploaded", {
       userProductId,
       side: "front",
       url: frontUpload.url,
@@ -93,16 +122,26 @@ export async function POST(req: Request) {
 
     if (backBuffer) {
       try {
+        console.info("[canvas-preview] capture started", {
+          userProductId,
+          side: "back",
+        });
         backUpload = await uploadBufferToR2({
           buffer: backBuffer,
           contentType: "image/webp",
           key: previewKey(userProductId, "back"),
         });
       } catch (error) {
-        console.error("[preview] failed", error);
+        console.error("[canvas-preview] failed", error);
         return NextResponse.json({ error: "Back preview upload failed" }, { status: 500 });
       }
-      console.info("[preview] back uploaded", {
+      console.info("[canvas-preview] capture completed", {
+        userProductId,
+        side: "back",
+        hasBlob: true,
+        blobSize: backBuffer.length,
+      });
+      console.info("[canvas-preview] uploaded", {
         userProductId,
         side: "back",
         url: backUpload.url,
@@ -110,30 +149,68 @@ export async function POST(req: Request) {
     }
 
     const currentMockups = parseMockups(userProduct.mockups);
+    const currentDesignData = parseDesignData(userProduct.design_data);
+    const currentSides =
+      currentDesignData.sides && typeof currentDesignData.sides === "object" && !Array.isArray(currentDesignData.sides)
+        ? (currentDesignData.sides as Record<string, unknown>)
+        : {};
+    const currentFront =
+      currentSides.front && typeof currentSides.front === "object" && !Array.isArray(currentSides.front)
+        ? (currentSides.front as Record<string, unknown>)
+        : {};
+    const currentBack =
+      currentSides.back && typeof currentSides.back === "object" && !Array.isArray(currentSides.back)
+        ? (currentSides.back as Record<string, unknown>)
+        : {};
+
     const nextMockups = {
       ...currentMockups,
       front: frontUpload.url,
-      back: backUpload?.url ?? null,
+      ...(backUpload?.url ? { back: backUpload.url } : {}),
+    };
+    const nextDesignData = {
+      ...currentDesignData,
+      sides: {
+        ...currentSides,
+        front: {
+          ...currentFront,
+          mockupUrl: frontUpload.url,
+        },
+        back: {
+          ...currentBack,
+          ...(backUpload?.url ? { mockupUrl: backUpload.url } : {}),
+        },
+      },
     };
 
     const { data: updated, error: updateError } = await supabase
       .from("user_products")
       .update({
         mockups: nextMockups,
+        design_data: nextDesignData,
       })
       .eq("id", userProductId)
       .eq("user_id", user.id)
-      .select("id, mockups")
-      .single<{ id: string; mockups: Record<string, unknown> | string | null }>();
+      .select("id, mockups, design_data")
+      .single<{ id: string; mockups: Record<string, unknown> | string | null; design_data: Record<string, unknown> | string | null }>();
 
     if (updateError || !updated) {
-      console.error("[preview] failed", updateError);
+      console.error("[canvas-preview] failed", updateError);
       return NextResponse.json({ error: "Preview persistence failed" }, { status: 500 });
     }
 
-    console.info("[preview] mockups updated", {
+    if (frontUpload.url) {
+      await supabase
+        .from("cart_items")
+        .update({
+          image: frontUpload.url,
+          mockup_url: frontUpload.url,
+        })
+        .or(`user_product_id.eq.${userProductId},design_id.eq.${userProductId}`);
+    }
+
+    console.info("[canvas-preview] persisted", {
       userProductId,
-      sides,
       front: nextMockups.front ?? null,
       back: nextMockups.back ?? null,
     });
@@ -142,9 +219,10 @@ export async function POST(req: Request) {
       success: true,
       userProductId,
       mockups: parseMockups(updated.mockups),
+      designData: parseDesignData(updated.design_data),
     });
   } catch (error) {
-    console.error("[preview] failed", error);
+    console.error("[canvas-preview] failed", error);
     return NextResponse.json({ error: "Unable to save preview mockups" }, { status: 500 });
   }
 }

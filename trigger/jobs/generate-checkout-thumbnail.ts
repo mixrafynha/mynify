@@ -61,14 +61,12 @@ function withThumbnailState(designData: any, patch: Record<string, unknown>) {
 function sideUrlPatch(side: DesignSide | undefined, url: string, key: string) {
   if (side === "back") {
     return {
-      back: url,
       checkout_thumbnail_back_url: url,
       checkout_thumbnail_back_key: key,
     };
   }
 
   return {
-    front: url,
     checkout_thumbnail_front_url: url,
     checkout_thumbnail_front_key: key,
     checkout_thumbnail_url: url,
@@ -180,7 +178,6 @@ export const generateCheckoutThumbnail = task({
         .update({
           design_data: nextDesignData,
           mockups: nextMockups,
-          ...(primary ? { design_image_url: primary.url } : {}),
         })
         .eq("id", payload.userProductId);
 
@@ -193,6 +190,11 @@ export const generateCheckoutThumbnail = task({
           persistedCanvasFront ||
           persistedCanvasBack ||
           primary.url;
+        console.info("[checkout-thumbnail] persisted fallback", {
+          userProductId: payload.userProductId,
+          thumbnailUrl: primary.url,
+          preservedCanvasFront: Boolean(persistedCanvasFront),
+        });
         const { error: cartUpdateError } = await supabase
           .from("cart_items")
           .update({ image: preferredCartImage, mockup_url: preferredCartImage })

@@ -66,6 +66,30 @@ function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
 
+function realCanvasFrontMockup(mockups: Record<string, unknown> | null): string | null {
+  if (!mockups) return null;
+
+  const front = publicString(mockups.front);
+  const checkoutFront =
+    publicString(mockups.checkout_thumbnail_front_url) ??
+    publicString(mockups.checkout_thumbnail_url);
+
+  if (!front) return null;
+  if (checkoutFront && front === checkoutFront) return null;
+  return front;
+}
+
+function realCanvasBackMockup(mockups: Record<string, unknown> | null): string | null {
+  if (!mockups) return null;
+
+  const back = publicString(mockups.back);
+  const checkoutBack = publicString(mockups.checkout_thumbnail_back_url);
+
+  if (!back) return null;
+  if (checkoutBack && back === checkoutBack) return null;
+  return back;
+}
+
 function parseMockups(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
   if (typeof value === "string") {
@@ -87,7 +111,7 @@ function parseMockups(value: unknown): Record<string, unknown> | null {
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
-    publicString(mockups.front) ??
+    realCanvasFrontMockup(mockups) ??
     publicString(mockups.checkout_thumbnail_url) ??
     publicString(mockups.checkout_thumbnail_front_url) ??
     publicString(mockups.image) ??
@@ -98,7 +122,7 @@ function frontMockupUrl(mockups: Record<string, unknown> | null): string | null 
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   return (
-    publicString(mockups.back) ??
+    realCanvasBackMockup(mockups) ??
     publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.checkout_thumbnail_back) ??
     null

@@ -134,6 +134,24 @@ function cleanUrl(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function resolveRealCanvasMockupUrl(args: {
+  mockups: Record<string, unknown>;
+  side: "front" | "back";
+}) {
+  const canvasUrl =
+    args.side === "front"
+      ? cleanUrl(args.mockups.front)
+      : cleanUrl(args.mockups.back);
+  const fallbackUrl =
+    args.side === "front"
+      ? cleanUrl(args.mockups.checkout_thumbnail_front_url) || cleanUrl(args.mockups.checkout_thumbnail_url)
+      : cleanUrl(args.mockups.checkout_thumbnail_back_url) || cleanUrl(args.mockups.checkout_thumbnail_back);
+
+  if (!canvasUrl) return null;
+  if (fallbackUrl && canvasUrl === fallbackUrl) return null;
+  return canvasUrl;
+}
+
 function formatShippingCurrency(amount: number | null | undefined, currency?: string | null) {
   if (typeof amount !== "number" || !Number.isFinite(amount)) return "Calculated";
   return new Intl.NumberFormat(undefined, {
@@ -196,16 +214,20 @@ function resolvePreviewImageSources(item: CartItem) {
 
   const front =
     cleanUrl(item.previewFront) ||
-    cleanUrl(mergedMockups.front) ||
+    resolveRealCanvasMockupUrl({ mockups: mergedMockups, side: "front" }) ||
     cleanUrl(frontSide.mockupUrl) ||
     cleanUrl(frontSide.mockup_url) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_url) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_front_url) ||
     (customDesignItem ? null : cleanUrl(item.image));
 
   const back =
     cleanUrl(item.previewBack) ||
-    cleanUrl(mergedMockups.back) ||
+    resolveRealCanvasMockupUrl({ mockups: mergedMockups, side: "back" }) ||
     cleanUrl(backSide.mockupUrl) ||
-    cleanUrl(backSide.mockup_url);
+    cleanUrl(backSide.mockup_url) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
+    cleanUrl(mergedMockups.checkout_thumbnail_back);
 
   return { front, back };
 }
