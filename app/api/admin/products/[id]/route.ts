@@ -216,7 +216,95 @@ export async function PATCH(
   const colors: ColorInput[] = Array.isArray(body.colors) ? body.colors : [];
   const variants: VariantInput[] = Array.isArray(body.variants) ? body.variants : [];
 
-  if (body.colors !== undefined || body.variants !== undefined) {
+  const hasStructurePayload =
+    body.colors !== undefined || body.variants !== undefined;
+
+  let shouldRebuildProductOptions = hasStructurePayload;
+
+  if (hasStructurePayload) {
+    const { data: existingProduct, error: existingProductError } = await supabase
+      .from("products")
+      .select(`
+        product_colors (
+          color,
+          color_hex,
+          product_variants (
+            size,
+            sku,
+            stock,
+            price,
+            name
+          )
+        )
+      `)
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingProductError) {
+      return NextResponse.json(
+        { error: existingProductError.message },
+        { status: 500 }
+      );
+    }
+
+    const existingColors = Array.isArray(existingProduct?.product_colors)
+      ? existingProduct.product_colors
+      : [];
+
+    const normalizeVariantRows = (rows: any[]) =>
+      rows.map((variant) => ({
+        size: clean(variant.size),
+        sku: clean(variant.sku),
+        stock: Number(variant.stock) || 0,
+        price: Number(variant.price) || 0,
+        name: clean(variant.name) || clean(variant.size),
+      }));
+
+    const normalizeRequestedVariants = (rows: VariantInput[]) =>
+      dedupeVariants(
+        rows
+          .map((variant) => ({
+            size: clean(variant.size),
+            sku: clean(variant.sku) || null,
+            stock: Number.isFinite(Number(variant.stock)) ? Number(variant.stock) : 0,
+            price: Number.isFinite(Number(variant.price)) ? Number(variant.price) : 0,
+            name: clean(variant.name) || clean(variant.size),
+          }))
+          .filter((variant) => variant.size),
+      );
+
+    const existingColorSignature = JSON.stringify(
+      existingColors.map((color: any) => ({
+        color: clean(color.color),
+        color_hex: clean(color.color_hex),
+      }))
+    );
+
+    const requestedColorSignature = JSON.stringify(
+      colors.map((color) => ({
+        color: clean(color.color) || clean(color.name),
+        color_hex: clean(color.color_hex) || clean(color.hex),
+      }))
+    );
+
+    const existingVariantSignature = JSON.stringify(
+      existingColors.flatMap((color: any) =>
+        normalizeVariantRows(
+          Array.isArray(color.product_variants) ? color.product_variants : []
+        )
+      )
+    );
+
+    const requestedVariantSignature = JSON.stringify(
+      normalizeRequestedVariants(variants)
+    );
+
+    shouldRebuildProductOptions =
+      existingColorSignature !== requestedColorSignature ||
+      existingVariantSignature !== requestedVariantSignature;
+  }
+
+  if (shouldRebuildProductOptions) {
     const { data: existingColors, error: existingColorsError } = await supabase
       .from("product_colors")
       .select("id")
