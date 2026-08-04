@@ -883,7 +883,11 @@ export default function EditorPage() {
       }
 
       console.info(`[preview] ${targetSide} exported`);
-      const blob = await dataUrlToWebPBlob(dataUrl, 600, 0.85);
+      const blob = await imageBlobToWebPBlob(
+        await fetch(dataUrl).then((response) => response.blob()),
+        600,
+        0.85,
+      );
       if (!blob) {
         throw new Error(`${targetSide} WebP conversion returned null`);
       }
@@ -1130,6 +1134,7 @@ export default function EditorPage() {
         snapshot.backElements,
       );
 
+      let frontPreviewBlob: Blob | null = null;
       stepContext.step = "preview";
       if (usedSides.includes("front")) {
         frontPreviewBlob = await withTimeout(
