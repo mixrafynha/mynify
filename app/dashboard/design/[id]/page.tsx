@@ -9,7 +9,6 @@ import EditorShell from "@/app/dashboard/design/components/EditorShell";
 import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
 import {
-  captureVisualMockupPreviewBlob,
   captureVisualMockupPreview,
 } from "@/app/dashboard/design/components/preview/services/previewCapture";
 import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
@@ -255,9 +254,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   ]);
 }
 
-const PREVIEW_EXPORT_TIMEOUT_MS = 20_000;
-const PREVIEW_EXPORT_MAX_ATTEMPTS = 2;
-
 async function hydrateSavedTextFonts(...groups: ElementType[][]) {
   const families = collectSavedTextFonts(...groups);
 
@@ -277,44 +273,6 @@ function normalizeSideMap(value: any) {
 function normalizeMockupVisualScale(value: any) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value;
-}
-
-async function waitForPreviewAssets(root: HTMLElement) {
-  await (document.fonts?.ready ?? Promise.resolve());
-
-  const images = Array.from(root.querySelectorAll("img"));
-  await Promise.all(
-    images.map(async (image) => {
-      if (image.complete && image.naturalWidth > 0) return;
-
-      if (typeof image.decode === "function") {
-        try {
-          await image.decode();
-          return;
-        } catch {
-          // Fall through to load/error events below.
-        }
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const handleLoad = () => {
-          cleanup();
-          resolve();
-        };
-        const handleError = () => {
-          cleanup();
-          reject(new Error(`Preview image failed to load: ${image.currentSrc || image.src || "unknown"}`));
-        };
-        const cleanup = () => {
-          image.removeEventListener("load", handleLoad);
-          image.removeEventListener("error", handleError);
-        };
-
-        image.addEventListener("load", handleLoad, { once: true });
-        image.addEventListener("error", handleError, { once: true });
-      });
-    }),
-  );
 }
 
 function buildProductDisplayConfig(
@@ -911,28 +869,21 @@ export default function EditorPage() {
         throw new Error(`${targetSide} export root not found`);
       }
 
-      await waitForPreviewAssets(exportNode).catch((error) => {
+      await document.fonts?.ready?.catch((error) => {
         console.error("[preview] failed", error);
       });
       await nextFrame();
-      const previewBlob = await withTimeout(
-        captureVisualMockupPreviewBlob(exportNode, {
-          maxDimension: 1400,
-          pixelRatio: 1.25,
-        }),
-        PREVIEW_EXPORT_TIMEOUT_MS,
+      const dataUrl = await withTimeout(
+        captureVisualMockupPreview(exportNode),
+        8000,
         `${targetSide} preview export`,
       );
-      if (!previewBlob) {
-        throw new Error(`${targetSide} capture returned an empty blob`);
+      if (!dataUrl) {
+        throw new Error(`${targetSide} capture returned null`);
       }
 
-      console.info(`[preview] ${targetSide} exported`, {
-        width: 1400,
-        pixelRatio: 1.25,
-        blobSize: previewBlob.size,
-      });
-      const blob = await imageBlobToWebPBlob(previewBlob, 1400, 0.82);
+      console.info(`[preview] ${targetSide} exported`);
+      const blob = await dataUrlToWebPBlob(dataUrl, 600, 0.85);
       if (!blob) {
         throw new Error(`${targetSide} WebP conversion returned null`);
       }
@@ -940,44 +891,6 @@ export default function EditorPage() {
       return blob;
     },
     [],
-  );
-
-  const exportPreviewWithRetry = useCallback(
-    async (sideToExport: Side): Promise<Blob> => {
-      let lastError: unknown;
-
-      for (let attempt = 1; attempt <= PREVIEW_EXPORT_MAX_ATTEMPTS; attempt += 1) {
-        const startedAt = Date.now();
-
-        try {
-          const result = await exportEditorPreview(sideToExport);
-
-          console.info("[preview-export] completed", {
-            side: sideToExport,
-            attempt,
-            durationMs: Date.now() - startedAt,
-          });
-
-          return result;
-        } catch (error) {
-          lastError = error;
-
-          console.warn("[preview-export] failed", {
-            side: sideToExport,
-            attempt,
-            durationMs: Date.now() - startedAt,
-            error: error instanceof Error ? error.message : String(error),
-          });
-
-          if (attempt === PREVIEW_EXPORT_MAX_ATTEMPTS) {
-            throw error;
-          }
-        }
-      }
-
-      throw lastError;
-    },
-    [exportEditorPreview],
   );
 
   const persistPreviewMockups = useCallback(
@@ -1087,11 +1000,19 @@ export default function EditorPage() {
       });
 
       if (!frontBlob && args.usedSides.includes("front")) {
-        frontBlob = await exportPreviewWithRetry("front");
+        frontBlob = await withTimeout(
+          exportEditorPreview("front"),
+          12000,
+          "Front preview export retry",
+        );
       }
 
       if (!backBlob && args.usedSides.includes("back")) {
-        backBlob = await exportPreviewWithRetry("back");
+        backBlob = await withTimeout(
+          exportEditorPreview("back"),
+          12000,
+          "Back preview export retry",
+        );
       }
 
       console.info("[canvas-preview] captured", {
@@ -1209,49 +1130,46 @@ export default function EditorPage() {
         snapshot.backElements,
       );
 
-      let frontPreviewBlob: Blob | null = null;
+      stepContext.step = "preview";
+      if (usedSides.includes("front")) {
+        frontPreviewBlob = await withTimeout(
+          exportEditorPreview("front"),
+          8000,
+          "Front preview export",
+        );
+      }
+
       let backPreviewBlob: Blob | null = null;
-      let previewFrontDataUrl: string | null = null;
-      let previewBackDataUrl: string | null = null;
-
-      try {
-        stepContext.step = "preview";
-
-        if (usedSides.includes("front")) {
-          frontPreviewBlob = await exportPreviewWithRetry("front");
+      if (usedSides.includes("back")) {
+        try {
+          backPreviewBlob = await withTimeout(
+            exportEditorPreview("back"),
+            8000,
+            "Back preview export",
+          );
+        } catch (error) {
+          console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
         }
+      }
 
-        if (usedSides.includes("back")) {
-          try {
-            backPreviewBlob = await exportPreviewWithRetry("back");
-          } catch (error) {
-            console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
-          }
-        }
-
-        if (frontPreviewBlob) {
-          console.info("[editor-preview] local preview ready", {
-            side: "front",
-            blobSize: frontPreviewBlob.size,
-            blobType: frontPreviewBlob.type,
-          });
-          previewFrontDataUrl = await blobToDataUrl(frontPreviewBlob);
-        }
-
-        if (backPreviewBlob) {
-          console.info("[editor-preview] local preview ready", {
-            side: "back",
-            blobSize: backPreviewBlob.size,
-            blobType: backPreviewBlob.type,
-          });
-          previewBackDataUrl = await blobToDataUrl(backPreviewBlob);
-        }
-      } catch (error) {
-        console.warn("[preview-flow] non-blocking failure", {
-          userProductId: draftDesignIdRef.current,
-          error: error instanceof Error ? error.message : String(error),
+      if (frontPreviewBlob) {
+        console.info("[editor-preview] local preview ready", {
+          side: "front",
+          blobSize: frontPreviewBlob.size,
+          blobType: frontPreviewBlob.type,
         });
       }
+
+      if (backPreviewBlob) {
+        console.info("[editor-preview] local preview ready", {
+          side: "back",
+          blobSize: backPreviewBlob.size,
+          blobType: backPreviewBlob.type,
+        });
+      }
+
+      const previewFrontDataUrl = frontPreviewBlob ? await blobToDataUrl(frontPreviewBlob) : null;
+      const previewBackDataUrl = backPreviewBlob ? await blobToDataUrl(backPreviewBlob) : null;
 
       const parsedDesignPayload = JSON.parse(designPayloadJson);
       const frontData = parsedDesignPayload?.design_data?.sides?.front ?? null;
@@ -1443,7 +1361,6 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     captureCheckoutPreviews,
-    exportPreviewWithRetry,
     exportEditorPreview,
     persistPreviewMockups,
   ]);
