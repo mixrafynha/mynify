@@ -574,9 +574,37 @@ export async function captureVisualMockupPreviewBlob(
       console.info("[preview-capture] toBlob started", {
         side: (node.dataset.mockupExportRoot || "front") as string,
       });
-      blob = await toBlob(container, captureOptions);
+      const sourceCanvas = await toCanvas(container, captureOptions);
       console.info("[preview-capture] toBlob completed", {
         side: (node.dataset.mockupExportRoot || "front") as string,
+      });
+
+      const outputSize = CHECKOUT_PREVIEW_SIZE;
+      const padding = 28;
+      const outputCanvas = document.createElement("canvas");
+      outputCanvas.width = outputSize;
+      outputCanvas.height = outputSize;
+
+      const ctx = outputCanvas.getContext("2d");
+      if (!ctx) {
+        throw new Error("Canvas context unavailable");
+      }
+
+      const availableSize = outputSize - padding * 2;
+      const scale = Math.min(
+        availableSize / sourceCanvas.width,
+        availableSize / sourceCanvas.height,
+      );
+      const drawWidth = sourceCanvas.width * scale;
+      const drawHeight = sourceCanvas.height * scale;
+      const offsetX = (outputSize - drawWidth) / 2;
+      const offsetY = (outputSize - drawHeight) / 2;
+
+      ctx.clearRect(0, 0, outputSize, outputSize);
+      ctx.drawImage(sourceCanvas, offsetX, offsetY, drawWidth, drawHeight);
+
+      blob = await new Promise<Blob | null>((resolve) => {
+        outputCanvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
       });
     } catch (firstError) {
       console.warn("[preview-capture] toBlob failed", {
@@ -592,8 +620,32 @@ export async function captureVisualMockupPreviewBlob(
         console.info("[preview-capture] toCanvas completed", {
           side: (node.dataset.mockupExportRoot || "front") as string,
         });
+        const outputSize = CHECKOUT_PREVIEW_SIZE;
+        const padding = 28;
+        const outputCanvas = document.createElement("canvas");
+        outputCanvas.width = outputSize;
+        outputCanvas.height = outputSize;
+
+        const ctx = outputCanvas.getContext("2d");
+        if (!ctx) {
+          throw new Error("Canvas context unavailable");
+        }
+
+        const availableSize = outputSize - padding * 2;
+        const scale = Math.min(
+          availableSize / canvas.width,
+          availableSize / canvas.height,
+        );
+        const drawWidth = canvas.width * scale;
+        const drawHeight = canvas.height * scale;
+        const offsetX = (outputSize - drawWidth) / 2;
+        const offsetY = (outputSize - drawHeight) / 2;
+
+        ctx.clearRect(0, 0, outputSize, outputSize);
+        ctx.drawImage(canvas, offsetX, offsetY, drawWidth, drawHeight);
+
         blob = await new Promise<Blob | null>((resolve) => {
-          canvas.toBlob(resolve, "image/webp", 0.8);
+          outputCanvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
         });
       } catch (secondError) {
         console.warn("[preview-capture] toCanvas failed", {
