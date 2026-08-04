@@ -33,6 +33,24 @@ function shortUrl(field: string, value: unknown) {
   };
 }
 
+function normalizeMockupsRecord(value: unknown) {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+  const normalized = { ...record };
+  const wrapperKeys = normalized.keys && typeof normalized.keys === "object" && !Array.isArray(normalized.keys)
+    ? (normalized.keys as Record<string, unknown>)
+    : null;
+
+  if (wrapperKeys) {
+    if (normalized.front === undefined && wrapperKeys.front !== undefined) normalized.front = wrapperKeys.front;
+    if (normalized.back === undefined && wrapperKeys.back !== undefined) normalized.back = wrapperKeys.back;
+  }
+
+  delete normalized.keys;
+  return normalized;
+}
+
 function containsInvalidInlineImage(value: unknown, path: string[] = []): boolean {
   if (typeof value === "string") {
     const pathKey = path[path.length - 1] || "";
@@ -200,7 +218,7 @@ export async function POST(req: Request) {
     if (previewFrontDataUrl || previewBackDataUrl) {
       saveContext.step = "upload-preview";
       const currentMockups = savePayload.mockups && typeof savePayload.mockups === "object"
-        ? (savePayload.mockups as Record<string, unknown>)
+        ? normalizeMockupsRecord(savePayload.mockups)
         : {};
 
       const nextMockups: Record<string, unknown> = { ...currentMockups };
@@ -269,10 +287,25 @@ export async function POST(req: Request) {
       );
     }
     saveContext.userProductId = userProduct.id;
+    const persistedMockups = normalizeMockupsRecord(userProduct.mockups);
     console.info("[checkout-preview:save-api] user_product update completed", {
       userProductId: userProduct.id,
-      mockupKeys: userProduct.mockups && typeof userProduct.mockups === "object" ? Object.keys(userProduct.mockups as Record<string, unknown>) : [],
+      mockupKeys: Object.keys(persistedMockups),
       designImageUrl: shortUrl("design_image_url", userProduct.design_image_url),
+    });
+    console.info("[checkout-preview:database] persisted mockup keys", {
+      userProductId: userProduct.id,
+      keys: Object.keys(persistedMockups),
+    });
+    console.info("[checkout-preview:database] persisted front exists", {
+      userProductId: userProduct.id,
+      exists: Boolean(persistedMockups.front),
+      front: shortUrl("front", persistedMockups.front),
+    });
+    console.info("[checkout-preview:database] persisted back exists", {
+      userProductId: userProduct.id,
+      exists: Boolean(persistedMockups.back),
+      back: shortUrl("back", persistedMockups.back),
     });
 
     const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
@@ -336,10 +369,7 @@ export async function POST(req: Request) {
         requested_at: backgroundJobs.printFileRunId ? requestedAt : currentPrintFiles?.requested_at ?? null,
         run_id: backgroundJobs.printFileRunId ?? currentPrintFiles?.run_id ?? null,
       };
-      const nextMockups =
-        userProduct.mockups && typeof userProduct.mockups === "object"
-          ? { ...(userProduct.mockups as Record<string, unknown>) }
-          : {};
+      const nextMockups = normalizeMockupsRecord(userProduct.mockups);
       const persistedMockups = Object.fromEntries(
         Object.entries(nextMockups).filter(([, value]) => value !== null && value !== undefined && value !== ""),
       );

@@ -713,6 +713,13 @@ export async function buildUserProductSavePayload(args: {
     null;
 
   const baseImages = Array.isArray(baseProduct.images) ? baseProduct.images : [];
+  const existingMockups = objectValue<any>(body.mockups || body.mockupFiles, {});
+  const normalizedMockups = {
+    ...existingMockups,
+    front: mockupFront.url ?? existingMockups.front ?? null,
+    back: mockupBack.url ?? existingMockups.back ?? null,
+  };
+  delete normalizedMockups.keys;
 
   return {
     id: designId,
@@ -742,14 +749,7 @@ export async function buildUserProductSavePayload(args: {
       },
       status: "pending",
     },
-    mockups: {
-      front: null,
-      back: null,
-      keys: {
-        front: mockupFront.key,
-        back: mockupBack.key,
-      },
-    },
+    mockups: normalizedMockups,
     print_box: printBox,
     safe_area: safeArea,
     design_image_url: null,
