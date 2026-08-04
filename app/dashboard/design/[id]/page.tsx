@@ -125,6 +125,12 @@ function nextFrame() {
   });
 }
 
+function timeoutAfter(ms: number) {
+  return new Promise<null>((resolve) => {
+    window.setTimeout(() => resolve(null), ms);
+  });
+}
+
 async function imageBlobToWebPBlob(
   sourceBlob: Blob,
   maxSize = 1400,
@@ -1130,31 +1136,31 @@ export default function EditorPage() {
         snapshot.backElements,
       );
 
-      let frontPreviewBlob: Blob | null = null;
       stepContext.step = "preview";
-      if (usedSides.includes("front")) {
-        try {
-          frontPreviewBlob = await withTimeout(
-            exportEditorPreview("front"),
-            20000,
-            "Front preview export",
-          );
-        } catch (error) {
-          console.warn("[editor-preview] front preview export failed; continuing without front thumbnail", error);
-        }
-      }
+      const quickPreviewPromise = captureCheckoutPreviews({
+        userProductId: resolvedDesignId,
+        frontPreviewBlob: null,
+        backPreviewBlob: null,
+        usedSides,
+      }).catch((error) => {
+        console.warn("[preview-flow] quick capture failed", {
+          userProductId: resolvedDesignId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      });
 
+      const quickPreview = await Promise.race([
+        quickPreviewPromise,
+        timeoutAfter(2500),
+      ]);
+
+      let frontPreviewBlob: Blob | null = null;
       let backPreviewBlob: Blob | null = null;
-      if (usedSides.includes("back")) {
-        try {
-          backPreviewBlob = await withTimeout(
-            exportEditorPreview("back"),
-            20000,
-            "Back preview export",
-          );
-        } catch (error) {
-          console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
-        }
+
+      if (quickPreview) {
+        frontPreviewBlob = quickPreview.front;
+        backPreviewBlob = quickPreview.back;
       }
 
       if (frontPreviewBlob) {
@@ -1280,38 +1286,41 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
-      try {
-        const previews = await captureCheckoutPreviews({
-          userProductId: savedUserProductId,
-          frontPreviewBlob,
-          backPreviewBlob,
-          usedSides,
-        });
+      if (!quickPreview) {
+        void (async () => {
+          try {
+            const previews = await captureCheckoutPreviews({
+              userProductId: savedUserProductId,
+              frontPreviewBlob: null,
+              backPreviewBlob: null,
+              usedSides,
+            });
 
-        console.info("[preview-flow] captured", {
-          userProductId: savedUserProductId,
-          hasFront: Boolean(previews.front),
-          hasBack: Boolean(previews.back),
-        });
+            console.info("[preview-flow] captured", {
+              userProductId: savedUserProductId,
+              hasFront: Boolean(previews.front),
+              hasBack: Boolean(previews.back),
+            });
 
-        const result = await persistPreviewMockups({
-          userProductId: savedUserProductId,
-          frontPreviewBlob: previews.front,
-          backPreviewBlob: previews.back,
-          usedSides,
-        });
+            const result = await persistPreviewMockups({
+              userProductId: savedUserProductId,
+              frontPreviewBlob: previews.front,
+              backPreviewBlob: previews.back,
+              usedSides,
+            });
 
-        console.info("[preview-flow] persisted", {
-          userProductId: savedUserProductId,
-          frontUrl: result.frontUrl ?? null,
-          backUrl: result.backUrl ?? null,
-        });
-      } catch (error) {
-        console.warn("[preview-flow] non-blocking failure", {
-          userProductId: savedUserProductId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        setSaveNotice("Design saved, but preview generation failed.");
+            console.info("[preview-flow] persisted", {
+              userProductId: savedUserProductId,
+              frontUrl: result.frontUrl ?? null,
+              backUrl: result.backUrl ?? null,
+            });
+          } catch (error) {
+            console.warn("[preview-flow] non-blocking failure", {
+              userProductId: savedUserProductId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        })();
       }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
