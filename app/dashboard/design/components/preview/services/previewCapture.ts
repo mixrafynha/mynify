@@ -17,6 +17,9 @@ const CAPTURE_HIDDEN_SELECTORS = [
   "[data-selection-frame]",
   "[data-gelato-dropzone]",
   "[data-production-hidden]",
+  "[data-lost-elements-overlay]",
+  "[data-lost-element-marker]",
+  "[data-outside-print-area='true']",
 ];
 
 function number(value: unknown, fallback = 0) {
@@ -255,6 +258,16 @@ function captureFilterForDiagnostics(target: HTMLElement) {
   return shouldCaptureNode(target);
 }
 
+function shortUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const url = value.trim();
+  return {
+    start: url.slice(0, 80),
+    end: url.slice(-30),
+    length: url.length,
+  };
+}
+
 function inspectLayer(name: string, element: HTMLElement | null) {
   if (!element) {
     return { name, missing: true };
@@ -367,6 +380,42 @@ function logLayerSnapshot(
     root: inspectLayer("root", root),
     layers: layerNodes,
   });
+}
+
+function snapshotLayerState(root: HTMLElement) {
+  const nodes = Array.from(root.querySelectorAll<HTMLElement>("img, canvas, [data-preview-layer]")).map((element) => {
+    const style = window.getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
+    return {
+      tag: element.tagName,
+      className: element.className,
+      dataPreviewLayer: element.getAttribute("data-preview-layer"),
+      src: element instanceof HTMLImageElement ? shortUrl(element.currentSrc || element.src) : null,
+      backgroundImage: style.backgroundImage,
+      display: style.display,
+      opacity: style.opacity,
+      visibility: style.visibility,
+      transform: style.transform,
+      clipPath: style.clipPath,
+      maskImage: style.maskImage,
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    };
+  });
+
+  return {
+    rootFound: Boolean(root),
+    rootRect: (() => {
+      const rect = root.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })(),
+    directChildren: root.children.length,
+    descendantCount: root.querySelectorAll("*").length,
+    imgCount: root.querySelectorAll("img").length,
+    canvasCount: root.querySelectorAll("canvas").length,
+    hasMockup: nodes.some((node) => String(node.src?.start || "").includes("/mockups/") || String(node.backgroundImage || "").includes("mockups")),
+    hasArtwork: nodes.some((node) => !String(node.src?.start || "").includes("/mockups/") && node.tag === "IMG"),
+    layers: nodes,
+  };
 }
 function getPrintableCaptureLayer(side?: PreviewSide | null) {
   const selector = side
@@ -636,6 +685,10 @@ export async function captureVisualMockupPreviewBlob(
     side: (node.dataset.mockupExportRoot || "front") as string,
     backgroundImage: window.getComputedStyle(node).backgroundImage,
   });
+  console.info("[checkout-preview:export-root-after-artwork]", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    ...snapshotLayerState(node),
+  });
   logLayerSnapshot("original", node);
   await document.fonts.ready;
   await Promise.all(
@@ -697,6 +750,11 @@ export async function captureVisualMockupPreviewBlob(
   clone.style.contain = "layout paint style size";
 
   prepareClonedImages(clone);
+  console.info("[checkout-preview:clone-state]", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    original: snapshotLayerState(node),
+    clone: snapshotLayerState(clone),
+  });
   logLayerSnapshot("clone-before-append", clone);
   container.appendChild(clone);
   document.body.appendChild(container);
@@ -727,6 +785,11 @@ export async function captureVisualMockupPreviewBlob(
     try {
       console.info("[preview-capture] toBlob started", {
         side: (node.dataset.mockupExportRoot || "front") as string,
+      });
+      console.info("[checkout-preview:before-capture]", {
+        side: (node.dataset.mockupExportRoot || "front") as string,
+        original: snapshotLayerState(node),
+        clone: snapshotLayerState(clone),
       });
       const sourceCanvas = await toCanvas(container, captureOptions);
       console.info("[preview-capture] toBlob completed", {
@@ -822,6 +885,17 @@ export async function captureVisualMockupPreviewBlob(
       type: blob.type,
       width: CHECKOUT_PREVIEW_SIZE,
       height: CHECKOUT_PREVIEW_SIZE,
+    });
+    console.info("[checkout-preview:blob-result]", {
+      side: (node.dataset.mockupExportRoot || "front") as string,
+      blobSize: blob.size,
+      blobType: blob.type,
+      width: CHECKOUT_PREVIEW_SIZE,
+      height: CHECKOUT_PREVIEW_SIZE,
+      mockupFoundBeforeCapture: snapshotLayerState(node).hasMockup,
+      artworkFoundBeforeCapture: snapshotLayerState(node).hasArtwork,
+      mockupFoundInClone: snapshotLayerState(clone).hasMockup,
+      artworkFoundInClone: snapshotLayerState(clone).hasArtwork,
     });
 
     return blob;

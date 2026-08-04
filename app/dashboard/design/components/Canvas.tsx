@@ -440,6 +440,13 @@ export default function Canvas({
     [handleUpdateElement],
   );
 
+  const moveElementById = useCallback(
+    (id: string, patch: { x: number; y: number }) => {
+      handleUpdateElement(id, patch);
+    },
+    [handleUpdateElement],
+  );
+
   const isInteractiveCanvasTarget = useCallback((target: HTMLElement | null) => {
     if (!target) return false;
 
@@ -585,12 +592,13 @@ export default function Canvas({
           />
 
           {!isPreviewMode && (
-            <LostElementsOverlay
-              elements={sortedElements}
-              safeArea={localSafeArea}
-              selectedIds={selectedIds}
-              onSelect={selectElement}
-            />
+          <LostElementsOverlay
+            elements={sortedElements}
+            safeArea={localSafeArea}
+            selectedIds={selectedIds}
+            onSelect={selectElement}
+            onMoveElement={moveElementById}
+          />
           )}
 
           {sortedElements.map((el: any) => (

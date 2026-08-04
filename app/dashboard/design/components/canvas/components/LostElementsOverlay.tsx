@@ -12,6 +12,7 @@ type LostElementsOverlayProps = {
   safeArea: SafeArea;
   selectedIds?: string[];
   onSelect?: (element: any) => void;
+  onMoveElement?: (id: string, patch: { x: number; y: number }) => void;
 };
 
 const MARKER_WIDTH = 54;
@@ -35,7 +36,13 @@ function getLostMarkerPosition(el: any, safeArea: SafeArea) {
   return { x: markerX, y: markerY };
 }
 
-function LostElementsOverlay({ elements, safeArea, selectedIds = [], onSelect }: LostElementsOverlayProps) {
+function LostElementsOverlay({
+  elements,
+  safeArea,
+  selectedIds = [],
+  onSelect,
+  onMoveElement,
+}: LostElementsOverlayProps) {
   const lostElements = useMemo(() => {
     if (!safeArea?.width || !safeArea?.height) return [];
 
@@ -78,6 +85,28 @@ function LostElementsOverlay({ elements, safeArea, selectedIds = [], onSelect }:
               event.preventDefault();
               event.stopPropagation();
               onSelect?.(el);
+
+              const startX = event.clientX;
+              const startY = event.clientY;
+              const originX = Number(el.x) || 0;
+              const originY = Number(el.y) || 0;
+
+              const handleMove = (moveEvent: PointerEvent) => {
+                onMoveElement?.(el.id, {
+                  x: Math.round(originX + (moveEvent.clientX - startX)),
+                  y: Math.round(originY + (moveEvent.clientY - startY)),
+                });
+              };
+
+              const handleEnd = () => {
+                window.removeEventListener("pointermove", handleMove);
+                window.removeEventListener("pointerup", handleEnd);
+                window.removeEventListener("pointercancel", handleEnd);
+              };
+
+              window.addEventListener("pointermove", handleMove, { passive: true });
+              window.addEventListener("pointerup", handleEnd, { passive: true });
+              window.addEventListener("pointercancel", handleEnd, { passive: true });
             }}
           >
             <span className="absolute inset-1 rounded-[7px] border border-dashed border-orange-100/85" />
