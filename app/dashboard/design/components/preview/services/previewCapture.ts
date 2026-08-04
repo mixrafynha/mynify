@@ -7,6 +7,7 @@ const CHECKOUT_PREVIEW_SIZE = 384;
 const CHECKOUT_PREVIEW_PIXEL_RATIO = 1;
 const CHECKOUT_PREVIEW_QUALITY = 0.72;
 const CHECKOUT_PREVIEW_TIMEOUT_MS = 12_000;
+const CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS = 3_000;
 
 const CAPTURE_HIDDEN_SELECTORS = [
   "[data-element-control]",
@@ -139,6 +140,17 @@ function waitForImages(container: HTMLElement, strict = false) {
         }),
     ),
   ).then(() => undefined);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error(`${label} timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
+    }),
+  ]);
 }
 
 function shouldCaptureNode(target: HTMLElement) {
@@ -458,7 +470,16 @@ export async function captureVisualMockupPreviewBlob(
     await ensureRuntimeGoogleFonts(container);
     await waitForFonts();
     await nextFrame();
-    await waitForImages(container);
+    await withTimeout(
+      waitForImages(container),
+      CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS,
+      "Checkout preview image wait",
+    ).catch((error) => {
+      console.warn("[preview-capture] image wait skipped", {
+        side: (node.dataset.mockupExportRoot || "front") as string,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
     await nextFrame();
 
     const captureOptions = {
