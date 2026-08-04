@@ -301,13 +301,16 @@ export async function POST(req: Request) {
         userProduct.mockups && typeof userProduct.mockups === "object"
           ? { ...(userProduct.mockups as Record<string, unknown>) }
           : {};
+      const persistedMockups = Object.fromEntries(
+        Object.entries(nextMockups).filter(([, value]) => value !== null && value !== undefined && value !== ""),
+      );
 
       const { error: jobStateError } = await supabase
         .from("user_products")
         .update({
           design_data: nextDesignData,
           print_files: nextPrintFiles,
-          mockups: Object.keys(nextMockups).length ? nextMockups : undefined,
+          mockups: Object.keys(persistedMockups).length ? persistedMockups : undefined,
         })
         .eq("id", userProduct.id);
 
