@@ -481,6 +481,21 @@ export async function captureVisualMockupPreviewBlob(
       await image.decode().catch(() => undefined);
     }),
   );
+  const invalidImages = Array.from(node.querySelectorAll<HTMLImageElement>("img")).filter(
+    (img) =>
+      !img.currentSrc ||
+      img.naturalWidth <= 0 ||
+      img.naturalHeight <= 0,
+  );
+  console.info("[preview-capture] invalid images", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    images: invalidImages.map((img) => ({
+      src: img.src,
+      currentSrc: img.currentSrc,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+    })),
+  });
   await validateCaptureImages(node);
 
   console.info("[preview-capture] node ready", {
