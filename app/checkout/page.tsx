@@ -232,6 +232,80 @@ function resolvePreviewImageSources(item: CartItem) {
   return { front, back };
 }
 
+function previewSourceRank(item: CartItem, side: "front" | "back") {
+  const designData = item.design_data ?? item.designData ?? {};
+  const directMockups =
+    item.mockups && typeof item.mockups === "object" && !Array.isArray(item.mockups)
+      ? (item.mockups as Record<string, unknown>)
+      : {};
+  const mockups =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.mockups && typeof designData.mockups === "object"
+      ? (designData.mockups as Record<string, unknown>)
+      : {};
+  const mergedMockups = { ...directMockups, ...mockups };
+  const sides =
+    designData && typeof designData === "object" && !Array.isArray(designData) && designData.sides && typeof designData.sides === "object"
+      ? (designData.sides as Record<string, unknown>)
+      : {};
+  const sideData =
+    sides[side] && typeof sides[side] === "object" && !Array.isArray(sides[side])
+      ? (sides[side] as Record<string, unknown>)
+      : {};
+
+  if (side === "front") {
+    if (cleanUrl(item.previewFront)) return 7;
+    if (resolveRealCanvasMockupUrl({ mockups: mergedMockups, side: "front" })) return 6;
+    if (cleanUrl(sideData.mockupUrl) || cleanUrl(sideData.mockup_url)) return 5;
+    if (cleanUrl((item as Record<string, unknown>).mockup_url)) return 4;
+    if (cleanUrl(item.image)) return 3;
+    if (cleanUrl(mergedMockups.checkout_thumbnail_front_url) || cleanUrl(mergedMockups.checkout_thumbnail_url)) return 2;
+    return 1;
+  }
+
+  if (cleanUrl(item.previewBack)) return 7;
+  if (resolveRealCanvasMockupUrl({ mockups: mergedMockups, side: "back" })) return 6;
+  if (cleanUrl(sideData.mockupUrl) || cleanUrl(sideData.mockup_url)) return 5;
+  if (cleanUrl(mergedMockups.checkout_thumbnail_back_url) || cleanUrl(mergedMockups.checkout_thumbnail_back)) return 2;
+  return 1;
+}
+
+function mergeCartItemsPreservingPreview(currentItems: CartItem[], nextItems: CartItem[]) {
+  const currentMap = new Map(currentItems.map((item) => [item.id, item]));
+
+  return nextItems.map((nextItem) => {
+    const currentItem = currentMap.get(nextItem.id);
+    if (!currentItem) return nextItem;
+
+    const currentFrontRank = previewSourceRank(currentItem, "front");
+    const nextFrontRank = previewSourceRank(nextItem, "front");
+    const currentBackRank = previewSourceRank(currentItem, "back");
+    const nextBackRank = previewSourceRank(nextItem, "back");
+
+    if (nextFrontRank >= currentFrontRank && nextBackRank >= currentBackRank) {
+      return nextItem;
+    }
+
+    return {
+      ...nextItem,
+      previewFront: nextFrontRank < currentFrontRank ? currentItem.previewFront ?? nextItem.previewFront : nextItem.previewFront,
+      previewBack: nextBackRank < currentBackRank ? currentItem.previewBack ?? nextItem.previewBack : nextItem.previewBack,
+      image: nextFrontRank < currentFrontRank ? currentItem.image ?? nextItem.image : nextItem.image,
+      mockups:
+        nextFrontRank < currentFrontRank || nextBackRank < currentBackRank
+          ? (currentItem.mockups ?? nextItem.mockups)
+          : nextItem.mockups,
+      design_data:
+        nextFrontRank < currentFrontRank || nextBackRank < currentBackRank
+          ? (currentItem.design_data ?? nextItem.design_data)
+          : nextItem.design_data,
+      designData:
+        nextFrontRank < currentFrontRank || nextBackRank < currentBackRank
+          ? (currentItem.designData ?? nextItem.designData)
+          : nextItem.designData,
+    };
+  });
+}
+
 type ThumbnailReadiness = "pending" | "processing" | "ready" | "failed" | "missing";
 
 function resolveThumbnailReadiness(item: CartItem): ThumbnailReadiness {
@@ -362,6 +436,7 @@ export default function CheckoutPage() {
   const availabilityLookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const availabilityAbortController = useRef<AbortController | null>(null);
   const availabilityRequestId = useRef(0);
+  const availabilityRequestSignatureRef = useRef("");
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -410,6 +485,31 @@ export default function CheckoutPage() {
   const customDesignItems = useMemo(() => items.filter((item) => isCustomDesignItem(item)), [items]);
   const printFilesReady = useMemo(() => customDesignItems.every((item) => isPrintFileReady(item)), [customDesignItems]);
   const printFilesPending = customDesignItems.length > 0 && !printFilesReady;
+  const availabilityRequestSignature = useMemo(() => {
+    const normalizedItems = items.map((item) => ({
+      id: item.id,
+      productId: getCartProductId(item),
+      variantId: item.variant_id ?? null,
+      designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
+      userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
+      quantity: Math.max(1, Number(item.quantity) || 1),
+      color: item.color ?? null,
+      size: item.size ?? null,
+      productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
+      printFiles: resolveGelatoPrintFiles(item).map((file) => `${file.type}:${file.url}`),
+    }));
+
+    return JSON.stringify({
+      step,
+      country: form.country.trim(),
+      address: form.address.trim(),
+      apartment: form.apartment.trim(),
+      city: form.city.trim(),
+      postalCode: form.postalCode.trim(),
+      hasCompleteShippingAddress,
+      items: normalizedItems,
+    });
+  }, [hasCompleteShippingAddress, step, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -509,7 +609,7 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(data?.error || "Error loading cart");
       const nextItems = safeArray<CartItem>(data?.items);
       console.info("[checkout] cart received", { itemCount: nextItems.length });
-      setItems(nextItems);
+      setItems((current) => mergeCartItemsPreservingPreview(current, nextItems));
       void fetchVariantsForItems(nextItems);
     } catch {
       if (!background) {
@@ -600,6 +700,10 @@ export default function CheckoutPage() {
     if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
     availabilityAbortController.current?.abort();
 
+    if (availabilityRequestSignatureRef.current === availabilityRequestSignature) {
+      return;
+    }
+
     const country = form.country.trim();
     const countryData = resolveCheckoutCountry(country);
 
@@ -643,6 +747,7 @@ export default function CheckoutPage() {
       const requestId = ++availabilityRequestId.current;
       const controller = new AbortController();
       availabilityAbortController.current = controller;
+      availabilityRequestSignatureRef.current = availabilityRequestSignature;
 
       setProductAvailability((current) => ({ ...current, loading: true, message: null }));
 
@@ -725,7 +830,7 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items, printFilesPending, step]);
+  }, [availabilityRequestSignature, printFilesPending]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
