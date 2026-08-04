@@ -10,6 +10,7 @@ import ToolbarFAB from "@/app/dashboard/design/components/toolbar/ToolbarFAB";
 import AuthPopup from "@/app/dashboard/design/components/toolbar/panels/AuthPopup";
 import {
   captureVisualMockupPreview,
+  captureVisualMockupPreviewBlob,
 } from "@/app/dashboard/design/components/preview/services/previewCapture";
 import { buildDesignSavePayload } from "@/app/dashboard/design/components/topbar/services/designSavePayload";
 import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
@@ -873,25 +874,20 @@ export default function EditorPage() {
         console.error("[preview] failed", error);
       });
       await nextFrame();
-      const dataUrl = await withTimeout(
-        captureVisualMockupPreview(exportNode),
-        8000,
+      const blob = await withTimeout(
+        captureVisualMockupPreviewBlob(exportNode),
+        12000,
         `${targetSide} preview export`,
       );
-      if (!dataUrl) {
-        throw new Error(`${targetSide} capture returned null`);
+      if (!blob || blob.size === 0) {
+        throw new Error(`${targetSide} capture returned an empty blob`);
       }
 
-      console.info(`[preview] ${targetSide} exported`);
-      const blob = await imageBlobToWebPBlob(
-        await fetch(dataUrl).then((response) => response.blob()),
-        600,
-        0.85,
-      );
-      if (!blob) {
-        throw new Error(`${targetSide} WebP conversion returned null`);
-      }
-      console.info(`[preview] ${targetSide} blob created`, { size: blob.size });
+      console.info(`[preview] ${targetSide} exported`, {
+        width: 384,
+        height: 384,
+        blobSize: blob.size,
+      });
       return blob;
     },
     [],

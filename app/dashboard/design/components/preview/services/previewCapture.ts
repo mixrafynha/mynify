@@ -1,7 +1,12 @@
-import { toBlob, toCanvas, toPng } from "html-to-image";
+import { toCanvas, toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
 import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
+
+const CHECKOUT_PREVIEW_SIZE = 384;
+const CHECKOUT_PREVIEW_PIXEL_RATIO = 1;
+const CHECKOUT_PREVIEW_QUALITY = 0.72;
+const CHECKOUT_PREVIEW_TIMEOUT_MS = 12_000;
 
 const CAPTURE_HIDDEN_SELECTORS = [
   "[data-element-control]",
@@ -378,10 +383,6 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
 
 export async function captureVisualMockupPreviewBlob(
   node: HTMLElement | null,
-  options?: {
-    maxDimension?: number;
-    pixelRatio?: number;
-  },
 ) {
   if (!node) {
     throw new Error("Front preview element not found");
@@ -400,18 +401,10 @@ export async function captureVisualMockupPreviewBlob(
     throw new Error("Front preview element is not visible");
   }
 
-  const maxDimension = Math.max(1, Math.min(options?.maxDimension ?? 1400, 1400));
-  const pixelRatio = Math.max(1, Math.min(options?.pixelRatio ?? 1.25, 1.5));
   const rect = node.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) {
     throw new Error(`Front preview has invalid dimensions: ${rect.width}x${rect.height}`);
   }
-
-  const sourceWidth = positiveNumber(rect.width, EXPORT_MOCKUP_AREA.width);
-  const sourceHeight = positiveNumber(rect.height, EXPORT_MOCKUP_AREA.height);
-  const scale = Math.min(1, maxDimension / Math.max(sourceWidth, sourceHeight));
-  const width = Math.max(1, Math.round(sourceWidth * scale));
-  const height = Math.max(1, Math.round(sourceHeight * scale));
 
   const sourceImages = Array.from(node.querySelectorAll("img"));
   await document.fonts.ready;
@@ -434,8 +427,8 @@ export async function captureVisualMockupPreviewBlob(
   container.style.position = "fixed";
   container.style.left = "0";
   container.style.top = "0";
-  container.style.width = `${width}px`;
-  container.style.height = `${height}px`;
+  container.style.width = `${CHECKOUT_PREVIEW_SIZE}px`;
+  container.style.height = `${CHECKOUT_PREVIEW_SIZE}px`;
   container.style.overflow = "hidden";
   container.style.background = "transparent";
   container.style.pointerEvents = "none";
@@ -449,8 +442,8 @@ export async function captureVisualMockupPreviewBlob(
   clone.style.position = "absolute";
   clone.style.left = "0";
   clone.style.top = "0";
-  clone.style.width = `${width}px`;
-  clone.style.height = `${height}px`;
+  clone.style.width = `${CHECKOUT_PREVIEW_SIZE}px`;
+  clone.style.height = `${CHECKOUT_PREVIEW_SIZE}px`;
   clone.style.transform = "none";
   clone.style.transformOrigin = "top left";
   clone.style.margin = "0";
@@ -470,12 +463,12 @@ export async function captureVisualMockupPreviewBlob(
 
     const captureOptions = {
       cacheBust: false,
-      pixelRatio,
+      pixelRatio: CHECKOUT_PREVIEW_PIXEL_RATIO,
       backgroundColor: "transparent",
-      width,
-      height,
-      canvasWidth: width,
-      canvasHeight: height,
+      width: CHECKOUT_PREVIEW_SIZE,
+      height: CHECKOUT_PREVIEW_SIZE,
+      canvasWidth: CHECKOUT_PREVIEW_SIZE,
+      canvasHeight: CHECKOUT_PREVIEW_SIZE,
       style: {
         margin: "0",
         transform: "none",
@@ -489,14 +482,10 @@ export async function captureVisualMockupPreviewBlob(
       },
     } as const;
 
-    let blob = await toBlob(container, captureOptions);
-
-    if (!blob) {
-      const canvas = await toCanvas(container, captureOptions);
-      blob = await new Promise<Blob | null>((resolve) => {
-        canvas.toBlob(resolve, "image/webp", 0.82);
-      });
-    }
+    const canvas = await toCanvas(container, captureOptions);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
+    });
 
     if (!blob || blob.size === 0) {
       throw new Error("Front preview capture returned an empty blob");
@@ -506,6 +495,8 @@ export async function captureVisualMockupPreviewBlob(
       side: (node.dataset.mockupExportRoot || "front") as string,
       size: blob.size,
       type: blob.type,
+      width: CHECKOUT_PREVIEW_SIZE,
+      height: CHECKOUT_PREVIEW_SIZE,
     });
 
     return blob;
