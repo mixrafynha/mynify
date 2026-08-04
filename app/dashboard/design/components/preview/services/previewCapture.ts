@@ -260,6 +260,120 @@ function captureFilterForDiagnostics(target: HTMLElement) {
   return shouldCaptureNode(target);
 }
 
+function inspectLayer(name: string, element: HTMLElement | null) {
+  if (!element) {
+    return { name, missing: true };
+  }
+
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+
+  return {
+    name,
+    tag: element.tagName,
+    className: element.className,
+    zIndex: style.zIndex,
+    position: style.position,
+    opacity: style.opacity,
+    visibility: style.visibility,
+    display: style.display,
+    background: style.background,
+    backgroundColor: style.backgroundColor,
+    mixBlendMode: style.mixBlendMode,
+    filter: style.filter,
+    clipPath: style.clipPath,
+    maskImage: style.maskImage,
+    overflow: style.overflow,
+    transform: style.transform,
+    rect: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    },
+  };
+}
+
+function inspectMockupImage(element: HTMLElement | null) {
+  const img = element instanceof HTMLImageElement ? element : element?.querySelector("img");
+  if (!(img instanceof HTMLImageElement)) {
+    return { missing: true };
+  }
+
+  const style = window.getComputedStyle(img);
+  const rect = img.getBoundingClientRect();
+
+  return {
+    tag: img.tagName,
+    className: img.className,
+    src: img.getAttribute("src"),
+    currentSrc: img.currentSrc,
+    naturalWidth: img.naturalWidth,
+    naturalHeight: img.naturalHeight,
+    opacity: style.opacity,
+    zIndex: style.zIndex,
+    position: style.position,
+    display: style.display,
+    visibility: style.visibility,
+    objectFit: style.objectFit,
+    objectPosition: style.objectPosition,
+    background: style.background,
+    backgroundColor: style.backgroundColor,
+    mixBlendMode: style.mixBlendMode,
+    filter: style.filter,
+    clipPath: style.clipPath,
+    maskImage: style.maskImage,
+    overflow: style.overflow,
+    transform: style.transform,
+    rect: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    },
+  };
+}
+
+function logLayerSnapshot(
+  scope: "original" | "clone" | "clone-before-append" | "clone-after-append",
+  root: HTMLElement,
+) {
+  const layerNodes = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      "[data-preview-layer], [data-printable-capture-layer], img",
+    ),
+  ).map((element, index) => ({
+    index,
+    layer: element.getAttribute("data-preview-layer") || element.getAttribute("data-printable-capture-layer") || (element instanceof HTMLImageElement ? "img" : "unknown"),
+    tag: element.tagName,
+    className: element.className,
+    zIndex: window.getComputedStyle(element).zIndex,
+    position: window.getComputedStyle(element).position,
+    opacity: window.getComputedStyle(element).opacity,
+    visibility: window.getComputedStyle(element).visibility,
+    display: window.getComputedStyle(element).display,
+    background: window.getComputedStyle(element).background,
+    backgroundColor: window.getComputedStyle(element).backgroundColor,
+    mixBlendMode: window.getComputedStyle(element).mixBlendMode,
+    filter: window.getComputedStyle(element).filter,
+    clipPath: window.getComputedStyle(element).clipPath,
+    maskImage: window.getComputedStyle(element).maskImage,
+    overflow: window.getComputedStyle(element).overflow,
+    transform: window.getComputedStyle(element).transform,
+    rect: (() => {
+      const rect = element.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    })(),
+    image: element instanceof HTMLImageElement ? inspectMockupImage(element) : null,
+  }));
+
+  console.info("[preview-capture] layer snapshot", {
+    scope,
+    root: inspectLayer("root", root),
+    layers: layerNodes,
+  });
+}
+
 function getPrintableCaptureLayer(side?: PreviewSide | null) {
   const selector = side
     ? `[data-printable-capture-layer="${side}"]`
@@ -528,6 +642,7 @@ export async function captureVisualMockupPreviewBlob(
     side: (node.dataset.mockupExportRoot || "front") as string,
     backgroundImage: window.getComputedStyle(node).backgroundImage,
   });
+  logLayerSnapshot("original", node);
   await document.fonts.ready;
   await Promise.all(
     sourceImages.map(async (image) => {
@@ -588,6 +703,7 @@ export async function captureVisualMockupPreviewBlob(
   clone.style.contain = "layout paint style size";
 
   prepareClonedImages(clone);
+  logLayerSnapshot("clone-before-append", clone);
   container.appendChild(clone);
   document.body.appendChild(container);
 
@@ -595,6 +711,7 @@ export async function captureVisualMockupPreviewBlob(
     await ensureRuntimeGoogleFonts(container);
     await waitForFonts();
     await nextFrame();
+    logLayerSnapshot("clone-after-append", clone);
     await withTimeout(
       waitForImages(container),
       CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS,
