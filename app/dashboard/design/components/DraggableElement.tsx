@@ -25,6 +25,16 @@ function stopPointer(e: React.PointerEvent) {
   e.stopPropagation();
 }
 
+function shortUrl(value: unknown) {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const url = value.trim();
+  return {
+    start: url.slice(0, 80),
+    end: url.slice(-30),
+    length: url.length,
+  };
+}
+
 function sanitizeText(value: string) {
   return String(value || "")
     .normalize("NFKC")
@@ -313,6 +323,55 @@ function DraggableElement({
     }),
     [el, outside, rect.height, rect.width, rect.x, rect.y, severity]
   );
+
+  useEffect(() => {
+    if (isHidden) return;
+
+    const root = elementRef.current?.closest("[data-mockup-export-root]");
+    const mockup = root?.querySelector("img");
+    const style = elementRef.current ? window.getComputedStyle(elementRef.current) : null;
+    const rectSnapshot = elementRef.current?.getBoundingClientRect() ?? null;
+
+    console.info("[checkout-preview:artwork-created]", {
+      side: root?.getAttribute("data-mockup-export-root") ?? null,
+      elementType: el?.type ?? null,
+      artworkUrl: shortUrl(el?.src),
+      artworkId: el?.id ?? null,
+      parentElement: elementRef.current?.parentElement?.tagName ?? null,
+      insideExportRoot: Boolean(root),
+      dimensions: { width: rect.width, height: rect.height },
+      position: { x: rect.x, y: rect.y },
+      scale: el?.meta?.scale ?? null,
+      rotation: el?.meta?.rotation ?? null,
+      opacity: style?.opacity ?? null,
+      zIndex: style?.zIndex ?? null,
+      transform: style?.transform ?? null,
+      layersBeforeAfter: {
+        before: null,
+        after: null,
+      },
+      mockupStillExists: Boolean(mockup),
+    });
+    console.info("[checkout-preview:mockup-after-artwork]", {
+      side: root?.getAttribute("data-mockup-export-root") ?? null,
+      mockupFound: Boolean(mockup),
+      mockupInsideExportRoot: Boolean(root && mockup && root.contains(mockup)),
+      mockupRect: mockup
+        ? (() => {
+            const r = mockup.getBoundingClientRect();
+            return { x: r.x, y: r.y, width: r.width, height: r.height };
+          })()
+        : null,
+      mockupDisplay: mockup ? window.getComputedStyle(mockup).display : null,
+      mockupVisibility: mockup ? window.getComputedStyle(mockup).visibility : null,
+      mockupOpacity: mockup ? window.getComputedStyle(mockup).opacity : null,
+      mockupZIndex: mockup ? window.getComputedStyle(mockup).zIndex : null,
+      artworkZIndex: style?.zIndex ?? null,
+      mockupConnected: mockup ? mockup.isConnected : null,
+      mockupUrl: shortUrl((mockup as HTMLImageElement | null)?.currentSrc || (mockup as HTMLImageElement | null)?.src),
+      rootChildrenCount: root?.children.length ?? null,
+    });
+  }, [el, isHidden, rect.height, rect.width, rect.x, rect.y]);
 
   if (isHidden) return null;
 
