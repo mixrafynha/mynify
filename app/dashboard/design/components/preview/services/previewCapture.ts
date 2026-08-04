@@ -222,6 +222,17 @@ function buildCaptureOptions(width: number, height: number) {
       transformOrigin: "top left",
     },
     filter: (target: HTMLElement) => {
+      if (target instanceof HTMLImageElement) {
+        const src = target.currentSrc || target.src || "";
+        if (
+          !src ||
+          target.naturalWidth <= 0 ||
+          target.naturalHeight <= 0 ||
+          src.includes("/dashboard/design/")
+        ) {
+          return false;
+        }
+      }
       if (!(target instanceof HTMLElement)) return true;
       if (target.dataset.excludeFromPreview !== undefined) return false;
       return shouldCaptureNode(target);

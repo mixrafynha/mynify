@@ -20,6 +20,24 @@ export default function CanvasMockup({
   visualScale = 1,
   tint = true,
 }: Props) {
+  function normalizeImageSource(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+
+    const source = value.trim();
+    if (!source) return null;
+
+    if (
+      source.startsWith("data:image/") ||
+      source.startsWith("blob:") ||
+      /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(source)
+    ) {
+      return source;
+    }
+
+    return null;
+  }
+
+  const safeMockup = normalizeImageSource(mockup);
   const filterId = `mockup-tint-${useId().replace(/:/g, "")}`;
   const normalizedColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(
     String(color).trim(),
@@ -63,17 +81,19 @@ export default function CanvasMockup({
         </svg>
       )}
 
-      <img
-        src={mockup}
-        alt={`${mockupId}-${currentSide}`}
-        draggable={false}
-        decoding="async"
-        className="absolute inset-0 h-full w-full object-cover md:drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
-        style={{
-          imageRendering: "auto",
-          filter: tint ? `url(#${filterId})` : undefined,
-        }}
-      />
+      {safeMockup ? (
+        <img
+          src={safeMockup}
+          alt={`${mockupId}-${currentSide}`}
+          draggable={false}
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover md:drop-shadow-[0_35px_45px_rgba(0,0,0,0.35)]"
+          style={{
+            imageRendering: "auto",
+            filter: tint ? `url(#${filterId})` : undefined,
+          }}
+        />
+      ) : null}
     </div>
   );
 }

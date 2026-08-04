@@ -4,6 +4,23 @@ import { memo } from "react";
 import { AlertTriangle, CheckCircle2, Shirt } from "lucide-react";
 import type { PreviewSide, PreviewSideData } from "./types/preview";
 
+function normalizeImageSource(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const source = value.trim();
+  if (!source) return null;
+
+  if (
+    source.startsWith("data:image/") ||
+    source.startsWith("blob:") ||
+    /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(source)
+  ) {
+    return source;
+  }
+
+  return null;
+}
+
 function Thumb({
   data,
   active,
@@ -14,6 +31,7 @@ function Thumb({
   onClick: () => void;
 }) {
   const ok = data.validation.status === "ready";
+  const safeMockupUrl = normalizeImageSource(data.mockupUrl);
 
   return (
     <button
@@ -26,9 +44,9 @@ function Thumb({
       }`}
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-black/30">
-        {data.mockupUrl ? (
+        {safeMockupUrl ? (
           <img
-            src={data.mockupUrl}
+            src={safeMockupUrl}
             alt={data.side}
             className="h-full w-full object-contain opacity-95 transition group-hover:scale-[1.03]"
           />

@@ -17,17 +17,37 @@ function isDarkColor(color: string) {
   return r * 0.299 + g * 0.587 + b * 0.114 < 120;
 }
 
+function normalizeImageSource(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const source = value.trim();
+  if (!source) return null;
+
+  if (
+    source.startsWith("data:image/") ||
+    source.startsWith("blob:") ||
+    /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(source)
+  ) {
+    return source;
+  }
+
+  return null;
+}
+
 function DesignImageOverlay({
   src,
   className = "",
 }: {
-  src: string;
+  src: string | null;
   className?: string;
 }) {
+  const safeSource = normalizeImageSource(src);
+  if (!safeSource) return null;
+
   return (
     <div className={`pointer-events-none overflow-hidden ${className}`}>
       <img
-        src={src}
+        src={safeSource}
         alt="Design overlay"
         draggable={false}
         className="block h-full w-full select-none object-contain"
@@ -108,7 +128,9 @@ function PreviewMockup({
   const visualScale = Number(data.visualScale) > 0 ? Number(data.visualScale) : 1;
 
   const dark = isDarkColor(color);
-  const hasAiMockup = Boolean(generatedMockupUrl) && !aiImageFailed;
+  const safeGeneratedMockupUrl = normalizeImageSource(generatedMockupUrl);
+  const safeMockupUrl = normalizeImageSource(data.mockupUrl);
+  const hasAiMockup = Boolean(safeGeneratedMockupUrl) && !aiImageFailed;
 
   return (
     <section
@@ -128,7 +150,7 @@ function PreviewMockup({
         {hasAiMockup ? (
           <div className="relative flex h-full w-full items-center justify-center">
             <img
-              src={generatedMockupUrl || ""}
+              src={safeGeneratedMockupUrl || undefined}
               alt={`${productId} generated ${data.side}`}
               draggable={false}
               onError={() => setAiImageFailed(true)}
@@ -156,7 +178,7 @@ function PreviewMockup({
                 transformOrigin: "center center",
               }}
             >
-              {data.mockupUrl ? (
+              {safeMockupUrl ? (
                 <div
                   className="pointer-events-none absolute inset-0 z-0 select-none"
                   style={{
@@ -165,7 +187,7 @@ function PreviewMockup({
                   }}
                 >
                   <img
-                    src={data.mockupUrl}
+                    src={safeMockupUrl}
                     alt={`${productId} ${data.side}`}
                     draggable={false}
                     className="absolute inset-0 h-full w-full select-none object-cover drop-shadow-[0_40px_55px_rgba(0,0,0,.30)]"
@@ -178,8 +200,8 @@ function PreviewMockup({
                     style={{
                       backgroundColor: color,
                       mixBlendMode: dark ? "normal" : "multiply",
-                      WebkitMaskImage: `url(${data.mockupUrl})`,
-                      maskImage: `url(${data.mockupUrl})`,
+                      WebkitMaskImage: `url(${safeMockupUrl})`,
+                      maskImage: `url(${safeMockupUrl})`,
                       WebkitMaskSize: "cover",
                       maskSize: "cover",
                       WebkitMaskPosition: "center",

@@ -13,6 +13,23 @@ import type { ProductionPreviewInput, PreviewSide } from "./types/preview";
 type ImagesBySide = Partial<Record<PreviewSide, string[]>>;
 type DesignImageBySide = Partial<Record<PreviewSide, string>>;
 
+function normalizeImageSource(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const source = value.trim();
+  if (!source) return null;
+
+  if (
+    source.startsWith("data:image/") ||
+    source.startsWith("blob:") ||
+    /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(source)
+  ) {
+    return source;
+  }
+
+  return null;
+}
+
 function normalizeImages(value: any): string[] {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -85,12 +102,14 @@ function ProductionPreview({
     Math.max(0, sideImages.length - 1),
   );
 
-  const activeGeneratedImage = sideImages[activeImageIndex] || null;
+  const activeGeneratedImage = normalizeImageSource(sideImages[activeImageIndex] || null);
 
   const activeDesignImage =
     designImageBySide[activeSide] ||
-    input.designImages?.[activeSide] ||
-    (input.designImage && input.side === activeSide ? input.designImage : null);
+    normalizeImageSource(
+      input.designImages?.[activeSide] ||
+        (input.designImage && input.side === activeSide ? input.designImage : null),
+    );
 
   const requestBodyBase = useMemo(
     () => ({
@@ -385,7 +404,7 @@ function ProductionPreview({
                 aria-label={`Select pose ${index + 1}`}
               >
                 <img
-                  src={img}
+                  src={normalizeImageSource(img) || undefined}
                   alt={`Pose ${index + 1}`}
                   className="h-full w-full object-cover"
                   draggable={false}
