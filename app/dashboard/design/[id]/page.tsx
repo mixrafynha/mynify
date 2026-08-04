@@ -1137,22 +1137,16 @@ export default function EditorPage() {
       );
 
       stepContext.step = "preview";
-      const quickPreviewPromise = captureCheckoutPreviews({
+      const previewPromise = captureCheckoutPreviews({
         userProductId: resolvedDesignId,
         frontPreviewBlob: null,
         backPreviewBlob: null,
         usedSides,
-      }).catch((error) => {
-        console.warn("[preview-flow] quick capture failed", {
-          userProductId: resolvedDesignId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return null;
       });
 
       const quickPreview = await Promise.race([
-        quickPreviewPromise,
-        timeoutAfter(2500),
+        previewPromise,
+        timeoutAfter(2500).then(() => null),
       ]);
 
       let frontPreviewBlob: Blob | null = null;
@@ -1286,15 +1280,12 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
+      setSaving(false);
+
       if (!quickPreview) {
         void (async () => {
           try {
-            const previews = await captureCheckoutPreviews({
-              userProductId: savedUserProductId,
-              frontPreviewBlob: null,
-              backPreviewBlob: null,
-              usedSides,
-            });
+            const previews = await previewPromise;
 
             console.info("[preview-flow] captured", {
               userProductId: savedUserProductId,
@@ -1365,7 +1356,9 @@ export default function EditorPage() {
       setSaveNotice(message);
       alert(message);
     } finally {
-      setSaving(false);
+      if (latestStateRef.current.saving) {
+        setSaving(false);
+      }
     }
   }, [
     productId,
@@ -1375,8 +1368,6 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     captureCheckoutPreviews,
-    exportEditorPreview,
-    persistPreviewMockups,
   ]);
 
   const handleAuthSuccess = useCallback(() => {
