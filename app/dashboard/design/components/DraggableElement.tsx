@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ElementRenderer from "@/shared/rendering/ElementRenderer";
 import { getElementBoxStyle } from "@/shared/rendering/elementBox";
 import SelectionFrame from "./element/SelectionFrame";
@@ -159,6 +159,13 @@ function DraggableElement({
       inputRef.current?.select?.();
     }, 30);
   }, [isText, isLocked]);
+
+  useEffect(() => {
+    if (!editing || isSelected || !isText) return;
+
+    setEditing(false);
+    inputRef.current?.blur();
+  }, [editing, inputRef, isSelected, isText]);
 
   const updateText = useCallback(
     (text: string) => {
