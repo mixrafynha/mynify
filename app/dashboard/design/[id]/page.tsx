@@ -1133,11 +1133,15 @@ export default function EditorPage() {
       let frontPreviewBlob: Blob | null = null;
       stepContext.step = "preview";
       if (usedSides.includes("front")) {
-        frontPreviewBlob = await withTimeout(
-          exportEditorPreview("front"),
-          12000,
-          "Front preview export",
-        );
+        try {
+          frontPreviewBlob = await withTimeout(
+            exportEditorPreview("front"),
+            20000,
+            "Front preview export",
+          );
+        } catch (error) {
+          console.warn("[editor-preview] front preview export failed; continuing without front thumbnail", error);
+        }
       }
 
       let backPreviewBlob: Blob | null = null;
@@ -1145,7 +1149,7 @@ export default function EditorPage() {
         try {
           backPreviewBlob = await withTimeout(
             exportEditorPreview("back"),
-            12000,
+            20000,
             "Back preview export",
           );
         } catch (error) {
