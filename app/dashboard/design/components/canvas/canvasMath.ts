@@ -29,6 +29,7 @@ const MIN_ELEMENT_SIZE = 10;
 const MIN_TEXT_WIDTH = 42;
 const TEXT_AVERAGE_CHAR_RATIO = 0.58;
 const TEXT_CAP_HEIGHT_RATIO = 0.08;
+let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 export function finiteNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
@@ -81,6 +82,32 @@ function splitTextLines(text: string): string[] {
   return lines.length ? lines : ["Text"];
 }
 
+function getTextMeasureContext() {
+  if (textMeasureContext || typeof document === "undefined") return textMeasureContext;
+
+  const canvas = document.createElement("canvas");
+  textMeasureContext = canvas.getContext("2d");
+  return textMeasureContext;
+}
+
+function measureLineWidth(line: string, meta: Record<string, any>, fontSize: number, letterSpacing: number) {
+  const content = line || " ";
+  const fallbackWidth =
+    content.length * fontSize * TEXT_AVERAGE_CHAR_RATIO +
+    Math.max(0, content.length - 1) * letterSpacing;
+  const context = getTextMeasureContext();
+
+  if (!context) return Math.ceil(fallbackWidth);
+
+  const fontStyle = meta.fontStyle || "normal";
+  const fontWeight = meta.fontWeight || 700;
+  const fontFamily = meta.fontFamily || "Arial";
+  context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}, Arial, sans-serif`;
+
+  const measuredWidth = context.measureText(content).width;
+  return Math.ceil(measuredWidth + Math.max(0, content.length - 1) * letterSpacing);
+}
+
 export function measureTextBox(el: CanvasElementLike) {
   const meta = el.meta || {};
   const text = String(el.text ?? el.content ?? "Text");
@@ -91,10 +118,9 @@ export function measureTextBox(el: CanvasElementLike) {
 
   const explicitWidth = finiteNumber(el.width, 0);
   const rawLines = splitTextLines(text);
-  const longestLineLength = Math.max(1, ...rawLines.map((line) => Array.from(line || " ").length));
-  const naturalLineWidth = Math.ceil(
-    longestLineLength * fontSize * TEXT_AVERAGE_CHAR_RATIO +
-      Math.max(0, longestLineLength - 1) * letterSpacing
+  const naturalLineWidth = Math.max(
+    1,
+    ...rawLines.map((line) => measureLineWidth(line, meta, fontSize, letterSpacing)),
   );
 
   const width = Math.max(
