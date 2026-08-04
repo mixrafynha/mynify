@@ -129,6 +129,11 @@ export async function POST(req: Request) {
           contentType: frontFile?.type || "image/webp",
           key: previewKey(userProductId, "front"),
         });
+        console.info("[mockup-preview] R2 upload completed", {
+          userProductId,
+          side: "front",
+          frontUrl: frontUpload?.url ?? null,
+        });
       } catch (error) {
         console.error("[mockup-preview] front upload failed", error);
         return NextResponse.json({ error: "Front preview upload failed" }, { status: 500 });
@@ -141,6 +146,11 @@ export async function POST(req: Request) {
           buffer: backBuffer,
           contentType: backFile?.type || "image/webp",
           key: previewKey(userProductId, "back"),
+        });
+        console.info("[mockup-preview] R2 upload completed", {
+          userProductId,
+          side: "back",
+          backUrl: backUpload?.url ?? null,
         });
       } catch (error) {
         console.error("[mockup-preview] back upload failed", error);
@@ -225,7 +235,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Preview persistence failed" }, { status: 500 });
     }
 
-    console.info("[mockup-preview] user_product updated", {
+    console.info("[mockup-preview] Supabase update completed", {
       userProductId,
       frontUrl: frontUpload?.url ?? null,
       backUrl: backUpload?.url ?? null,
@@ -257,13 +267,22 @@ export async function POST(req: Request) {
       back: nextMockups.back ?? null,
     });
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       frontUrl: frontUpload?.url ?? null,
       backUrl: backUpload?.url ?? null,
       mockups: parseMockups(updated.mockups),
       designData: parseDesignData(updated.design_data),
+    };
+
+    console.info("[mockup-preview] response sent", {
+      userProductId,
+      httpStatus: 200,
+      frontUrl: responsePayload.frontUrl,
+      backUrl: responsePayload.backUrl,
     });
+
+    return NextResponse.json(responsePayload);
   } catch (error) {
     console.error("[mockup-preview] failed", error);
     return NextResponse.json(

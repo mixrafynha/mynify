@@ -255,6 +255,54 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): 
   ]);
 }
 
+type PreviewDebugStage =
+  | "save_completed"
+  | "capture_started"
+  | "node_found"
+  | "node_dimensions_valid"
+  | "fonts_ready"
+  | "images_decoded"
+  | "blob_created"
+  | "persistence_started"
+  | "persistence_response"
+  | "navigation_started"
+  | "capture_failed"
+  | "persistence_failed";
+
+type PreviewDebugPayload = {
+  userProductId: string;
+  stage: PreviewDebugStage;
+  side?: Side | null;
+  nodeWidth?: number | null;
+  nodeHeight?: number | null;
+  blobSize?: number | null;
+  blobType?: string | null;
+  httpStatus?: number | null;
+  error?: string | null;
+};
+
+async function reportPreviewStage(payload: PreviewDebugPayload) {
+  try {
+    await fetch("/api/debug/preview-flow", {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...payload,
+        timestamp: new Date().toISOString(),
+      }),
+    });
+  } catch (error) {
+    console.warn("[preview-flow] debug report failed", {
+      userProductId: payload.userProductId,
+      stage: payload.stage,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 async function hydrateSavedTextFonts(...groups: ElementType[][]) {
   const families = collectSavedTextFonts(...groups);
 
@@ -846,6 +894,7 @@ export default function EditorPage() {
     async (targetSide: Side): Promise<Blob> => {
       const stageRef = targetSide === "front" ? frontStageRef : backStageRef;
       const stageRoot = stageRef.current;
+      const debugUserProductId = draftDesignIdRef.current || "unknown";
 
       console.info("[preview] stage state", {
         side: targetSide,
@@ -870,8 +919,42 @@ export default function EditorPage() {
         throw new Error(`${targetSide} export root not found`);
       }
 
+      const rect = exportNode.getBoundingClientRect();
+      await reportPreviewStage({
+        userProductId: debugUserProductId,
+        stage: "node_found",
+        side: targetSide,
+        nodeWidth: rect.width,
+        nodeHeight: rect.height,
+      });
+      if (rect.width > 0 && rect.height > 0) {
+        await reportPreviewStage({
+          userProductId: debugUserProductId,
+          stage: "node_dimensions_valid",
+          side: targetSide,
+          nodeWidth: rect.width,
+          nodeHeight: rect.height,
+        });
+      }
+
       await document.fonts?.ready?.catch((error) => {
         console.error("[preview] failed", error);
+      });
+      await reportPreviewStage({
+        userProductId: debugUserProductId,
+        stage: "fonts_ready",
+        side: targetSide,
+        nodeWidth: rect.width,
+        nodeHeight: rect.height,
+      });
+      const sourceImages = Array.from(exportNode.querySelectorAll("img"));
+      await reportPreviewStage({
+        userProductId: debugUserProductId,
+        stage: "images_decoded",
+        side: targetSide,
+        nodeWidth: rect.width,
+        nodeHeight: rect.height,
+        error: `imageCount=${sourceImages.length},complete=${sourceImages.filter((image) => image.complete && image.naturalWidth > 0).length}`,
       });
       await nextFrame();
       const blob = await withTimeout(
@@ -887,6 +970,15 @@ export default function EditorPage() {
         width: 384,
         height: 384,
         blobSize: blob.size,
+      });
+      await reportPreviewStage({
+        userProductId: debugUserProductId,
+        stage: "blob_created",
+        side: targetSide,
+        nodeWidth: rect.width,
+        nodeHeight: rect.height,
+        blobSize: blob.size,
+        blobType: blob.type,
       });
       return blob;
     },
@@ -950,6 +1042,13 @@ export default function EditorPage() {
         hasFront: Boolean(frontBlob),
         hasBack: Boolean(backBlob),
       });
+      await reportPreviewStage({
+        userProductId: args.userProductId,
+        stage: "persistence_started",
+        side: "front",
+        blobSize: frontBlob.size,
+        blobType: frontBlob.type,
+      });
 
       const formData = new FormData();
       formData.append("userProductId", args.userProductId);
@@ -958,12 +1057,47 @@ export default function EditorPage() {
         formData.append("back", blobToPreviewFile(backBlob, "back"));
       }
 
-      const response = await fetch("/api/user-products/save-design/mockup-preview", {
-        method: "POST",
-        credentials: "include",
-        body: formData,
+      let response: Response;
+      try {
+        response = await fetch("/api/user-products/save-design/mockup-preview", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        await reportPreviewStage({
+          userProductId: args.userProductId,
+          stage: "persistence_failed",
+          side: "front",
+          blobSize: frontBlob.size,
+          blobType: frontBlob.type,
+          error:
+            error instanceof DOMException && error.name === "AbortError"
+              ? `AbortError: ${message}`
+              : error instanceof TypeError
+                ? `TypeError: ${message}`
+                : message,
+        });
+        throw error;
+      }
+
+      const rawPayload = await response.text().catch(() => "");
+      let payload: any = null;
+      try {
+        payload = rawPayload ? JSON.parse(rawPayload) : null;
+      } catch {
+        payload = null;
+      }
+      await reportPreviewStage({
+        userProductId: args.userProductId,
+        stage: "persistence_response",
+        side: "front",
+        blobSize: frontBlob.size,
+        blobType: frontBlob.type,
+        httpStatus: response.status,
+        error: rawPayload.slice(0, 500) || null,
       });
-      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
         throw new Error(payload?.error || "Preview persistence failed");
@@ -1213,6 +1347,10 @@ export default function EditorPage() {
       console.info("[save-design] main save completed", {
         userProductId: savedUserProductId,
       });
+      await reportPreviewStage({
+        userProductId: savedUserProductId,
+        stage: "save_completed",
+      });
 
       if (process.env.NODE_ENV === "development") {
         console.log(
@@ -1249,6 +1387,15 @@ export default function EditorPage() {
       };
 
       try {
+        await reportPreviewStage({
+          userProductId: savedUserProductId,
+          stage: "capture_started",
+          side: usedSides.includes("front")
+            ? "front"
+            : usedSides.includes("back")
+              ? "back"
+              : null,
+        });
         const captured = await captureCheckoutPreviews({
           userProductId: savedUserProductId,
           frontPreviewBlob: null,
@@ -1267,6 +1414,16 @@ export default function EditorPage() {
           backSize: previews.backBlob?.size ?? null,
         });
       } catch (error) {
+        await reportPreviewStage({
+          userProductId: savedUserProductId,
+          stage: "capture_failed",
+          side: usedSides.includes("front")
+            ? "front"
+            : usedSides.includes("back")
+              ? "back"
+              : null,
+          error: error instanceof Error ? error.message : String(error),
+        });
         console.warn("[preview-flow] capture failed", {
           userProductId: savedUserProductId,
           error: error instanceof Error ? error.message : String(error),
@@ -1292,6 +1449,14 @@ export default function EditorPage() {
             backUrl: uploadResult.backUrl ?? null,
           });
         } catch (error) {
+          await reportPreviewStage({
+            userProductId: savedUserProductId,
+            stage: "persistence_failed",
+            side: previews.frontBlob ? "front" : previews.backBlob ? "back" : null,
+            blobSize: previews.frontBlob?.size ?? previews.backBlob?.size ?? null,
+            blobType: previews.frontBlob?.type ?? previews.backBlob?.type ?? null,
+            error: error instanceof Error ? error.message : String(error),
+          });
           console.warn("[preview-flow] preview persistence failed", {
             userProductId: savedUserProductId,
             error: error instanceof Error ? error.message : String(error),
@@ -1307,6 +1472,10 @@ export default function EditorPage() {
         });
         console.info("[canvas-preview] navigating to checkout", {
           userProductId: savedUserProductId,
+        });
+        await reportPreviewStage({
+          userProductId: savedUserProductId,
+          stage: "navigation_started",
         });
         router.push(data?.redirectTo ?? "/cart");
         return;
@@ -1327,6 +1496,10 @@ export default function EditorPage() {
       });
       console.info("[canvas-preview] navigating to checkout", {
         userProductId: savedUserProductId,
+      });
+      await reportPreviewStage({
+        userProductId: savedUserProductId,
+        stage: "navigation_started",
       });
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;
