@@ -440,18 +440,36 @@ export default function Canvas({
     [handleUpdateElement],
   );
 
+  const isInteractiveCanvasTarget = useCallback((target: HTMLElement | null) => {
+    if (!target) return false;
+
+    return !!(
+      target.closest("[data-draggable-element]") ||
+      target.closest("[data-element-control]") ||
+      target.closest("[data-resize-handle]") ||
+      target.closest("textarea") ||
+      target.closest("input") ||
+      target.closest("button")
+    );
+  }, []);
+
+  const handleCanvasPointerDownCapture = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+
+      if (!isInteractiveCanvasTarget(target)) {
+        clearSelection();
+      }
+
+      handlePinchDown(e);
+    },
+    [clearSelection, handlePinchDown, isInteractiveCanvasTarget],
+  );
+
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
-      const clickedInteractiveElement =
-        target.closest("[data-draggable-element]") ||
-        target.closest("[data-element-control]") ||
-        target.closest("[data-resize-handle]") ||
-        target.closest("textarea") ||
-        target.closest("input") ||
-        target.closest("button");
-
-      if (clickedInteractiveElement) return;
+      if (isInteractiveCanvasTarget(target)) return;
 
       clearSelection();
 
@@ -459,7 +477,7 @@ export default function Canvas({
         startPan(e);
       }
     },
-    [clearSelection, startPan],
+    [clearSelection, isInteractiveCanvasTarget, startPan],
   );
 
   const handleWheel = useCallback(
@@ -488,7 +506,7 @@ export default function Canvas({
       onPointerMove={onPanMove}
       onPointerUp={endPan}
       onPointerCancel={endPan}
-      onPointerDownCapture={handlePinchDown}
+      onPointerDownCapture={handleCanvasPointerDownCapture}
       onPointerMoveCapture={handlePinchMove}
       onPointerUpCapture={handlePinchEnd}
       onPointerCancelCapture={handlePinchEnd}
