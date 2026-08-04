@@ -477,6 +477,7 @@ export default function Canvas({
   return (
     <div
       ref={setWrapperNode}
+      data-mockup-export-root={side}
       className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden bg-[#05070d] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       onPointerDown={handleCanvasPointerDown}
       onPointerMove={onPanMove}
@@ -524,7 +525,6 @@ export default function Canvas({
 
       <div
         ref={mockupRootRef}
-        data-mockup-export-root={side}
         className="relative shrink-0 will-change-transform md:will-change-auto"
         style={{
           width: MOCKUP_AREA.width,

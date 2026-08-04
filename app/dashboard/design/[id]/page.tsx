@@ -913,6 +913,13 @@ export default function EditorPage() {
       console.info(`[preview] ${targetSide} stage found`);
 
       const exportNode = stageRoot;
+      console.info("[preview-root-debug]", {
+        tag: exportNode.tagName,
+        className: exportNode.className,
+        rect: exportNode.getBoundingClientRect(),
+        childCount: exportNode.children.length,
+        html: exportNode.outerHTML.slice(0, 1500),
+      });
 
       const rect = exportNode.getBoundingClientRect();
       await reportPreviewStage({
