@@ -443,10 +443,15 @@ export default function Canvas({
   const handleCanvasPointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       const target = e.target as HTMLElement;
-      const clickedCanvas = e.currentTarget === e.target;
-      const clickedMockupRoot = target.dataset.mockupExportRoot === side;
+      const clickedInteractiveElement =
+        target.closest("[data-draggable-element]") ||
+        target.closest("[data-element-control]") ||
+        target.closest("[data-resize-handle]") ||
+        target.closest("textarea") ||
+        target.closest("input") ||
+        target.closest("button");
 
-      if (!clickedCanvas && !clickedMockupRoot) return;
+      if (clickedInteractiveElement) return;
 
       clearSelection();
 
