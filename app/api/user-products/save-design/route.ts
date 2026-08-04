@@ -307,7 +307,7 @@ export async function POST(req: Request) {
         .update({
           design_data: nextDesignData,
           print_files: nextPrintFiles,
-          mockups: nextMockups,
+          mockups: Object.keys(nextMockups).length ? nextMockups : undefined,
         })
         .eq("id", userProduct.id);
 
