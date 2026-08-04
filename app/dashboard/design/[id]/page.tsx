@@ -1209,12 +1209,58 @@ export default function EditorPage() {
         snapshot.backElements,
       );
 
+      let frontPreviewBlob: Blob | null = null;
+      let backPreviewBlob: Blob | null = null;
+      let previewFrontDataUrl: string | null = null;
+      let previewBackDataUrl: string | null = null;
+
+      try {
+        stepContext.step = "preview";
+
+        if (usedSides.includes("front")) {
+          frontPreviewBlob = await exportPreviewWithRetry("front");
+        }
+
+        if (usedSides.includes("back")) {
+          try {
+            backPreviewBlob = await exportPreviewWithRetry("back");
+          } catch (error) {
+            console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
+          }
+        }
+
+        if (frontPreviewBlob) {
+          console.info("[editor-preview] local preview ready", {
+            side: "front",
+            blobSize: frontPreviewBlob.size,
+            blobType: frontPreviewBlob.type,
+          });
+          previewFrontDataUrl = await blobToDataUrl(frontPreviewBlob);
+        }
+
+        if (backPreviewBlob) {
+          console.info("[editor-preview] local preview ready", {
+            side: "back",
+            blobSize: backPreviewBlob.size,
+            blobType: backPreviewBlob.type,
+          });
+          previewBackDataUrl = await blobToDataUrl(backPreviewBlob);
+        }
+      } catch (error) {
+        console.warn("[preview-flow] non-blocking failure", {
+          userProductId: draftDesignIdRef.current,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       const parsedDesignPayload = JSON.parse(designPayloadJson);
       const frontData = parsedDesignPayload?.design_data?.sides?.front ?? null;
       const backData = parsedDesignPayload?.design_data?.sides?.back ?? null;
       const requestPayload = {
         ...parsedDesignPayload,
         designId: resolvedDesignId,
+        previewFrontDataUrl,
+        previewBackDataUrl,
       };
       console.log("[editor-save] payload inspection", {
         hasFront: Boolean(frontData),
@@ -1312,36 +1358,6 @@ export default function EditorPage() {
       });
 
       try {
-        stepContext.step = "preview";
-        let frontPreviewBlob: Blob | null = null;
-        if (usedSides.includes("front")) {
-          frontPreviewBlob = await exportPreviewWithRetry("front");
-        }
-
-        let backPreviewBlob: Blob | null = null;
-        if (usedSides.includes("back")) {
-          try {
-            backPreviewBlob = await exportPreviewWithRetry("back");
-          } catch (error) {
-            console.warn("[editor-preview] back preview export failed; continuing without back thumbnail", error);
-          }
-        }
-
-        if (frontPreviewBlob) {
-          console.info("[editor-preview] local preview ready", {
-            side: "front",
-            blobSize: frontPreviewBlob.size,
-            blobType: frontPreviewBlob.type,
-          });
-        }
-        if (backPreviewBlob) {
-          console.info("[editor-preview] local preview ready", {
-            side: "back",
-            blobSize: backPreviewBlob.size,
-            blobType: backPreviewBlob.type,
-          });
-        }
-
         const previews = await captureCheckoutPreviews({
           userProductId: savedUserProductId,
           frontPreviewBlob,
