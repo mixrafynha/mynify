@@ -197,13 +197,8 @@ function prepareClonedImages(container: HTMLElement) {
   const images = Array.from(container.querySelectorAll("img"));
 
   images.forEach((img) => {
-    const source = img.currentSrc || img.getAttribute("src") || img.src || "";
-    const originalCrossOrigin = img.getAttribute("crossorigin");
-    if (originalCrossOrigin) {
-      img.setAttribute("crossorigin", originalCrossOrigin);
-    } else {
-      img.removeAttribute("crossorigin");
-    }
+    const source = img.getAttribute("src") || img.src || "";
+    img.setAttribute("crossorigin", "anonymous");
     img.setAttribute("decoding", "sync");
     img.setAttribute("loading", "eager");
     img.removeAttribute("srcset");
@@ -373,7 +368,6 @@ function logLayerSnapshot(
     layers: layerNodes,
   });
 }
-
 function getPrintableCaptureLayer(side?: PreviewSide | null) {
   const selector = side
     ? `[data-printable-capture-layer="${side}"]`
