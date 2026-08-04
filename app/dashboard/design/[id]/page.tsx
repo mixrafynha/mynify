@@ -125,12 +125,6 @@ function nextFrame() {
   });
 }
 
-function timeoutAfter(ms: number) {
-  return new Promise<null>((resolve) => {
-    window.setTimeout(() => resolve(null), ms);
-  });
-}
-
 async function imageBlobToWebPBlob(
   sourceBlob: Blob,
   maxSize = 1400,
@@ -1144,46 +1138,12 @@ export default function EditorPage() {
         usedSides,
       });
 
-      const quickPreview = await Promise.race([
-        previewPromise,
-        timeoutAfter(2500).then(() => null),
-      ]);
-
-      let frontPreviewBlob: Blob | null = null;
-      let backPreviewBlob: Blob | null = null;
-
-      if (quickPreview) {
-        frontPreviewBlob = quickPreview.front;
-        backPreviewBlob = quickPreview.back;
-      }
-
-      if (frontPreviewBlob) {
-        console.info("[editor-preview] local preview ready", {
-          side: "front",
-          blobSize: frontPreviewBlob.size,
-          blobType: frontPreviewBlob.type,
-        });
-      }
-
-      if (backPreviewBlob) {
-        console.info("[editor-preview] local preview ready", {
-          side: "back",
-          blobSize: backPreviewBlob.size,
-          blobType: backPreviewBlob.type,
-        });
-      }
-
-      const previewFrontDataUrl = frontPreviewBlob ? await blobToDataUrl(frontPreviewBlob) : null;
-      const previewBackDataUrl = backPreviewBlob ? await blobToDataUrl(backPreviewBlob) : null;
-
       const parsedDesignPayload = JSON.parse(designPayloadJson);
       const frontData = parsedDesignPayload?.design_data?.sides?.front ?? null;
       const backData = parsedDesignPayload?.design_data?.sides?.back ?? null;
       const requestPayload = {
         ...parsedDesignPayload,
         designId: resolvedDesignId,
-        previewFrontDataUrl,
-        previewBackDataUrl,
       };
       console.log("[editor-save] payload inspection", {
         hasFront: Boolean(frontData),
@@ -1280,39 +1240,37 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
-      setSaving(false);
-
-      if (!quickPreview) {
-        void (async () => {
-          try {
-            const previews = await previewPromise;
-
-            console.info("[preview-flow] captured", {
-              userProductId: savedUserProductId,
-              hasFront: Boolean(previews.front),
-              hasBack: Boolean(previews.back),
-            });
-
-            const result = await persistPreviewMockups({
-              userProductId: savedUserProductId,
-              frontPreviewBlob: previews.front,
-              backPreviewBlob: previews.back,
-              usedSides,
-            });
-
-            console.info("[preview-flow] persisted", {
-              userProductId: savedUserProductId,
-              frontUrl: result.frontUrl ?? null,
-              backUrl: result.backUrl ?? null,
-            });
-          } catch (error) {
-            console.warn("[preview-flow] non-blocking failure", {
-              userProductId: savedUserProductId,
-              error: error instanceof Error ? error.message : String(error),
-            });
+      void previewPromise
+        .then(async (latePreview) => {
+          if (!latePreview?.front && !latePreview?.back) {
+            return;
           }
-        })();
-      }
+
+          console.info("[preview-flow] captured", {
+            userProductId: savedUserProductId,
+            hasFront: Boolean(latePreview.front),
+            hasBack: Boolean(latePreview.back),
+          });
+
+          const result = await persistPreviewMockups({
+            userProductId: savedUserProductId,
+            frontPreviewBlob: latePreview.front,
+            backPreviewBlob: latePreview.back,
+            usedSides,
+          });
+
+          console.info("[preview-flow] persisted", {
+            userProductId: savedUserProductId,
+            frontUrl: result.frontUrl ?? null,
+            backUrl: result.backUrl ?? null,
+          });
+        })
+        .catch((error) => {
+          console.warn("[preview-flow] background failure", {
+            userProductId: savedUserProductId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
