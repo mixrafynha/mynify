@@ -1273,20 +1273,31 @@ export default function EditorPage() {
         });
       }
 
-      const uploadPromise =
-        previews.frontBlob || previews.backBlob
-          ? persistPreviewMockups({
-              userProductId: savedUserProductId,
-              frontPreviewBlob: previews.frontBlob,
-              backPreviewBlob: previews.backBlob,
-              usedSides,
-            })
-          : null;
-
-      console.info("[preview-flow] upload started", {
-        userProductId: savedUserProductId,
-        hasUpload: Boolean(uploadPromise),
-      });
+      if (previews.frontBlob || previews.backBlob) {
+        try {
+          console.info("[preview-flow] upload request started", {
+            userProductId: savedUserProductId,
+            hasFront: Boolean(previews.frontBlob),
+            hasBack: Boolean(previews.backBlob),
+          });
+          const uploadResult = await persistPreviewMockups({
+            userProductId: savedUserProductId,
+            frontPreviewBlob: previews.frontBlob,
+            backPreviewBlob: previews.backBlob,
+            usedSides,
+          });
+          console.info("[preview-flow] upload response received", {
+            userProductId: savedUserProductId,
+            frontUrl: uploadResult.frontUrl ?? null,
+            backUrl: uploadResult.backUrl ?? null,
+          });
+        } catch (error) {
+          console.warn("[preview-flow] preview persistence failed", {
+            userProductId: savedUserProductId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
@@ -1298,20 +1309,6 @@ export default function EditorPage() {
           userProductId: savedUserProductId,
         });
         router.push(data?.redirectTo ?? "/cart");
-        void uploadPromise
-          ?.then((result) => {
-            console.info("[preview-flow] upload completed", {
-              userProductId: savedUserProductId,
-              frontUrl: result.frontUrl ?? null,
-              backUrl: result.backUrl ?? null,
-            });
-          })
-          .catch((error) => {
-            console.error("[preview-flow] upload failed", {
-              userProductId: savedUserProductId,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          });
         return;
       }
 
@@ -1332,20 +1329,6 @@ export default function EditorPage() {
         userProductId: savedUserProductId,
       });
       router.push(`/checkout?${checkoutParams.toString()}`);
-      void uploadPromise
-        ?.then((result) => {
-          console.info("[preview-flow] upload completed", {
-            userProductId: savedUserProductId,
-            frontUrl: result.frontUrl ?? null,
-            backUrl: result.backUrl ?? null,
-          });
-        })
-        .catch((error) => {
-          console.error("[preview-flow] upload failed", {
-            userProductId: savedUserProductId,
-            error: error instanceof Error ? error.message : String(error),
-          });
-        });
       return;
     } catch (error) {
       console.error("[save-design] failed", {
