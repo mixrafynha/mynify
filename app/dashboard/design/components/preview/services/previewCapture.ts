@@ -1,4 +1,4 @@
-import { toCanvas, toPng } from "html-to-image";
+import { toBlob, toCanvas, toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
 import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
@@ -153,6 +153,38 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   ]);
 }
 
+function describeCaptureError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+
+  if (error instanceof Event) {
+    const target = error.target;
+
+    if (target instanceof HTMLImageElement) {
+      return `Image event: src=${target.currentSrc || target.src}, complete=${target.complete}, naturalWidth=${target.naturalWidth}, naturalHeight=${target.naturalHeight}`;
+    }
+
+    return `Event: type=${error.type}`;
+  }
+
+  return String(error);
+}
+
+async function validateCaptureImages(node: HTMLElement) {
+  const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
+
+  for (const image of images) {
+    if (!image.complete) {
+      await image.decode();
+    }
+
+    if (image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+      throw new Error(`Invalid image before capture: ${image.currentSrc || image.src}`);
+    }
+  }
+}
+
 function shouldCaptureNode(target: HTMLElement) {
   if (target.dataset.excludeFromPreview !== undefined) return false;
 
@@ -172,6 +204,29 @@ function prepareClonedImages(container: HTMLElement) {
     img.removeAttribute("srcset");
     if (source) img.setAttribute("src", source);
   });
+}
+
+function buildCaptureOptions(width: number, height: number) {
+  return {
+    cacheBust: false,
+    includeQueryParams: true,
+    pixelRatio: CHECKOUT_PREVIEW_PIXEL_RATIO,
+    backgroundColor: "transparent",
+    width,
+    height,
+    canvasWidth: width,
+    canvasHeight: height,
+    style: {
+      margin: "0",
+      transform: "none",
+      transformOrigin: "top left",
+    },
+    filter: (target: HTMLElement) => {
+      if (!(target instanceof HTMLElement)) return true;
+      if (target.dataset.excludeFromPreview !== undefined) return false;
+      return shouldCaptureNode(target);
+    },
+  } as const;
 }
 
 function getPrintableCaptureLayer(side?: PreviewSide | null) {
@@ -426,6 +481,7 @@ export async function captureVisualMockupPreviewBlob(
       await image.decode().catch(() => undefined);
     }),
   );
+  await validateCaptureImages(node);
 
   console.info("[preview-capture] node ready", {
     side: (node.dataset.mockupExportRoot || "front") as string,
@@ -477,39 +533,55 @@ export async function captureVisualMockupPreviewBlob(
     ).catch((error) => {
       console.warn("[preview-capture] image wait skipped", {
         side: (node.dataset.mockupExportRoot || "front") as string,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeCaptureError(error),
       });
     });
     await nextFrame();
 
-    const captureOptions = {
-      cacheBust: false,
-      pixelRatio: CHECKOUT_PREVIEW_PIXEL_RATIO,
-      backgroundColor: "transparent",
-      width: CHECKOUT_PREVIEW_SIZE,
-      height: CHECKOUT_PREVIEW_SIZE,
-      canvasWidth: CHECKOUT_PREVIEW_SIZE,
-      canvasHeight: CHECKOUT_PREVIEW_SIZE,
-      style: {
-        margin: "0",
-        transform: "none",
-        transformOrigin: "top left",
-      },
-      filter: (target: HTMLElement) => {
-        if (target === container) return true;
-        if (!(target instanceof HTMLElement)) return true;
-        if (target.dataset.visualMockupRootClone === "true") return true;
-        return shouldCaptureNode(target);
-      },
-    } as const;
+    const captureOptions = buildCaptureOptions(
+      CHECKOUT_PREVIEW_SIZE,
+      CHECKOUT_PREVIEW_SIZE,
+    );
+    let blob: Blob | null = null;
 
-    const canvas = await toCanvas(container, captureOptions);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
-    });
+    try {
+      console.info("[preview-capture] toBlob started", {
+        side: (node.dataset.mockupExportRoot || "front") as string,
+      });
+      blob = await toBlob(container, captureOptions);
+      console.info("[preview-capture] toBlob completed", {
+        side: (node.dataset.mockupExportRoot || "front") as string,
+      });
+    } catch (firstError) {
+      console.warn("[preview-capture] toBlob failed", {
+        side: (node.dataset.mockupExportRoot || "front") as string,
+        error: describeCaptureError(firstError),
+      });
 
-    if (!blob || blob.size === 0) {
-      throw new Error("Front preview capture returned an empty blob");
+      try {
+        console.info("[preview-capture] toCanvas started", {
+          side: (node.dataset.mockupExportRoot || "front") as string,
+        });
+        const canvas = await toCanvas(container, captureOptions);
+        console.info("[preview-capture] toCanvas completed", {
+          side: (node.dataset.mockupExportRoot || "front") as string,
+        });
+        blob = await new Promise<Blob | null>((resolve) => {
+          canvas.toBlob(resolve, "image/webp", 0.8);
+        });
+      } catch (secondError) {
+        console.warn("[preview-capture] toCanvas failed", {
+          side: (node.dataset.mockupExportRoot || "front") as string,
+          error: describeCaptureError(secondError),
+        });
+        throw new Error(
+          `Preview capture failed. toBlob=${describeCaptureError(firstError)}; toCanvas=${describeCaptureError(secondError)}`,
+        );
+      }
+    }
+
+    if (!(blob instanceof Blob) || blob.size === 0) {
+      throw new Error("Preview capture produced an empty blob");
     }
 
     console.info("[preview-capture] blob created", {
@@ -522,7 +594,7 @@ export async function captureVisualMockupPreviewBlob(
 
     return blob;
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = describeCaptureError(error);
     if (/Front preview element not found/i.test(message)) {
       throw error;
     }
@@ -538,10 +610,7 @@ export async function captureVisualMockupPreviewBlob(
     if (/tainted|cors|cross-origin/i.test(message)) {
       throw new Error(`Front preview capture failed due to image CORS: ${message}`);
     }
-    if (/blob/i.test(message)) {
-      throw new Error(`Front preview capture failed during toBlob: ${message}`);
-    }
-    throw error;
+    throw new Error(`Front preview capture failed: ${message}`);
   } finally {
     container.remove();
   }
