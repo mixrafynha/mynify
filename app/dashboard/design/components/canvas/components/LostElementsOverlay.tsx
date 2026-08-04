@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useRef } from "react";
+import { memo, useMemo } from "react";
 import { ImageIcon, Type } from "lucide-react";
 import { getElementSize } from "../canvasMath";
 import { isFullyOutsideSafeArea } from "../engine/bounds";
@@ -43,7 +43,6 @@ function LostElementsOverlay({
   onSelect,
   onMoveElement,
 }: LostElementsOverlayProps) {
-  const rafRef = useRef<number | null>(null);
   const lostElements = useMemo(() => {
     if (!safeArea?.width || !safeArea?.height) return [];
 
@@ -86,36 +85,20 @@ function LostElementsOverlay({
               event.preventDefault();
               event.stopPropagation();
               onSelect?.(el);
-              event.currentTarget.setPointerCapture?.(event.pointerId);
 
               const startX = event.clientX;
               const startY = event.clientY;
               const originX = Number(el.x) || 0;
               const originY = Number(el.y) || 0;
-              let lastPatch = { x: originX, y: originY };
 
               const handleMove = (moveEvent: PointerEvent) => {
-                const nextPatch = {
+                onMoveElement?.(el.id, {
                   x: Math.round(originX + (moveEvent.clientX - startX)),
                   y: Math.round(originY + (moveEvent.clientY - startY)),
-                };
-                lastPatch = nextPatch;
-
-                if (rafRef.current !== null) return;
-
-                rafRef.current = requestAnimationFrame(() => {
-                  rafRef.current = null;
-                  onMoveElement?.(el.id, lastPatch);
                 });
               };
 
               const handleEnd = () => {
-                if (rafRef.current !== null) {
-                  cancelAnimationFrame(rafRef.current);
-                  rafRef.current = null;
-                }
-                onMoveElement?.(el.id, lastPatch);
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
                 window.removeEventListener("pointermove", handleMove);
                 window.removeEventListener("pointerup", handleEnd);
                 window.removeEventListener("pointercancel", handleEnd);
