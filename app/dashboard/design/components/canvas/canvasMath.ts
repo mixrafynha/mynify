@@ -28,7 +28,7 @@ const DEFAULT_TEXT_FONT_SIZE = 42;
 const MIN_ELEMENT_SIZE = 10;
 const MIN_TEXT_WIDTH = 42;
 const TEXT_AVERAGE_CHAR_RATIO = 0.58;
-const TEXT_CAP_HEIGHT_RATIO = 0.34;
+const TEXT_CAP_HEIGHT_RATIO = 0.08;
 
 export function finiteNumber(value: unknown, fallback = 0): number {
   const n = Number(value);
@@ -114,7 +114,12 @@ export function measureTextBox(el: CanvasElementLike) {
   }, 0);
 
   const textHeight = Math.ceil(visualLines * fontSize * lineHeight);
-  const extraFontSafety = Math.ceil(fontSize * TEXT_CAP_HEIGHT_RATIO);
+  const strokeWidth = Math.max(0, finiteNumber(meta.strokeWidth, 0));
+  const effectHeight = meta.shadow || meta.glow ? Math.ceil(fontSize * 0.05) : 0;
+  const extraFontSafety = Math.max(
+    2,
+    Math.ceil(fontSize * TEXT_CAP_HEIGHT_RATIO) + strokeWidth + effectHeight
+  );
   const height = Math.max(
     MIN_ELEMENT_SIZE,
     Math.round(textHeight + padding.y * 2 + extraFontSafety)

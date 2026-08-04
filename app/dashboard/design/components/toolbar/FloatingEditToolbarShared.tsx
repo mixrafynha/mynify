@@ -237,23 +237,23 @@ export function MobileNumberStepper({
   increase: () => void;
 }) {
   return (
-    <div className="flex h-11 shrink-0 items-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.06]">
+    <div className="flex h-12 shrink-0 items-center overflow-hidden rounded-xl border border-white/10 bg-white/[0.06]">
       <button
         type="button"
         onClick={decrease}
-        className="flex h-full w-9 items-center justify-center active:bg-white/10"
+        className="flex h-full w-11 items-center justify-center active:bg-white/10"
       >
-        <Minus size={15} />
+        <Minus size={17} />
       </button>
-      <div className="min-w-12 px-2 text-center text-sm font-black text-white">
+      <div className="min-w-14 px-2 text-center text-sm font-black text-white">
         {value}
       </div>
       <button
         type="button"
         onClick={increase}
-        className="flex h-full w-9 items-center justify-center active:bg-white/10"
+        className="flex h-full w-11 items-center justify-center active:bg-white/10"
       >
-        <Plus size={15} />
+        <Plus size={17} />
       </button>
     </div>
   );
