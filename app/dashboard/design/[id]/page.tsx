@@ -912,12 +912,7 @@ export default function EditorPage() {
       }
       console.info(`[preview] ${targetSide} stage found`);
 
-      const exportNode = stageRoot.querySelector(
-        `[data-mockup-export-root="${targetSide}"]`,
-      );
-      if (!(exportNode instanceof HTMLElement)) {
-        throw new Error(`${targetSide} export root not found`);
-      }
+      const exportNode = stageRoot;
 
       const rect = exportNode.getBoundingClientRect();
       await reportPreviewStage({
