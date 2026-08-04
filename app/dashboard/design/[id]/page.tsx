@@ -1234,22 +1234,37 @@ export default function EditorPage() {
 
       setSaving(false);
 
-      let previewBlobs: {
-        front: Blob | null;
-        back: Blob | null;
-      } | null = null;
+      console.info("[preview-flow] capture started", {
+        userProductId: savedUserProductId,
+        frontHasDesign: usedSides.includes("front"),
+        backHasDesign: usedSides.includes("back"),
+      });
+
+      let previews: {
+        frontBlob: Blob | null;
+        backBlob: Blob | null;
+      } = {
+        frontBlob: null,
+        backBlob: null,
+      };
 
       try {
-        console.info("[preview-flow] capture started", {
-          userProductId: savedUserProductId,
-          hasFront: usedSides.includes("front"),
-          hasBack: usedSides.includes("back"),
-        });
-        previewBlobs = await captureCheckoutPreviews({
+        const captured = await captureCheckoutPreviews({
           userProductId: savedUserProductId,
           frontPreviewBlob: null,
           backPreviewBlob: null,
           usedSides,
+        });
+        previews = {
+          frontBlob: captured.front ?? null,
+          backBlob: captured.back ?? null,
+        };
+        console.info("[preview-flow] capture completed", {
+          userProductId: savedUserProductId,
+          hasFront: Boolean(previews.frontBlob),
+          hasBack: Boolean(previews.backBlob),
+          frontSize: previews.frontBlob?.size ?? null,
+          backSize: previews.backBlob?.size ?? null,
         });
       } catch (error) {
         console.warn("[preview-flow] capture failed", {
@@ -1258,36 +1273,45 @@ export default function EditorPage() {
         });
       }
 
+      const uploadPromise =
+        previews.frontBlob || previews.backBlob
+          ? persistPreviewMockups({
+              userProductId: savedUserProductId,
+              frontPreviewBlob: previews.frontBlob,
+              backPreviewBlob: previews.backBlob,
+              usedSides,
+            })
+          : null;
+
+      console.info("[preview-flow] upload started", {
+        userProductId: savedUserProductId,
+        hasUpload: Boolean(uploadPromise),
+      });
+
       const cartItemId = String(data?.cartItem?.id || "").trim();
       if (!cartItemId) {
         console.warn("[save-design] cart item missing in response", {
           userProductId: savedUserProductId,
           redirectTo: data?.redirectTo ?? "/cart",
         });
-        let uploadPromise:
-          | Promise<Awaited<ReturnType<typeof persistPreviewMockups>>>
-          | null = null;
-        if (previewBlobs?.front || previewBlobs?.back) {
-          console.info("[preview-flow] upload started", {
-            userProductId: savedUserProductId,
-          });
-          uploadPromise = persistPreviewMockups({
-            userProductId: savedUserProductId,
-            frontPreviewBlob: previewBlobs.front,
-            backPreviewBlob: previewBlobs.back,
-            usedSides,
-          });
-        }
         console.info("[canvas-preview] navigating to checkout", {
           userProductId: savedUserProductId,
         });
         router.push(data?.redirectTo ?? "/cart");
-        void uploadPromise?.catch((error) => {
-          console.warn("[preview-flow] upload failed", {
-            userProductId: savedUserProductId,
-            error: error instanceof Error ? error.message : String(error),
+        void uploadPromise
+          ?.then((result) => {
+            console.info("[preview-flow] upload completed", {
+              userProductId: savedUserProductId,
+              frontUrl: result.frontUrl ?? null,
+              backUrl: result.backUrl ?? null,
+            });
+          })
+          .catch((error) => {
+            console.error("[preview-flow] upload failed", {
+              userProductId: savedUserProductId,
+              error: error instanceof Error ? error.message : String(error),
+            });
           });
-        });
         return;
       }
 
@@ -1307,31 +1331,17 @@ export default function EditorPage() {
       console.info("[canvas-preview] navigating to checkout", {
         userProductId: savedUserProductId,
       });
-      let uploadPromise:
-        | Promise<Awaited<ReturnType<typeof persistPreviewMockups>>>
-        | null = null;
-      if (previewBlobs?.front || previewBlobs?.back) {
-        console.info("[preview-flow] upload started", {
-          userProductId: savedUserProductId,
-        });
-        uploadPromise = persistPreviewMockups({
-          userProductId: savedUserProductId,
-          frontPreviewBlob: previewBlobs.front,
-          backPreviewBlob: previewBlobs.back,
-          usedSides,
-        });
-      }
       router.push(`/checkout?${checkoutParams.toString()}`);
       void uploadPromise
         ?.then((result) => {
-          console.info("[preview-flow] persisted", {
+          console.info("[preview-flow] upload completed", {
             userProductId: savedUserProductId,
             frontUrl: result.frontUrl ?? null,
             backUrl: result.backUrl ?? null,
           });
         })
         .catch((error) => {
-          console.warn("[preview-flow] upload failed", {
+          console.error("[preview-flow] upload failed", {
             userProductId: savedUserProductId,
             error: error instanceof Error ? error.message : String(error),
           });
