@@ -1135,7 +1135,7 @@ export default function EditorPage() {
       if (usedSides.includes("front")) {
         frontPreviewBlob = await withTimeout(
           exportEditorPreview("front"),
-          8000,
+          12000,
           "Front preview export",
         );
       }
@@ -1145,7 +1145,7 @@ export default function EditorPage() {
         try {
           backPreviewBlob = await withTimeout(
             exportEditorPreview("back"),
-            8000,
+            12000,
             "Back preview export",
           );
         } catch (error) {
