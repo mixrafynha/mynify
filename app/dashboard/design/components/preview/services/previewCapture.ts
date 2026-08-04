@@ -197,8 +197,13 @@ function prepareClonedImages(container: HTMLElement) {
   const images = Array.from(container.querySelectorAll("img"));
 
   images.forEach((img) => {
-    const source = img.getAttribute("src") || img.src || "";
-    img.setAttribute("crossorigin", "anonymous");
+    const source = img.currentSrc || img.getAttribute("src") || img.src || "";
+    const originalCrossOrigin = img.getAttribute("crossorigin");
+    if (originalCrossOrigin) {
+      img.setAttribute("crossorigin", originalCrossOrigin);
+    } else {
+      img.removeAttribute("crossorigin");
+    }
     img.setAttribute("decoding", "sync");
     img.setAttribute("loading", "eager");
     img.removeAttribute("srcset");
@@ -238,6 +243,21 @@ function buildCaptureOptions(width: number, height: number) {
       return shouldCaptureNode(target);
     },
   } as const;
+}
+
+function captureFilterForDiagnostics(target: HTMLElement) {
+  if (target instanceof HTMLImageElement) {
+    const src = target.currentSrc || target.src || "";
+    if (
+      !src ||
+      target.naturalWidth <= 0 ||
+      target.naturalHeight <= 0 ||
+      src.includes("/dashboard/design/")
+    ) {
+      return false;
+    }
+  }
+  return shouldCaptureNode(target);
 }
 
 function getPrintableCaptureLayer(side?: PreviewSide | null) {
@@ -485,6 +505,29 @@ export async function captureVisualMockupPreviewBlob(
   }
 
   const sourceImages = Array.from(node.querySelectorAll("img"));
+  const imageDiagnostics = Array.from(
+    node.querySelectorAll<HTMLImageElement>("img"),
+  ).map((img, index) => ({
+    index,
+    srcAttribute: img.getAttribute("src"),
+    src: img.src,
+    currentSrc: img.currentSrc,
+    alt: img.alt,
+    className: img.className,
+    complete: img.complete,
+    naturalWidth: img.naturalWidth,
+    naturalHeight: img.naturalHeight,
+    excludedByFilter: !captureFilterForDiagnostics(img),
+    outerHTML: img.outerHTML.slice(0, 500),
+  }));
+  console.info("[preview-capture] images before export", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    images: imageDiagnostics,
+  });
+  console.info("[preview-capture] mockup background", {
+    side: (node.dataset.mockupExportRoot || "front") as string,
+    backgroundImage: window.getComputedStyle(node).backgroundImage,
+  });
   await document.fonts.ready;
   await Promise.all(
     sourceImages.map(async (image) => {
