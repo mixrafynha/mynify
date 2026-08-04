@@ -119,6 +119,22 @@ function clampEditorZoom(value: unknown, fallback = 1) {
   return Math.min(maxZoom, Math.max(0.25, value));
 }
 
+function shortenUrl(field: string, value: unknown) {
+  const url = typeof value === "string" && value.trim() ? value.trim() : null;
+  if (!url) {
+    return { field, value: null };
+  }
+
+  return {
+    field,
+    value: {
+      start: url.slice(0, 80),
+      end: url.slice(-30),
+      length: url.length,
+    },
+  };
+}
+
 function nextFrame() {
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
@@ -922,6 +938,24 @@ export default function EditorPage() {
       });
 
       const rect = exportNode.getBoundingClientRect();
+      const mockupBaseImages = Array.from(
+        exportNode.querySelectorAll<HTMLImageElement>("img"),
+      ).filter((img) => String(img.currentSrc || img.getAttribute("src") || "").includes("/mockups/"));
+      const artworkImages = Array.from(
+        exportNode.querySelectorAll<HTMLImageElement>("img"),
+      ).filter((img) => !String(img.currentSrc || img.getAttribute("src") || "").includes("/mockups/"));
+      console.info("[checkout-preview:capture] editor snapshot", {
+        side: targetSide,
+        element: {
+          tagName: exportNode.tagName,
+          className: exportNode.className,
+          width: rect.width,
+          height: rect.height,
+        },
+        mockupBasePresent: mockupBaseImages.length > 0,
+        artworkPresent: artworkImages.length > 0,
+        imageCount: exportNode.querySelectorAll("img").length,
+      });
       await reportPreviewStage({
         userProductId: debugUserProductId,
         stage: "node_found",
@@ -1038,6 +1072,18 @@ export default function EditorPage() {
       if (!frontBlob) {
         throw new Error("Front canvas preview capture returned no blob");
       }
+
+      console.info("[checkout-preview:save-request] preview blobs", {
+        userProductId: args.userProductId,
+        side: {
+          front: args.usedSides.includes("front"),
+          back: args.usedSides.includes("back"),
+        },
+        frontPreviewDataUrlExists: Boolean(frontBlob),
+        backPreviewDataUrlExists: Boolean(backBlob),
+        frontSize: frontBlob?.size ?? null,
+        backSize: backBlob?.size ?? null,
+      });
 
       console.info("[canvas-preview] persisting before navigation", {
         userProductId: args.userProductId,
@@ -1290,6 +1336,15 @@ export default function EditorPage() {
         designId: resolvedDesignId,
         hasFront: Boolean(frontData),
         hasBack: Boolean(backData),
+      });
+      console.info("[checkout-preview:save-request] request payload", {
+        designId: resolvedDesignId,
+        previewFrontDataUrlExists: Boolean(requestPayload.previewFrontDataUrl),
+        previewBackDataUrlExists: Boolean(requestPayload.previewBackDataUrl),
+        previewFrontDataUrlSize: typeof requestPayload.previewFrontDataUrl === "string" ? requestPayload.previewFrontDataUrl.length : null,
+        previewBackDataUrlSize: typeof requestPayload.previewBackDataUrl === "string" ? requestPayload.previewBackDataUrl.length : null,
+        front: shortenUrl("previewFrontDataUrl", requestPayload.previewFrontDataUrl),
+        back: shortenUrl("previewBackDataUrl", requestPayload.previewBackDataUrl),
       });
 
       stepContext.step = "request";

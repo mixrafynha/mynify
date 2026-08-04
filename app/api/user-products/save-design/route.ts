@@ -20,6 +20,19 @@ const INLINE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
 const INLINE_SVG_RE = /^data:image\/svg\+xml(?:;charset=utf-8)?,/i;
 const MAX_INLINE_SVG_CHARS = 120_000;
 
+function shortUrl(field: string, value: unknown) {
+  const url = typeof value === "string" && value.trim() ? value.trim() : null;
+  if (!url) return { field, value: null };
+  return {
+    field,
+    value: {
+      start: url.slice(0, 80),
+      end: url.slice(-30),
+      length: url.length,
+    },
+  };
+}
+
 function containsInvalidInlineImage(value: unknown, path: string[] = []): boolean {
   if (typeof value === "string") {
     const pathKey = path[path.length - 1] || "";
@@ -175,6 +188,15 @@ export async function POST(req: Request) {
     const previewFrontDataUrl = typeof body.previewFrontDataUrl === "string" ? body.previewFrontDataUrl : null;
     const previewBackDataUrl = typeof body.previewBackDataUrl === "string" ? body.previewBackDataUrl : null;
 
+    console.info("[checkout-preview:save-api] preview inputs", {
+      previewFrontDataUrlExists: Boolean(previewFrontDataUrl),
+      previewBackDataUrlExists: Boolean(previewBackDataUrl),
+      previewFrontDataUrlSize: previewFrontDataUrl?.length ?? null,
+      previewBackDataUrlSize: previewBackDataUrl?.length ?? null,
+      front: shortUrl("previewFrontDataUrl", previewFrontDataUrl),
+      back: shortUrl("previewBackDataUrl", previewBackDataUrl),
+    });
+
     if (previewFrontDataUrl || previewBackDataUrl) {
       saveContext.step = "upload-preview";
       const currentMockups = savePayload.mockups && typeof savePayload.mockups === "object"
@@ -182,6 +204,9 @@ export async function POST(req: Request) {
         : {};
 
       const nextMockups: Record<string, unknown> = { ...currentMockups };
+      console.info("[checkout-preview:database] mockups before upload", {
+        mockupKeys: Object.keys(currentMockups),
+      });
 
       if (previewFrontDataUrl) {
         const frontPreview = await uploadPreviewImageToR2({
@@ -189,6 +214,9 @@ export async function POST(req: Request) {
           designId,
           side: "front",
           dataUrl: previewFrontDataUrl,
+        });
+        console.info("[checkout-preview:save-api] front upload created", {
+          url: shortUrl("frontPreview.url", frontPreview.url),
         });
         nextMockups.front = frontPreview.url ?? null;
         nextMockups.checkout_thumbnail_url = frontPreview.url ?? null;
@@ -203,12 +231,18 @@ export async function POST(req: Request) {
           side: "back",
           dataUrl: previewBackDataUrl,
         });
+        console.info("[checkout-preview:save-api] back upload created", {
+          url: shortUrl("backPreview.url", backPreview.url),
+        });
         nextMockups.back = backPreview.url ?? null;
         nextMockups.checkout_thumbnail_back_url = backPreview.url ?? null;
         nextMockups.checkout_thumbnail_back = backPreview.url ?? null;
       }
 
       (savePayload as Record<string, any>).mockups = nextMockups;
+      console.info("[checkout-preview:database] mockups after upload", {
+        mockupKeys: Object.keys(nextMockups),
+      });
     }
 
     console.info("[save-design] started", {
@@ -235,6 +269,11 @@ export async function POST(req: Request) {
       );
     }
     saveContext.userProductId = userProduct.id;
+    console.info("[checkout-preview:save-api] user_product update completed", {
+      userProductId: userProduct.id,
+      mockupKeys: userProduct.mockups && typeof userProduct.mockups === "object" ? Object.keys(userProduct.mockups as Record<string, unknown>) : [],
+      designImageUrl: shortUrl("design_image_url", userProduct.design_image_url),
+    });
 
     const currentDesignData = userProduct.design_data && typeof userProduct.design_data === "object"
       ? userProduct.design_data
@@ -304,6 +343,11 @@ export async function POST(req: Request) {
       const persistedMockups = Object.fromEntries(
         Object.entries(nextMockups).filter(([, value]) => value !== null && value !== undefined && value !== ""),
       );
+
+      console.info("[checkout-preview:database] persisted mockup keys", {
+        userProductId: userProduct.id,
+        keys: Object.keys(persistedMockups),
+      });
 
       const { error: jobStateError } = await supabase
         .from("user_products")

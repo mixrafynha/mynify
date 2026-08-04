@@ -29,6 +29,16 @@ export default function ProductPreviewImage({ title, frontImage, backImage }: Pr
   const activeImage = activeSide === "back" ? images.back || images.front : images.front || images.back;
   const canToggle = hasFront && hasBack;
 
+  console.info("[checkout-preview:checkout-ui] preview component", {
+    title,
+    activeSide,
+    hasFront,
+    hasBack,
+    activeImage: cleanUrl(activeImage),
+    frontImage: cleanUrl(frontImage),
+    backImage: cleanUrl(backImage),
+  });
+
   const toggleSide = () => {
     if (!canToggle) return;
     setActiveSide((current) => (current === "front" ? "back" : "front"));

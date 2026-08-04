@@ -134,6 +134,19 @@ function cleanUrl(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function shortUrl(field: string, value: unknown) {
+  const url = cleanUrl(value);
+  if (!url) return { field, value: null };
+  return {
+    field,
+    value: {
+      start: url.slice(0, 80),
+      end: url.slice(-30),
+      length: url.length,
+    },
+  };
+}
+
 function resolveRealCanvasMockupUrl(args: {
   mockups: Record<string, unknown>;
   side: "front" | "back";
@@ -228,6 +241,32 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(backSide.mockup_url) ||
     cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
     cleanUrl(mergedMockups.checkout_thumbnail_back);
+
+  console.info("[checkout-preview:checkout-ui] source candidates", {
+    cartItemId: item.id,
+    userProductId: item.user_product_id ?? null,
+    frontCandidates: [
+      shortUrl("previewFront", item.previewFront),
+      shortUrl("mockups.front", mergedMockups.front),
+      shortUrl("frontSide.mockupUrl", frontSide.mockupUrl),
+      shortUrl("frontSide.mockup_url", frontSide.mockup_url),
+      shortUrl("checkout_thumbnail_url", mergedMockups.checkout_thumbnail_url),
+      shortUrl("checkout_thumbnail_front_url", mergedMockups.checkout_thumbnail_front_url),
+      shortUrl("item.image", item.image),
+    ],
+    backCandidates: [
+      shortUrl("previewBack", item.previewBack),
+      shortUrl("mockups.back", mergedMockups.back),
+      shortUrl("backSide.mockupUrl", backSide.mockupUrl),
+      shortUrl("backSide.mockup_url", backSide.mockup_url),
+      shortUrl("checkout_thumbnail_back_url", mergedMockups.checkout_thumbnail_back_url),
+      shortUrl("checkout_thumbnail_back", mergedMockups.checkout_thumbnail_back),
+    ],
+    selected: {
+      front: shortUrl("front", front),
+      back: shortUrl("back", back),
+    },
+  });
 
   return { front, back };
 }

@@ -66,6 +66,19 @@ function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
 
+function shortUrl(field: string, value: unknown) {
+  const url = publicString(value);
+  if (!url) return { field, value: null };
+  return {
+    field,
+    value: {
+      start: url.slice(0, 80),
+      end: url.slice(-30),
+      length: url.length,
+    },
+  };
+}
+
 function realCanvasFrontMockup(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
 
@@ -104,23 +117,41 @@ function parseMockups(value: unknown): Record<string, unknown> | null {
 
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
-  return (
+  const selected =
     realCanvasFrontMockup(mockups) ??
     publicString(mockups.checkout_thumbnail_url) ??
     publicString(mockups.checkout_thumbnail_front_url) ??
     publicString(mockups.image) ??
-    publicString(mockups.mockup_front)
-  );
+    publicString(mockups.mockup_front);
+  console.info("[checkout-preview:cart-api] front candidates", {
+    candidates: [
+      shortUrl("front", mockups.front),
+      shortUrl("checkout_thumbnail_url", mockups.checkout_thumbnail_url),
+      shortUrl("checkout_thumbnail_front_url", mockups.checkout_thumbnail_front_url),
+      shortUrl("image", mockups.image),
+      shortUrl("mockup_front", mockups.mockup_front),
+    ],
+    selected: shortUrl("selected", selected),
+  });
+  return selected;
 }
 
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
-  return (
+  const selected =
     realCanvasBackMockup(mockups) ??
     publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.checkout_thumbnail_back) ??
-    null
-  );
+    null;
+  console.info("[checkout-preview:cart-api] back candidates", {
+    candidates: [
+      shortUrl("back", mockups.back),
+      shortUrl("checkout_thumbnail_back_url", mockups.checkout_thumbnail_back_url),
+      shortUrl("checkout_thumbnail_back", mockups.checkout_thumbnail_back),
+    ],
+    selected: shortUrl("selected", selected),
+  });
+  return selected;
 }
 
 async function resolveUserProductAssets(
@@ -226,6 +257,14 @@ export async function GET() {
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
         const previewFront = frontMockupUrl(userProductAssets.mockups);
         const previewBack = backMockupUrl(userProductAssets.mockups);
+
+        console.info("[checkout-preview:cart-api] resolved item", {
+          userProductId: item.user_product_id,
+          cartItemId: item.id,
+          previewFront: shortUrl("previewFront", previewFront),
+          previewBack: shortUrl("previewBack", previewBack),
+          image: shortUrl("image", previewFront ?? item.image),
+        });
 
         return {
           ...item,
