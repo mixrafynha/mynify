@@ -517,7 +517,9 @@ async function capturePrintableLayer(args: {
   clone.style.isolation = "isolate";
 
   prepareClonedImages(clone);
+  logLayerSnapshot("clone-before-append", clone);
   container.appendChild(clone);
+  logLayerSnapshot("clone-after-append", clone);
   document.body.appendChild(container);
 
   try {
@@ -601,7 +603,9 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
   clone.style.contain = "layout paint style size";
 
   prepareClonedImages(clone);
+  logLayerSnapshot("clone-before-append", clone);
   container.appendChild(clone);
+  logLayerSnapshot("clone-after-append", clone);
   document.body.appendChild(container);
 
   try {
