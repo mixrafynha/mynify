@@ -125,6 +125,9 @@ const TextElement = memo(function TextElement({
       WebkitBackgroundClip: el.meta?.gradient ? "text" : undefined,
       WebkitTextFillColor: el.meta?.gradient ? "transparent" : undefined,
       overflow: "visible",
+      fontSynthesis: "none",
+      fontKerning: "normal",
+      textRendering: "geometricPrecision",
     }),
     [el.color, el.fontFamily, el.fontWeight, el.fontSize, el.meta, el.textAlign, fontSize, lineHeight, padding.x, padding.y],
   );
@@ -181,14 +184,28 @@ const TextElement = memo(function TextElement({
         />
       ) : (
         <div
+          data-trigger-text-element={editing ? undefined : "true"}
+          data-element-id={el.id || ""}
+          data-text-content={content}
+          data-font-family={el.meta?.fontFamily || el.fontFamily || ""}
+          data-font-weight={String(el.meta?.fontWeight || el.fontWeight || 700)}
+          data-font-style={el.meta?.fontStyle || el.fontStyle || "normal"}
+          data-font-size={String(fontSize)}
+          data-line-height={String(lineHeight)}
+          data-letter-spacing={String(el.meta?.letterSpacing ?? 0)}
+          data-configured-width={String(el.width || 0)}
+          data-configured-height={String(el.height || 0)}
           style={{
             ...textStyle,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-            overflowWrap: "break-word",
+            whiteSpace: "pre",
+            wordBreak: "keep-all",
+            overflowWrap: "normal",
+            lineBreak: "auto",
+            overflow: "visible",
+            maxWidth: "none",
           }}
         >
           {content || "Text"}
