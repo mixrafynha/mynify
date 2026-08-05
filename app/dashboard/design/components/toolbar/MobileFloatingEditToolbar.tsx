@@ -111,6 +111,7 @@ function MobileFloatingEditToolbar({
 
   return (
     <div
+      data-editor-toolbar
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onTouchStart={stopEvent}

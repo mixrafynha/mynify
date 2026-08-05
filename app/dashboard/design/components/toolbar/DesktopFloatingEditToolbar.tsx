@@ -246,6 +246,7 @@ function DesktopFloatingEditToolbar({
   return (
     <div
       ref={toolbarRef}
+      data-editor-toolbar
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onTouchStart={stopEvent}

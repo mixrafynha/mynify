@@ -454,6 +454,7 @@ export default function Canvas({
       target.closest("[data-draggable-element]") ||
       target.closest("[data-element-control]") ||
       target.closest("[data-resize-handle]") ||
+      target.closest("[data-editor-toolbar]") ||
       target.closest("textarea") ||
       target.closest("input") ||
       target.closest("button")
