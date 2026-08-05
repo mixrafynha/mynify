@@ -441,62 +441,33 @@ ${googleFontsLinks(elements)}
     });
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.evaluate(async (texts) => {
-      const requiredFonts = texts.map((item) => {
-        const style = item.fontStyle || "normal";
-        const weight = item.fontWeight ?? 400;
-        const size = item.fontSize || 40;
-        return {
-          ...item,
-          fontKey: `${style} ${weight} ${size}px "${item.fontFamily}"`,
-        };
-      });
+      for (const item of texts) {
+        const fontKey =
+          `${item.fontStyle || "normal"} ` +
+          `${item.fontWeight ?? 400} ` +
+          `${item.fontSize || 40}px ` +
+          `"${item.fontFamily}"`;
 
-      for (const item of requiredFonts) {
         if (!item.fontFamily) {
           throw new Error(`[trigger-render:font-load] Missing fontFamily for elementId=${item.elementId}`);
         }
-        await document.fonts.load(item.fontKey);
-        if (!document.fonts.check(item.fontKey)) {
+
+        await document.fonts.load(fontKey);
+        if (!document.fonts.check(fontKey)) {
           throw new Error(
             `[trigger-render:font-load] Failed to load font for elementId=${item.elementId} fontFamily=${item.fontFamily} fontWeight=${item.fontWeight} fontStyle=${item.fontStyle}`,
           );
         }
       }
 
-      await document.fonts?.ready;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-
-      const validateTextLayout = (texts: typeof requiredFonts) => {
-        for (const item of texts) {
-          const selector = `[data-trigger-text-element="true"][data-element-id="${CSS.escape(item.elementId)}"]`;
-          const node = document.querySelector<HTMLElement>(selector);
-          if (!node) {
-            throw new Error(`[trigger-render:text-layout] Missing rendered text elementId=${item.elementId}`);
-          }
-
-          const renderedWidth = node.getBoundingClientRect().width;
-          const renderedHeight = node.getBoundingClientRect().height;
-          const lineCount = Math.max(1, node.getClientRects().length);
-          console.log("[trigger-render:text-layout]", {
-            elementId: item.elementId,
-            text: item.text,
-            fontFamily: item.fontFamily,
-            fontWeight: item.fontWeight,
-            fontSize: item.fontSize,
-            lineHeight: item.lineHeight,
-            letterSpacing: item.letterSpacing,
-            configuredWidth: item.configuredWidth,
-            renderedWidth,
-            configuredHeight: item.configuredHeight,
-            renderedHeight,
-            lineCount,
+      await document.fonts.ready;
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
           });
-
-          if (!item.text.includes("\n") && lineCount > 1) {
-            throw new Error(`[trigger-render:text-layout] Unexpected line wrap for elementId=${item.elementId}`);
-          }
-        }
-      };
+        });
+      });
 
       const images = Array.from(document.images);
 
@@ -518,7 +489,36 @@ ${googleFontsLinks(elements)}
       if (failed.length) {
         throw new Error(`Render image load failed: ${failed.join(" | ")}`);
       }
-      validateTextLayout(requiredFonts);
+
+      for (const item of texts) {
+        const selector = `[data-trigger-text-element="true"][data-element-id="${CSS.escape(item.elementId)}"]`;
+        const node = document.querySelector<HTMLElement>(selector);
+        if (!node) {
+          throw new Error(`[trigger-render:text-layout] Missing rendered text elementId=${item.elementId}`);
+        }
+
+        const renderedWidth = node.getBoundingClientRect().width;
+        const renderedHeight = node.getBoundingClientRect().height;
+        const lineCount = Math.max(1, node.getClientRects().length);
+        console.log("[trigger-render:text-layout]", {
+          elementId: item.elementId,
+          text: item.text,
+          fontFamily: item.fontFamily,
+          fontWeight: item.fontWeight,
+          fontSize: item.fontSize,
+          lineHeight: item.lineHeight,
+          letterSpacing: item.letterSpacing,
+          configuredWidth: item.configuredWidth,
+          renderedWidth,
+          configuredHeight: item.configuredHeight,
+          renderedHeight,
+          lineCount,
+        });
+
+        if (!item.text.includes("\n") && lineCount > 1) {
+          throw new Error(`[trigger-render:text-layout] Unexpected line wrap for elementId=${item.elementId}`);
+        }
+      }
     }, textMetrics);
     return Buffer.from(await page.screenshot({ type: "png", omitBackground: !!args.transparent }));
   } finally {

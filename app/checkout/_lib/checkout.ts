@@ -178,7 +178,7 @@ export type CheckoutForm = {
   city: string;
   postalCode: string;
   country: string;
-  shippingMethod: "standard" | "express";
+  shippingMethod: string;
 };
 
 
@@ -2023,8 +2023,7 @@ export function readCheckoutSession(): CheckoutForm | null {
       city: typeof data.city === "string" ? data.city : "",
       postalCode: typeof data.postalCode === "string" ? data.postalCode : "",
       country: typeof data.country === "string" ? data.country : "",
-      shippingMethod:
-        data.shippingMethod === "express" ? "express" : "standard",
+      shippingMethod: typeof data.shippingMethod === "string" ? data.shippingMethod : "",
     };
   } catch {
     return null;

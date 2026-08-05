@@ -51,6 +51,7 @@ type CheckoutBody = {
   shipping?: {
     method?: string | null;
   };
+  draftOrderId?: string | null;
 
   // Compatibilidade temporária com o checkout antigo.
   id?: string;
@@ -254,8 +255,35 @@ export async function POST(req: Request) {
     const requestedCartItemIds = Array.isArray(body.cartItemIds)
       ? [...new Set(body.cartItemIds.filter(isUuid))]
       : [];
+    let draftCheckout:
+      | {
+          cart_item_ids: string[] | null;
+          selected_shipping_method: { id?: string | null; code?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
+          shipping_address: Record<string, unknown> | null;
+        }
+      | null = null;
 
-    if (requestedCartItemIds.length > 50) {
+    if (body.draftOrderId) {
+      const { data: draftRow, error: draftError } = await supabase
+        .from("checkout_drafts")
+        .select("cart_item_ids, selected_shipping_method, shipping_address")
+        .eq("id", body.draftOrderId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (draftError) {
+        return NextResponse.json({ error: "Failed to load draft order" }, { status: 500 });
+      }
+      draftCheckout = draftRow ?? null;
+    }
+
+    const effectiveCartItemIds =
+      draftCheckout?.cart_item_ids?.length
+        ? [...new Set(draftCheckout.cart_item_ids.filter(isUuid))]
+        : requestedCartItemIds;
+    const draftShippingMethod = draftCheckout?.selected_shipping_method ?? null;
+    const draftShippingAddress = draftCheckout?.shipping_address ?? null;
+
+    if (effectiveCartItemIds.length > 50) {
       return NextResponse.json(
         { error: "Too many cart items" },
         { status: 400 },
@@ -285,7 +313,7 @@ export async function POST(req: Request) {
           sku
         `)
         .eq("user_id", user.id)
-        .in("id", requestedCartItemIds);
+        .in("id", effectiveCartItemIds);
 
       if (cartError) {
         console.error("CHECKOUT_CART_ERROR", {
@@ -300,7 +328,7 @@ export async function POST(req: Request) {
 
       const cartItems = (cartRows ?? []) as CartItemRow[];
 
-      if (cartItems.length !== requestedCartItemIds.length) {
+      if (cartItems.length !== effectiveCartItemIds.length) {
         return NextResponse.json(
           {
             error:
@@ -727,8 +755,21 @@ export async function POST(req: Request) {
         });
       }
 
-      const shippingAddress = buildShippingRecipient(body);
-      const shippingMethod = normalizeAddressField(body.shipping?.method)?.toLowerCase() ?? "standard";
+      const shippingAddress = draftShippingAddress
+        ? {
+            firstName: normalizeAddressField(draftShippingAddress.firstName) || "Customer",
+            lastName: normalizeAddressField(draftShippingAddress.lastName) || ".",
+            addressLine1: normalizeAddressField(draftShippingAddress.addressLine1) || "",
+            addressLine2: normalizeAddressField(draftShippingAddress.addressLine2) || undefined,
+            city: normalizeAddressField(draftShippingAddress.city) || "",
+            state: normalizeAddressField(draftShippingAddress.state) || undefined,
+            postalCode: normalizeAddressField(draftShippingAddress.postalCode) || "",
+            countryCode: resolveCountryCode(draftShippingAddress.countryCode) ?? normalizeAddressField(draftShippingAddress.countryCode) ?? "",
+            email: normalizeAddressField(draftShippingAddress.email) || undefined,
+            phone: normalizeAddressField(draftShippingAddress.phone) || undefined,
+          }
+        : buildShippingRecipient(body);
+      const shippingMethod = draftShippingMethod?.id || normalizeAddressField(body.shipping?.method)?.toLowerCase() || "standard";
 
       const gelatoQuoteResult = gelatoQuoteItems.length
         ? await getGelatoCheckoutQuote({

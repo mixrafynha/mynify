@@ -58,6 +58,7 @@ import {
   createSecureCheckoutRequestPayload,
   resolveGelatoPrintFiles,
 } from "./_lib/checkout";
+import { normalizeShippingMethods, type NormalizedShippingMethod } from "@/lib/gelato/shipping-methods";
 import type {
   AddressSuggestion,
   CartItem,
@@ -484,6 +485,8 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [testingGelato, setTestingGelato] = useState(false);
   const [gelatoTestResult, setGelatoTestResult] = useState<GelatoDraftTestResult | null>(null);
+  const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
+  const [shippingMethodSelection, setShippingMethodSelection] = useState<NormalizedShippingMethod | null>(null);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [addressSearching, setAddressSearching] = useState(false);
@@ -566,16 +569,70 @@ export default function CheckoutPage() {
   const validatedShippingMethods = productAvailability.shippingMethods?.length ? productAvailability.shippingMethods : null;
   const shippingMethodsForDisplay = useMemo(() => {
     if (!validatedShippingMethods?.length) return null;
-    return [...validatedShippingMethods].sort((a, b) => {
-      const priceA = typeof a.price === "number" ? a.price : Number.POSITIVE_INFINITY;
-      const priceB = typeof b.price === "number" ? b.price : Number.POSITIVE_INFINITY;
-      return priceA - priceB;
-    });
+    return normalizeShippingMethods(validatedShippingMethods);
   }, [validatedShippingMethods]);
+  const itemsSignature = useMemo(
+    () =>
+      items
+        .map((item) =>
+          [
+            item.id,
+            item.quantity,
+            item.variant_id ?? "",
+            item.user_product_id ?? item.userProductId ?? "",
+            item.base_product_id ?? item.baseProductId ?? "",
+          ].join(":"),
+        )
+        .join("|"),
+    [items],
+  );
+  const shippingAddressSignature = useMemo(
+    () =>
+      [
+        form.address.trim(),
+        form.country.trim(),
+        form.postalCode.trim(),
+        form.city.trim(),
+      ].join("|"),
+    [form.address, form.city, form.country, form.postalCode],
+  );
+  useEffect(() => {
+    if (!shippingMethodsForDisplay?.length) {
+      setShippingMethodSelection(null);
+      return;
+    }
+
+    setShippingMethodSelection((current) => {
+      if (current) {
+        const matched = shippingMethodsForDisplay.find((method) => method.id === current.id);
+        if (matched) return matched;
+      }
+
+      const matchedByForm = shippingMethodsForDisplay.find((method) => method.id === form.shippingMethod);
+      return matchedByForm ?? current ?? null;
+    });
+  }, [form.shippingMethod, shippingMethodsForDisplay]);
+
+  const previousItemsSignature = useRef("");
+  const previousShippingAddressSignature = useRef("");
+  useEffect(() => {
+    if (previousItemsSignature.current && previousItemsSignature.current !== itemsSignature) {
+      setShippingMethodSelection(null);
+      setDraftOrderId(null);
+    }
+    previousItemsSignature.current = itemsSignature;
+  }, [itemsSignature]);
+  useEffect(() => {
+    if (previousShippingAddressSignature.current && previousShippingAddressSignature.current !== shippingAddressSignature) {
+      setShippingMethodSelection(null);
+      setDraftOrderId(null);
+    }
+    previousShippingAddressSignature.current = shippingAddressSignature;
+  }, [shippingAddressSignature]);
   const selectedShippingMethod =
+    shippingMethodsForDisplay?.find((method) => method.id === shippingMethodSelection?.id) ??
     shippingMethodsForDisplay?.find((method) => method.id === form.shippingMethod) ??
-    shippingMethodsForDisplay?.[0] ??
-    validatedShippingMethods?.find((method) => method.id === form.shippingMethod);
+    null;
   const shipping =
     subtotal > 0 && step !== "shipping" && printFilesReady
       ? typeof selectedShippingMethod?.price === "number"
@@ -604,7 +661,19 @@ export default function CheckoutPage() {
       !hasAvailabilityBlock,
   );
 
-  const canPay = shippingComplete && items.length > 0 && !productAvailability.loading && productAvailability.available && Boolean(validatedShippingMethods?.length);
+  const canPay =
+    shippingComplete &&
+    items.length > 0 &&
+    !productAvailability.loading &&
+    productAvailability.available &&
+    Boolean(validatedShippingMethods?.length) &&
+    Boolean(selectedShippingMethod?.id);
+
+  useEffect(() => {
+    if (step === "payment" && !selectedShippingMethod?.id) {
+      setStep("review");
+    }
+  }, [selectedShippingMethod?.id, step]);
 
   const fetchVariantsForItems = useCallback(async (cartItems: CartItem[]) => {
     const lookupIds = Array.from(new Set(cartItems.flatMap((item) => getVariantLookupProductIds(item))));
@@ -845,7 +914,7 @@ export default function CheckoutPage() {
           setForm((prev) => {
             if (methods.some((method) => method.id === prev.shippingMethod)) return prev;
             const cheapest = [...methods].sort((a, b) => (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY))[0];
-            return cheapest ? { ...prev, shippingMethod: cheapest.id as CheckoutForm["shippingMethod"] } : prev;
+            return cheapest ? { ...prev, shippingMethod: cheapest.id } : prev;
           });
         }
       } catch (error) {
@@ -876,6 +945,11 @@ export default function CheckoutPage() {
       selectedAddressLock.current = "";
       suppressAddressLookup.current = false;
       if (!addressSessionToken.current) addressSessionToken.current = createAddressSessionToken();
+    }
+
+    if (key === "address" || key === "country" || key === "postalCode" || key === "city") {
+      setShippingMethodSelection(null);
+      setDraftOrderId(null);
     }
 
     setForm((prev) => ({
@@ -1160,6 +1234,14 @@ export default function CheckoutPage() {
     }
   };
 
+  useEffect(() => {
+    setShippingMethodSelection((current) => {
+      const active = shippingMethodsForDisplay?.find((method) => method.id === current?.id) ?? null;
+      if (!active) return current;
+      return active;
+    });
+  }, [shippingMethodsForDisplay]);
+
 
   // Payload completo apenas para o teste interno da Gelato.
   // Nunca deve ser usado para autorizar preços no Stripe.
@@ -1184,14 +1266,57 @@ export default function CheckoutPage() {
       setError("Some products are not available for this delivery country. Change country or product variant before paying.");
       return;
     }
+    if (!selectedShippingMethod?.id) {
+      setError("Please select a shipping method.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
     try {
+      const draftRes = await fetch("/api/checkout/draft-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          cartItemIds: items.map((item) => item.id),
+          address: {
+            firstName: form.fullName.split(/\s+/).filter(Boolean).slice(0, -1).join(" ") || form.fullName,
+            lastName: form.fullName.split(/\s+/).filter(Boolean).at(-1) || ".",
+            addressLine1: form.address,
+            addressLine2: form.apartment || null,
+            city: form.city,
+            state: null,
+            postalCode: form.postalCode,
+            countryCode: form.country,
+            email: form.email,
+            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+          },
+          customer: {
+            fullName: form.fullName,
+            email: form.email,
+            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+            country: form.country,
+            countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+            address: form.address,
+            apartment: form.apartment,
+            city: form.city,
+            state: null,
+            postalCode: form.postalCode,
+          },
+          selectedShippingMethod,
+        }),
+      });
+      const draftData = await draftRes.json().catch(() => null);
+      if (!draftRes.ok || !draftData?.success) {
+        throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
+      }
+      setDraftOrderId(draftData.draftOrderId ?? null);
+
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildSecureCheckoutPayload()),
+        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: draftData.draftOrderId }),
       });
 
       const data = await res.json().catch(() => null);
@@ -1265,7 +1390,7 @@ export default function CheckoutPage() {
 
   const goNext = () => {
     if (step === "shipping" && shippingComplete) setStep("review");
-    if (step === "review" && items.length > 0) setStep("payment");
+    if (step === "review" && items.length > 0 && selectedShippingMethod?.id) setStep("payment");
   };
 
   const stepIndex = step === "shipping" ? 0 : step === "review" ? 1 : 2;
@@ -1608,22 +1733,31 @@ export default function CheckoutPage() {
                     ) : productAvailability.checked && productAvailability.available && shippingMethodsForDisplay?.length ? (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {shippingMethodsForDisplay.map((method, index) => {
-                          const active = form.shippingMethod === method.id;
+                          const active = selectedShippingMethod?.id === method.id;
                           const isCheapest = index === 0;
                           const isFastest = index === shippingMethodsForDisplay.length - 1;
                           return (
-                            <button key={method.id} type="button" onClick={() => updateField("shippingMethod", method.id)} className={`rounded-xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                            <button key={method.id} type="button" onClick={() => {
+                              console.info("[checkout:shipping-selected]", {
+                                id: method.id,
+                                code: method.code,
+                                name: method.name,
+                                price: method.price,
+                                currency: method.currency,
+                              });
+                              setShippingMethodSelection(method);
+                            setForm((prev) => ({ ...prev, shippingMethod: method.id }));
+                            }} className={`rounded-xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
                               <span className="flex items-start justify-between gap-3">
                                 <span className="min-w-0">
-                                  <span className="block text-sm font-black leading-5">{method.title}</span>
+                                  <span className="block text-sm font-black leading-5">{method.name}</span>
                                   <span className="mt-1 block text-sm font-bold text-white/80">{formatShippingCurrency(method.price ?? null, method.currency)}</span>
                                 </span>
                                 <span className="mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-black/20">
                                   <span className={`h-2.5 w-2.5 rounded-full ${active ? "bg-purple-300" : "bg-transparent"}`} />
                                 </span>
                               </span>
-                              <span className="mt-2 block text-xs font-medium text-white/45">{`Estimated delivery: ${formatEstimatedDelivery(method.estimatedDays || null)}`}</span>
-                              {method.fulfillmentCountry ? <span className="mt-1 block text-[11px] font-medium text-white/35">{formatShipsFrom(method.fulfillmentCountry)}</span> : null}
+                              <span className="mt-2 block text-xs font-medium text-white/45">{`Estimated delivery: ${formatEstimatedDelivery(method.minDays || method.maxDays ? `${method.minDays ?? ""} - ${method.maxDays ?? ""}` : null)}`}</span>
                               <div className="mt-2 flex items-center gap-2">
                                 {isCheapest ? <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-white/70">Cheapest</span> : null}
                                 {isFastest ? <span className="rounded-full bg-purple-500/15 px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-purple-100">Fastest</span> : null}
@@ -1703,7 +1837,7 @@ export default function CheckoutPage() {
                     </>
                   )}
 
-                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}
                   </button>
                 </div>
