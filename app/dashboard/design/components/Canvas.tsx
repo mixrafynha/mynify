@@ -556,6 +556,8 @@ export default function Canvas({
 
       <div
         ref={mockupRootRef}
+        data-mockup-capture-root={side}
+        data-mockup-capture-side={currentSide}
         className="relative shrink-0 will-change-transform md:will-change-auto"
         style={{
           width: MOCKUP_AREA.width,

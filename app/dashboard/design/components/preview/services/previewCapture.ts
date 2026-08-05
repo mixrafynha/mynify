@@ -2,12 +2,18 @@ import { toBlob, toCanvas, toPng } from "html-to-image";
 import { EXPORT_MOCKUP_AREA } from "../../canvas/constants";
 import type { PreviewSide, PreviewSideData } from "../types/preview";
 import { TARGET_PRINT_DPI } from "../../canvas/engine/dpi";
+import { fetchEditorFonts } from "../../toolbar/data";
+import { getFontByFamily, loadEditorFont } from "../../data/fonts";
+import { resolveElementImageSrc } from "@/shared/rendering/imageSource";
+import { FONT_ITEMS, EXTRA_STICKER_ITEMS, SHAPES, STICKER_ITEMS } from "../../data";
+
+console.warn("[PREVIEW DIAGNOSTIC] module loaded");
 
 const CHECKOUT_PREVIEW_SIZE = 384;
 const CHECKOUT_PREVIEW_PIXEL_RATIO = 1;
 const CHECKOUT_PREVIEW_QUALITY = 0.72;
-const CHECKOUT_PREVIEW_TIMEOUT_MS = 12_000;
-const CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS = 3_000;
+const CHECKOUT_PREVIEW_TIMEOUT_MS = 35_000;
+const CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS = 10_000;
 
 const CAPTURE_HIDDEN_SELECTORS = [
   "[data-element-control]",
@@ -19,7 +25,6 @@ const CAPTURE_HIDDEN_SELECTORS = [
   "[data-production-hidden]",
   "[data-lost-elements-overlay]",
   "[data-lost-element-marker]",
-  "[data-outside-print-area='true']",
 ];
 
 function number(value: unknown, fallback = 0) {
@@ -38,8 +43,103 @@ function nextFrame() {
   });
 }
 
+function delay(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForStableCaptureState(
+  node: HTMLElement,
+  expectedIds: string[],
+  timeoutMs = 10_000,
+) {
+  const startedAt = performance.now();
+  let stableFrames = 0;
+  let previousSignature = "";
+
+  while (performance.now() - startedAt < timeoutMs) {
+    const rect = node.getBoundingClientRect();
+    const renderedIds = Array.from(
+      node.querySelectorAll<HTMLElement>("[data-design-element-id]"),
+    ).map((item) => String(item.dataset.designElementId || ""));
+    const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
+    const decodedImages = images.filter(
+      (image) => image.complete && image.naturalWidth > 0 && image.naturalHeight > 0,
+    ).length;
+    const missingIds = expectedIds.filter((id) => !renderedIds.includes(id));
+    const signature = [
+      rect.left.toFixed(1),
+      rect.top.toFixed(1),
+      rect.width.toFixed(1),
+      rect.height.toFixed(1),
+      renderedIds.length,
+      images.length,
+      decodedImages,
+    ].join("|");
+
+    const ready =
+      rect.width > 0 &&
+      rect.height > 0 &&
+      missingIds.length === 0 &&
+      decodedImages === images.length;
+
+    if (ready && signature === previousSignature) stableFrames += 1;
+    else stableFrames = ready ? 1 : 0;
+
+    previousSignature = signature;
+    if (stableFrames >= 4) return;
+    await nextFrame();
+  }
+
+  throw new Error("Checkout preview layout/resources did not become stable in time");
+}
+
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+function devLog(...args: unknown[]) {
+  if (isDevelopment) {
+    console.warn(...args);
+  }
+}
+
 async function waitForFonts() {
   await document.fonts?.ready?.catch?.(() => undefined);
+}
+
+function normalizeFamily(value: string) {
+  return value.trim().replace(/^['"]|['"]$/g, "");
+}
+
+function isLikelyImageUrl(url: string) {
+  return /^(data:|blob:|https?:\/\/)/i.test(url) || /\.(png|jpe?g|webp|gif|avif|svg)(\?.*)?$/i.test(url);
+}
+
+function isHtmlRouteUrl(url: string) {
+  try {
+    const parsed = new URL(url, window.location.href);
+    return parsed.origin === window.location.origin && !isLikelyImageUrl(parsed.href);
+  } catch {
+    return false;
+  }
+}
+
+function isUsableImageSource(value: string | null | undefined) {
+  const source = String(value || "").trim();
+  if (!source) return false;
+  if (/^(about:blank|javascript:)/i.test(source)) return false;
+
+  try {
+    const resolved = new URL(source, window.location.href);
+    const currentPage = new URL(window.location.href);
+
+    if (resolved.href === currentPage.href) return false;
+    if (resolved.origin === currentPage.origin && isHtmlRouteUrl(resolved.href)) {
+      return false;
+    }
+
+    return isLikelyImageUrl(resolved.href);
+  } catch {
+    return isLikelyImageUrl(source);
+  }
 }
 
 const SYSTEM_FONT_FAMILIES = new Set([
@@ -54,7 +154,219 @@ const SYSTEM_FONT_FAMILIES = new Set([
 ]);
 
 function normalizeFontFamilyName(value: string) {
-  return value.trim().replace(/^['"]|['"]$/g, "");
+  return normalizeFamily(value);
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function firstFontFamily(value: string) {
+  return normalizeFamily(String(value || "").split(",")[0] || "");
+}
+
+async function prepareCaptureResources(container: HTMLElement) {
+  const fontsCatalog = await fetchEditorFonts().catch(() => []);
+  const fontFamilies = new Set<string>();
+  const usedImages: string[] = [];
+  const unresolved: Array<Record<string, unknown>> = [];
+  const restoreCallbacks: Array<() => void> = [];
+
+  const nodes = [container, ...Array.from(container.querySelectorAll<HTMLElement>("*"))];
+  for (const node of nodes) {
+    const style = window.getComputedStyle(node);
+    const family = firstFontFamily(style.fontFamily || "");
+    if (family && !SYSTEM_FONT_FAMILIES.has(family.toLowerCase()) && !family.startsWith("var(")) {
+      fontFamilies.add(family);
+    }
+  }
+
+  const loadedFonts: string[] = [];
+  for (const family of fontFamilies) {
+    const font =
+      fontsCatalog.find((item) => String(item?.family || "").toLowerCase() === family.toLowerCase()) ??
+      getFontByFamily(family);
+
+    try {
+      if (font) {
+        await loadEditorFont(font.family);
+      }
+      await document.fonts.load(`400 16px "${family}"`).catch(() => undefined);
+      await document.fonts.load(`700 16px "${family}"`).catch(() => undefined);
+      if (document.fonts.check(`16px "${family}"`)) loadedFonts.push(family);
+      else unresolved.push({ type: "font", fontFamily: family, reason: "font_not_loaded" });
+    } catch (error) {
+      unresolved.push({
+        type: "font",
+        fontFamily: family,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const images = Array.from(container.querySelectorAll<HTMLImageElement>("img"));
+  for (const image of images) {
+    const elementNode = image.closest<HTMLElement>("[data-design-element-id]");
+    const resolvedSrc = String(image.currentSrc || image.src || image.getAttribute("src") || "").trim();
+
+    if (!resolvedSrc) {
+      unresolved.push({
+        type: "image",
+        elementId: elementNode?.dataset.designElementId ?? null,
+        reason: "missing_src",
+      });
+      continue;
+    }
+    if (isHtmlRouteUrl(resolvedSrc)) {
+      unresolved.push({
+        type: "image",
+        elementId: elementNode?.dataset.designElementId ?? null,
+        src: resolvedSrc.slice(0, 180),
+        reason: "html_route_used_as_image",
+      });
+      continue;
+    }
+
+    usedImages.push(resolvedSrc);
+    image.loading = "eager";
+    image.decoding = "sync";
+
+    // The live editor DOM is the source of truth. A decoded image is already
+    // safe to capture and must not be rejected because a second CORS fetch fails.
+    if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+      continue;
+    }
+
+    try {
+      await Promise.race([
+        image.decode(),
+        delay(CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS).then(() => {
+          throw new Error("image_decode_timeout");
+        }),
+      ]);
+    } catch (error) {
+      if (!(image.complete && image.naturalWidth > 0 && image.naturalHeight > 0)) {
+        unresolved.push({
+          type: "image",
+          elementId: elementNode?.dataset.designElementId ?? null,
+          src: resolvedSrc.slice(0, 180),
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  }
+
+  await document.fonts.ready.catch(() => undefined);
+  await nextFrame();
+  await nextFrame();
+
+  return {
+    loadedFonts,
+    usedImages,
+    unresolved,
+    cleanup() {
+      for (const restore of restoreCallbacks.reverse()) restore();
+    },
+  };
+}
+
+function getNodeChain(node: HTMLElement | null) {
+  const chain: Array<Record<string, unknown>> = [];
+  let current: HTMLElement | null = node;
+
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const rect = current.getBoundingClientRect();
+    chain.push({
+      tagName: current.tagName,
+      className: current.className,
+      position: style.position,
+      width: rect.width,
+      height: rect.height,
+      transform: style.transform,
+      transformOrigin: style.transformOrigin,
+      overflow: style.overflow,
+      clipPath: style.clipPath,
+      mask: style.maskImage || style.mask,
+      scale: style.scale,
+    });
+
+    if (current.tagName === "BODY") break;
+    current = current.parentElement;
+  }
+
+  return chain;
+}
+
+function getCatalogResolution(element: any, fontsCatalog: any[], stickersCatalog: any[], shapesCatalog: any[]) {
+  const requestedId = String(element?.assetId || element?.stickerId || element?.shapeId || element?.fontFamily || "");
+  const fontHit = fontsCatalog.find((item) => String(item?.id || item?.family || "").toLowerCase() === requestedId.toLowerCase());
+  const stickerHit = stickersCatalog.find((item) => String(item?.id || item?.value || item?.label || "").toLowerCase() === requestedId.toLowerCase());
+  const shapeHit = shapesCatalog.find((item) => String(item?.id || item?.value || item?.label || "").toLowerCase() === requestedId.toLowerCase());
+
+  return {
+    elementId: element?.id ?? null,
+    type: element?.type ?? null,
+    requestedId,
+    foundInFontsCatalog: Boolean(fontHit),
+    foundInStickersCatalog: Boolean(stickerHit),
+    foundInShapesCatalog: Boolean(shapeHit),
+    resolvedCatalogUrl: fontHit?.previewWebpUrl || fontHit?.preview_webp_url || stickerHit?.svg || shapeHit?.svg || null,
+  };
+}
+
+function getStickerCatalog() {
+  return [...STICKER_ITEMS, ...EXTRA_STICKER_ITEMS];
+}
+
+function getAbsoluteUrl(src: string) {
+  try {
+    return new URL(src, window.location.href).toString();
+  } catch {
+    return src;
+  }
+}
+
+async function diagnoseImageUrl(url: string) {
+  const absoluteUrl = getAbsoluteUrl(url);
+  let status: number | null = null;
+  let contentType: string | null = null;
+  let size: number | null = null;
+  let corsAvailable: boolean | null = null;
+
+  try {
+    const response = await fetch(absoluteUrl, { method: "GET", mode: "cors" });
+    status = response.status;
+    contentType = response.headers.get("content-type");
+    const blob = await response.blob();
+    size = blob.size;
+    corsAvailable = true;
+  } catch {
+    corsAvailable = false;
+  }
+
+  const parsed = (() => {
+    try {
+      return new URL(absoluteUrl);
+    } catch {
+      return null;
+    }
+  })();
+
+  return {
+    url: absoluteUrl,
+    hostname: parsed?.hostname ?? null,
+    pathname: parsed?.pathname ?? null,
+    status,
+    contentType,
+    corsAvailable,
+    size,
+  };
 }
 
 function collectFontFamilies(container: HTMLElement) {
@@ -156,6 +468,142 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
   ]);
 }
 
+
+function normalizeCaptureFailure(error: unknown): Error {
+  if (error instanceof Error) return error;
+
+  if (error instanceof Event) {
+    const target = error.target;
+    if (target instanceof HTMLImageElement) {
+      return new Error(
+        `Image capture failed: src=${target.currentSrc || target.getAttribute("src") || "unknown"}, ` +
+          `complete=${target.complete}, naturalWidth=${target.naturalWidth}, ` +
+          `naturalHeight=${target.naturalHeight}`,
+      );
+    }
+    return new Error(`Capture event failed: type=${error.type || "unknown"}`);
+  }
+
+  return new Error(String(error));
+}
+
+async function stabilizeLiveImagesForCapture(container: HTMLElement) {
+  const images = Array.from(container.querySelectorAll<HTMLImageElement>("img"));
+  const restorers: Array<() => void> = [];
+  const preloaders: HTMLImageElement[] = [];
+
+  for (const image of images) {
+    const original = {
+      src: image.getAttribute("src"),
+      srcset: image.getAttribute("srcset"),
+      sizes: image.getAttribute("sizes"),
+      loading: image.getAttribute("loading"),
+      decoding: image.getAttribute("decoding"),
+    };
+
+    const currentSrc = String(image.currentSrc || "").trim();
+    const explicitSrc = String(image.getAttribute("src") || "").trim();
+    const stableSrc = isUsableImageSource(currentSrc)
+      ? currentSrc
+      : isUsableImageSource(explicitSrc)
+        ? explicitSrc
+        : "";
+
+    // Empty/missing image sources are exposed by the browser as the current
+    // editor page URL. html-to-image then tries to decode that HTML page as an
+    // image. Remove those invalid image nodes from the capture tree entirely
+    // and restore them after capture.
+    if (!stableSrc) {
+      const parent = image.parentNode;
+      if (parent) {
+        const placeholder = document.createElement("span");
+        const rect = image.getBoundingClientRect();
+        const computed = window.getComputedStyle(image);
+        placeholder.setAttribute("data-preview-invalid-image-placeholder", "true");
+        placeholder.style.display = computed.display === "none" ? "none" : "inline-block";
+        placeholder.style.width = `${Math.max(0, rect.width)}px`;
+        placeholder.style.height = `${Math.max(0, rect.height)}px`;
+        placeholder.style.opacity = "0";
+        placeholder.style.pointerEvents = "none";
+        parent.replaceChild(placeholder, image);
+        restorers.push(() => {
+          if (placeholder.parentNode) placeholder.parentNode.replaceChild(image, placeholder);
+        });
+      }
+      continue;
+    }
+
+    restorers.push(() => {
+      const restore = (name: string, value: string | null) => {
+        if (value === null) image.removeAttribute(name);
+        else image.setAttribute(name, value);
+      };
+      restore("src", original.src);
+      restore("srcset", original.srcset);
+      restore("sizes", original.sizes);
+      restore("loading", original.loading);
+      restore("decoding", original.decoding);
+    });
+
+    image.loading = "eager";
+    image.decoding = "sync";
+    image.removeAttribute("srcset");
+    image.removeAttribute("sizes");
+    if (image.getAttribute("src") !== stableSrc) image.setAttribute("src", stableSrc);
+
+    if (!(image.complete && image.naturalWidth > 0 && image.naturalHeight > 0)) {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          cleanup();
+          reject(new Error(`Image readiness timed out: ${stableSrc}`));
+        }, CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS);
+        const cleanup = () => {
+          window.clearTimeout(timeout);
+          image.removeEventListener("load", onLoad);
+          image.removeEventListener("error", onError);
+        };
+        const onLoad = () => { cleanup(); resolve(); };
+        const onError = (event: Event) => { cleanup(); reject(normalizeCaptureFailure(event)); };
+        image.addEventListener("load", onLoad, { once: true });
+        image.addEventListener("error", onError, { once: true });
+      });
+    }
+
+    const preloader = new Image();
+    preloader.decoding = "sync";
+    preloader.loading = "eager";
+    preloader.src = stableSrc;
+    preloaders.push(preloader);
+    await new Promise<void>((resolve, reject) => {
+      if (preloader.complete && preloader.naturalWidth > 0) {
+        resolve();
+        return;
+      }
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error(`Image preload timed out: ${stableSrc}`));
+      }, CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS);
+      const cleanup = () => {
+        window.clearTimeout(timeout);
+        preloader.removeEventListener("load", onLoad);
+        preloader.removeEventListener("error", onError);
+      };
+      const onLoad = () => { cleanup(); resolve(); };
+      const onError = (event: Event) => { cleanup(); reject(normalizeCaptureFailure(event)); };
+      preloader.addEventListener("load", onLoad, { once: true });
+      preloader.addEventListener("error", onError, { once: true });
+    });
+  }
+
+  await nextFrame();
+  await nextFrame();
+
+  return () => {
+    preloaders.forEach((image) => { image.removeAttribute("src"); });
+    for (const restore of restorers.reverse()) restore();
+  };
+}
+
 function describeCaptureError(error: unknown): string {
   if (error instanceof Error) {
     return `${error.name}: ${error.message}`;
@@ -165,7 +613,7 @@ function describeCaptureError(error: unknown): string {
     const target = error.target;
 
     if (target instanceof HTMLImageElement) {
-      return `Image event: src=${target.currentSrc || target.src}, complete=${target.complete}, naturalWidth=${target.naturalWidth}, naturalHeight=${target.naturalHeight}`;
+      return `Image event: src=${target.currentSrc || target.getAttribute("src")}, complete=${target.complete}, naturalWidth=${target.naturalWidth}, naturalHeight=${target.naturalHeight}`;
     }
 
     return `Event: type=${error.type}`;
@@ -226,7 +674,7 @@ function buildCaptureOptions(width: number, height: number) {
     },
     filter: (target: HTMLElement) => {
       if (target instanceof HTMLImageElement) {
-        const src = target.currentSrc || target.src || "";
+        const src = target.currentSrc || target.getAttribute("src") || "";
         if (
           !src ||
           target.naturalWidth <= 0 ||
@@ -245,7 +693,7 @@ function buildCaptureOptions(width: number, height: number) {
 
 function captureFilterForDiagnostics(target: HTMLElement) {
   if (target instanceof HTMLImageElement) {
-    const src = target.currentSrc || target.src || "";
+    const src = target.currentSrc || target.getAttribute("src") || "";
     if (
       !src ||
       target.naturalWidth <= 0 ||
@@ -553,6 +1001,7 @@ async function capturePrintableLayer(args: {
 }
 
 export async function capturePreviewDesignOverlay(data: PreviewSideData) {
+  console.warn("[PREVIEW DIAGNOSTIC] function entered: capturePreviewDesignOverlay");
   // Visual preview overlay is a 1024x1024 transparent mockup-space PNG.
   // The safe-area DOM is cloned once and placed at the same safe-area coordinates
   // used by the editor/mockup. It is not rebuilt from elements[].
@@ -561,12 +1010,14 @@ export async function capturePreviewDesignOverlay(data: PreviewSideData) {
 
 
 export async function captureProductionDesign(data: PreviewSideData) {
+  console.warn("[PREVIEW DIAGNOSTIC] function entered: captureProductionDesign");
   // Production print files are high-resolution captures of the real preview DOM.
   // There is intentionally no Canvas fallback and no elements[] fallback.
   return capturePrintableLayer({ data, production: true });
 }
 
 export async function captureVisualMockupPreview(node: HTMLElement | null) {
+  console.warn("[PREVIEW DIAGNOSTIC] function entered: captureVisualMockupPreview");
   if (!node) return null;
 
   const width = EXPORT_MOCKUP_AREA.width;
@@ -636,16 +1087,67 @@ export async function captureVisualMockupPreview(node: HTMLElement | null) {
   }
 }
 
-export async function captureVisualMockupPreviewBlob(
-  node: HTMLElement | null,
-) {
-  if (!node) {
-    throw new Error("Front preview element not found");
+
+function getCaptureCrop(node: HTMLElement) {
+  const rootRect = node.getBoundingClientRect();
+  const candidates = [
+    node.querySelector<HTMLElement>("[data-checkout-mockup-base]"),
+    ...Array.from(node.querySelectorAll<HTMLElement>("[data-design-element-id]")),
+  ].filter((item): item is HTMLElement => Boolean(item));
+
+  const visibleRects = candidates
+    .map((item) => item.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0);
+
+  if (!visibleRects.length) {
+    const side = Math.min(node.offsetWidth, node.offsetHeight);
+    return { x: 0, y: 0, width: side, height: side };
   }
 
-  if (!node.isConnected) {
-    throw new Error("Front preview element is detached from the DOM");
-  }
+  let left = Math.min(...visibleRects.map((rect) => rect.left - rootRect.left));
+  let top = Math.min(...visibleRects.map((rect) => rect.top - rootRect.top));
+  let right = Math.max(...visibleRects.map((rect) => rect.right - rootRect.left));
+  let bottom = Math.max(...visibleRects.map((rect) => rect.bottom - rootRect.top));
+
+  const contentWidth = Math.max(1, right - left);
+  const contentHeight = Math.max(1, bottom - top);
+  const margin = Math.max(contentWidth, contentHeight) * 0.08;
+  left -= margin;
+  top -= margin;
+  right += margin;
+  bottom += margin;
+
+  const desiredSide = Math.min(
+    Math.max(right - left, bottom - top),
+    Math.min(node.offsetWidth, node.offsetHeight),
+  );
+  const centerX = (left + right) / 2;
+  const centerY = (top + bottom) / 2;
+  let x = centerX - desiredSide / 2;
+  let y = centerY - desiredSide / 2;
+
+  x = Math.max(0, Math.min(x, node.offsetWidth - desiredSide));
+  y = Math.max(0, Math.min(y, node.offsetHeight - desiredSide));
+
+  return { x, y, width: desiredSide, height: desiredSide };
+}
+
+async function canvasToWebpBlob(canvas: HTMLCanvasElement, quality = 0.84) {
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Failed to encode checkout preview"))),
+      "image/webp",
+      quality,
+    );
+  });
+}
+
+export async function captureVisualMockupPreviewBlob(
+  node: HTMLElement | null,
+  debugElements: any[] = [],
+) {
+  if (!node) throw new Error("Checkout preview element not found");
+  if (!node.isConnected) throw new Error("Checkout preview element is detached from the DOM");
 
   const computedStyle = window.getComputedStyle(node);
   if (
@@ -653,276 +1155,216 @@ export async function captureVisualMockupPreviewBlob(
     computedStyle.visibility === "hidden" ||
     computedStyle.opacity === "0"
   ) {
-    throw new Error("Front preview element is not visible");
+    throw new Error("Checkout preview element is not visible");
   }
 
-  const rect = node.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) {
-    throw new Error(`Front preview has invalid dimensions: ${rect.width}x${rect.height}`);
-  }
-
-  const sourceImages = Array.from(node.querySelectorAll("img"));
-  const imageDiagnostics = Array.from(
-    node.querySelectorAll<HTMLImageElement>("img"),
-  ).map((img, index) => ({
-    index,
-    srcAttribute: img.getAttribute("src"),
-    src: img.src,
-    currentSrc: img.currentSrc,
-    alt: img.alt,
-    className: img.className,
-    complete: img.complete,
-    naturalWidth: img.naturalWidth,
-    naturalHeight: img.naturalHeight,
-    excludedByFilter: !captureFilterForDiagnostics(img),
-    outerHTML: img.outerHTML.slice(0, 500),
-  }));
-  console.info("[preview-capture] images before export", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    images: imageDiagnostics,
-  });
-  console.info("[preview-capture] mockup background", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    backgroundImage: window.getComputedStyle(node).backgroundImage,
-  });
-  console.info("[checkout-preview:export-root-after-artwork]", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    ...snapshotLayerState(node),
-  });
-  logLayerSnapshot("original", node);
-  await document.fonts.ready;
-  await Promise.all(
-    sourceImages.map(async (image) => {
-      if (image.complete && image.naturalWidth > 0) return;
-      await image.decode().catch(() => undefined);
-    }),
-  );
-  const invalidImages = Array.from(node.querySelectorAll<HTMLImageElement>("img")).filter(
-    (img) =>
-      !img.currentSrc ||
-      img.naturalWidth <= 0 ||
-      img.naturalHeight <= 0,
-  );
-  console.info("[preview-capture] invalid images", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    images: invalidImages.map((img) => ({
-      src: img.src,
-      currentSrc: img.currentSrc,
-      naturalWidth: img.naturalWidth,
-      naturalHeight: img.naturalHeight,
-    })),
-  });
-  await validateCaptureImages(node);
-
-  console.info("[preview-capture] node ready", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    width: rect.width,
-    height: rect.height,
-    imageCount: sourceImages.length,
-  });
-
-  const container = document.createElement("div");
-  container.setAttribute("data-visual-mockup-capture", "true");
-  container.style.position = "fixed";
-  container.style.left = "0";
-  container.style.top = "0";
-  container.style.width = `${CHECKOUT_PREVIEW_SIZE}px`;
-  container.style.height = `${CHECKOUT_PREVIEW_SIZE}px`;
-  container.style.overflow = "hidden";
-  container.style.background = "transparent";
-  container.style.pointerEvents = "none";
-  container.style.zIndex = "-2147483647";
-  container.style.isolation = "isolate";
-  container.style.contain = "layout paint style size";
-
-  const clone = node.cloneNode(true) as HTMLElement;
-  clone.removeAttribute("id");
-  clone.setAttribute("data-visual-mockup-root-clone", "true");
-  clone.style.position = "absolute";
-  clone.style.left = "0";
-  clone.style.top = "0";
-  clone.style.width = `${CHECKOUT_PREVIEW_SIZE}px`;
-  clone.style.height = `${CHECKOUT_PREVIEW_SIZE}px`;
-  clone.style.transform = "none";
-  clone.style.transformOrigin = "top left";
-  clone.style.margin = "0";
-  clone.style.pointerEvents = "none";
-  clone.style.contain = "layout paint style size";
-
-  prepareClonedImages(clone);
-  console.info("[checkout-preview:clone-state]", {
-    side: (node.dataset.mockupExportRoot || "front") as string,
-    original: snapshotLayerState(node),
-    clone: snapshotLayerState(clone),
-  });
-  logLayerSnapshot("clone-before-append", clone);
-  container.appendChild(clone);
-  document.body.appendChild(container);
+  const previousTransform = node.style.transform;
+  const previousTransformOrigin = node.style.transformOrigin;
+  const previousWillChange = node.style.willChange;
+  const restoreImages: Array<() => void> = [];
 
   try {
-    await ensureRuntimeGoogleFonts(container);
-    await waitForFonts();
+    // Let React finish the hidden preview render. This must not depend on
+    // DevTools, resize events or the speed of the machine.
+    await delay(900);
+    await document.fonts.ready.catch(() => undefined);
+
+    const expectedIds = debugElements
+      .filter((element) => !element?.meta?.hidden)
+      .map((element) => String(element?.id ?? ""))
+      .filter(Boolean);
+
+    await waitForStableCaptureState(node, expectedIds, 12_000);
+
+    // Remove only the editor viewport pan/zoom. Product visualScale and all
+    // artwork transforms remain inside the capture root.
+    node.style.transform = "none";
+    node.style.transformOrigin = "top left";
+    node.style.willChange = "auto";
     await nextFrame();
-    logLayerSnapshot("clone-after-append", clone);
-    await withTimeout(
-      waitForImages(container),
-      CHECKOUT_PREVIEW_IMAGE_WAIT_TIMEOUT_MS,
-      "Checkout preview image wait",
-    ).catch((error) => {
-      console.warn("[preview-capture] image wait skipped", {
-        side: (node.dataset.mockupExportRoot || "front") as string,
-        error: describeCaptureError(error),
-      });
-    });
+    await nextFrame();
     await nextFrame();
 
-    const captureOptions = buildCaptureOptions(
-      CHECKOUT_PREVIEW_SIZE,
-      CHECKOUT_PREVIEW_SIZE,
-    );
-    let blob: Blob | null = null;
+    const width = node.offsetWidth;
+    const height = node.offsetHeight;
+    if (width <= 0 || height <= 0) {
+      throw new Error(`Checkout preview has invalid dimensions: ${width}x${height}`);
+    }
 
-    try {
-      console.info("[preview-capture] toBlob started", {
-        side: (node.dataset.mockupExportRoot || "front") as string,
-      });
-      console.info("[checkout-preview:before-capture]", {
-        side: (node.dataset.mockupExportRoot || "front") as string,
-        original: snapshotLayerState(node),
-        clone: snapshotLayerState(clone),
-      });
-      const sourceCanvas = await toCanvas(container, captureOptions);
-      console.info("[preview-capture] toBlob completed", {
-        side: (node.dataset.mockupExportRoot || "front") as string,
+    // html-to-image reloads every <img> while serializing the DOM. Route
+    // external raster images through Next's same-origin image endpoint so the
+    // screenshot does not depend on R2/CORS. Invalid/empty image nodes are
+    // hidden only for the capture and restored afterwards.
+    const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
+    for (const image of images) {
+      const original = {
+        src: image.getAttribute("src"),
+        srcset: image.getAttribute("srcset"),
+        sizes: image.getAttribute("sizes"),
+        display: image.style.display,
+        loading: image.getAttribute("loading"),
+        decoding: image.getAttribute("decoding"),
+      };
+
+      restoreImages.push(() => {
+        if (original.src === null) image.removeAttribute("src");
+        else image.setAttribute("src", original.src);
+        if (original.srcset === null) image.removeAttribute("srcset");
+        else image.setAttribute("srcset", original.srcset);
+        if (original.sizes === null) image.removeAttribute("sizes");
+        else image.setAttribute("sizes", original.sizes);
+        if (original.loading === null) image.removeAttribute("loading");
+        else image.setAttribute("loading", original.loading);
+        if (original.decoding === null) image.removeAttribute("decoding");
+        else image.setAttribute("decoding", original.decoding);
+        image.style.display = original.display;
       });
 
-      const outputSize = CHECKOUT_PREVIEW_SIZE;
-      const padding = 28;
-      const outputCanvas = document.createElement("canvas");
-      outputCanvas.width = outputSize;
-      outputCanvas.height = outputSize;
+      const explicitSrc = String(image.getAttribute("src") || "").trim();
+      const currentSrc = String(image.currentSrc || "").trim();
+      const source = isUsableImageSource(currentSrc)
+        ? currentSrc
+        : isUsableImageSource(explicitSrc)
+          ? explicitSrc
+          : "";
 
-      const ctx = outputCanvas.getContext("2d");
-      if (!ctx) {
-        throw new Error("Canvas context unavailable");
+      if (!source || image.naturalWidth <= 0 || image.naturalHeight <= 0) {
+        image.style.display = "none";
+        image.removeAttribute("src");
+        image.removeAttribute("srcset");
+        image.removeAttribute("sizes");
+        continue;
       }
 
-      const availableSize = outputSize - padding * 2;
-      const scale = Math.min(
-        availableSize / sourceCanvas.width,
-        availableSize / sourceCanvas.height,
-      );
-      const drawWidth = sourceCanvas.width * scale;
-      const drawHeight = sourceCanvas.height * scale;
-      const offsetX = (outputSize - drawWidth) / 2;
-      const offsetY = (outputSize - drawHeight) / 2;
-
-      ctx.clearRect(0, 0, outputSize, outputSize);
-      ctx.drawImage(sourceCanvas, offsetX, offsetY, drawWidth, drawHeight);
-
-      blob = await new Promise<Blob | null>((resolve) => {
-        outputCanvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
-      });
-    } catch (firstError) {
-      console.warn("[preview-capture] toBlob failed", {
-        side: (node.dataset.mockupExportRoot || "front") as string,
-        error: describeCaptureError(firstError),
-      });
+      image.loading = "eager";
+      image.decoding = "sync";
+      image.removeAttribute("srcset");
+      image.removeAttribute("sizes");
 
       try {
-        console.info("[preview-capture] toCanvas started", {
-          side: (node.dataset.mockupExportRoot || "front") as string,
-        });
-        const canvas = await toCanvas(container, captureOptions);
-        console.info("[preview-capture] toCanvas completed", {
-          side: (node.dataset.mockupExportRoot || "front") as string,
-        });
-        const outputSize = CHECKOUT_PREVIEW_SIZE;
-        const padding = 28;
-        const outputCanvas = document.createElement("canvas");
-        outputCanvas.width = outputSize;
-        outputCanvas.height = outputSize;
+        const isInlineSource = source.startsWith("data:") || source.startsWith("blob:");
+        const parsed = isInlineSource ? null : new URL(source, window.location.href);
+        const isExternal = Boolean(parsed && parsed.origin !== window.location.origin);
 
-        const ctx = outputCanvas.getContext("2d");
-        if (!ctx) {
-          throw new Error("Canvas context unavailable");
+        if (isInlineSource) {
+          // Inline SVG/data URLs and blob URLs are already browser-ready.
+          // Never send them through the HTTP proxy: the proxy intentionally
+          // accepts only remote http(s) image URLs.
+          image.setAttribute("src", source);
+          if (source.startsWith("blob:")) {
+            await image.decode().catch(() => undefined);
+          }
+        } else if (isExternal && parsed) {
+          // html-to-image serializes the DOM and reloads external images. Use a
+          // dedicated same-origin proxy, then embed the returned bytes as a
+          // data URL. This avoids both R2 CORS restrictions and Next/Image 404s.
+          const response = await fetch(
+            `/api/checkout/image-proxy?url=${encodeURIComponent(parsed.href)}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) {
+            throw new Error(`Preview image proxy failed (${response.status}): ${parsed.href}`);
+          }
+
+          const blob = await response.blob();
+          if (!blob.type.startsWith("image/") || blob.size === 0) {
+            throw new Error(`Preview image proxy returned invalid content: ${parsed.href}`);
+          }
+
+          const dataUrl = await blobToDataUrl(blob);
+          image.setAttribute("src", dataUrl);
+          await Promise.race([
+            image.decode(),
+            delay(6_000).then(() => {
+              throw new Error(`Preview image decode timed out: ${parsed.href}`);
+            }),
+          ]);
+        } else {
+          image.setAttribute("src", source);
         }
-
-        const availableSize = outputSize - padding * 2;
-        const scale = Math.min(
-          availableSize / canvas.width,
-          availableSize / canvas.height,
-        );
-        const drawWidth = canvas.width * scale;
-        const drawHeight = canvas.height * scale;
-        const offsetX = (outputSize - drawWidth) / 2;
-        const offsetY = (outputSize - drawHeight) / 2;
-
-        ctx.clearRect(0, 0, outputSize, outputSize);
-        ctx.drawImage(canvas, offsetX, offsetY, drawWidth, drawHeight);
-
-        blob = await new Promise<Blob | null>((resolve) => {
-          outputCanvas.toBlob(resolve, "image/webp", CHECKOUT_PREVIEW_QUALITY);
-        });
-      } catch (secondError) {
-        console.warn("[preview-capture] toCanvas failed", {
-          side: (node.dataset.mockupExportRoot || "front") as string,
-          error: describeCaptureError(secondError),
-        });
-        throw new Error(
-          `Preview capture failed. toBlob=${describeCaptureError(firstError)}; toCanvas=${describeCaptureError(secondError)}`,
-        );
+      } catch (error) {
+        throw error instanceof Error ? error : new Error(String(error));
       }
     }
 
-    if (!(blob instanceof Blob) || blob.size === 0) {
-      throw new Error("Preview capture produced an empty blob");
+    await document.fonts.ready.catch(() => undefined);
+    await nextFrame();
+    await nextFrame();
+    await nextFrame();
+
+    const crop = getCaptureCrop(node);
+    const captureOptions = {
+      cacheBust: false,
+      includeQueryParams: true,
+      pixelRatio: 1,
+      backgroundColor: "transparent",
+      width,
+      height,
+      canvasWidth: width,
+      canvasHeight: height,
+      style: { margin: "0" },
+      filter: (target: HTMLElement) => {
+        if (!(target instanceof HTMLElement)) return true;
+        if (target instanceof HTMLImageElement && target.style.display === "none") {
+          return false;
+        }
+        return shouldCaptureNode(target);
+      },
+    } as const;
+
+    let sourceCanvas: HTMLCanvasElement;
+    try {
+      sourceCanvas = await withTimeout(
+        toCanvas(node, captureOptions),
+        CHECKOUT_PREVIEW_TIMEOUT_MS,
+        "Checkout preview capture",
+      );
+    } catch (firstError) {
+      await nextFrame();
+      await nextFrame();
+      try {
+        sourceCanvas = await withTimeout(
+          toCanvas(node, captureOptions),
+          CHECKOUT_PREVIEW_TIMEOUT_MS,
+          "Checkout preview capture retry",
+        );
+      } catch (retryError) {
+        throw normalizeCaptureFailure(retryError ?? firstError);
+      }
     }
 
-    console.info("[preview-capture] blob created", {
-      side: (node.dataset.mockupExportRoot || "front") as string,
-      size: blob.size,
-      type: blob.type,
-      width: CHECKOUT_PREVIEW_SIZE,
-      height: CHECKOUT_PREVIEW_SIZE,
-    });
-    console.info("[checkout-preview:blob-result]", {
-      side: (node.dataset.mockupExportRoot || "front") as string,
-      blobSize: blob.size,
-      blobType: blob.type,
-      width: CHECKOUT_PREVIEW_SIZE,
-      height: CHECKOUT_PREVIEW_SIZE,
-      mockupFoundBeforeCapture: snapshotLayerState(node).hasMockup,
-      artworkFoundBeforeCapture: snapshotLayerState(node).hasArtwork,
-      mockupFoundInClone: snapshotLayerState(clone).hasMockup,
-      artworkFoundInClone: snapshotLayerState(clone).hasArtwork,
-    });
+    const outputSize = 900;
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = outputSize;
+    outputCanvas.height = outputSize;
+    const context = outputCanvas.getContext("2d");
+    if (!context) throw new Error("Could not create checkout preview canvas context");
+    context.clearRect(0, 0, outputSize, outputSize);
+    context.drawImage(
+      sourceCanvas,
+      crop.x,
+      crop.y,
+      crop.width,
+      crop.height,
+      0,
+      0,
+      outputSize,
+      outputSize,
+    );
 
+    const blob = await canvasToWebpBlob(outputCanvas, 0.84);
+    if (!blob.size) throw new Error("Checkout preview produced an empty blob");
     return blob;
-  } catch (error) {
-    const message = describeCaptureError(error);
-    if (/Front preview element not found/i.test(message)) {
-      throw error;
-    }
-    if (/invalid dimensions/i.test(message)) {
-      throw error;
-    }
-    if (/not visible/i.test(message)) {
-      throw error;
-    }
-    if (/empty blob/i.test(message)) {
-      throw error;
-    }
-    if (/tainted|cors|cross-origin/i.test(message)) {
-      throw new Error(`Front preview capture failed due to image CORS: ${message}`);
-    }
-    throw new Error(`Front preview capture failed: ${message}`);
   } finally {
-    container.remove();
+    for (const restore of restoreImages.reverse()) restore();
+    node.style.transform = previousTransform;
+    node.style.transformOrigin = previousTransformOrigin;
+    node.style.willChange = previousWillChange;
   }
 }
 
 export async function captureProductionPreview(node: HTMLElement | null) {
+  console.warn("[PREVIEW DIAGNOSTIC] function entered: captureProductionPreview");
   if (!node) return null;
 
   try {
@@ -947,6 +1389,7 @@ export async function captureProductionPreview(node: HTMLElement | null) {
 }
 
 export function downloadDataUrl(dataUrl: string, filename: string) {
+  console.warn("[PREVIEW DIAGNOSTIC] function entered: downloadDataUrl");
   const link = document.createElement("a");
   link.href = dataUrl;
   link.download = filename;

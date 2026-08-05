@@ -130,6 +130,7 @@ export default function CanvasMockup({
 
       {safeMockup ? (
         <img
+          data-checkout-mockup-base={currentSide}
           src={safeMockup}
           alt={`${mockupId}-${currentSide}`}
           draggable={false}

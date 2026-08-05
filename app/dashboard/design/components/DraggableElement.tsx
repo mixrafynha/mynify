@@ -378,6 +378,13 @@ function DraggableElement({
   return (
     <div
       data-draggable-element
+      data-design-element-id={el?.id ?? undefined}
+      data-design-element-type={el?.type ?? undefined}
+      data-asset-id={el?.assetId ?? el?.meta?.assetId ?? undefined}
+      data-sticker-id={el?.stickerId ?? el?.meta?.stickerId ?? undefined}
+      data-shape-id={el?.shapeId ?? el?.meta?.shapeId ?? undefined}
+      data-font-family={el?.fontFamily ?? el?.meta?.fontFamily ?? undefined}
+      data-resource-src={el?.src ?? el?.imageUrl ?? el?.url ?? undefined}
       data-outside-print-area={outside ? "true" : "false"}
       ref={elementRef}
       onPointerDown={startDrag}

@@ -928,7 +928,10 @@ export default function EditorPage() {
       }
       console.info(`[preview] ${targetSide} stage found`);
 
-      const exportNode = stageRoot;
+      const exportNode =
+        stageRoot.querySelector<HTMLElement>(
+          `[data-mockup-capture-root="${targetSide}"]`,
+        ) ?? stageRoot;
       console.info("[preview-root-debug]", {
         tag: exportNode.tagName,
         className: exportNode.className,
@@ -993,9 +996,13 @@ export default function EditorPage() {
         error: `imageCount=${sourceImages.length},complete=${sourceImages.filter((image) => image.complete && image.naturalWidth > 0).length}`,
       });
       await nextFrame();
+      console.warn("[PREVIEW DIAGNOSTIC] calling", "captureVisualMockupPreviewBlob");
       const blob = await withTimeout(
-        captureVisualMockupPreviewBlob(exportNode),
-        12000,
+        captureVisualMockupPreviewBlob(
+          exportNode,
+          targetSide === "front" ? frontElements : backElements,
+        ),
+        35_000,
         `${targetSide} preview export`,
       );
       if (!blob || blob.size === 0) {
@@ -1003,8 +1010,8 @@ export default function EditorPage() {
       }
 
       console.info(`[preview] ${targetSide} exported`, {
-        width: 384,
-        height: 384,
+        width: 900,
+        height: 900,
         blobSize: blob.size,
       });
       await reportPreviewStage({
@@ -1018,7 +1025,7 @@ export default function EditorPage() {
       });
       return blob;
     },
-    [],
+    [backElements, frontElements],
   );
 
   const persistPreviewMockups = useCallback(
@@ -1041,7 +1048,7 @@ export default function EditorPage() {
         try {
           frontBlob = await withTimeout(
             exportEditorPreview("front"),
-            12000,
+            30_000,
             "Front preview export retry",
           );
         } catch (error) {
@@ -1053,7 +1060,7 @@ export default function EditorPage() {
         try {
           backBlob = await withTimeout(
             exportEditorPreview("back"),
-            12000,
+            30_000,
             "Back preview export retry",
           );
         } catch (error) {
@@ -1069,8 +1076,14 @@ export default function EditorPage() {
         backSize: backBlob?.size ?? null,
       });
 
-      if (!frontBlob) {
+      if (args.usedSides.includes("front") && !frontBlob) {
         throw new Error("Front canvas preview capture returned no blob");
+      }
+      if (args.usedSides.includes("back") && !backBlob) {
+        throw new Error("Back canvas preview capture returned no blob");
+      }
+      if (!frontBlob) {
+        throw new Error("Checkout preview requires a front blob");
       }
 
       console.info("[checkout-preview:save-request] preview blobs", {
@@ -1147,8 +1160,14 @@ export default function EditorPage() {
         error: rawPayload.slice(0, 500) || null,
       });
 
-      if (!response.ok) {
+      if (!response.ok || payload?.success !== true) {
         throw new Error(payload?.error || "Preview persistence failed");
+      }
+      if (args.usedSides.includes("front") && typeof payload?.frontUrl !== "string") {
+        throw new Error("Front preview was not persisted");
+      }
+      if (args.usedSides.includes("back") && typeof payload?.backUrl !== "string") {
+        throw new Error("Back preview was not persisted");
       }
 
       console.info("[preview-flow] persisted", {
@@ -1184,7 +1203,7 @@ export default function EditorPage() {
       if (!frontBlob && args.usedSides.includes("front")) {
         frontBlob = await withTimeout(
           exportEditorPreview("front"),
-          12000,
+          30_000,
           "Front preview export retry",
         );
       }
@@ -1192,7 +1211,7 @@ export default function EditorPage() {
       if (!backBlob && args.usedSides.includes("back")) {
         backBlob = await withTimeout(
           exportEditorPreview("back"),
-          12000,
+          30_000,
           "Back preview export retry",
         );
       }
@@ -1205,8 +1224,11 @@ export default function EditorPage() {
         backSize: backBlob?.size ?? null,
       });
 
-      if (!frontBlob) {
+      if (args.usedSides.includes("front") && !frontBlob) {
         throw new Error("Front canvas preview capture returned no blob");
+      }
+      if (args.usedSides.includes("back") && !backBlob) {
+        throw new Error("Back canvas preview capture returned no blob");
       }
 
       return {
@@ -1485,8 +1507,10 @@ export default function EditorPage() {
           userProductId: savedUserProductId,
           error: error instanceof Error ? error.message : String(error),
         });
+        throw error instanceof Error ? error : new Error(String(error));
       }
 
+      let persistedPreview: { frontUrl: string | null; backUrl: string | null } | null = null;
       if (previews.frontBlob || previews.backBlob) {
         try {
           console.info("[preview-flow] upload request started", {
@@ -1500,6 +1524,7 @@ export default function EditorPage() {
             backPreviewBlob: previews.backBlob,
             usedSides,
           });
+          persistedPreview = uploadResult;
           console.info("[preview-flow] upload response received", {
             userProductId: savedUserProductId,
             frontUrl: uploadResult.frontUrl ?? null,
@@ -1518,7 +1543,18 @@ export default function EditorPage() {
             userProductId: savedUserProductId,
             error: error instanceof Error ? error.message : String(error),
           });
+          throw error instanceof Error ? error : new Error(String(error));
         }
+      }
+
+      if (!persistedPreview) {
+        throw new Error("Checkout preview was not persisted; navigation cancelled");
+      }
+      if (usedSides.includes("front") && !persistedPreview.frontUrl) {
+        throw new Error("Front checkout preview is missing; navigation cancelled");
+      }
+      if (usedSides.includes("back") && !persistedPreview.backUrl) {
+        throw new Error("Back checkout preview is missing; navigation cancelled");
       }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
@@ -1558,6 +1594,8 @@ export default function EditorPage() {
         userProductId: savedUserProductId,
         stage: "navigation_started",
       });
+      console.warn("[PREVIEW DIAGNOSTIC] navigation about to start");
+      await new Promise((resolve) => window.setTimeout(resolve, 800));
       router.push(`/checkout?${checkoutParams.toString()}`);
       return;
     } catch (error) {

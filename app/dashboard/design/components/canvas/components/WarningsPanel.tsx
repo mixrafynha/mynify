@@ -81,7 +81,7 @@ function WarningsPanel({ warnings, warningCount, quality, elements = [], safeAre
 
   return (
     <>
-      <div className="absolute right-3 top-3 z-[70] flex items-center gap-1.5 md:right-4 md:top-4">
+      <div data-exclude-from-preview className="absolute right-3 top-3 z-[70] flex items-center gap-1.5 md:right-4 md:top-4">
         <button
           type="button"
           onClick={() => setOpen(true)}

@@ -121,6 +121,7 @@ function sideData(input: PreviewPayloadInput, category: string, side: Side) {
 }
 
 export async function buildPreviewPayload(input: PreviewPayloadInput) {
+  console.warn("[PREVIEW DIAGNOSTIC] previewStorage before capture");
   const category = input.productConfig?.category || normalizeCategory(input.category);
   const productId = input.productId || category;
   const side: Side = input.side === "back" ? "back" : "front";
@@ -135,6 +136,7 @@ export async function buildPreviewPayload(input: PreviewPayloadInput) {
 
 
   const currentDesignImage = await capturePreviewDesignOverlay(currentSideData);
+  console.warn("[PREVIEW DIAGNOSTIC] previewStorage after capture");
 
   const frontDesignImage =
     side === "front"
@@ -233,7 +235,9 @@ export async function storePreviewPayload(input: PreviewPayloadInput) {
     return null;
   }
 
+  console.warn("[PREVIEW DIAGNOSTIC] previewStorage before capture");
   const payload = await buildPreviewPayload(input);
+  console.warn("[PREVIEW DIAGNOSTIC] previewStorage after capture");
   const key = `ryfio-editor-preview:${payload.productId}`;
 
   const sessionStored = safeSetStorage(sessionStorage, key, payload);

@@ -104,8 +104,40 @@ function measureLineWidth(line: string, meta: Record<string, any>, fontSize: num
   const fontFamily = meta.fontFamily || "Arial";
   context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}, Arial, sans-serif`;
 
-  const measuredWidth = context.measureText(content).width;
-  return Math.ceil(measuredWidth + Math.max(0, content.length - 1) * letterSpacing);
+  const metrics = context.measureText(content);
+  const visualWidth = Math.max(
+    metrics.width,
+    Math.abs(metrics.actualBoundingBoxLeft || 0) +
+      Math.abs(metrics.actualBoundingBoxRight || 0),
+  );
+  return Math.ceil(visualWidth + Math.max(0, content.length - 1) * letterSpacing);
+}
+
+function measureWrappedLineCount(
+  line: string,
+  meta: Record<string, any>,
+  fontSize: number,
+  letterSpacing: number,
+  usableWidth: number,
+) {
+  const content = line || " ";
+  if (!content.length) return 1;
+  if (measureLineWidth(content, meta, fontSize, letterSpacing) <= usableWidth) return 1;
+
+  let rows = 1;
+  let current = "";
+
+  for (const char of Array.from(content)) {
+    const next = current + char;
+    if (current && measureLineWidth(next, meta, fontSize, letterSpacing) > usableWidth) {
+      rows += 1;
+      current = char;
+      continue;
+    }
+    current = next;
+  }
+
+  return rows;
 }
 
 export function measureTextBox(el: CanvasElementLike) {
@@ -129,14 +161,8 @@ export function measureTextBox(el: CanvasElementLike) {
   );
 
   const usableWidth = Math.max(1, width - padding.x * 2);
-  const charsPerLine = Math.max(
-    1,
-    Math.floor(usableWidth / Math.max(1, fontSize * TEXT_AVERAGE_CHAR_RATIO + letterSpacing))
-  );
-
   const visualLines = rawLines.reduce((count, line) => {
-    const len = Math.max(1, Array.from(line || " ").length);
-    return count + Math.max(1, Math.ceil(len / charsPerLine));
+    return count + measureWrappedLineCount(line, meta, fontSize, letterSpacing, usableWidth);
   }, 0);
 
   const textHeight = Math.ceil(visualLines * fontSize * lineHeight);

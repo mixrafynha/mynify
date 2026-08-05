@@ -139,6 +139,8 @@ function TopBar({
   }, [isBusy, onPreviewDesign, previewPayload]);
 
   const handleSaveClick = useCallback(async () => {
+    console.warn("[PREVIEW DIAGNOSTIC] save button clicked");
+    console.warn("[PREVIEW DIAGNOSTIC] save handler entered");
     console.info("[save-design] save button clicked", {
       saving,
       previewing,
