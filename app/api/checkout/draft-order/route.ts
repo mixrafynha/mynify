@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { normalizeShippingMethods, type NormalizedShippingMethod } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoPrintFiles, type CartItem, type CartVariant } from "@/app/checkout/_lib/checkout";
@@ -415,7 +415,7 @@ export async function POST(req: Request) {
 
     const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
     let subtotal = 0;
-    let currency = shippingMethodInput.currency.toUpperCase();
+    const quoteCurrency = (body as { currency?: string | null } | null)?.currency?.trim() || "EUR";
 
     for (const cartRow of cartRows ?? []) {
       const userProductId = cartRow.user_product_id;
@@ -594,7 +594,7 @@ export async function POST(req: Request) {
       phonePresent: Boolean(address.phone),
     });
 
-    const quotePayload = {
+    const quotePayload = buildGelatoCheckoutQuotePayload({
       productUid: quoteItems[0].productUid,
       quantity: quoteItems[0].quantity,
       shippingAddress: {
@@ -603,45 +603,42 @@ export async function POST(req: Request) {
       },
       printFiles: quoteItems[0].printFiles,
       items: quoteItems,
-      currencyIsoCode: currency,
-      orderReferenceId: `draft-${authData.user.id}-${cartItemIds.slice().sort().join("-")}`,
-      customerReferenceId: authData.user.email ?? authData.user.id,
-    };
+      currencyIsoCode: quoteCurrency,
+    });
 
     const safeQuotePayload = {
       ...quotePayload,
-      shippingAddress: quotePayload.shippingAddress
+      shippingAddress: quotePayload.recipient
         ? {
-            country: quotePayload.shippingAddress.countryCode ?? null,
-            postCodePresent: Boolean(quotePayload.shippingAddress.postalCode),
-            cityPresent: Boolean(quotePayload.shippingAddress.city),
-            addressLine1Present: Boolean(quotePayload.shippingAddress.addressLine1),
+            country: quotePayload.recipient.countryIsoCode ?? null,
+            postCodePresent: Boolean(quotePayload.recipient.postcode),
+            cityPresent: Boolean(quotePayload.recipient.city),
+            addressLine1Present: Boolean(quotePayload.recipient.addressLine1),
           }
         : null,
-      items: Array.isArray(quotePayload.items)
-        ? quotePayload.items.map((item) => ({
+      products: Array.isArray(quotePayload.products)
+        ? quotePayload.products.map((item) => ({
             itemReferenceId: item.itemReferenceId ?? null,
             productUid: item.productUid ?? null,
             quantity: item.quantity ?? null,
-            files: Array.isArray(item.printFiles)
-              ? item.printFiles.map((file) => ({
-                  type: file.type,
-                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
-                }))
-              : undefined,
-            printFiles: Array.isArray(item.printFiles)
-              ? item.printFiles.map((file) => ({
-                  type: file.type,
-                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
-                }))
-              : undefined,
+            pdfUrlPresent: Boolean(item.pdfUrl),
           }))
         : [],
     };
 
     console.info("[checkout:draft:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
 
-    const quote = await resolveCheckoutQuote(quotePayload);
+    const quote = await resolveCheckoutQuote({
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress: {
+        ...address,
+        countryCode: address.countryCode,
+      },
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: quoteCurrency,
+    });
 
     if (process.env.NODE_ENV !== "production") {
       const rawQuote = quote.rawQuote && typeof quote.rawQuote === "object" ? (quote.rawQuote as Record<string, unknown>) : null;
@@ -793,7 +790,7 @@ export async function POST(req: Request) {
 
     const gelatoPayload = gelatoRequestPayload({
       idempotencyKey,
-      currency,
+      currency: quotePayload.order.currencyIsoCode,
       shippingMethod: matched,
       address,
       items: resolvedItems,

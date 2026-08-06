@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 
@@ -382,7 +382,7 @@ export async function POST(req: Request) {
       phonePresent: Boolean(shippingAddress.phone),
     });
 
-    const quotePayload = {
+    const quotePayload = buildGelatoCheckoutQuotePayload({
       productUid: quoteItems[0].productUid,
       quantity: quoteItems[0].quantity,
       shippingAddress,
@@ -391,34 +391,23 @@ export async function POST(req: Request) {
       currencyIsoCode: safeText(body?.currency) || "EUR",
       customerReferenceId: safeText(body?.customerReferenceId) || undefined,
       orderReferenceId: safeText(body?.orderReferenceId) || undefined,
-    };
+    });
     const safeQuotePayload = {
       ...quotePayload,
-      shippingAddress: quotePayload.shippingAddress
+      shippingAddress: quotePayload.recipient
         ? {
-            country: quotePayload.shippingAddress.countryCode ?? null,
-            postCodePresent: Boolean(quotePayload.shippingAddress.postalCode),
-            cityPresent: Boolean(quotePayload.shippingAddress.city),
-            addressLine1Present: Boolean(quotePayload.shippingAddress.addressLine1),
+            country: quotePayload.recipient.countryIsoCode ?? null,
+            postCodePresent: Boolean(quotePayload.recipient.postcode),
+            cityPresent: Boolean(quotePayload.recipient.city),
+            addressLine1Present: Boolean(quotePayload.recipient.addressLine1),
           }
         : null,
-      items: Array.isArray(quotePayload.items)
-        ? quotePayload.items.map((item) => ({
+      products: Array.isArray(quotePayload.products)
+        ? quotePayload.products.map((item) => ({
             itemReferenceId: item.itemReferenceId ?? null,
             productUid: item.productUid ?? null,
             quantity: item.quantity ?? null,
-            files: Array.isArray(item.printFiles)
-              ? item.printFiles.map((file) => ({
-                  type: file.type,
-                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
-                }))
-              : undefined,
-            printFiles: Array.isArray(item.printFiles)
-              ? item.printFiles.map((file) => ({
-                  type: file.type,
-                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
-                }))
-              : undefined,
+            pdfUrlPresent: Boolean(item.pdfUrl),
           }))
         : [],
     };
@@ -435,7 +424,16 @@ export async function POST(req: Request) {
       );
     }
 
-    const quote = await resolveCheckoutQuote(quotePayload);
+    const quote = await resolveCheckoutQuote({
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress,
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: safeText(body?.currency) || "EUR",
+      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
+      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+    });
 
     console.info("[checkout:availability:09-gelato-http]", {
       status: quote.httpStatus,

@@ -29,6 +29,32 @@ export type GelatoCheckoutQuoteInput = {
   orderReferenceId?: string;
 };
 
+export type GelatoCheckoutQuotePayload = {
+  order: {
+    orderReferenceId: string;
+    customerReferenceId: string;
+    currencyIsoCode: string;
+  };
+  recipient: {
+    countryIsoCode: string;
+    firstName: string;
+    lastName: string;
+    addressLine1: string;
+    addressLine2?: string;
+    stateCode?: string;
+    city: string;
+    postcode: string;
+    email?: string;
+    phone?: string;
+  };
+  products: Array<{
+    itemReferenceId: string;
+    productUid: string;
+    pdfUrl: string;
+    quantity: number;
+  }>;
+};
+
 export type NormalizedGelatoQuote = {
   available: boolean;
   retryable: boolean;
@@ -115,6 +141,46 @@ function isTemporaryStatus(status: number): boolean {
 
 function getQuoteUrl(): string {
   return process.env.GELATO_QUOTE_URL?.trim() || GELATO_QUOTE_URL;
+}
+
+export function buildGelatoCheckoutQuotePayload(input: GelatoCheckoutQuoteInput): GelatoCheckoutQuotePayload {
+  return {
+    order: {
+      orderReferenceId: input.orderReferenceId || `ryfio-quote-${Date.now()}`,
+      customerReferenceId: input.customerReferenceId || input.shippingAddress.email || input.orderReferenceId || `ryfio-quote-${Date.now()}`,
+      currencyIsoCode: normalizeCurrency(input.currencyIsoCode) ?? "EUR",
+    },
+    recipient: {
+      countryIsoCode: normalizeCountryCode(input.shippingAddress.countryCode) ?? input.shippingAddress.countryCode.trim().toUpperCase(),
+      firstName: cleanString(input.shippingAddress.firstName) ?? "Customer",
+      lastName: cleanString(input.shippingAddress.lastName) ?? ".",
+      addressLine1: input.shippingAddress.addressLine1.trim(),
+      ...(input.shippingAddress.addressLine2 ? { addressLine2: input.shippingAddress.addressLine2.trim() } : {}),
+      ...(input.shippingAddress.state ? { stateCode: input.shippingAddress.state.trim().toUpperCase() } : {}),
+      city: input.shippingAddress.city.trim(),
+      postcode: input.shippingAddress.postalCode.trim(),
+      ...(input.shippingAddress.email ? { email: input.shippingAddress.email.trim() } : {}),
+      ...(input.shippingAddress.phone ? { phone: input.shippingAddress.phone.trim() } : {}),
+    },
+    products:
+      input.items?.length
+        ? input.items.map((item, index) => ({
+            itemReferenceId: `ryfio-${index}-${item.productUid}`,
+            productUid: item.productUid,
+            pdfUrl: item.printFiles[0]?.url ?? "",
+            quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+          }))
+        : input.printFiles.length
+          ? [
+              {
+                itemReferenceId: `ryfio-${input.productUid}`,
+                productUid: input.productUid,
+                pdfUrl: input.printFiles[0].url,
+                quantity: Math.max(1, Math.floor(Number(input.quantity) || 1)),
+              },
+            ]
+          : [],
+  };
 }
 
 function safeJsonString(value: unknown) {
@@ -359,43 +425,7 @@ export async function resolveCheckoutQuote(
     };
   }
 
-  const payload = {
-    order: {
-      orderReferenceId: input.orderReferenceId || `ryfio-quote-${Date.now()}`,
-      customerReferenceId: input.customerReferenceId || input.shippingAddress.email || input.orderReferenceId || `ryfio-quote-${Date.now()}`,
-      currencyIsoCode: normalizeCurrency(input.currencyIsoCode) ?? "EUR",
-    },
-    recipient: {
-      countryIsoCode: normalizeCountryCode(input.shippingAddress.countryCode) ?? input.shippingAddress.countryCode.trim().toUpperCase(),
-      firstName: cleanString(input.shippingAddress.firstName) ?? "Customer",
-      lastName: cleanString(input.shippingAddress.lastName) ?? ".",
-      addressLine1: input.shippingAddress.addressLine1.trim(),
-      ...(input.shippingAddress.addressLine2 ? { addressLine2: input.shippingAddress.addressLine2.trim() } : {}),
-      ...(input.shippingAddress.state ? { stateCode: input.shippingAddress.state.trim().toUpperCase() } : {}),
-      city: input.shippingAddress.city.trim(),
-      postcode: input.shippingAddress.postalCode.trim(),
-      ...(input.shippingAddress.email ? { email: input.shippingAddress.email.trim() } : {}),
-      ...(input.shippingAddress.phone ? { phone: input.shippingAddress.phone.trim() } : {}),
-    },
-    products:
-      input.items?.length
-        ? input.items.map((item, index) => ({
-            itemReferenceId: `ryfio-${index}-${item.productUid}`,
-            productUid: item.productUid,
-            pdfUrl: item.printFiles[0]?.url ?? "",
-            quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
-          }))
-        : input.printFiles.length
-          ? [
-              {
-                itemReferenceId: `ryfio-${input.productUid}`,
-                productUid: input.productUid,
-                pdfUrl: input.printFiles[0].url,
-                quantity: Math.max(1, Math.floor(Number(input.quantity) || 1)),
-              },
-            ]
-          : [],
-  };
+  const payload = buildGelatoCheckoutQuotePayload(input);
 
   const url = new URL(getQuoteUrl());
   const startedAt = Date.now();
