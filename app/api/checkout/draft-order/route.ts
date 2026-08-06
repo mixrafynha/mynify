@@ -61,7 +61,6 @@ type VariantRow = {
 type UserProductRow = {
   id: string;
   user_id: string | null;
-  variant_id: string | null;
   gelato_product_uid: string | null;
   design_data: Record<string, unknown> | null;
   print_files: Record<string, unknown> | null;
@@ -153,7 +152,6 @@ function resolveVariantId(row: CartRow, userProduct: UserProductRow | null) {
   return firstString(
     row.variant_id,
     selectedVariant?.id,
-    userProduct?.variant_id,
     designRecord ? designRecord["variantId"] : null,
     selectedVariantRecord ? selectedVariantRecord["id"] : null,
     selectedVariant ? (selectedVariant.sku as string) : null,
@@ -210,6 +208,27 @@ function asUrl(value: unknown): string | null {
   if (typeof record.fileUrl === "string" && record.fileUrl.trim()) return record.fileUrl.trim();
   if (typeof record.printFileUrl === "string" && record.printFileUrl.trim()) return record.printFileUrl.trim();
   return null;
+}
+
+function buildProductionFiles(printFiles: Record<string, unknown> | null | undefined) {
+  const record = printFiles && typeof printFiles === "object" ? printFiles : {};
+  const seen = new Set<string>();
+  const files: GelatoFile[] = [];
+  const push = (type: "default" | "back", value: unknown) => {
+    const url = asUrl(value);
+    if (!url || url.includes("/mockups/") || seen.has(`${type}:${url}`) || seen.has(url)) return;
+    seen.add(`${type}:${url}`);
+    seen.add(url);
+    files.push({ type, url });
+  };
+
+  push("default", record.front);
+  push("default", record.default);
+  push("default", record.front_url);
+  push("back", record.back);
+  push("back", record.back_url);
+
+  return files;
 }
 
 function determineRequiredSides(userProduct: UserProductRow | null) {
@@ -361,7 +380,7 @@ export async function POST(req: Request) {
     const userProductRowsPromise = userProductIds.length
       ? supabase
           .from("user_products")
-          .select("id, user_id, variant_id, design_data, print_files, mockups")
+          .select("id, user_id, design_data, print_files, mockups")
           .eq("user_id", authData.user.id)
           .in("id", userProductIds)
       : Promise.resolve({ data: [] as UserProductRow[], error: null });
@@ -414,7 +433,7 @@ export async function POST(req: Request) {
         loadedUserProductsCount: userProductRows?.length ?? 0,
         loadedUserProductIds: (userProductRows ?? []).map((item) => item.id),
       });
-      const variantId = resolveVariantId(cartRow as CartRow, userProduct);
+      const variantId = resolveVariantId(cartRow as CartRow, resolvedUserProduct);
       const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
       const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
       if (!variantId || !variant) {
@@ -457,7 +476,7 @@ export async function POST(req: Request) {
         cartItemId: cartRow.id,
         originalVariantId: cartRow.variant_id ?? null,
         selectedVariantId: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).id ?? null : null,
-        userProductVariantId: userProduct?.variant_id ?? userDesignData?.variantId ?? userSelectedVariant?.id ?? null,
+        userProductVariantId: userDesignData?.variantId ?? userSelectedVariant?.id ?? null,
         resolvedVariantId: variant?.id ?? null,
         resolutionSource,
         sku: variant?.sku ?? cartRow.selected_variant?.sku ?? null,
@@ -483,15 +502,9 @@ export async function POST(req: Request) {
       const mockupsRecord = resolvedUserProduct?.mockups && typeof resolvedUserProduct.mockups === "object"
         ? (resolvedUserProduct.mockups as Record<string, unknown>)
         : {};
-      const frontPrintFile =
-        asUrl(printFilesRecord.front) ??
-        asUrl(printFilesRecord.default) ??
-        asUrl(printFilesRecord.front_url) ??
-        null;
-      const backPrintFile =
-        asUrl(printFilesRecord.back) ??
-        asUrl(printFilesRecord.back_url) ??
-        null;
+      const printFilesFinal = buildProductionFiles(printFilesRecord);
+      const frontPrintFile = printFilesFinal.find((file) => file.type === "default")?.url ?? null;
+      const backPrintFile = printFilesFinal.find((file) => file.type === "back")?.url ?? null;
       console.info("[checkout:draft:production-files]", {
         cartItemId: cartRow.id,
         printFilesFound: {
@@ -503,8 +516,7 @@ export async function POST(req: Request) {
           back: asUrl(mockupsRecord.back) ?? asUrl(mockupsRecord.back_url) ?? null,
         },
         filesSentToGelato: [
-          ...(frontPrintFile ? [{ type: "default", url: frontPrintFile }] : []),
-          ...(backPrintFile ? [{ type: "back", url: backPrintFile }] : []),
+          ...printFilesFinal,
         ],
       });
       console.info("[checkout:draft:05-print-files]", {
@@ -519,6 +531,18 @@ export async function POST(req: Request) {
         backProtocol: typeof backPrintFile === "string" ? backPrintFile.split(":")[0] : null,
       });
 
+      if (frontHasDesign && !frontPrintFile) {
+        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
+          userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+          missingSides: ["front"],
+        });
+      }
+      if (backHasDesign && !backPrintFile) {
+        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
+          userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+          missingSides: ["back"],
+        });
+      }
       if (!frontPrintFile && !backPrintFile) {
         return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
           userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
@@ -527,11 +551,14 @@ export async function POST(req: Request) {
       }
 
       const quantity = Math.max(1, Number(cartRow.quantity) || 1);
-      const resolvedPrintFiles = [
-        ...(frontPrintFile ? [{ type: "default", url: frontPrintFile }] : []),
-        ...(backPrintFile ? [{ type: "back", url: backPrintFile }] : []),
-      ];
-      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: resolvedPrintFiles });
+      const containsMockupPath = printFilesFinal.some((file) => file.url.includes("/mockups/"));
+      if (containsMockupPath) {
+        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
+          userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+          missingSides: [],
+        });
+      }
+      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal });
       subtotal += 0;
     }
 
