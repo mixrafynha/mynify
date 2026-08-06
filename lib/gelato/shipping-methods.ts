@@ -1,6 +1,7 @@
 export type NormalizedShippingMethod = {
   id: string;
   code: string | null;
+  shipmentMethodUid?: string | null;
   name: string;
   price: number;
   currency: string;
@@ -24,6 +25,8 @@ function normalizeId(method: Record<string, any>) {
   const minDays = toNumber(method.minDays ?? method.estimatedDaysMin ?? method.estimatedDaysMinimum);
   const maxDays = toNumber(method.maxDays ?? method.estimatedDaysMax ?? method.estimatedDaysMaximum);
   return (
+    cleanString(method.shipmentMethodUid) ??
+    cleanString(method.uid) ??
     cleanString(method.id) ??
     cleanString(method.code) ??
     cleanString(method.type) ??
@@ -51,6 +54,7 @@ export function normalizeShippingMethods(response: unknown): NormalizedShippingM
       return {
         id: normalizeId(record),
         code: cleanString(record.code) ?? cleanString(record.serviceType) ?? null,
+        shipmentMethodUid: cleanString(record.shipmentMethodUid) ?? cleanString(record.uid) ?? cleanString(record.id) ?? null,
         name,
         price,
         currency,

@@ -25,6 +25,7 @@ type DraftBody = {
   shippingMethod?: {
     id: string;
     code?: string | null;
+    shipmentMethodUid?: string | null;
     name: string;
     price: number;
     currency: string;
@@ -68,12 +69,30 @@ type UserProductRow = {
 
 type GelatoFile = { type: string; url: string };
 
+const conflict = (
+  code: string,
+  message: string,
+  details?: Record<string, unknown>,
+) => {
+  console.error("[checkout:draft-conflict]", {
+    code,
+    message,
+    ...(details ?? {}),
+  });
+
+  return NextResponse.json(
+    {
+      success: false,
+      code,
+      message,
+      details: details ?? null,
+    },
+    { status: 409 },
+  );
+};
+
 function cleanText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeId(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function splitFullName(fullName: string) {
@@ -206,7 +225,10 @@ function gelatoRequestPayload(input: {
     orderReferenceId: input.idempotencyKey,
     customerReferenceId: input.email,
     currency: input.currency,
-    shipmentMethodUid: input.shippingMethod.code ?? input.shippingMethod.id,
+    shipmentMethodUid:
+      input.shippingMethod.shipmentMethodUid ??
+      input.shippingMethod.code ??
+      input.shippingMethod.id,
     shippingAddress: {
       firstName: input.address.firstName,
       lastName: input.address.lastName,
@@ -291,13 +313,13 @@ export async function POST(req: Request) {
     const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
     const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
     if (!variantId || !variant) {
-      return NextResponse.json({ success: false, code: "MISSING_VARIANT", cartItemId: cartRow.id }, { status: 409 });
+      return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
     }
 
     const product = productMap.get(cartRow.product_id) ?? null;
     const productUid = resolveProductUid(variant, cartRow as CartRow, userProduct, product);
     if (!productUid) {
-      return NextResponse.json({ success: false, code: "MISSING_PRODUCT_UID", cartItemId: cartRow.id }, { status: 409 });
+      return conflict("MISSING_PRODUCT_UID", "Unable to resolve the Gelato product UID for this cart item.", { cartItemId: cartRow.id });
     }
 
     const printFiles = userProduct ? resolveGelatoPrintFiles({
@@ -316,7 +338,7 @@ export async function POST(req: Request) {
     if (frontHasDesign && !printFiles.some((file) => file.type === "default" || file.type === "front")) missingSides.push("front");
     if (backHasDesign && !printFiles.some((file) => file.type === "back")) missingSides.push("back");
     if (missingSides.length) {
-      return NextResponse.json({ success: false, code: "PRINT_FILES_NOT_READY", userProductId: userProduct?.id ?? null, missingSides }, { status: 409 });
+      return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", { userProductId: userProduct?.id ?? null, missingSides });
     }
 
     const quantity = Math.max(1, Number(cartRow.quantity) || 1);
@@ -338,17 +360,45 @@ export async function POST(req: Request) {
     customerReferenceId: authData.user.email ?? authData.user.id,
   });
 
-  if (!quote.available) {
-    return NextResponse.json({ success: false, code: "SHIPPING_METHOD_EXPIRED", shippingMethods: normalizeShippingMethods(quote.shippingOptions) }, { status: 409 });
+  const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+  const matched =
+    shippingMethods.find(
+      (method) =>
+        shippingMethodInput.shipmentMethodUid &&
+        method.shipmentMethodUid &&
+        method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
+    ) ??
+    shippingMethods.find((method) => method.code && shippingMethodInput.code && method.code === shippingMethodInput.code) ??
+    shippingMethods.find((method) => method.id === shippingMethodInput.id) ??
+    shippingMethods.find(
+      (method) =>
+        method.name.trim().toLowerCase() === shippingMethodInput.name.trim().toLowerCase() &&
+        method.currency === shippingMethodInput.currency,
+    ) ??
+    null;
+  if (!matched) {
+    return conflict("SHIPPING_METHOD_EXPIRED", "The selected shipping method is no longer available.", {
+      selectedId: shippingMethodInput.id,
+      selectedCode: shippingMethodInput.code ?? null,
+      availableIds: shippingMethods.map((method) => method.id),
+      availableCodes: shippingMethods.map((method) => method.code ?? null),
+    });
   }
 
-  const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
-  const matched = shippingMethods.find((method) => method.id === shippingMethodInput.id || method.code === shippingMethodInput.code);
-  if (!matched) {
-    return NextResponse.json({ success: false, code: "SHIPPING_METHOD_EXPIRED", shippingMethods }, { status: 409 });
-  }
-  if (matched.price !== shippingMethodInput.price || matched.currency !== shippingMethodInput.currency.toUpperCase()) {
-    return NextResponse.json({ success: false, code: "SHIPPING_METHOD_CHANGED", shippingMethods }, { status: 409 });
+  const selectedMinor = Math.round(Number(shippingMethodInput.price) * 100);
+  const validatedMinor = Math.round(Number(matched.price) * 100);
+  const priceChanged =
+    selectedMinor !== validatedMinor ||
+    matched.currency.toUpperCase() !== shippingMethodInput.currency.toUpperCase();
+  if (priceChanged) {
+    return conflict("SHIPPING_METHOD_CHANGED", "The selected shipping price has changed.", {
+      selectedId: shippingMethodInput.id,
+      selectedCode: shippingMethodInput.code ?? null,
+      selectedPrice: shippingMethodInput.price,
+      validatedPrice: matched.price,
+      selectedCurrency: shippingMethodInput.currency,
+      validatedCurrency: matched.currency,
+    });
   }
 
   const idempotencyKey = hashIdempotencyKey({

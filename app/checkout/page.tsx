@@ -83,6 +83,7 @@ type GelatoDraftTestResult = {
 type CheckoutShippingMethod = {
   id: string;
   title: string;
+  shipmentMethodUid?: string | null;
   price?: number | null;
   currency?: string | null;
   estimatedDays?: string | null;
@@ -1326,6 +1327,7 @@ export default function CheckoutPage() {
           shippingMethod: {
             id: selectedShippingMethod.id,
             code: selectedShippingMethod.code ?? null,
+            shipmentMethodUid: selectedShippingMethod.shipmentMethodUid ?? null,
             name: selectedShippingMethod.name,
             price: selectedShippingMethod.price,
             currency: selectedShippingMethod.currency,
@@ -1334,7 +1336,13 @@ export default function CheckoutPage() {
       });
       const draftData = await draftRes.json().catch(() => null);
       if (!draftRes.ok || !draftData?.success) {
-        throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
+        console.error("[checkout:draft-failed]", {
+          status: draftRes.status,
+          code: draftData?.code ?? null,
+          message: draftData?.message ?? null,
+          details: draftData?.details ?? null,
+        });
+        throw new Error(draftData?.message || "Unable to prepare the order.");
       }
       const nextDraftOrderId = draftData.draftOrderId;
       if (!nextDraftOrderId) {
