@@ -819,26 +819,44 @@ export async function POST(req: Request) {
     const gelatoStatus = gelatoResponse.status;
     const gelatoContentType = gelatoResponse.headers.get("content-type");
     const gelatoRawText = await gelatoResponse.text();
-    console.info("[checkout:draft:14-create-response]", {
-      status: gelatoStatus,
-      ok: gelatoResponse.ok,
-      responseKeys: [],
-    });
-    console.info("[checkout:draft:09-gelato-http]", {
+    console.info("[checkout:draft:15-response-text]", {
       status: gelatoStatus,
       ok: gelatoResponse.ok,
       contentType: gelatoContentType,
       bodyLength: gelatoRawText.length,
+      bodyPreview:
+        process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 1000) : undefined,
     });
     let gelatoBody: unknown = null;
     try {
       gelatoBody = gelatoRawText ? JSON.parse(gelatoRawText) : null;
-    } catch {
-      console.error("[checkout:draft:09-invalid-json]", {
+    } catch (error) {
+      console.error("[checkout:draft:15-invalid-json]", {
         status: gelatoStatus,
-        bodyPreview: gelatoRawText.slice(0, 500),
+        bodyLength: gelatoRawText.length,
+        message: error instanceof Error ? error.message : String(error),
       });
+      return NextResponse.json(
+        {
+          success: false,
+          code: "GELATO_DRAFT_INVALID_RESPONSE",
+          message: "Gelato returned an invalid Draft Order response.",
+        },
+        { status: 502 },
+      );
     }
+    console.info("[checkout:draft:16-response-shape]", {
+      bodyType: Array.isArray(gelatoBody) ? "array" : gelatoBody === null ? "null" : typeof gelatoBody,
+      topLevelKeys:
+        gelatoBody && typeof gelatoBody === "object" && !Array.isArray(gelatoBody)
+          ? Object.keys(gelatoBody as Record<string, unknown>)
+          : [],
+      arrayLength: Array.isArray(gelatoBody) ? gelatoBody.length : null,
+      firstItemKeys:
+        Array.isArray(gelatoBody) && gelatoBody[0] && typeof gelatoBody[0] === "object"
+          ? Object.keys(gelatoBody[0] as Record<string, unknown>)
+          : [],
+    });
     const gelatoError = gelatoBody && typeof gelatoBody === "object" ? (gelatoBody as Record<string, unknown>) : null;
     if (!gelatoResponse.ok) {
       console.error("[checkout:draft:10-gelato-error]", {
@@ -862,7 +880,61 @@ export async function POST(req: Request) {
       );
     }
 
-    const gelatoDraftOrderId = String((gelatoBody as Record<string, unknown> | null)?.id ?? (gelatoBody as Record<string, unknown> | null)?.orderId ?? (gelatoBody as Record<string, unknown> | null)?.draftOrderId ?? "");
+    function extractGelatoOrderId(body: unknown): string | null {
+      const candidates: unknown[] = [];
+
+      const collect = (value: unknown) => {
+        if (!value || typeof value !== "object") return;
+
+        const row = value as Record<string, unknown>;
+        candidates.push(row.id, row.orderId, row.order_id, row.draftOrderId, row.orderReferenceId);
+
+        if (row.order && typeof row.order === "object") {
+          const order = row.order as Record<string, unknown>;
+          candidates.push(order.id, order.orderId, order.order_id, order.orderReferenceId);
+        }
+
+        if (row.data && typeof row.data === "object") {
+          const data = row.data as Record<string, unknown>;
+          candidates.push(data.id, data.orderId, data.order_id, data.draftOrderId, data.orderReferenceId);
+        }
+
+        if (row.orders && Array.isArray(row.orders)) {
+          for (const order of row.orders) collect(order);
+        }
+      };
+
+      if (Array.isArray(body)) {
+        for (const item of body) collect(item);
+      } else {
+        collect(body);
+      }
+
+      const found = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
+      return typeof found === "string" ? found.trim() : null;
+    }
+
+    const gelatoDraftOrderId = extractGelatoOrderId(gelatoBody);
+    console.info("[checkout:draft:17-id-resolution]", {
+      gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
+    });
+    if (!gelatoDraftOrderId) {
+      console.error("[checkout:draft:17-id-missing]", {
+        bodyType: Array.isArray(gelatoBody) ? "array" : typeof gelatoBody,
+        topLevelKeys:
+          gelatoBody && typeof gelatoBody === "object" && !Array.isArray(gelatoBody)
+            ? Object.keys(gelatoBody as Record<string, unknown>)
+            : [],
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          code: "GELATO_DRAFT_ID_MISSING",
+          message: "Gelato created the draft but did not return a recognized order ID.",
+        },
+        { status: 502 },
+      );
+    }
     const draftRow = {
       user_id: authData.user.id,
       cart_item_ids: cartItemIds,
@@ -888,20 +960,75 @@ export async function POST(req: Request) {
       updated_at: new Date().toISOString(),
     };
 
+    console.info("[checkout:draft:18-persist-start]", {
+      userIdPresent: Boolean(authData.user.id),
+      gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
+      cartItemCount: cartItemIds.length,
+      idempotencyKeyPresent: Boolean(idempotencyKey),
+      currency: matched.currency,
+    });
+
     const { data: savedDraft, error: saveError } = await supabase
       .from("checkout_drafts")
       .upsert(draftRow, { onConflict: "idempotency_key" })
-      .select("id, gelato_draft_order_id")
+      .select("id, gelato_draft_order_id, status")
       .single();
 
-    if (saveError || !savedDraft) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
+    console.info("[checkout:draft:19-persist-result]", {
+      hasData: Boolean(savedDraft),
+      draftOrderId: savedDraft?.id ?? null,
+      gelatoDraftOrderId: savedDraft?.gelato_draft_order_id ?? null,
+      status: savedDraft?.status ?? null,
+      error: saveError
+        ? {
+            code: saveError.code ?? null,
+            message: saveError.message ?? null,
+            details: saveError.details ?? null,
+            hint: saveError.hint ?? null,
+          }
+        : null,
+    });
+
+    if (saveError || !savedDraft) {
+      console.error("[checkout:draft:persist-failed]", {
+        code: saveError?.code ?? null,
+        message: saveError?.message ?? null,
+        details: saveError?.details ?? null,
+        hint: saveError?.hint ?? null,
+      });
+      const isMissingTable =
+        saveError?.code === "42P01" ||
+        /does not exist/i.test(saveError?.message ?? "") ||
+        /does not exist/i.test(saveError?.details ?? "") ||
+        /relation .*checkout_drafts/i.test(saveError?.message ?? "");
+      return NextResponse.json(
+        isMissingTable
+          ? {
+              success: false,
+              code: "CHECKOUT_DRAFTS_TABLE_MISSING",
+              message: "The checkout draft storage is not configured.",
+            }
+          : {
+              success: false,
+              code: "DRAFT_PERSIST_FAILED",
+              message: "The draft was created but could not be saved.",
+            },
+        { status: isMissingTable ? 500 : 500 },
+      );
+    }
 
     log("[checkout:draft-created]", { draftOrderId: savedDraft.id });
+
+    console.info("[checkout:draft:20-response]", {
+      success: true,
+      draftOrderIdPresent: Boolean(savedDraft.id),
+      gelatoDraftOrderIdPresent: Boolean(savedDraft.gelato_draft_order_id ?? gelatoDraftOrderId),
+    });
 
     return NextResponse.json({
       success: true,
       draftOrderId: savedDraft.id,
-      gelatoDraftOrderId,
+      gelatoDraftOrderId: savedDraft.gelato_draft_order_id ?? gelatoDraftOrderId,
       shippingMethod: {
         id: matched.id,
         code: matched.code,
