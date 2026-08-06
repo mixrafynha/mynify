@@ -130,7 +130,7 @@ const ProductCard = memo(function ProductCard({
   return (
     <Link
       href={safeHref(CATALOG_HREF)}
-      className="group relative min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_0_24px_rgba(168,85,247,0.07)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45 sm:min-h-[380px]"
+      className="group relative min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] transition duration-300 hover:-translate-y-1 hover:border-purple-500/45 sm:min-h-[380px]"
     >
       {product.tag && (
         <div className="absolute left-3 top-3 z-20 rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-2.5 py-1 text-[9px] font-black sm:left-4 sm:top-4 sm:px-3 sm:text-xs">
@@ -176,72 +176,72 @@ export default function HomePage() {
   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.25)_0%,#03030a_100%)] lg:bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.94)_34%,rgba(3,3,10,0.45)_72%,#03030a_100%)]" />
 
   <div className="relative mx-auto grid max-w-7xl items-center gap-2 px-4 pb-3 pt-7 sm:pt-12 md:px-8 lg:min-h-[650px] lg:grid-cols-2 lg:gap-6 lg:px-12 lg:pb-4 lg:pt-20">
-    <div className="z-10 order-1 text-center lg:text-left">
-      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/85 shadow-[0_0_22px_rgba(168,85,247,0.28)] sm:mb-6 sm:text-xs">
+    <div className="z-10 order-1 w-full max-w-[720px] pt-6 text-center lg:pt-6 lg:text-left">
+      <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/85 sm:mb-6 sm:text-xs">
         <Zap size={14} className="text-purple-400" aria-hidden="true" />
-        AI custom products
+        AI CUSTOM PRODUCTS
       </div>
 
-      <h1 className="mb-4 text-[38px] font-black uppercase leading-[0.9] tracking-[-0.052em] sm:text-6xl md:text-7xl lg:text-[96px]">
-        <span className="block text-white">Your idea.</span>
-        <span className="block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-          Your product.
+      <h1
+        className="mb-6 uppercase leading-[0.88] tracking-[-0.04em] text-[52px] sm:text-[72px] md:text-[86px] lg:text-[98px]"
+        style={{
+          fontFamily: "'Audiowide', sans-serif",
+          fontWeight: 700,
+        }}
+      >
+        <span className="block bg-gradient-to-r from-white via-slate-100 to-violet-200 bg-clip-text text-transparent">
+          WEAR
         </span>
-        <span className="block text-white">Made with AI.</span>
+
+        <span className="block translate-x-[10%] bg-gradient-to-r from-white via-violet-100 to-purple-300 bg-clip-text text-transparent">
+          YOUR
+        </span>
+
+        <span className="block translate-x-[20%] bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+          IDEAS.
+        </span>
       </h1>
 
-      <p className="mx-auto max-w-xl text-[14px] font-medium leading-relaxed text-white/62 sm:text-lg md:text-xl lg:mx-0 lg:mb-6">
-        Choose a product, describe your idea and let Ryfio create a custom
-        design ready to order.
+      <p className="mx-auto mb-8 max-w-[680px] text-[15px] font-medium leading-relaxed text-white/65 sm:text-[17px] lg:mx-0 lg:whitespace-nowrap">
+        Create custom clothing in minutes with AI. No design skills required.
       </p>
 
-      {/* DESKTOP CTA */}
-      <div className="hidden justify-center lg:flex lg:justify-start">
+      <div className="mt-2 hidden lg:flex lg:justify-start">
         <Link
           href={safeHref(CATALOG_HREF)}
-          className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-7 py-4 text-base font-black text-white shadow-[0_0_30px_rgba(168,85,247,0.42)] transition duration-300 hover:scale-[1.02]"
+          className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-7 py-4 text-base font-black text-white transition duration-300 hover:scale-[1.02]"
         >
-          Free to start
+          Start Creating
           <Zap size={17} aria-hidden="true" />
         </Link>
       </div>
     </div>
 
     <div className="relative z-0 order-2 mx-auto -mt-4 h-[390px] w-full max-w-[820px] sm:h-[470px] md:h-[540px] lg:-mt-2 lg:h-[560px] lg:max-w-none">
-      <div className="absolute inset-0 rounded-full bg-purple-600/10 blur-[24px] md:bg-purple-600/20 md:blur-[80px]" />
-
-        <Link
-  href={safeHref(CATALOG_HREF)}
-  className="
-    absolute
-    left-[3%]
-    inset-y-0
-    w-full
-
-    sm:left-[2%]
-
-    lg:left-auto
-    lg:right-[-130px]
-    lg:w-[900px]
-  "
->
+      <Link
+        href={safeHref(CATALOG_HREF)}
+        className="absolute inset-y-0 left-[-6%] w-full sm:left-[-4%] lg:left-auto lg:right-[-40%] lg:w-[1040px]"
+      >
         <Image
-  src="/hero2.webp"
-  alt="Create custom products with Ryfio"
-  fill
-  priority
-  quality={72}
-  sizes="(max-width: 640px) 820px, (max-width: 1024px) 900px, 900px"
-  className="
-    scale-[1.08]
-    object-contain
-    object-[%_center]
-    sm:object-center
-    sm:scale-[1.04]
-    lg:scale-100
-    md:drop-shadow-[0_0_55px_rgba(168,85,247,0.45)]
-  "
-/>
+          src="/hero2.webp"
+          alt="Create custom products with Ryfio"
+          fill
+          priority
+          quality={78}
+          sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 980px"
+          className="hero-slide hero-slide-first scale-[1.23] object-contain object-center sm:scale-[1.04] lg:scale-100"
+        />
+
+        <div className="absolute inset-0">
+          <Image
+            src="/hero3.webp"
+            alt="Custom Ryfio product example"
+            fill
+            quality={78}
+            sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 980px"
+            className="hero-slide hero-slide-second scale-[1.28] translate-x-[5%] object-contain object-center sm:translate-x-0 sm:scale-[1.04] lg:scale-100 lg:translate-x-[5%]"
+          />
+        </div>
       </Link>
     </div>
   </div>
@@ -250,7 +250,7 @@ export default function HomePage() {
   <div className="relative mx-auto w-full max-w-md px-4 pb-5 lg:hidden">
     <Link
       href={safeHref(CATALOG_HREF)}
-      className="flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-sm font-black text-white shadow-[0_0_25px_rgba(168,85,247,0.35)]"
+      className="flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-sm font-black text-white"
     >
       Free to start
     </Link>
@@ -258,7 +258,7 @@ export default function HomePage() {
 
   {/* HERO MARQUEE */}
   <div className="relative mx-auto max-w-7xl px-4 pb-5 md:px-8 lg:px-12">
-    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] py-3 shadow-[0_0_24px_rgba(168,85,247,0.06)]">
+    <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] py-3">
       <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-12 bg-gradient-to-r from-[#03030a] to-transparent" />
       <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-12 bg-gradient-to-l from-[#03030a] to-transparent" />
 
@@ -283,7 +283,7 @@ export default function HomePage() {
         ].map((item, index) => (
           <div
             key={`${item}-${index}`}
-            className="shrink-0 rounded-full border border-purple-400/20 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-cyan-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-white/80 shadow-[0_0_16px_rgba(168,85,247,0.06)] sm:text-xs"
+            className="shrink-0 rounded-full border border-purple-400/20 bg-gradient-to-r from-purple-500/12 via-fuchsia-500/10 to-cyan-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.12em] text-white/80 sm:text-xs"
           >
             {item}
           </div>
@@ -294,7 +294,7 @@ export default function HomePage() {
 
   {/* TRUST BAR */}
   <div className="relative mx-auto max-w-7xl px-4 pb-8 md:px-8 lg:px-12">
-    <div className="flex items-center justify-center rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4 shadow-[0_0_24px_rgba(168,85,247,0.05)]">
+    <div className="flex items-center justify-center rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4">
       <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4">
         <span className="text-sm font-black text-white">Excellent</span>
 
@@ -331,7 +331,7 @@ export default function HomePage() {
   </div>
 
   <div className="relative mx-auto max-w-7xl px-4 pb-10 md:px-8 lg:px-12">
-    <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] shadow-xl sm:grid-cols-2 md:shadow-[0_0_50px_rgba(168,85,247,0.12)] md:backdrop-blur-xl lg:grid-cols-4">
+    <div className="grid overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] sm:grid-cols-2 lg:grid-cols-4">
       {FEATURES.map((item) => (
         <FeatureCard key={item.title} item={item} />
       ))}
@@ -376,7 +376,6 @@ export default function HomePage() {
               />
 
               <div className="absolute inset-0 bg-gradient-to-r from-[#03030a]/70 via-transparent to-transparent" />
-              <div className="absolute -bottom-20 left-0 h-52 w-52 rounded-full bg-purple-600/25 blur-[45px] md:blur-[100px]" />
             </Link>
 
             <div className="relative p-0 lg:p-8">
@@ -402,7 +401,7 @@ export default function HomePage() {
                     key={item}
                     className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] p-3"
                   >
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-xs font-black text-white shadow-[0_0_20px_rgba(168,85,247,0.35)]">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-fuchsia-500 text-xs font-black text-white">
                       ✓
                     </div>
 
@@ -435,7 +434,7 @@ export default function HomePage() {
 
           <Link
             href={safeHref(CREATE_HREF)}
-            className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 text-base font-black text-white shadow-lg transition hover:scale-[1.02] sm:w-auto md:shadow-[0_0_35px_rgba(168,85,247,0.55)]"
+            className="inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 py-4 text-base font-black text-white transition hover:scale-[1.02] sm:w-auto"
           >
             Create my product
           </Link>
@@ -445,6 +444,33 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+      <style>{`
+        .hero-slide {
+          opacity: 0;
+          animation: heroCrossfade 12s ease-in-out infinite;
+          will-change: opacity;
+        }
+
+        .hero-slide-first {
+          animation-delay: 0s;
+        }
+
+        .hero-slide-second {
+          animation-delay: 6s;
+        }
+
+        @keyframes heroCrossfade {
+          0%, 40% { opacity: 1; }
+          50%, 90% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .hero-slide { animation: none; }
+          .hero-slide-first { opacity: 1; }
+          .hero-slide-second { opacity: 0; }
+        }
+      `}</style>
     </main>
   );
 }

@@ -346,19 +346,60 @@ export async function POST(req: Request) {
     subtotal += 0;
   }
 
+  // Rebuild the quote with exactly the same item shape used by
+  // /api/checkout/availability. The previous draft-order implementation
+  // omitted itemReferenceId from each item; the Gelato quote helper uses that
+  // shape when constructing multi-item quote payloads, which caused a valid
+  // checkout method to be followed by an empty shippingOptions array here.
+  const quoteItems = resolvedItems.map((item) => ({
+    itemReferenceId: item.cartItemId,
+    productUid: item.productUid,
+    quantity: item.quantity,
+    printFiles: item.files,
+  }));
+
   const quote = await getGelatoCheckoutQuote({
-    productUid: resolvedItems[0].productUid,
-    quantity: resolvedItems[0].quantity,
+    productUid: quoteItems[0].productUid,
+    quantity: quoteItems[0].quantity,
     shippingAddress: {
       ...address,
       countryCode: address.countryCode,
     },
-    printFiles: resolvedItems[0].files,
-    items: resolvedItems.map((item) => ({ productUid: item.productUid, quantity: item.quantity, printFiles: item.files })),
+    printFiles: quoteItems[0].printFiles,
+    items: quoteItems,
     currencyIsoCode: currency,
     orderReferenceId: `draft-${authData.user.id}-${cartItemIds.slice().sort().join("-")}`,
     customerReferenceId: authData.user.email ?? authData.user.id,
   });
+
+  log("[checkout:draft-quote]", {
+    available: quote.available,
+    retryable: quote.retryable,
+    reason: quote.reason ?? null,
+    shippingMethodsCount: quote.shippingOptions.length,
+  });
+
+  if (quote.retryable) {
+    return NextResponse.json(
+      {
+        success: false,
+        code: "GELATO_QUOTE_FAILED",
+        message: "Shipping could not be recalculated for the draft order.",
+      },
+      { status: 503 },
+    );
+  }
+
+  if (!quote.available || quote.shippingOptions.length === 0) {
+    return conflict(
+      "SHIPPING_METHODS_UNAVAILABLE",
+      "Gelato did not return shipping methods for the validated cart and address.",
+      {
+        quoteReason: quote.reason ?? null,
+        quoteItemCount: quoteItems.length,
+      },
+    );
+  }
 
   const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
   const matched =
