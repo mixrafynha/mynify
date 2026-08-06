@@ -83,7 +83,6 @@ type GelatoDraftTestResult = {
 type CheckoutShippingMethod = {
   id: string;
   title: string;
-  shipmentMethodUid?: string | null;
   price?: number | null;
   currency?: string | null;
   estimatedDays?: string | null;
@@ -570,7 +569,13 @@ export default function CheckoutPage() {
   const validatedShippingMethods = productAvailability.shippingMethods?.length ? productAvailability.shippingMethods : null;
   const shippingMethodsForDisplay = useMemo(() => {
     if (!validatedShippingMethods?.length) return null;
-    return normalizeShippingMethods(validatedShippingMethods);
+
+    // The checkout is EUR-only. Always use the latest validated quote and
+    // normalize the UI value so an older USD selection cannot be submitted.
+    return normalizeShippingMethods(validatedShippingMethods).map((method) => ({
+      ...method,
+      currency: "EUR",
+    }));
   }, [validatedShippingMethods]);
   const findShippingMethod = useMemo(
     () =>
@@ -623,12 +628,36 @@ export default function CheckoutPage() {
 
     setShippingMethodSelection((current) => {
       if (current) {
-        const matched = shippingMethodsForDisplay.find((method) => method.id === current.id);
-        if (matched) return matched;
+        // Gelato generates new shipping IDs for every quote. Refresh the
+        // selection using stable fields instead of keeping the stale object.
+        const currentName = String(current.name ?? "").trim().toLowerCase();
+        const currentCode = String(current.code ?? "").trim().toLowerCase();
+
+        const matched =
+          shippingMethodsForDisplay.find((method) => method.id === current.id) ??
+          shippingMethodsForDisplay.find((method) => {
+            const methodName = String(method.name ?? "").trim().toLowerCase();
+            const methodCode = String(method.code ?? "").trim().toLowerCase();
+            return Boolean(currentName) && methodName === currentName && methodCode === currentCode;
+          }) ??
+          shippingMethodsForDisplay.find((method) => {
+            const methodCode = String(method.code ?? "").trim().toLowerCase();
+            return Boolean(currentCode) && methodCode === currentCode;
+          });
+
+        if (matched) {
+          setSelectedShippingMethodId(matched.id);
+          setForm((previous) =>
+            previous.shippingMethod === matched.id
+              ? previous
+              : { ...previous, shippingMethod: matched.id },
+          );
+          return { ...matched, currency: "EUR" };
+        }
       }
 
       const matchedByForm = findShippingMethod(form.shippingMethod);
-      return matchedByForm ?? current ?? null;
+      return matchedByForm ? { ...matchedByForm, currency: "EUR" } : null;
     });
     if (selectedShippingMethodId && !findShippingMethod(selectedShippingMethodId)) {
       setSelectedShippingMethodId("");
@@ -660,11 +689,14 @@ export default function CheckoutPage() {
     }
     previousShippingAddressSignature.current = shippingAddressSignature;
   }, [shippingAddressSignature]);
-  const selectedShippingMethod =
+  const selectedShippingMethodRaw =
     findShippingMethod(selectedShippingMethodId) ??
     shippingMethodsForDisplay?.find((method) => method.id === shippingMethodSelection?.id) ??
     findShippingMethod(form.shippingMethod) ??
     null;
+  const selectedShippingMethod = selectedShippingMethodRaw
+    ? { ...selectedShippingMethodRaw, currency: "EUR" }
+    : null;
   const shipping =
     subtotal > 0 && step !== "shipping" && printFilesReady
       ? typeof selectedShippingMethod?.price === "number"
@@ -1309,12 +1341,14 @@ export default function CheckoutPage() {
     try {
       const draftRes = await fetch("/api/checkout/draft-order", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         body: JSON.stringify({
           cartItemIds: items.map((item) => item.id),
           address: {
-            fullName: form.fullName,
+            firstName: form.fullName.split(/\s+/).filter(Boolean).slice(0, -1).join(" ") || form.fullName,
+            lastName: form.fullName.split(/\s+/).filter(Boolean).at(-1) || ".",
             addressLine1: form.address,
             addressLine2: form.apartment || null,
             city: form.city,
@@ -1324,74 +1358,32 @@ export default function CheckoutPage() {
             email: form.email,
             phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
           },
-          shippingMethod: {
-            id: selectedShippingMethod.id,
-            code: selectedShippingMethod.code ?? null,
-            shipmentMethodUid: selectedShippingMethod.shipmentMethodUid ?? null,
-            name: selectedShippingMethod.name,
-            price: selectedShippingMethod.price,
-            currency: selectedShippingMethod.currency,
+          customer: {
+            fullName: form.fullName,
+            email: form.email,
+            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+            country: form.country,
+            countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+            address: form.address,
+            apartment: form.apartment,
+            city: form.city,
+            state: null,
+            postalCode: form.postalCode,
           },
+          selectedShippingMethod,
         }),
       });
-      const draftRaw = await draftRes.text();
-      let draftData: any = null;
-      try {
-        draftData = draftRaw ? JSON.parse(draftRaw) : null;
-      } catch (cause) {
-        console.error("[checkout:draft-ui-response-parse-failed]", {
-          status: draftRes.status,
-          bodyPreview: draftRaw.slice(0, 500),
-          message: cause instanceof Error ? cause.message : String(cause),
-        });
+      const draftData = await draftRes.json().catch(() => null);
+      if (!draftRes.ok || !draftData?.success) {
+        throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
       }
-      console.info("[checkout:draft-ui-response]", {
-        status: draftRes.status,
-        ok: draftRes.ok,
-        success: draftData?.success ?? null,
-        code: draftData?.code ?? null,
-        keys: draftData && typeof draftData === "object" ? Object.keys(draftData) : [],
-      });
-      if (!draftRes.ok || draftData?.success !== true) {
-        console.error("[checkout:draft-failed]", {
-          status: draftRes.status,
-          code: draftData?.code ?? null,
-          message: draftData?.message ?? null,
-          details: draftData?.details ?? null,
-        });
-        const draftErrorCode = typeof draftData?.code === "string" ? draftData.code : null;
-        const draftErrorMessage =
-          draftErrorCode === "GELATO_DRAFT_INVALID_RESPONSE"
-            ? "Gelato returned an invalid order response."
-            : draftErrorCode === "GELATO_DRAFT_ID_MISSING"
-              ? "The draft was created, but its order ID was not returned."
-              : draftErrorCode === "DRAFT_PERSIST_FAILED"
-                ? "The draft was created, but it could not be saved."
-                : draftErrorCode === "SHIPPING_METHOD_CHANGED"
-                  ? "The selected shipping method is no longer available. Please choose another shipping method."
-                  : draftErrorCode === "PRINT_FILES_NOT_READY"
-                    ? "Your design files are still being prepared."
-                    : typeof draftData?.message === "string" && draftData.message.trim()
-                      ? draftData.message
-                      : "Unable to prepare the order.";
-        throw new Error(draftErrorMessage);
-      }
-      const nextDraftOrderId = draftData.draftOrderId;
-      if (!nextDraftOrderId) {
-        console.error("[checkout:draft-ui-missing-id]", {
-          status: draftRes.status,
-          code: draftData?.code ?? null,
-          keys: draftData && typeof draftData === "object" ? Object.keys(draftData) : [],
-        });
-        throw new Error("The order draft was created, but its ID was not returned.");
-      }
-      setDraftOrderId(nextDraftOrderId);
-      setStep("payment");
+      setDraftOrderId(draftData.draftOrderId ?? null);
 
       const res = await fetch("/api/checkout", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: nextDraftOrderId }),
+        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: draftData.draftOrderId }),
       });
 
       const data = await res.json().catch(() => null);
