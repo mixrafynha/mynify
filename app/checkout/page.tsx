@@ -1334,19 +1334,56 @@ export default function CheckoutPage() {
           },
         }),
       });
-      const draftData = await draftRes.json().catch(() => null);
-      if (!draftRes.ok || !draftData?.success) {
+      const draftRaw = await draftRes.text();
+      let draftData: any = null;
+      try {
+        draftData = draftRaw ? JSON.parse(draftRaw) : null;
+      } catch (cause) {
+        console.error("[checkout:draft-ui-response-parse-failed]", {
+          status: draftRes.status,
+          bodyPreview: draftRaw.slice(0, 500),
+          message: cause instanceof Error ? cause.message : String(cause),
+        });
+      }
+      console.info("[checkout:draft-ui-response]", {
+        status: draftRes.status,
+        ok: draftRes.ok,
+        success: draftData?.success ?? null,
+        code: draftData?.code ?? null,
+        keys: draftData && typeof draftData === "object" ? Object.keys(draftData) : [],
+      });
+      if (!draftRes.ok || draftData?.success !== true) {
         console.error("[checkout:draft-failed]", {
           status: draftRes.status,
           code: draftData?.code ?? null,
           message: draftData?.message ?? null,
           details: draftData?.details ?? null,
         });
-        throw new Error(draftData?.message || "Unable to prepare the order.");
+        const draftErrorCode = typeof draftData?.code === "string" ? draftData.code : null;
+        const draftErrorMessage =
+          draftErrorCode === "GELATO_DRAFT_INVALID_RESPONSE"
+            ? "Gelato returned an invalid order response."
+            : draftErrorCode === "GELATO_DRAFT_ID_MISSING"
+              ? "The draft was created, but its order ID was not returned."
+              : draftErrorCode === "DRAFT_PERSIST_FAILED"
+                ? "The draft was created, but it could not be saved."
+                : draftErrorCode === "SHIPPING_METHOD_CHANGED"
+                  ? "The selected shipping method is no longer available. Please choose another shipping method."
+                  : draftErrorCode === "PRINT_FILES_NOT_READY"
+                    ? "Your design files are still being prepared."
+                    : typeof draftData?.message === "string" && draftData.message.trim()
+                      ? draftData.message
+                      : "Unable to prepare the order.";
+        throw new Error(draftErrorMessage);
       }
       const nextDraftOrderId = draftData.draftOrderId;
       if (!nextDraftOrderId) {
-        throw new Error("Missing draft order id.");
+        console.error("[checkout:draft-ui-missing-id]", {
+          status: draftRes.status,
+          code: draftData?.code ?? null,
+          keys: draftData && typeof draftData === "object" ? Object.keys(draftData) : [],
+        });
+        throw new Error("The order draft was created, but its ID was not returned.");
       }
       setDraftOrderId(nextDraftOrderId);
       setStep("payment");
