@@ -543,7 +543,6 @@ export default function CheckoutPage() {
     }));
 
     return JSON.stringify({
-      step,
       country: form.country.trim(),
       address: form.address.trim(),
       apartment: form.apartment.trim(),
@@ -552,7 +551,7 @@ export default function CheckoutPage() {
       hasCompleteShippingAddress,
       items: normalizedItems,
     });
-  }, [hasCompleteShippingAddress, step, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
+  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -612,6 +611,10 @@ export default function CheckoutPage() {
   );
   useEffect(() => {
     if (!shippingMethodsForDisplay?.length) {
+      // Preserve the validated selection while moving from review to payment.
+      // The selection is cleared only when the address or cart really changes.
+      if (step === "payment" && shippingMethodSelection?.id) return;
+
       setShippingMethodSelection(null);
       setSelectedShippingMethodId("");
       return;
@@ -629,7 +632,14 @@ export default function CheckoutPage() {
     if (selectedShippingMethodId && !findShippingMethod(selectedShippingMethodId)) {
       setSelectedShippingMethodId("");
     }
-  }, [findShippingMethod, form.shippingMethod, selectedShippingMethodId, shippingMethodsForDisplay]);
+  }, [
+    findShippingMethod,
+    form.shippingMethod,
+    selectedShippingMethodId,
+    shippingMethodsForDisplay,
+    shippingMethodSelection?.id,
+    step,
+  ]);
 
   const previousItemsSignature = useRef("");
   const previousShippingAddressSignature = useRef("");
@@ -837,14 +847,15 @@ export default function CheckoutPage() {
     const countryData = resolveCheckoutCountry(country);
 
     if (step !== "review") {
-      setProductAvailability({
+      // Keep the quote and selected shipping method intact on the payment step.
+      // Clearing them here caused payment to immediately fall back to review.
+      if (step === "payment") return;
+
+      setProductAvailability((current) => ({
+        ...current,
         loading: false,
-        checked: false,
-        configured: false,
-        available: true,
-        unavailableItems: [],
-        message: step === "shipping" ? null : "Shipping methods are calculated in review.",
-      });
+        message: null,
+      }));
       return;
     }
 
@@ -959,7 +970,7 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [availabilityRequestSignature, printFilesPending]);
+  }, [availabilityRequestSignature, printFilesPending, step]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
