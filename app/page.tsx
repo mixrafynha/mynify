@@ -176,70 +176,66 @@ export default function HomePage() {
   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.25)_0%,#03030a_100%)] lg:bg-[linear-gradient(90deg,#03030a_0%,rgba(3,3,10,0.94)_34%,rgba(3,3,10,0.45)_72%,#03030a_100%)]" />
 
   <div className="relative mx-auto grid max-w-7xl items-center gap-2 px-4 pb-3 pt-7 sm:pt-12 md:px-8 lg:min-h-[650px] lg:grid-cols-2 lg:gap-6 lg:px-12 lg:pb-4 lg:pt-20">
-    <div className="z-10 order-1 w-full max-w-[720px] pt-6 text-center lg:pt-6 lg:text-left">
-      <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/85 sm:mb-6 sm:text-xs">
-        <Zap size={14} className="text-purple-400" aria-hidden="true" />
-        AI CUSTOM PRODUCTS
-      </div>
-
+    <div className="z-10 order-1 text-center lg:-mt-32 lg:text-left">
+      
       <h1
-        className="mb-6 uppercase leading-[0.88] tracking-[-0.04em] text-[52px] sm:text-[72px] md:text-[86px] lg:text-[98px]"
-        style={{
-          fontFamily: "'Audiowide', sans-serif",
-          fontWeight: 700,
-        }}
+        className="mb-5 text-[38px] font-black uppercase leading-[0.9] tracking-[-0.052em] sm:text-6xl md:text-7xl lg:text-[96px]"
+        style={{ fontFamily: "'Audiowide', sans-serif" }}
       >
-        <span className="block bg-gradient-to-r from-white via-slate-100 to-violet-200 bg-clip-text text-transparent">
-          WEAR
-        </span>
+        <div className="flex items-center justify-center gap-4 lg:justify-start">
+          <span className="text-white">
+            Wear
+          </span>
 
-        <span className="block translate-x-[10%] bg-gradient-to-r from-white via-violet-100 to-purple-300 bg-clip-text text-transparent">
-          YOUR
-        </span>
+          <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+            Your
+          </span>
+        </div>
 
-        <span className="block translate-x-[20%] bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-          IDEAS.
+        <span className="mt-1 block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent lg:mt-2">
+          Ideas.
         </span>
       </h1>
 
-      <p className="mx-auto mb-8 max-w-[680px] text-[15px] font-medium leading-relaxed text-white/65 sm:text-[17px] lg:mx-0 lg:whitespace-nowrap">
+      <p className="mx-auto max-w-xl text-[14px] font-medium leading-relaxed text-white/62 sm:text-lg md:text-xl lg:mx-0 lg:mb-6">
         Create custom clothing in minutes with AI. No design skills required.
       </p>
 
-      <div className="mt-2 hidden lg:flex lg:justify-start">
+      {/* DESKTOP CTA */}
+      <div className="hidden justify-center lg:flex lg:justify-start">
         <Link
           href={safeHref(CATALOG_HREF)}
           className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-7 py-4 text-base font-black text-white transition duration-300 hover:scale-[1.02]"
         >
-          Start Creating
+          Free to start
           <Zap size={17} aria-hidden="true" />
         </Link>
       </div>
     </div>
 
-    <div className="relative z-0 order-2 mx-auto -mt-4 h-[390px] w-full max-w-[820px] sm:h-[470px] md:h-[540px] lg:-mt-2 lg:h-[560px] lg:max-w-none">
+    <div className="relative z-0 order-2 mx-auto -mt-4 flex w-full items-center justify-center sm:-mt-2 lg:justify-end">
       <Link
         href={safeHref(CATALOG_HREF)}
-        className="absolute inset-y-0 left-[-6%] w-full sm:left-[-4%] lg:left-auto lg:right-[-40%] lg:w-[1040px]"
+        className="relative block h-[390px] w-full max-w-[820px] p-[10px] sm:h-[470px] md:h-[540px] lg:right-[-15%] lg:h-[560px] lg:w-[1040px] lg:max-w-none"
       >
-        <Image
-          src="/hero2.webp"
-          alt="Create custom products with Ryfio"
-          fill
-          priority
-          quality={78}
-          sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 980px"
-          className="hero-slide hero-slide-first scale-[1.23] object-contain object-center sm:scale-[1.04] lg:scale-100"
-        />
+        <div className="relative h-full w-full">
+          <Image
+            src="/hero2.webp"
+            alt="Create custom products with Ryfio"
+            fill
+            priority
+            quality={78}
+            sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
+            className="hero-slide hero-slide-first -translate-x-[9%] scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.38] lg:scale-[1.45]"
+          />
 
-        <div className="absolute inset-0">
           <Image
             src="/hero3.webp"
             alt="Custom Ryfio product example"
             fill
             quality={78}
-            sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 980px"
-            className="hero-slide hero-slide-second scale-[1.28] translate-x-[5%] object-contain object-center sm:translate-x-0 sm:scale-[1.04] lg:scale-100 lg:translate-x-[5%]"
+            sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
+            className="hero-slide hero-slide-second scale-[1.38]  translate-x-[0%] scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.04] lg:-translate-x-[15%] lg:scale-[1.45]"
           />
         </div>
       </Link>
