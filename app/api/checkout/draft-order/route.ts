@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { normalizeShippingMethods, type NormalizedShippingMethod } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoPrintFiles, type CartItem, type CartVariant } from "@/app/checkout/_lib/checkout";
@@ -358,7 +358,7 @@ export async function POST(req: Request) {
     printFiles: item.files,
   }));
 
-  const quote = await getGelatoCheckoutQuote({
+  const quote = await resolveCheckoutQuote({
     productUid: quoteItems[0].productUid,
     quantity: quoteItems[0].quantity,
     shippingAddress: {
@@ -371,6 +371,19 @@ export async function POST(req: Request) {
     orderReferenceId: `draft-${authData.user.id}-${cartItemIds.slice().sort().join("-")}`,
     customerReferenceId: authData.user.email ?? authData.user.id,
   });
+
+  if (process.env.NODE_ENV !== "production") {
+    const rawQuote = quote.rawQuote && typeof quote.rawQuote === "object" ? (quote.rawQuote as Record<string, unknown>) : null;
+    const rawData = rawQuote?.data && typeof rawQuote.data === "object" ? (rawQuote.data as Record<string, unknown>) : null;
+    console.info("[checkout:draft-quote-shape]", {
+      topLevelKeys: rawQuote ? Object.keys(rawQuote) : [],
+      dataKeys: rawData ? Object.keys(rawData) : [],
+      hasShippingMethods: Array.isArray(rawQuote?.shippingMethods),
+      hasShipmentMethods: Array.isArray(rawQuote?.shipmentMethods),
+      hasShippingOptions: Array.isArray(rawQuote?.shippingOptions),
+      hasQuotes: Array.isArray(rawQuote?.quotes),
+    });
+  }
 
   log("[checkout:draft-quote]", {
     available: quote.available,
@@ -392,10 +405,11 @@ export async function POST(req: Request) {
 
   if (!quote.available || quote.shippingOptions.length === 0) {
     return conflict(
-      "SHIPPING_METHODS_UNAVAILABLE",
+      "INVALID_QUOTE_RESPONSE",
       "Gelato did not return shipping methods for the validated cart and address.",
       {
-        quoteReason: quote.reason ?? null,
+        responseKeys: quote.responseKeys,
+        quoteReason: quote.quoteReason ?? quote.reason ?? null,
         quoteItemCount: quoteItems.length,
       },
     );

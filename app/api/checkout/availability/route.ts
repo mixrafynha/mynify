@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 
 type AvailabilityItem = {
@@ -367,7 +368,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const quote = await getGelatoCheckoutQuote({
+    const quote = await resolveCheckoutQuote({
       productUid: quoteItems[0].productUid,
       quantity: quoteItems[0].quantity,
       shippingAddress,
@@ -406,28 +407,20 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           ok: false,
-          code: "NO_SHIPPING_METHODS_PARSED",
+          code: "INVALID_QUOTE_RESPONSE",
           message: "The Gelato response did not contain recognized shipping methods.",
-          responseKeys: [],
+          responseKeys: quote.responseKeys,
+          quoteReason: quote.quoteReason ?? null,
         },
         { status: 422 },
       );
     }
 
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+
     return NextResponse.json({
       ok: true,
-      shippingMethods: quote.shippingOptions.map((option) => ({
-        id: option.id,
-        title: option.name,
-        price: option.price,
-        estimatedDays: option.estimatedDeliveryMin && option.estimatedDeliveryMax
-          ? `${option.estimatedDeliveryMin} - ${option.estimatedDeliveryMax}`
-          : option.estimatedDeliveryMin || option.estimatedDeliveryMax || null,
-        currency: option.currency,
-        fulfillmentCountry: option.fulfillmentCountry,
-        promiseUid: option.promiseUid,
-        serviceType: option.serviceType,
-      })),
+      shippingMethods,
     });
   } catch (error) {
     return NextResponse.json(

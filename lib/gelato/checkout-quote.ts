@@ -57,6 +57,12 @@ export type NormalizedGelatoQuote = {
     | "invalid_quote_response";
 };
 
+export type ResolvedGelatoCheckoutQuote = NormalizedGelatoQuote & {
+  rawQuote: unknown;
+  responseKeys: string[];
+  quoteReason: string | null;
+};
+
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
 const GELATO_QUOTE_URL = "https://api.gelato.com/v2/quote";
@@ -118,7 +124,7 @@ function logLine(prefix: string, payload: unknown) {
   console.log(`${prefix} ${serialized ?? "\"[unserializable]\""}`);
 }
 
-function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
+function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
   if (!raw || typeof raw !== "object") {
     return {
       available: false,
@@ -127,12 +133,16 @@ function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
       productCurrency: null,
       shippingOptions: [],
       reason: "invalid_quote_response",
+      rawQuote: raw ?? null,
+      responseKeys: [],
+      quoteReason: "invalid_quote_response",
     };
   }
 
   const record = raw as Record<string, unknown>;
   const production = record.production && typeof record.production === "object" ? (record.production as Record<string, unknown>) : null;
   const shipments = Array.isArray(production?.shipments) ? (production.shipments as Record<string, unknown>[]) : [];
+  const responseKeys = Object.keys(record);
   const requestCurrency = normalizeCurrency(record.currencyIsoCode ?? record.currency ?? null);
   const productionCurrency = normalizeCurrency(production?.currency ?? null);
   const currency = requestCurrency ?? productionCurrency ?? "USD";
@@ -167,14 +177,14 @@ function normalizeQuoteResponse(raw: unknown): NormalizedGelatoQuote {
     productCost: null,
     productCurrency: currency,
     shippingOptions,
-    reason:
-      shippingOptions.length > 0
-        ? null
-        : "no_shipping_options",
+    reason: shippingOptions.length > 0 ? null : "invalid_quote_response",
+    rawQuote: raw,
+    responseKeys,
+    quoteReason: shippingOptions.length > 0 ? null : "invalid_quote_response",
   };
 }
 
-function classifyQuoteFailure(status: number, payload: JsonValue | null): NormalizedGelatoQuote {
+function classifyQuoteFailure(status: number, payload: JsonValue | null): ResolvedGelatoCheckoutQuote {
   const message = typeof payload === "string" ? payload.toLowerCase() : "";
   const payloadText = JSON.stringify(payload ?? {}).toLowerCase();
   const isRetryable = isTemporaryStatus(status);
@@ -187,6 +197,9 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Normal
       productCurrency: null,
       shippingOptions: [],
       reason: "temporary_gelato_error",
+      rawQuote: payload,
+      responseKeys: [],
+      quoteReason: "temporary_gelato_error",
     };
   }
 
@@ -198,6 +211,9 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Normal
       productCurrency: null,
       shippingOptions: [],
       reason: "invalid_address",
+      rawQuote: payload,
+      responseKeys: [],
+      quoteReason: "invalid_address",
     };
   }
 
@@ -209,6 +225,9 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Normal
       productCurrency: null,
       shippingOptions: [],
       reason: "product_not_supported",
+      rawQuote: payload,
+      responseKeys: [],
+      quoteReason: "product_not_supported",
     };
   }
 
@@ -219,6 +238,9 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Normal
     productCurrency: null,
     shippingOptions: [],
     reason: "invalid_quote_response",
+    rawQuote: payload,
+    responseKeys: [],
+    quoteReason: "invalid_quote_response",
   };
 }
 
@@ -263,9 +285,9 @@ function classifyGelatoHttpFailure(status: number): {
   };
 }
 
-export async function getGelatoCheckoutQuote(
+export async function resolveCheckoutQuote(
   input: GelatoCheckoutQuoteInput,
-): Promise<NormalizedGelatoQuote> {
+): Promise<ResolvedGelatoCheckoutQuote> {
   const apiKey = process.env.GELATO_API_KEY?.trim();
   if (!apiKey) {
     return {
@@ -275,6 +297,9 @@ export async function getGelatoCheckoutQuote(
       productCurrency: null,
       shippingOptions: [],
       reason: "temporary_gelato_error",
+      rawQuote: null,
+      responseKeys: [],
+      quoteReason: "temporary_gelato_error",
     };
   }
 
@@ -386,6 +411,9 @@ export async function getGelatoCheckoutQuote(
         productCurrency: null,
         shippingOptions: [],
         reason: classification.reason,
+        rawQuote: rawJson,
+        responseKeys: rawJson && typeof rawJson === "object" ? Object.keys(rawJson as Record<string, unknown>) : [],
+        quoteReason: classification.reason,
       };
     }
 
@@ -424,6 +452,9 @@ export async function getGelatoCheckoutQuote(
       productCurrency: null,
       shippingOptions: [],
       reason: isTimeout ? "temporary_gelato_error" : "temporary_gelato_error",
+      rawQuote: null,
+      responseKeys: [],
+      quoteReason: "temporary_gelato_error",
     };
   } finally {
     clearTimeout(timeoutId);
@@ -431,4 +462,10 @@ export async function getGelatoCheckoutQuote(
       durationMs: Date.now() - startedAt,
     });
   }
+}
+
+export async function getGelatoCheckoutQuote(
+  input: GelatoCheckoutQuoteInput,
+): Promise<NormalizedGelatoQuote> {
+  return resolveCheckoutQuote(input);
 }
