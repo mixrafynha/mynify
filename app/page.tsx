@@ -179,26 +179,35 @@ export default function HomePage() {
     <div className="z-10 order-1 text-center lg:-mt-32 lg:text-left">
       
       <h1
-        className="mb-5 text-[38px] font-black uppercase leading-[0.9] tracking-[-0.052em] sm:text-6xl md:text-7xl lg:text-[96px]"
-        style={{ fontFamily: "'Audiowide', sans-serif" }}
-      >
-        <div className="flex items-center justify-center gap-4 lg:justify-start">
-          <span className="text-white">
-            Wear
-          </span>
+  className="mb-8 font-[var(--font-logo)] text-[42px] font-semibold uppercase leading-[0.92] tracking-[-0.04em] sm:text-[58px] md:text-[70px] lg:text-[92px]"
+  style={{
+    textShadow: "0 0 14px rgba(102,67,136,.18)",
+  }}
+>
+  <div className="flex items-center justify-center gap-6 lg:justify-start">
+    <span className="text-white">Wear</span>
 
-          <span className="bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
-            Your
-          </span>
-        </div>
+    <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
+      Your
+    </span>
+  </div>
 
-        <span className="mt-1 block bg-gradient-to-r from-violet-300 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent lg:mt-2">
-          Ideas.
-        </span>
-      </h1>
+  <span className="mt-3 block text-white">
+   
+  </span>
+
+  <span className="mt-3 block bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
+    Ideas
+  </span>
+
+  <span className="mt-7 block text-[13px] font-medium uppercase tracking-[0.24em] text-white/60 sm:text-[15px] md:text-[17px] lg:text-[20px]">
+    CREATE • DESIGN • WEAR
+  </span>
+</h1>
 
       <p className="mx-auto max-w-xl text-[14px] font-medium leading-relaxed text-white/62 sm:text-lg md:text-xl lg:mx-0 lg:mb-6">
-        Create custom clothing in minutes with AI. No design skills required.
+        Turn any idea into custom clothing in minutes. Create, preview and
+        order with AI — no design skills required.
       </p>
 
       {/* DESKTOP CTA */}
@@ -207,7 +216,7 @@ export default function HomePage() {
           href={safeHref(CATALOG_HREF)}
           className="inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-7 py-4 text-base font-black text-white transition duration-300 hover:scale-[1.02]"
         >
-          Free to start
+          Create your idea
           <Zap size={17} aria-hidden="true" />
         </Link>
       </div>
@@ -226,7 +235,7 @@ export default function HomePage() {
             priority
             quality={78}
             sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
-            className="hero-slide hero-slide-first -translate-x-[9%] scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.38] lg:scale-[1.45]"
+            className="hero-slide hero-slide-first -translate-x-[9%] scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.38] lg:-translate-x-[4%] lg:scale-[1.45]"
           />
 
           <Image
@@ -235,7 +244,7 @@ export default function HomePage() {
             fill
             quality={78}
             sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
-            className="hero-slide hero-slide-second scale-[1.38]  translate-x-[0%] scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.04] lg:-translate-x-[15%] lg:scale-[1.45]"
+            className="hero-slide hero-slide-second translate-x-0 scale-[1.38] object-contain object-center sm:translate-x-0 sm:scale-[1.04] lg:-translate-x-[2%] lg:scale-[1.45]"
           />
         </div>
       </Link>
@@ -243,14 +252,15 @@ export default function HomePage() {
   </div>
 
   {/* MOBILE CTA */}
-  <div className="relative mx-auto w-full max-w-md px-4 pb-5 lg:hidden">
-    <Link
-      href={safeHref(CATALOG_HREF)}
-      className="flex h-14 w-full items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 text-sm font-black text-white"
-    >
-      Free to start
-    </Link>
-  </div>
+<div className="relative mx-auto w-full max-w-[280px] px-4 pb-6 lg:hidden">
+  <Link
+    href={safeHref(CATALOG_HREF)}
+    className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-5 text-[13px] font-semibold text-white shadow-[0_8px_30px_rgba(168,85,247,0.25)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+  >
+    <Zap size={15} aria-hidden="true" />
+    Create your idea
+  </Link>
+</div>
 
   {/* HERO MARQUEE */}
   <div className="relative mx-auto max-w-7xl px-4 pb-5 md:px-8 lg:px-12">
