@@ -809,17 +809,61 @@ export async function POST(req: Request) {
     const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
     if (!gelatoApiKey) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
 
-    const gelatoResponse = await fetch(new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
-      body: JSON.stringify(gelatoPayload),
-      cache: "no-store",
+    console.info("[checkout:draft:13a-fetch-start]", {
+      endpoint: "/v4/orders",
+      itemCount: gelatoPayload.items.length,
+      shipmentMethodUidPresent: Boolean(gelatoPayload.shipmentMethodUid),
+      currency: gelatoPayload.currency,
+      orderType: gelatoPayload.orderType,
+      orderReferenceIdPresent: Boolean(gelatoPayload.orderReferenceId),
+    });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    let gelatoResponse: Response;
+    try {
+      gelatoResponse = await fetch(
+        new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com"),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
+          body: JSON.stringify(gelatoPayload),
+          cache: "no-store",
+          signal: controller.signal,
+        },
+      );
+    } catch (error) {
+      const aborted = error instanceof Error && error.name === "AbortError";
+      console.error("[checkout:draft:13c-fetch-error]", {
+        name: error instanceof Error ? error.name : null,
+        message: error instanceof Error ? error.message : String(error),
+        aborted,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          code: aborted ? "GELATO_DRAFT_TIMEOUT" : "GELATO_DRAFT_NETWORK_ERROR",
+          message: aborted
+            ? "Gelato took too long to create the draft order."
+            : "The draft order service could not be reached.",
+        },
+        { status: aborted ? 504 : 502 },
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    console.info("[checkout:draft:14-create-response]", {
+      status: gelatoResponse.status,
+      ok: gelatoResponse.ok,
+      statusText: gelatoResponse.statusText,
+      contentType: gelatoResponse.headers.get("content-type"),
     });
 
     const gelatoStatus = gelatoResponse.status;
     const gelatoContentType = gelatoResponse.headers.get("content-type");
-    const gelatoRawText = await gelatoResponse.text();
     console.info("[checkout:draft:15-body-read-start]");
+    const gelatoRawText = await gelatoResponse.text();
     console.info("[checkout:draft:15-body-read-finished]", {
       bodyLength: gelatoRawText.length,
       preview: process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 500) : undefined,
@@ -881,37 +925,36 @@ export async function POST(req: Request) {
     }
 
     function extractGelatoOrderId(body: unknown): string | null {
-      const candidates: unknown[] = [];
+      const directCandidates: string[] = [];
+      const referenceCandidates: string[] = [];
+      const visited = new Set<object>();
 
-      const collect = (value: unknown) => {
-        if (!value || typeof value !== "object") return;
+      const walk = (value: unknown, depth = 0) => {
+        if (!value || typeof value !== "object" || depth > 8) return;
+        if (visited.has(value as object)) return;
+        visited.add(value as object);
+
+        if (Array.isArray(value)) {
+          for (const item of value) walk(item, depth + 1);
+          return;
+        }
 
         const row = value as Record<string, unknown>;
-        candidates.push(row.id, row.orderId, row.order_id, row.draftOrderId, row.orderReferenceId);
-
-        if (row.order && typeof row.order === "object") {
-          const order = row.order as Record<string, unknown>;
-          candidates.push(order.id, order.orderId, order.order_id, order.orderReferenceId);
-        }
-
-        if (row.data && typeof row.data === "object") {
-          const data = row.data as Record<string, unknown>;
-          candidates.push(data.id, data.orderId, data.order_id, data.draftOrderId, data.orderReferenceId);
-        }
-
-        if (row.orders && Array.isArray(row.orders)) {
-          for (const order of row.orders) collect(order);
+        for (const [key, candidate] of Object.entries(row)) {
+          if (typeof candidate === "string" && candidate.trim()) {
+            const normalizedKey = key.toLowerCase();
+            if (["id", "orderid", "order_id", "draftorderid", "draft_order_id"].includes(normalizedKey)) {
+              directCandidates.push(candidate.trim());
+            } else if (["orderreferenceid", "order_reference_id", "referenceid", "reference_id"].includes(normalizedKey)) {
+              referenceCandidates.push(candidate.trim());
+            }
+          }
+          if (candidate && typeof candidate === "object") walk(candidate, depth + 1);
         }
       };
 
-      if (Array.isArray(body)) {
-        for (const item of body) collect(item);
-      } else {
-        collect(body);
-      }
-
-      const found = candidates.find((value) => typeof value === "string" && value.trim().length > 0);
-      return typeof found === "string" ? found.trim() : null;
+      walk(body);
+      return directCandidates[0] ?? referenceCandidates[0] ?? null;
     }
 
     console.info("[checkout:draft:17-id-resolution-start]");
@@ -940,6 +983,7 @@ export async function POST(req: Request) {
       idempotency_key: idempotencyKey,
       status: "draft",
       gelato_draft_order_id: gelatoDraftOrderId,
+      order_reference_id: idempotencyKey,
       selected_shipping_method: {
         id: matched.id,
         code: matched.code,
@@ -983,7 +1027,6 @@ export async function POST(req: Request) {
     console.info("[checkout:draft:19-persist-result]", {
       hasData: Boolean(savedDraft),
       data: savedDraft,
-      error: saveError,
       draftOrderId: savedDraft?.id ?? null,
       gelatoDraftOrderId: savedDraft?.gelato_draft_order_id ?? null,
       status: savedDraft?.status ?? null,
