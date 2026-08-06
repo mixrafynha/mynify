@@ -819,23 +819,17 @@ export async function POST(req: Request) {
     const gelatoStatus = gelatoResponse.status;
     const gelatoContentType = gelatoResponse.headers.get("content-type");
     const gelatoRawText = await gelatoResponse.text();
-    console.info("[checkout:draft:15-response-text]", {
-      status: gelatoStatus,
-      ok: gelatoResponse.ok,
-      contentType: gelatoContentType,
+    console.info("[checkout:draft:15-body-read-start]");
+    console.info("[checkout:draft:15-body-read-finished]", {
       bodyLength: gelatoRawText.length,
-      bodyPreview:
-        process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 1000) : undefined,
+      preview: process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 500) : undefined,
     });
     let gelatoBody: unknown = null;
+    console.info("[checkout:draft:16-json-parse-start]");
     try {
       gelatoBody = gelatoRawText ? JSON.parse(gelatoRawText) : null;
     } catch (error) {
-      console.error("[checkout:draft:15-invalid-json]", {
-        status: gelatoStatus,
-        bodyLength: gelatoRawText.length,
-        message: error instanceof Error ? error.message : String(error),
-      });
+      console.error("[checkout:draft:16-json-parse-error]", error);
       return NextResponse.json(
         {
           success: false,
@@ -845,6 +839,12 @@ export async function POST(req: Request) {
         { status: 502 },
       );
     }
+    console.info("[checkout:draft:16-json-parse-success]", {
+      keys:
+        gelatoBody && typeof gelatoBody === "object" && !Array.isArray(gelatoBody)
+          ? Object.keys(gelatoBody as Record<string, unknown>)
+          : [],
+    });
     console.info("[checkout:draft:16-response-shape]", {
       bodyType: Array.isArray(gelatoBody) ? "array" : gelatoBody === null ? "null" : typeof gelatoBody,
       topLevelKeys:
@@ -914,18 +914,17 @@ export async function POST(req: Request) {
       return typeof found === "string" ? found.trim() : null;
     }
 
+    console.info("[checkout:draft:17-id-resolution-start]");
     const gelatoDraftOrderId = extractGelatoOrderId(gelatoBody);
     console.info("[checkout:draft:17-id-resolution]", {
+      gelatoDraftOrderId,
+      orderId: (gelatoBody as Record<string, unknown> | null)?.id ?? null,
+      externalId: (gelatoBody as Record<string, unknown> | null)?.orderId ?? null,
+      reference: (gelatoBody as Record<string, unknown> | null)?.orderReferenceId ?? null,
       gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
     });
     if (!gelatoDraftOrderId) {
-      console.error("[checkout:draft:17-id-missing]", {
-        bodyType: Array.isArray(gelatoBody) ? "array" : typeof gelatoBody,
-        topLevelKeys:
-          gelatoBody && typeof gelatoBody === "object" && !Array.isArray(gelatoBody)
-            ? Object.keys(gelatoBody as Record<string, unknown>)
-            : [],
-      });
+      console.error("[checkout:draft:17-id-missing]", gelatoBody);
       return NextResponse.json(
         {
           success: false,
@@ -961,13 +960,20 @@ export async function POST(req: Request) {
     };
 
     console.info("[checkout:draft:18-persist-start]", {
+      table: "checkout_drafts",
       userIdPresent: Boolean(authData.user.id),
       gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
       cartItemCount: cartItemIds.length,
       idempotencyKeyPresent: Boolean(idempotencyKey),
       currency: matched.currency,
     });
+    console.info("[checkout:draft:18-row]", {
+      keys: Object.keys(draftRow),
+      draftOrderIdPresent: Boolean((draftRow as { draft_order_id?: unknown }).draft_order_id),
+      gelatoDraftOrderIdPresent: Boolean(draftRow.gelato_draft_order_id),
+    });
 
+    console.info("[checkout:draft:19-insert-start]");
     const { data: savedDraft, error: saveError } = await supabase
       .from("checkout_drafts")
       .upsert(draftRow, { onConflict: "idempotency_key" })
@@ -976,6 +982,8 @@ export async function POST(req: Request) {
 
     console.info("[checkout:draft:19-persist-result]", {
       hasData: Boolean(savedDraft),
+      data: savedDraft,
+      error: saveError,
       draftOrderId: savedDraft?.id ?? null,
       gelatoDraftOrderId: savedDraft?.gelato_draft_order_id ?? null,
       status: savedDraft?.status ?? null,
@@ -1019,10 +1027,9 @@ export async function POST(req: Request) {
 
     log("[checkout:draft-created]", { draftOrderId: savedDraft.id });
 
-    console.info("[checkout:draft:20-response]", {
-      success: true,
-      draftOrderIdPresent: Boolean(savedDraft.id),
-      gelatoDraftOrderIdPresent: Boolean(savedDraft.gelato_draft_order_id ?? gelatoDraftOrderId),
+    console.info("[checkout:draft:20-success-response]", {
+      checkoutDraftId: savedDraft?.id ?? null,
+      gelatoDraftOrderId,
     });
 
     return NextResponse.json({
