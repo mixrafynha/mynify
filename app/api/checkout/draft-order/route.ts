@@ -916,6 +916,7 @@ export async function POST(req: Request) {
 
     console.info("[checkout:draft:17-id-resolution-start]");
     const gelatoDraftOrderId = extractGelatoOrderId(gelatoBody);
+    const gelatoOrderReferenceId = (gelatoResponse as any)?.orderReferenceId ?? (gelatoBody as any)?.orderReferenceId ?? null;
     console.info("[checkout:draft:17-id-resolution]", {
       gelatoDraftOrderId,
       orderId: (gelatoBody as Record<string, unknown> | null)?.id ?? null,
@@ -940,6 +941,7 @@ export async function POST(req: Request) {
       idempotency_key: idempotencyKey,
       status: "draft",
       gelato_draft_order_id: gelatoDraftOrderId,
+      order_reference_id: gelatoOrderReferenceId ?? idempotencyKey,
       selected_shipping_method: {
         id: matched.id,
         code: matched.code,
