@@ -2,7 +2,6 @@ import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { convertMoneyToCents, normalizeCheckoutCurrency } from "./currency";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { calculateSellingPrice } from "@/lib/gelato/pricing";
 import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
@@ -528,7 +527,9 @@ export async function POST(req: Request) {
         gelato_product_uid: string | null;
       }> = [];
 
-      let checkoutCurrency: string | null = null;
+      // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
+      // official numeric prices are charged as EUR without runtime FX conversion.
+      const checkoutCurrency = "EUR";
 
       for (const cartItem of cartItems) {
         const product = productMap.get(cartItem.product_id);
@@ -697,46 +698,24 @@ export async function POST(req: Request) {
         }
 
         const baseCurrency = officialBaseCurrency;
-        const currency = normalizeCheckoutCurrency(cartItem.currency);
+        const currency = checkoutCurrency;
+        const unitAmount = moneyToCents(officialPrice);
 
-        if (
-          checkoutCurrency !== null &&
-          checkoutCurrency !== currency
-        ) {
+        if (!unitAmount) {
           return NextResponse.json(
-            {
-              error:
-                "All products in one checkout must use the same currency",
-            },
+            { error: `Invalid official price for ${product.title}` },
             { status: 400 },
           );
         }
 
-        checkoutCurrency = currency;
-
-        let unitAmount: number;
-        try {
-          unitAmount = convertMoneyToCents(
-            officialPrice,
-            baseCurrency,
-            currency,
-          );
-        } catch (conversionError) {
-          console.error("CHECKOUT_CURRENCY_CONVERSION_ERROR", {
-            productId: product.id,
-            baseCurrency,
-            currency,
-            message:
-              conversionError instanceof Error
-                ? conversionError.message
-                : "Unknown conversion error",
-          });
-
-          return NextResponse.json(
-            { error: "Currency conversion is temporarily unavailable" },
-            { status: 503 },
-          );
-        }
+        console.info("[checkout:final:currency-resolution]", {
+          productId: product.id,
+          storedCurrency: cartItem.currency ?? product.currency ?? null,
+          officialBaseCurrency: baseCurrency,
+          checkoutCurrency,
+          conversionRequired: false,
+          policy: "eur_only_numeric_price",
+        });
 
         const size = variant?.size ?? cartItem.size;
         const sku = variant?.sku ?? cartItem.sku;
@@ -812,7 +791,7 @@ export async function POST(req: Request) {
             shippingAddress,
             printFiles: gelatoQuoteItems[0].files,
             items: gelatoQuoteItems,
-            currencyIsoCode: checkoutCurrency ?? "EUR",
+            currencyIsoCode: checkoutCurrency,
             customerReferenceId: user.id,
             orderReferenceId: createdOrderId ?? `ryfio-checkout-${Date.now()}`,
           })
@@ -885,12 +864,9 @@ export async function POST(req: Request) {
           total + item.unit_amount * item.quantity,
         0,
       );
+      // EUR-only checkout: use the validated numeric shipping amount as EUR.
       const shippingAmount = totalShippingFromGelato
-        ? convertMoneyToCents(
-            totalShippingFromGelato,
-            normalizeBaseCurrency(selectedQuoteOption.currency),
-            checkoutCurrency ?? "EUR",
-          )
+        ? moneyToCents(totalShippingFromGelato) ?? 0
         : 0;
 
       const { data: order, error: orderError } = await supabase
@@ -903,7 +879,7 @@ export async function POST(req: Request) {
               ? firstItem.title
               : `${orderItems.length} products`,
           product_price: (totalAmount + shippingAmount) / 100,
-          product_currency: checkoutCurrency ?? "eur",
+          product_currency: checkoutCurrency.toLowerCase(),
           status: "pending",
           created_at: new Date().toISOString(),
         })
@@ -932,7 +908,7 @@ export async function POST(req: Request) {
             ? [
                 {
                   price_data: {
-                    currency: (checkoutCurrency ?? "EUR").toLowerCase(),
+                    currency: checkoutCurrency.toLowerCase(),
                     product_data: {
                       name: `Shipping (${selectedQuoteOption.name})`,
                     },
@@ -1044,7 +1020,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const currency = normalizeBaseCurrency(product.currency);
+    const currency = "eur";
 
     const baseUrl =
       process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||

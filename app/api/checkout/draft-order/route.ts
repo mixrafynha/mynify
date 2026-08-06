@@ -698,7 +698,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions).map((method) => ({
+      ...method,
+      // Ryfio is EUR-only. Keep the validated numeric shipping price and expose it as EUR.
+      currency: "EUR",
+    }));
     for (const method of shippingMethods) {
       console.info("[checkout:draft:11-shipping-method]", {
         id: method.id,
