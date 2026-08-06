@@ -1,6 +1,7 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServer } from "@/lib/supabase-server";
 import { convertMoneyToCents, normalizeCheckoutCurrency } from "./currency";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { calculateSellingPrice } from "@/lib/gelato/pricing";
@@ -221,22 +222,36 @@ export async function POST(req: Request) {
 
   try {
     const token = getBearerToken(req);
+    const cookieHeaderPresent = Boolean(req.headers.get("cookie"));
 
-    if (!token) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 },
-      );
-    }
+    console.info("[checkout:final:01-auth-start]", {
+      cookieHeaderPresent,
+      authorizationHeaderPresent: Boolean(token),
+    });
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser(token);
+    // The checkout UI authenticates with the Supabase session cookie.
+    // Keep Bearer-token support for older clients, but do not require it.
+    const authResult = token
+      ? await supabase.auth.getUser(token)
+      : await createSupabaseServer().auth.getUser();
+
+    const user = authResult.data.user;
+    const userError = authResult.error;
+
+    console.info("[checkout:final:02-auth-result]", {
+      authenticated: Boolean(user?.id),
+      userIdSuffix: user?.id ? user.id.slice(-8) : null,
+      authSource: token ? "bearer" : "cookie",
+      error: userError?.message ?? null,
+    });
 
     if (userError || !user) {
       return NextResponse.json(
-        { error: "Unauthorized" },
+        {
+          success: false,
+          code: "UNAUTHORIZED",
+          message: "Your session expired. Please sign in again.",
+        },
         { status: 401 },
       );
     }
@@ -270,10 +285,28 @@ export async function POST(req: Request) {
         .eq("id", body.draftOrderId)
         .eq("user_id", user.id)
         .maybeSingle();
+      console.info("[checkout:final:03-draft-resolution]", {
+        draftOrderId: body.draftOrderId,
+        found: Boolean(draftRow),
+        ownerMatches: Boolean(draftRow),
+        error: draftError?.message ?? null,
+      });
+
       if (draftError) {
-        return NextResponse.json({ error: "Failed to load draft order" }, { status: 500 });
+        return NextResponse.json(
+          { success: false, code: "DRAFT_LOAD_FAILED", message: "Failed to load draft order." },
+          { status: 500 },
+        );
       }
-      draftCheckout = draftRow ?? null;
+
+      if (!draftRow) {
+        return NextResponse.json(
+          { success: false, code: "DRAFT_NOT_FOUND", message: "The prepared order could not be found." },
+          { status: 404 },
+        );
+      }
+
+      draftCheckout = draftRow;
     }
 
     const effectiveCartItemIds =
@@ -295,7 +328,7 @@ export async function POST(req: Request) {
      * O cliente envia apenas cartItemIds.
      * Nunca utilizamos cart_items.price para cobrar.
      */
-    if (requestedCartItemIds.length > 0) {
+    if (effectiveCartItemIds.length > 0) {
       const { data: cartRows, error: cartError } = await supabase
         .from("cart_items")
         .select(`
@@ -398,18 +431,18 @@ export async function POST(req: Request) {
         variants = (variantRows ?? []) as VariantRow[];
       }
 
-      const designIds = [
+      const userProductIds = [
         ...new Set(
           cartItems
-            .map((item) => item.design_id)
+            .map((item) => item.user_product_id ?? item.design_id)
             .filter((id): id is string => Boolean(id)),
         ),
       ];
-      const { data: userProductRows, error: userProductsError } = designIds.length
+      const { data: userProductRows, error: userProductsError } = userProductIds.length
         ? await supabase
             .from("user_products")
             .select("id, print_files, mockups, design_data")
-            .in("id", designIds)
+            .in("id", userProductIds)
         : { data: [], error: null };
 
       if (userProductsError) {
@@ -601,7 +634,8 @@ export async function POST(req: Request) {
           officialPrice = sellingPrice;
           officialBaseCurrency = normalizeBaseCurrency(gelatoMarket.currency).toUpperCase();
 
-          const userProduct = cartItem.design_id ? userProductMap.get(cartItem.design_id) ?? null : null;
+          const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
+          const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
           const printFilesSource = userProduct
             ? {
                 id: cartItem.id,
