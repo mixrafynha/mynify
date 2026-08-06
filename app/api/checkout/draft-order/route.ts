@@ -260,307 +260,553 @@ function gelatoRequestPayload(input: {
 }
 
 export async function POST(req: Request) {
-  const supabase = createSupabaseServer();
-  const { data: authData } = await supabase.auth.getUser();
-  if (!authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const supabase = createSupabaseServer();
+    const body = (await req.json().catch(() => null)) as DraftBody | null;
+    const cartItemIds = Array.from(new Set((body?.cartItemIds ?? []).filter(isUuid)));
+    const shippingMethodInput = body?.shippingMethod ?? null;
+    const address = normalizeAddress(body ?? {});
 
-  const body = (await req.json().catch(() => null)) as DraftBody | null;
-  const cartItemIds = Array.from(new Set((body?.cartItemIds ?? []).filter(isUuid)));
-  const shippingMethodInput = body?.shippingMethod ?? null;
-  const address = normalizeAddress(body ?? {});
-
-  if (!cartItemIds.length) return NextResponse.json({ code: "MISSING_CART_ITEMS", success: false }, { status: 400 });
-  if (!shippingMethodInput?.id || !shippingMethodInput.name || !shippingMethodInput.currency) {
-    return NextResponse.json({ code: "MISSING_SHIPPING_METHOD", success: false }, { status: 400 });
-  }
-  if (!address.firstName || !address.lastName || !address.email || !address.addressLine1 || !address.city || !address.postalCode || !address.countryCode) {
-    return NextResponse.json({ code: "ADDRESS_INVALID", success: false }, { status: 400 });
-  }
-
-  log("[checkout:draft-request]", { cartItemCount: cartItemIds.length });
-
-  const { data: cartRows, error: cartError } = await supabase
-    .from("cart_items")
-    .select("id, user_id, product_id, variant_id, user_product_id, design_id, quantity, selected_variant, title")
-    .eq("user_id", authData.user.id)
-    .in("id", cartItemIds);
-  if (cartError) return NextResponse.json({ error: cartError.message }, { status: 500 });
-  if ((cartRows ?? []).length !== cartItemIds.length) return NextResponse.json({ error: "CART_OWNERSHIP_INVALID" }, { status: 403 });
-
-  const designIds = Array.from(new Set((cartRows ?? []).map((row) => row.design_id).filter((value): value is string => Boolean(value))));
-  const productIds = Array.from(new Set((cartRows ?? []).map((row) => row.product_id)));
-  const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
-
-  const [{ data: productRows }, { data: variantRows }, { data: userProductRows }] = await Promise.all([
-    supabase.from("products").select("id, gelato_product_uid").in("id", productIds),
-    supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, name").in("id", variantHints),
-    designIds.length
-      ? supabase.from("user_products").select("id, variant_id, gelato_product_uid, design_data, print_files, production").in("id", designIds)
-      : Promise.resolve({ data: [] as UserProductRow[] }),
-  ]);
-
-  const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
-  const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
-  const userProductMap = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
-
-  const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
-  let subtotal = 0;
-  let currency = shippingMethodInput.currency.toUpperCase();
-
-  for (const cartRow of cartRows ?? []) {
-    const userProduct = cartRow.design_id ? userProductMap.get(cartRow.design_id) ?? null : null;
-    const variantId = resolveVariantId(cartRow as CartRow, userProduct);
-    const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
-    const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
-    if (!variantId || !variant) {
-      return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
-    }
-
-    const product = productMap.get(cartRow.product_id) ?? null;
-    const productUid = resolveProductUid(variant, cartRow as CartRow, userProduct, product);
-    if (!productUid) {
-      return conflict("MISSING_PRODUCT_UID", "Unable to resolve the Gelato product UID for this cart item.", { cartItemId: cartRow.id });
-    }
-
-    const printFiles = userProduct ? resolveGelatoPrintFiles({
-      id: cartRow.id,
-      user_product_id: userProduct.id,
-      design_data: userProduct.design_data,
-      designData: userProduct.design_data,
-      print_files: userProduct.print_files,
-      printFiles: userProduct.print_files,
-      production: userProduct.production,
-      product: { print_files: userProduct.print_files, design_data: userProduct.design_data, production: userProduct.production },
-    } as unknown as CartItem) : [];
-
-    const { frontHasDesign, backHasDesign } = determineRequiredSides(userProduct);
-    const missingSides: string[] = [];
-    if (frontHasDesign && !printFiles.some((file) => file.type === "default" || file.type === "front")) missingSides.push("front");
-    if (backHasDesign && !printFiles.some((file) => file.type === "back")) missingSides.push("back");
-    if (missingSides.length) {
-      return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", { userProductId: userProduct?.id ?? null, missingSides });
-    }
-
-    const quantity = Math.max(1, Number(cartRow.quantity) || 1);
-    resolvedItems.push({ cartItemId: cartRow.id, userProductId: userProduct?.id ?? cartRow.design_id ?? null, productUid, quantity, files: printFiles.filter((file) => file.type === "default" || file.type === "back") });
-    subtotal += 0;
-  }
-
-  // Rebuild the quote with exactly the same item shape used by
-  // /api/checkout/availability. The previous draft-order implementation
-  // omitted itemReferenceId from each item; the Gelato quote helper uses that
-  // shape when constructing multi-item quote payloads, which caused a valid
-  // checkout method to be followed by an empty shippingOptions array here.
-  const quoteItems = resolvedItems.map((item) => ({
-    itemReferenceId: item.cartItemId,
-    productUid: item.productUid,
-    quantity: item.quantity,
-    printFiles: item.files,
-  }));
-
-  const quote = await resolveCheckoutQuote({
-    productUid: quoteItems[0].productUid,
-    quantity: quoteItems[0].quantity,
-    shippingAddress: {
-      ...address,
-      countryCode: address.countryCode,
-    },
-    printFiles: quoteItems[0].printFiles,
-    items: quoteItems,
-    currencyIsoCode: currency,
-    orderReferenceId: `draft-${authData.user.id}-${cartItemIds.slice().sort().join("-")}`,
-    customerReferenceId: authData.user.email ?? authData.user.id,
-  });
-
-  if (process.env.NODE_ENV !== "production") {
-    const rawQuote = quote.rawQuote && typeof quote.rawQuote === "object" ? (quote.rawQuote as Record<string, unknown>) : null;
-    const rawData = rawQuote?.data && typeof rawQuote.data === "object" ? (rawQuote.data as Record<string, unknown>) : null;
-    console.info("[checkout:draft-quote-shape]", {
-      topLevelKeys: rawQuote ? Object.keys(rawQuote) : [],
-      dataKeys: rawData ? Object.keys(rawData) : [],
-      hasShippingMethods: Array.isArray(rawQuote?.shippingMethods),
-      hasShipmentMethods: Array.isArray(rawQuote?.shipmentMethods),
-      hasShippingOptions: Array.isArray(rawQuote?.shippingOptions),
-      hasQuotes: Array.isArray(rawQuote?.quotes),
+    console.info("[checkout:draft:01-request]", {
+      cartItemCount: Array.isArray(body?.cartItemIds) ? body.cartItemIds.length : 0,
+      hasAddress: Boolean(body?.address),
+      hasShippingMethod: Boolean(body?.shippingMethod),
+      selectedShippingMethod: body?.shippingMethod
+        ? {
+            id: body.shippingMethod.id ?? null,
+            code: body.shippingMethod.code ?? null,
+            shipmentMethodUid: body.shippingMethod.shipmentMethodUid ?? null,
+            name: body.shippingMethod.name ?? null,
+            price: body.shippingMethod.price ?? null,
+            currency: body.shippingMethod.currency ?? null,
+          }
+        : null,
     });
-  }
 
-  log("[checkout:draft-quote]", {
-    available: quote.available,
-    retryable: quote.retryable,
-    reason: quote.reason ?? null,
-    shippingMethodsCount: quote.shippingOptions.length,
-  });
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) {
+      console.error("[checkout:draft:02-auth-failed]", { message: authError.message ?? "Unknown auth error" });
+    }
+    console.info("[checkout:draft:02-auth]", {
+      authenticated: Boolean(authData.user?.id),
+      userIdSuffix: authData.user?.id ? authData.user.id.slice(-8) : null,
+    });
+    if (!authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  if (quote.retryable) {
+    if (!cartItemIds.length) return NextResponse.json({ code: "MISSING_CART_ITEMS", success: false }, { status: 400 });
+    if (!shippingMethodInput?.id || !shippingMethodInput.name || !shippingMethodInput.currency) {
+      return NextResponse.json({ code: "MISSING_SHIPPING_METHOD", success: false }, { status: 400 });
+    }
+    if (!address.firstName || !address.lastName || !address.email || !address.addressLine1 || !address.city || !address.postalCode || !address.countryCode) {
+      return NextResponse.json({ code: "ADDRESS_INVALID", success: false }, { status: 400 });
+    }
+
+    const { data: cartRows, error: cartError } = await supabase
+      .from("cart_items")
+      .select("id, user_id, product_id, variant_id, user_product_id, design_id, quantity, selected_variant, title")
+      .eq("user_id", authData.user.id)
+      .in("id", cartItemIds);
+    if (cartError) return NextResponse.json({ error: cartError.message }, { status: 500 });
+    if ((cartRows ?? []).length !== cartItemIds.length) return NextResponse.json({ error: "CART_OWNERSHIP_INVALID" }, { status: 403 });
+
+    console.info("[checkout:draft:03-cart-items]", {
+      requestedCount: cartItemIds.length,
+      loadedCount: cartRows?.length ?? 0,
+      items: (cartRows ?? []).map((item) => ({
+        cartItemId: item.id,
+        productId: item.product_id ?? null,
+        userProductId: item.user_product_id ?? null,
+        variantId: item.variant_id ?? null,
+        sku: null,
+        size: null,
+        quantity: item.quantity ?? null,
+        hasSelectedVariant: Boolean(item.selected_variant),
+      })),
+    });
+
+    const designIds = Array.from(new Set((cartRows ?? []).map((row) => row.design_id).filter((value): value is string => Boolean(value))));
+    const productIds = Array.from(new Set((cartRows ?? []).map((row) => row.product_id)));
+    const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
+
+    const [{ data: productRows }, { data: variantRows }, { data: userProductRows }] = await Promise.all([
+      supabase.from("products").select("id, gelato_product_uid").in("id", productIds),
+      supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, name").in("id", variantHints),
+      designIds.length
+        ? supabase.from("user_products").select("id, variant_id, gelato_product_uid, design_data, print_files, production").in("id", designIds)
+        : Promise.resolve({ data: [] as UserProductRow[] }),
+    ]);
+
+    const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
+    const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
+    const userProductMap = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
+
+    const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
+    let subtotal = 0;
+    let currency = shippingMethodInput.currency.toUpperCase();
+
+    for (const cartRow of cartRows ?? []) {
+      const userProduct = cartRow.design_id ? userProductMap.get(cartRow.design_id) ?? null : null;
+      const variantId = resolveVariantId(cartRow as CartRow, userProduct);
+      const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
+      const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
+      if (!variantId || !variant) {
+        console.error("[checkout:draft:04-variant-failed]", {
+          cartItemId: cartRow.id,
+          productId: cartRow.product_id ?? null,
+          variantId: cartRow.variant_id ?? null,
+          sku: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).sku ?? null : null,
+          size: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).size ?? null : null,
+          selectedVariantKeys:
+            cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? Object.keys(cartRow.selected_variant) : [],
+        });
+        return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
+      }
+
+      const product = productMap.get(cartRow.product_id) ?? null;
+      const productUid = resolveProductUid(variant, cartRow as CartRow, userProduct, product);
+      if (!productUid) {
+        return conflict("MISSING_PRODUCT_UID", "Unable to resolve the Gelato product UID for this cart item.", { cartItemId: cartRow.id });
+      }
+
+      const userDesignData = userProduct?.design_data && typeof userProduct.design_data === "object"
+        ? (userProduct.design_data as Record<string, unknown>)
+        : null;
+      const userSelectedVariant = userDesignData?.selectedVariant && typeof userDesignData.selectedVariant === "object"
+        ? (userDesignData.selectedVariant as Record<string, unknown>)
+        : null;
+
+      const resolutionSource =
+        variant?.gelato_product_uid
+          ? "variant"
+          : cartRow.selected_variant && typeof cartRow.selected_variant === "object" && (cartRow.selected_variant as Record<string, unknown>).gelato_product_uid
+            ? "selected_variant"
+            : userProduct?.gelato_product_uid
+              ? "user_product"
+              : product?.gelato_product_uid
+                ? "product"
+                : "missing";
+      console.info("[checkout:draft:04-variant-resolution]", {
+        cartItemId: cartRow.id,
+        originalVariantId: cartRow.variant_id ?? null,
+        selectedVariantId: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).id ?? null : null,
+        userProductVariantId: userProduct?.variant_id ?? userDesignData?.variantId ?? userSelectedVariant?.id ?? null,
+        resolvedVariantId: variant?.id ?? null,
+        resolutionSource,
+        sku: variant?.sku ?? cartRow.selected_variant?.sku ?? null,
+        size: variant?.size ?? cartRow.selected_variant?.size ?? null,
+        gelatoProductUidPresent: Boolean(productUid),
+        gelatoProductUidPrefix: typeof productUid === "string" ? productUid.slice(0, 45) : null,
+      });
+
+      const printFiles = userProduct
+        ? resolveGelatoPrintFiles({
+            id: cartRow.id,
+            user_product_id: userProduct.id,
+            design_data: userProduct.design_data,
+            designData: userProduct.design_data,
+            print_files: userProduct.print_files,
+            printFiles: userProduct.print_files,
+            production: userProduct.production,
+            product: { print_files: userProduct.print_files, design_data: userProduct.design_data, production: userProduct.production },
+          } as unknown as CartItem)
+        : [];
+
+      const { frontHasDesign, backHasDesign } = determineRequiredSides(userProduct);
+      const frontPrintFile = printFiles.find((file) => file.type === "default" || file.type === "front")?.url ?? null;
+      const backPrintFile = printFiles.find((file) => file.type === "back")?.url ?? null;
+      console.info("[checkout:draft:05-print-files]", {
+        cartItemId: cartRow.id,
+        userProductId: userProduct?.id ?? null,
+        frontHasDesign,
+        backHasDesign,
+        printFilesKeys:
+          userProduct?.print_files && typeof userProduct.print_files === "object" ? Object.keys(userProduct.print_files) : [],
+        frontExists: Boolean(frontPrintFile),
+        backExists: Boolean(backPrintFile),
+        frontProtocol: typeof frontPrintFile === "string" ? frontPrintFile.split(":")[0] : null,
+        backProtocol: typeof backPrintFile === "string" ? backPrintFile.split(":")[0] : null,
+      });
+
+      const missingSides: string[] = [];
+      if (frontHasDesign && !printFiles.some((file) => file.type === "default" || file.type === "front")) missingSides.push("front");
+      if (backHasDesign && !printFiles.some((file) => file.type === "back")) missingSides.push("back");
+      if (missingSides.length) {
+        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", { userProductId: userProduct?.id ?? null, missingSides });
+      }
+
+      const quantity = Math.max(1, Number(cartRow.quantity) || 1);
+      resolvedItems.push({ cartItemId: cartRow.id, userProductId: userProduct?.id ?? cartRow.design_id ?? null, productUid, quantity, files: printFiles.filter((file) => file.type === "default" || file.type === "back") });
+      subtotal += 0;
+    }
+
+    const quoteItems = resolvedItems.map((item) => ({
+      itemReferenceId: item.cartItemId,
+      productUid: item.productUid,
+      quantity: item.quantity,
+      printFiles: item.files,
+    }));
+
+    console.info("[checkout:draft:06-quote-items]", {
+      count: quoteItems.length,
+      items: quoteItems.map((item) => ({
+        itemReferenceId: item.itemReferenceId ?? null,
+        productUidPresent: Boolean(item.productUid),
+        productUidPrefix: typeof item.productUid === "string" ? item.productUid.slice(0, 50) : null,
+        quantity: item.quantity,
+        printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : 0,
+        printFileTypes: Array.isArray(item.printFiles) ? item.printFiles.map((file) => file.type) : [],
+        printFileProtocols: Array.isArray(item.printFiles)
+          ? item.printFiles.map((file) => (typeof file.url === "string" ? file.url.split(":")[0] : null))
+          : [],
+      })),
+    });
+
+    console.info("[checkout:draft:07-address]", {
+      countryCode: address.countryCode ?? null,
+      postalCodeLength: address.postalCode?.length ?? 0,
+      cityPresent: Boolean(address.city),
+      addressLine1Present: Boolean(address.addressLine1),
+      statePresent: Boolean(address.state),
+      emailPresent: Boolean(address.email),
+      phonePresent: Boolean(address.phone),
+    });
+
+    const quotePayload = {
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress: {
+        ...address,
+        countryCode: address.countryCode,
+      },
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: currency,
+      orderReferenceId: `draft-${authData.user.id}-${cartItemIds.slice().sort().join("-")}`,
+      customerReferenceId: authData.user.email ?? authData.user.id,
+    };
+
+    const safeQuotePayload = {
+      ...quotePayload,
+      shippingAddress: quotePayload.shippingAddress
+        ? {
+            country: quotePayload.shippingAddress.countryCode ?? null,
+            postCodePresent: Boolean(quotePayload.shippingAddress.postalCode),
+            cityPresent: Boolean(quotePayload.shippingAddress.city),
+            addressLine1Present: Boolean(quotePayload.shippingAddress.addressLine1),
+          }
+        : null,
+      items: Array.isArray(quotePayload.items)
+        ? quotePayload.items.map((item) => ({
+            itemReferenceId: item.itemReferenceId ?? null,
+            productUid: item.productUid ?? null,
+            quantity: item.quantity ?? null,
+            files: Array.isArray(item.printFiles)
+              ? item.printFiles.map((file) => ({
+                  type: file.type,
+                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
+                }))
+              : undefined,
+            printFiles: Array.isArray(item.printFiles)
+              ? item.printFiles.map((file) => ({
+                  type: file.type,
+                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
+                }))
+              : undefined,
+          }))
+        : [],
+    };
+
+    console.info("[checkout:draft:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
+
+    const quote = await resolveCheckoutQuote(quotePayload);
+
+    if (process.env.NODE_ENV !== "production") {
+      const rawQuote = quote.rawQuote && typeof quote.rawQuote === "object" ? (quote.rawQuote as Record<string, unknown>) : null;
+      const rawData = rawQuote?.data && typeof rawQuote.data === "object" ? (rawQuote.data as Record<string, unknown>) : null;
+      console.info("[checkout:draft:11-quote-shape]", {
+        responseKeys: rawQuote ? Object.keys(rawQuote) : [],
+        dataKeys: rawData ? Object.keys(rawData) : [],
+        shippingMethodsCount: quote.shippingOptions.length,
+      });
+    }
+
+    log("[checkout:draft-quote]", {
+      available: quote.available,
+      retryable: quote.retryable,
+      reason: quote.reason ?? null,
+      shippingMethodsCount: quote.shippingOptions.length,
+    });
+
+    console.info("[checkout:draft:09-gelato-http]", {
+      status: quote.httpStatus,
+      ok: quote.httpStatus ? quote.httpStatus >= 200 && quote.httpStatus < 300 : null,
+      contentType: quote.contentType,
+      bodyLength: quote.bodyLength,
+    });
+
+    if (quote.errorCode || quote.errorMessage || quote.requestId || quote.details) {
+      console.error("[checkout:draft:10-gelato-error]", {
+        httpStatus: quote.httpStatus,
+        code: quote.errorCode ?? null,
+        message: quote.errorMessage ?? null,
+        requestId: quote.requestId ?? null,
+        details: quote.details ?? null,
+        responseKeys: quote.responseKeys,
+      });
+    }
+
+    if (quote.retryable) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "GELATO_QUOTE_FAILED",
+          message: "Shipping could not be recalculated for the draft order.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!quote.available || quote.shippingOptions.length === 0) {
+      return conflict(
+        "INVALID_QUOTE_RESPONSE",
+        "Gelato did not return shipping methods for the validated cart and address.",
+        {
+          responseKeys: quote.responseKeys,
+          quoteReason: quote.quoteReason ?? quote.reason ?? null,
+          quoteItemCount: quoteItems.length,
+        },
+      );
+    }
+
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+    for (const method of shippingMethods) {
+      console.info("[checkout:draft:11-shipping-method]", {
+        id: method.id,
+        code: method.code ?? null,
+        shipmentMethodUid: method.shipmentMethodUid ?? null,
+        name: method.name,
+        price: method.price,
+        currency: method.currency,
+      });
+    }
+    const matched =
+      shippingMethods.find(
+        (method) =>
+          shippingMethodInput.shipmentMethodUid &&
+          method.shipmentMethodUid &&
+          method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
+      ) ??
+      shippingMethods.find((method) => method.code && shippingMethodInput.code && method.code === shippingMethodInput.code) ??
+      shippingMethods.find((method) => method.id === shippingMethodInput.id) ??
+      shippingMethods.find(
+        (method) =>
+          method.name.trim().toLowerCase() === shippingMethodInput.name.trim().toLowerCase() &&
+          method.currency === shippingMethodInput.currency,
+      ) ??
+      null;
+
+    console.info("[checkout:draft:12-shipping-match]", {
+      selectedId: shippingMethodInput.id ?? null,
+      selectedCode: shippingMethodInput.code ?? null,
+      selectedShipmentMethodUid: shippingMethodInput.shipmentMethodUid ?? null,
+      availableCount: shippingMethods.length,
+      matched: Boolean(matched),
+      matchedId: matched?.id ?? null,
+      matchedCode: matched?.code ?? null,
+      matchedShipmentMethodUid: matched?.shipmentMethodUid ?? null,
+    });
+
+    if (!matched) {
+      return conflict("SHIPPING_METHOD_EXPIRED", "The selected shipping method is no longer available.", {
+        selectedId: shippingMethodInput.id,
+        selectedCode: shippingMethodInput.code ?? null,
+        availableIds: shippingMethods.map((method) => method.id),
+        availableCodes: shippingMethods.map((method) => method.code ?? null),
+      });
+    }
+
+    const selectedMinor = Math.round(Number(shippingMethodInput.price) * 100);
+    const validatedMinor = Math.round(Number(matched.price) * 100);
+    const priceChanged =
+      selectedMinor !== validatedMinor ||
+      matched.currency.toUpperCase() !== shippingMethodInput.currency.toUpperCase();
+    if (priceChanged) {
+      return conflict("SHIPPING_METHOD_CHANGED", "The selected shipping price has changed.", {
+        selectedId: shippingMethodInput.id,
+        selectedCode: shippingMethodInput.code ?? null,
+        selectedPrice: shippingMethodInput.price,
+        validatedPrice: matched.price,
+        selectedCurrency: shippingMethodInput.currency,
+        validatedCurrency: matched.currency,
+      });
+    }
+
+    const idempotencyKey = hashIdempotencyKey({
+      userId: authData.user.id,
+      cartItemIds: [...cartItemIds].sort(),
+      postalCode: address.postalCode,
+      countryCode: address.countryCode,
+      shippingMethodId: shippingMethodInput.id,
+    });
+
+    const { data: existingDraft } = await supabase
+      .from("checkout_drafts")
+      .select("id, gelato_draft_order_id, shipping_method, subtotal, shipping_amount, total, currency")
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle();
+
+    if (existingDraft?.gelato_draft_order_id) {
+      return NextResponse.json({
+        success: true,
+        draftOrderId: existingDraft.id,
+        gelatoDraftOrderId: existingDraft.gelato_draft_order_id,
+        shippingMethod: shippingMethodInput,
+        subtotal: existingDraft.subtotal ?? 0,
+        shipping: existingDraft.shipping_amount ?? matched.price,
+        total: existingDraft.total ?? matched.price,
+        currency: existingDraft.currency ?? matched.currency,
+      });
+    }
+
+    const gelatoPayload = gelatoRequestPayload({
+      idempotencyKey,
+      currency,
+      shippingMethod: matched,
+      address,
+      items: resolvedItems,
+      email: authData.user.email ?? authData.user.id,
+    });
+
+    console.info("[checkout:draft:13-create-start]", {
+      itemCount: gelatoPayload.items.length,
+      shipmentMethodUidPresent: Boolean(gelatoPayload.shipmentMethodUid),
+      currency: gelatoPayload.currency,
+    });
+
+    log("[checkout:variant-resolution]", { itemCount: resolvedItems.length });
+    log("[checkout:shipping-validation]", { shippingMethodId: matched.id, shippingMethodCode: matched.code ?? null });
+
+    const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
+    if (!gelatoApiKey) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
+
+    const gelatoResponse = await fetch(new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
+      body: JSON.stringify(gelatoPayload),
+      cache: "no-store",
+    });
+
+    const gelatoStatus = gelatoResponse.status;
+    const gelatoContentType = gelatoResponse.headers.get("content-type");
+    const gelatoRawText = await gelatoResponse.text();
+    console.info("[checkout:draft:14-create-response]", {
+      status: gelatoStatus,
+      ok: gelatoResponse.ok,
+      responseKeys: [],
+    });
+    console.info("[checkout:draft:09-gelato-http]", {
+      status: gelatoStatus,
+      ok: gelatoResponse.ok,
+      contentType: gelatoContentType,
+      bodyLength: gelatoRawText.length,
+    });
+    let gelatoBody: unknown = null;
+    try {
+      gelatoBody = gelatoRawText ? JSON.parse(gelatoRawText) : null;
+    } catch {
+      console.error("[checkout:draft:09-invalid-json]", {
+        status: gelatoStatus,
+        bodyPreview: gelatoRawText.slice(0, 500),
+      });
+    }
+    const gelatoError = gelatoBody && typeof gelatoBody === "object" ? (gelatoBody as Record<string, unknown>) : null;
+    if (!gelatoResponse.ok) {
+      console.error("[checkout:draft:10-gelato-error]", {
+        httpStatus: gelatoStatus,
+        code: gelatoError?.code ?? null,
+        message: gelatoError?.message ?? null,
+        requestId: gelatoError?.requestId ?? null,
+        details: gelatoError?.details ?? null,
+        responseKeys: gelatoError ? Object.keys(gelatoError) : [],
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          code: "GELATO_QUOTE_FAILED",
+          message: typeof gelatoError?.message === "string" ? gelatoError.message : "Gelato quote failed.",
+          gelatoCode: gelatoError?.code ?? null,
+          gelatoRequestId: gelatoError?.requestId ?? null,
+          gelatoDetails: gelatoError?.details ?? null,
+        },
+        { status: 502 },
+      );
+    }
+
+    const gelatoDraftOrderId = String((gelatoBody as Record<string, unknown> | null)?.id ?? (gelatoBody as Record<string, unknown> | null)?.orderId ?? (gelatoBody as Record<string, unknown> | null)?.draftOrderId ?? "");
+    const draftRow = {
+      user_id: authData.user.id,
+      cart_item_ids: cartItemIds,
+      idempotency_key: idempotencyKey,
+      status: "draft",
+      gelato_draft_order_id: gelatoDraftOrderId,
+      selected_shipping_method: {
+        id: matched.id,
+        code: matched.code,
+        name: matched.name,
+        price: matched.price,
+        currency: matched.currency,
+      },
+      shipping_address: address,
+      subtotal,
+      shipping_amount: matched.price,
+      total: subtotal + matched.price,
+      currency: matched.currency,
+      gelato_response: {
+        id: gelatoDraftOrderId,
+        status: gelatoStatus,
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: savedDraft, error: saveError } = await supabase
+      .from("checkout_drafts")
+      .upsert(draftRow, { onConflict: "idempotency_key" })
+      .select("id, gelato_draft_order_id")
+      .single();
+
+    if (saveError || !savedDraft) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
+
+    log("[checkout:draft-created]", { draftOrderId: savedDraft.id });
+
+    return NextResponse.json({
+      success: true,
+      draftOrderId: savedDraft.id,
+      gelatoDraftOrderId,
+      shippingMethod: {
+        id: matched.id,
+        code: matched.code,
+        name: matched.name,
+        price: matched.price,
+        currency: matched.currency,
+      },
+      subtotal,
+      shipping: matched.price,
+      total: subtotal + matched.price,
+      currency: matched.currency,
+    });
+  } catch (error) {
+    console.error("[checkout:draft:99-unhandled]", {
+      name: error instanceof Error ? error.name : null,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : null,
+    });
     return NextResponse.json(
       {
         success: false,
-        code: "GELATO_QUOTE_FAILED",
-        message: "Shipping could not be recalculated for the draft order.",
+        code: "GELATO_DRAFT_FAILED",
+        message: error instanceof Error ? error.message : "Unexpected checkout draft error.",
       },
-      { status: 503 },
+      { status: 500 },
     );
   }
-
-  if (!quote.available || quote.shippingOptions.length === 0) {
-    return conflict(
-      "INVALID_QUOTE_RESPONSE",
-      "Gelato did not return shipping methods for the validated cart and address.",
-      {
-        responseKeys: quote.responseKeys,
-        quoteReason: quote.quoteReason ?? quote.reason ?? null,
-        quoteItemCount: quoteItems.length,
-      },
-    );
-  }
-
-  const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
-  const matched =
-    shippingMethods.find(
-      (method) =>
-        shippingMethodInput.shipmentMethodUid &&
-        method.shipmentMethodUid &&
-        method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
-    ) ??
-    shippingMethods.find((method) => method.code && shippingMethodInput.code && method.code === shippingMethodInput.code) ??
-    shippingMethods.find((method) => method.id === shippingMethodInput.id) ??
-    shippingMethods.find(
-      (method) =>
-        method.name.trim().toLowerCase() === shippingMethodInput.name.trim().toLowerCase() &&
-        method.currency === shippingMethodInput.currency,
-    ) ??
-    null;
-  if (!matched) {
-    return conflict("SHIPPING_METHOD_EXPIRED", "The selected shipping method is no longer available.", {
-      selectedId: shippingMethodInput.id,
-      selectedCode: shippingMethodInput.code ?? null,
-      availableIds: shippingMethods.map((method) => method.id),
-      availableCodes: shippingMethods.map((method) => method.code ?? null),
-    });
-  }
-
-  const selectedMinor = Math.round(Number(shippingMethodInput.price) * 100);
-  const validatedMinor = Math.round(Number(matched.price) * 100);
-  const priceChanged =
-    selectedMinor !== validatedMinor ||
-    matched.currency.toUpperCase() !== shippingMethodInput.currency.toUpperCase();
-  if (priceChanged) {
-    return conflict("SHIPPING_METHOD_CHANGED", "The selected shipping price has changed.", {
-      selectedId: shippingMethodInput.id,
-      selectedCode: shippingMethodInput.code ?? null,
-      selectedPrice: shippingMethodInput.price,
-      validatedPrice: matched.price,
-      selectedCurrency: shippingMethodInput.currency,
-      validatedCurrency: matched.currency,
-    });
-  }
-
-  const idempotencyKey = hashIdempotencyKey({
-    userId: authData.user.id,
-    cartItemIds: [...cartItemIds].sort(),
-    postalCode: address.postalCode,
-    countryCode: address.countryCode,
-    shippingMethodId: shippingMethodInput.id,
-  });
-
-  const { data: existingDraft } = await supabase
-    .from("checkout_drafts")
-    .select("id, gelato_draft_order_id, shipping_method, subtotal, shipping_amount, total, currency")
-    .eq("idempotency_key", idempotencyKey)
-    .maybeSingle();
-
-  if (existingDraft?.gelato_draft_order_id) {
-    return NextResponse.json({
-      success: true,
-      draftOrderId: existingDraft.id,
-      gelatoDraftOrderId: existingDraft.gelato_draft_order_id,
-      shippingMethod: shippingMethodInput,
-      subtotal: existingDraft.subtotal ?? 0,
-      shipping: existingDraft.shipping_amount ?? matched.price,
-      total: existingDraft.total ?? matched.price,
-      currency: existingDraft.currency ?? matched.currency,
-    });
-  }
-
-  const gelatoPayload = gelatoRequestPayload({
-    idempotencyKey,
-    currency,
-    shippingMethod: matched,
-    address,
-    items: resolvedItems,
-    email: authData.user.email ?? authData.user.id,
-  });
-
-  log("[checkout:variant-resolution]", { itemCount: resolvedItems.length });
-  log("[checkout:shipping-validation]", { shippingMethodId: matched.id, shippingMethodCode: matched.code ?? null });
-
-  const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
-  if (!gelatoApiKey) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
-
-  const gelatoResponse = await fetch(new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
-    body: JSON.stringify(gelatoPayload),
-    cache: "no-store",
-  });
-
-  const gelatoResult = await gelatoResponse.json().catch(() => null);
-  if (!gelatoResponse.ok) {
-    log("[checkout:draft-failed]", { status: gelatoResponse.status });
-    return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 502 });
-  }
-
-  const gelatoDraftOrderId = String(gelatoResult?.id ?? gelatoResult?.orderId ?? gelatoResult?.draftOrderId ?? "");
-  const draftRow = {
-    user_id: authData.user.id,
-    cart_item_ids: cartItemIds,
-    idempotency_key: idempotencyKey,
-    status: "draft",
-    gelato_draft_order_id: gelatoDraftOrderId,
-    selected_shipping_method: {
-      id: matched.id,
-      code: matched.code,
-      name: matched.name,
-      price: matched.price,
-      currency: matched.currency,
-    },
-    shipping_address: address,
-    subtotal,
-    shipping_amount: matched.price,
-    total: subtotal + matched.price,
-    currency: matched.currency,
-    gelato_response: {
-      id: gelatoDraftOrderId,
-      status: gelatoResponse.status,
-    },
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: savedDraft, error: saveError } = await supabase
-    .from("checkout_drafts")
-    .upsert(draftRow, { onConflict: "idempotency_key" })
-    .select("id, gelato_draft_order_id")
-    .single();
-
-  if (saveError || !savedDraft) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
-
-  log("[checkout:draft-created]", { draftOrderId: savedDraft.id });
-
-  return NextResponse.json({
-    success: true,
-    draftOrderId: savedDraft.id,
-    gelatoDraftOrderId,
-    shippingMethod: {
-      id: matched.id,
-      code: matched.code,
-      name: matched.name,
-      price: matched.price,
-      currency: matched.currency,
-    },
-    subtotal,
-    shipping: matched.price,
-    total: subtotal + matched.price,
-    currency: matched.currency,
-  });
 }

@@ -357,6 +357,73 @@ export async function POST(req: Request) {
       );
     }
 
+    console.info("[checkout:availability:06-quote-items]", {
+      count: quoteItems.length,
+      items: quoteItems.map((item) => ({
+        itemReferenceId: item.itemReferenceId ?? null,
+        productUidPresent: Boolean(item.productUid),
+        productUidPrefix: typeof item.productUid === "string" ? item.productUid.slice(0, 50) : null,
+        quantity: item.quantity,
+        printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : 0,
+        printFileTypes: Array.isArray(item.printFiles) ? item.printFiles.map((file) => file.type) : [],
+        printFileProtocols: Array.isArray(item.printFiles)
+          ? item.printFiles.map((file) => (typeof file.url === "string" ? file.url.split(":")[0] : null))
+          : [],
+      })),
+    });
+
+    console.info("[checkout:availability:07-address]", {
+      countryCode: shippingAddress.countryCode ?? null,
+      postalCodeLength: shippingAddress.postalCode?.length ?? 0,
+      cityPresent: Boolean(shippingAddress.city),
+      addressLine1Present: Boolean(shippingAddress.addressLine1),
+      statePresent: Boolean(shippingAddress.state),
+      emailPresent: Boolean(shippingAddress.email),
+      phonePresent: Boolean(shippingAddress.phone),
+    });
+
+    const quotePayload = {
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress,
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: safeText(body?.currency) || "EUR",
+      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
+      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+    };
+    const safeQuotePayload = {
+      ...quotePayload,
+      shippingAddress: quotePayload.shippingAddress
+        ? {
+            country: quotePayload.shippingAddress.countryCode ?? null,
+            postCodePresent: Boolean(quotePayload.shippingAddress.postalCode),
+            cityPresent: Boolean(quotePayload.shippingAddress.city),
+            addressLine1Present: Boolean(quotePayload.shippingAddress.addressLine1),
+          }
+        : null,
+      items: Array.isArray(quotePayload.items)
+        ? quotePayload.items.map((item) => ({
+            itemReferenceId: item.itemReferenceId ?? null,
+            productUid: item.productUid ?? null,
+            quantity: item.quantity ?? null,
+            files: Array.isArray(item.printFiles)
+              ? item.printFiles.map((file) => ({
+                  type: file.type,
+                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
+                }))
+              : undefined,
+            printFiles: Array.isArray(item.printFiles)
+              ? item.printFiles.map((file) => ({
+                  type: file.type,
+                  protocol: typeof file.url === "string" ? file.url.split(":")[0] : null,
+                }))
+              : undefined,
+          }))
+        : [],
+    };
+    console.info("[checkout:availability:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
+
     if (process.env.NODE_ENV !== "production") {
       console.log(
         "[GELATO_QUOTE_CALL_START]",
@@ -368,16 +435,24 @@ export async function POST(req: Request) {
       );
     }
 
-    const quote = await resolveCheckoutQuote({
-      productUid: quoteItems[0].productUid,
-      quantity: quoteItems[0].quantity,
-      shippingAddress,
-      printFiles: quoteItems[0].printFiles,
-      items: quoteItems,
-      currencyIsoCode: safeText(body?.currency) || "EUR",
-      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
-      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+    const quote = await resolveCheckoutQuote(quotePayload);
+
+    console.info("[checkout:availability:09-gelato-http]", {
+      status: quote.httpStatus,
+      ok: quote.httpStatus ? quote.httpStatus >= 200 && quote.httpStatus < 300 : null,
+      contentType: quote.contentType,
+      bodyLength: quote.bodyLength,
     });
+    if (quote.errorCode || quote.errorMessage || quote.requestId || quote.details) {
+      console.error("[checkout:availability:10-gelato-error]", {
+        httpStatus: quote.httpStatus,
+        code: quote.errorCode ?? null,
+        message: quote.errorMessage ?? null,
+        requestId: quote.requestId ?? null,
+        details: quote.details ?? null,
+        responseKeys: quote.responseKeys,
+      });
+    }
 
     if (process.env.NODE_ENV !== "production") {
       console.log(
@@ -417,6 +492,24 @@ export async function POST(req: Request) {
     }
 
     const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+    console.info("[checkout:availability:11-quote-shape]", {
+      responseKeys: quote.rawQuote && typeof quote.rawQuote === "object" ? Object.keys(quote.rawQuote as Record<string, unknown>) : [],
+      dataKeys:
+        quote.rawQuote && typeof quote.rawQuote === "object" && (quote.rawQuote as Record<string, unknown>).data && typeof (quote.rawQuote as Record<string, unknown>).data === "object"
+          ? Object.keys((quote.rawQuote as Record<string, unknown>).data as Record<string, unknown>)
+          : [],
+      shippingMethodsCount: shippingMethods.length,
+    });
+    for (const method of shippingMethods) {
+      console.info("[checkout:availability:11-shipping-method]", {
+        id: method.id,
+        code: method.code ?? null,
+        shipmentMethodUid: method.shipmentMethodUid ?? null,
+        name: method.name,
+        price: method.price,
+        currency: method.currency,
+      });
+    }
 
     return NextResponse.json({
       ok: true,

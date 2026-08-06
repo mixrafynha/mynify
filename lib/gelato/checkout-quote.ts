@@ -61,6 +61,13 @@ export type ResolvedGelatoCheckoutQuote = NormalizedGelatoQuote & {
   rawQuote: unknown;
   responseKeys: string[];
   quoteReason: string | null;
+  httpStatus: number | null;
+  contentType: string | null;
+  bodyLength: number | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  requestId: string | null;
+  details: unknown;
 };
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
@@ -136,6 +143,13 @@ function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
       rawQuote: raw ?? null,
       responseKeys: [],
       quoteReason: "invalid_quote_response",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   }
 
@@ -181,6 +195,13 @@ function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
     rawQuote: raw,
     responseKeys,
     quoteReason: shippingOptions.length > 0 ? null : "invalid_quote_response",
+    httpStatus: null,
+    contentType: null,
+    bodyLength: null,
+    errorCode: null,
+    errorMessage: null,
+    requestId: null,
+    details: null,
   };
 }
 
@@ -200,6 +221,13 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Resolv
       rawQuote: payload,
       responseKeys: [],
       quoteReason: "temporary_gelato_error",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   }
 
@@ -214,6 +242,13 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Resolv
       rawQuote: payload,
       responseKeys: [],
       quoteReason: "invalid_address",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   }
 
@@ -228,6 +263,13 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Resolv
       rawQuote: payload,
       responseKeys: [],
       quoteReason: "product_not_supported",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   }
 
@@ -241,6 +283,13 @@ function classifyQuoteFailure(status: number, payload: JsonValue | null): Resolv
     rawQuote: payload,
     responseKeys: [],
     quoteReason: "invalid_quote_response",
+    httpStatus: null,
+    contentType: null,
+    bodyLength: null,
+    errorCode: null,
+    errorMessage: null,
+    requestId: null,
+    details: null,
   };
 }
 
@@ -300,6 +349,13 @@ export async function resolveCheckoutQuote(
       rawQuote: null,
       responseKeys: [],
       quoteReason: "temporary_gelato_error",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   }
 
@@ -374,6 +430,7 @@ export async function resolveCheckoutQuote(
     });
 
     const rawText = await response.text();
+    const contentType = response.headers.get("content-type");
     const rawPreview = rawText.slice(0, 500);
     let rawJson: JsonValue | null = null;
     let jsonParseFailed = false;
@@ -390,7 +447,7 @@ export async function resolveCheckoutQuote(
       httpStatus: response.status,
       ok: response.ok,
       durationMs: Date.now() - startedAt,
-      contentType: response.headers.get("content-type"),
+      contentType,
       bodyLength: rawText.length,
       bodyPreview: rawPreview,
     });
@@ -404,6 +461,7 @@ export async function resolveCheckoutQuote(
 
     if (!response.ok) {
       const classification = classifyGelatoHttpFailure(response.status);
+      const errorObject = rawJson && typeof rawJson === "object" ? (rawJson as Record<string, unknown>) : null;
       return {
         available: false,
         retryable: classification.retryable,
@@ -414,6 +472,13 @@ export async function resolveCheckoutQuote(
         rawQuote: rawJson,
         responseKeys: rawJson && typeof rawJson === "object" ? Object.keys(rawJson as Record<string, unknown>) : [],
         quoteReason: classification.reason,
+        httpStatus: response.status,
+        contentType,
+        bodyLength: rawText.length,
+        errorCode: typeof errorObject?.code === "string" ? errorObject.code : null,
+        errorMessage: typeof errorObject?.message === "string" ? errorObject.message : null,
+        requestId: typeof errorObject?.requestId === "string" ? errorObject.requestId : null,
+        details: errorObject?.details ?? null,
       };
     }
 
@@ -455,6 +520,13 @@ export async function resolveCheckoutQuote(
       rawQuote: null,
       responseKeys: [],
       quoteReason: "temporary_gelato_error",
+      httpStatus: null,
+      contentType: null,
+      bodyLength: null,
+      errorCode: null,
+      errorMessage: null,
+      requestId: null,
+      details: null,
     };
   } finally {
     clearTimeout(timeoutId);
