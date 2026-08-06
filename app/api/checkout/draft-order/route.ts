@@ -60,11 +60,12 @@ type VariantRow = {
 
 type UserProductRow = {
   id: string;
+  user_id: string | null;
   variant_id: string | null;
   gelato_product_uid: string | null;
   design_data: Record<string, unknown> | null;
   print_files: Record<string, unknown> | null;
-  production: Record<string, unknown> | null;
+  mockups: Record<string, unknown> | null;
 };
 
 type GelatoFile = { type: string; url: string };
@@ -201,10 +202,30 @@ function collectFiles(value: unknown): GelatoFile[] {
   return files;
 }
 
+function asUrl(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  if (typeof record.url === "string" && record.url.trim()) return record.url.trim();
+  if (typeof record.fileUrl === "string" && record.fileUrl.trim()) return record.fileUrl.trim();
+  if (typeof record.printFileUrl === "string" && record.printFileUrl.trim()) return record.printFileUrl.trim();
+  return null;
+}
+
 function determineRequiredSides(userProduct: UserProductRow | null) {
-  const designData = userProduct?.design_data;
-  const frontHasDesign = Boolean(designData && typeof designData === "object" && extractBoolean((designData as Record<string, unknown>).frontHasDesign));
-  const backHasDesign = Boolean(designData && typeof designData === "object" && extractBoolean((designData as Record<string, unknown>).backHasDesign));
+  const designData = userProduct?.design_data && typeof userProduct.design_data === "object" ? (userProduct.design_data as Record<string, unknown>) : null;
+  const frontElements = designData?.sides && typeof designData.sides === "object"
+    ? (designData.sides as Record<string, unknown>).front && typeof (designData.sides as Record<string, unknown>).front === "object"
+      ? ((designData.sides as Record<string, unknown>).front as Record<string, unknown>).elements
+      : null
+    : null;
+  const backElements = designData?.sides && typeof designData.sides === "object"
+    ? (designData.sides as Record<string, unknown>).back && typeof (designData.sides as Record<string, unknown>).back === "object"
+      ? ((designData.sides as Record<string, unknown>).back as Record<string, unknown>).elements
+      : null
+    : null;
+  const frontHasDesign = Array.isArray(frontElements) && frontElements.length > 0;
+  const backHasDesign = Array.isArray(backElements) && backElements.length > 0;
   return { frontHasDesign, backHasDesign };
 }
 
@@ -324,28 +345,75 @@ export async function POST(req: Request) {
       })),
     });
 
+    const userProductIds = Array.from(
+      new Set(
+        (cartRows ?? [])
+          .map((item) => item.user_product_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0),
+      ),
+    );
     const designIds = Array.from(new Set((cartRows ?? []).map((row) => row.design_id).filter((value): value is string => Boolean(value))));
     const productIds = Array.from(new Set((cartRows ?? []).map((row) => row.product_id)));
     const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
 
-    const [{ data: productRows }, { data: variantRows }, { data: userProductRows }] = await Promise.all([
-      supabase.from("products").select("id, gelato_product_uid").in("id", productIds),
-      supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, name").in("id", variantHints),
-      designIds.length
-        ? supabase.from("user_products").select("id, variant_id, gelato_product_uid, design_data, print_files, production").in("id", designIds)
-        : Promise.resolve({ data: [] as UserProductRow[] }),
+    const productRowsPromise = supabase.from("products").select("id, gelato_product_uid").in("id", productIds);
+    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, name").in("id", variantHints);
+    const userProductRowsPromise = userProductIds.length
+      ? supabase
+          .from("user_products")
+          .select("id, user_id, variant_id, design_data, print_files, mockups")
+          .eq("user_id", authData.user.id)
+          .in("id", userProductIds)
+      : Promise.resolve({ data: [] as UserProductRow[], error: null });
+
+    const [{ data: productRows }, { data: variantRows }, userProductResult] = await Promise.all([
+      productRowsPromise,
+      variantRowsPromise,
+      userProductRowsPromise,
     ]);
+    const userProductRows = "data" in userProductResult ? userProductResult.data : [];
+    const userProductRowsError = "error" in userProductResult ? userProductResult.error : null;
+
+    if (userProductRowsError) {
+      console.error("[checkout:draft:user-products-query-failed]", {
+        message: userProductRowsError.message,
+        code: userProductRowsError.code,
+        requestedCount: userProductIds.length,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          code: "USER_PRODUCTS_QUERY_FAILED",
+          message: "Unable to load user products for checkout draft.",
+        },
+        { status: 500 },
+      );
+    }
 
     const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
     const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
-    const userProductMap = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
+    const userProductById = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
 
     const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
     let subtotal = 0;
     let currency = shippingMethodInput.currency.toUpperCase();
 
     for (const cartRow of cartRows ?? []) {
-      const userProduct = cartRow.design_id ? userProductMap.get(cartRow.design_id) ?? null : null;
+      const userProductId = cartRow.user_product_id;
+      const userProduct =
+        typeof userProductId === "string"
+          ? userProductById.get(userProductId) ?? null
+          : null;
+      const legacyDesignUserProduct = !userProduct && cartRow.design_id ? userProductById.get(cartRow.design_id) ?? null : null;
+      const resolvedUserProduct = userProduct ?? legacyDesignUserProduct;
+      console.info("[checkout:draft:user-product-resolution]", {
+        cartItemId: cartRow.id,
+        requestedUserProductId: cartRow.user_product_id ?? null,
+        found: Boolean(resolvedUserProduct),
+        resolvedUserProductId: resolvedUserProduct?.id ?? null,
+        loadedUserProductsCount: userProductRows?.length ?? 0,
+        loadedUserProductIds: (userProductRows ?? []).map((item) => item.id),
+      });
       const variantId = resolveVariantId(cartRow as CartRow, userProduct);
       const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
       const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
@@ -398,44 +466,71 @@ export async function POST(req: Request) {
         gelatoProductUidPrefix: typeof productUid === "string" ? productUid.slice(0, 45) : null,
       });
 
-      const printFiles = userProduct
+      const printFiles = resolvedUserProduct
         ? resolveGelatoPrintFiles({
             id: cartRow.id,
-            user_product_id: userProduct.id,
-            design_data: userProduct.design_data,
-            designData: userProduct.design_data,
-            print_files: userProduct.print_files,
-            printFiles: userProduct.print_files,
-            production: userProduct.production,
-            product: { print_files: userProduct.print_files, design_data: userProduct.design_data, production: userProduct.production },
+            user_product_id: resolvedUserProduct.id,
+            design_data: resolvedUserProduct.design_data,
+            designData: resolvedUserProduct.design_data,
+            print_files: resolvedUserProduct.print_files,
+            printFiles: resolvedUserProduct.print_files,
+            production: resolvedUserProduct.mockups ?? null,
+            product: { print_files: resolvedUserProduct.print_files, design_data: resolvedUserProduct.design_data, production: resolvedUserProduct.mockups ?? null },
           } as unknown as CartItem)
         : [];
 
-      const { frontHasDesign, backHasDesign } = determineRequiredSides(userProduct);
-      const frontPrintFile = printFiles.find((file) => file.type === "default" || file.type === "front")?.url ?? null;
-      const backPrintFile = printFiles.find((file) => file.type === "back")?.url ?? null;
+      const designData = resolvedUserProduct?.design_data && typeof resolvedUserProduct.design_data === "object"
+        ? (resolvedUserProduct.design_data as Record<string, unknown>)
+        : null;
+      const frontElements = designData?.sides && typeof designData.sides === "object" && (designData.sides as Record<string, unknown>).front && typeof (designData.sides as Record<string, unknown>).front === "object"
+        ? ((designData.sides as Record<string, unknown>).front as Record<string, unknown>).elements
+        : null;
+      const backElements = designData?.sides && typeof designData.sides === "object" && (designData.sides as Record<string, unknown>).back && typeof (designData.sides as Record<string, unknown>).back === "object"
+        ? ((designData.sides as Record<string, unknown>).back as Record<string, unknown>).elements
+        : null;
+      const frontHasDesign = Array.isArray(frontElements) && frontElements.length > 0;
+      const backHasDesign = Array.isArray(backElements) && backElements.length > 0;
+      const printFilesRecord = resolvedUserProduct?.print_files && typeof resolvedUserProduct.print_files === "object"
+        ? (resolvedUserProduct.print_files as Record<string, unknown>)
+        : {};
+      const frontPrintFile =
+        asUrl(printFilesRecord.front) ??
+        asUrl(printFilesRecord.default) ??
+        asUrl(printFilesRecord.front_url) ??
+        asUrl((designData?.printFiles as Record<string, unknown> | undefined)?.front) ??
+        asUrl((designData?.production as Record<string, unknown> | undefined)?.front) ??
+        null;
+      const backPrintFile =
+        asUrl(printFilesRecord.back) ??
+        asUrl(printFilesRecord.back_url) ??
+        asUrl((designData?.printFiles as Record<string, unknown> | undefined)?.back) ??
+        asUrl((designData?.production as Record<string, unknown> | undefined)?.back) ??
+        null;
       console.info("[checkout:draft:05-print-files]", {
         cartItemId: cartRow.id,
-        userProductId: userProduct?.id ?? null,
+        userProductId: resolvedUserProduct?.id ?? null,
         frontHasDesign,
         backHasDesign,
-        printFilesKeys:
-          userProduct?.print_files && typeof userProduct.print_files === "object" ? Object.keys(userProduct.print_files) : [],
+        printFilesKeys: Object.keys(printFilesRecord),
         frontExists: Boolean(frontPrintFile),
         backExists: Boolean(backPrintFile),
         frontProtocol: typeof frontPrintFile === "string" ? frontPrintFile.split(":")[0] : null,
         backProtocol: typeof backPrintFile === "string" ? backPrintFile.split(":")[0] : null,
       });
 
-      const missingSides: string[] = [];
-      if (frontHasDesign && !printFiles.some((file) => file.type === "default" || file.type === "front")) missingSides.push("front");
-      if (backHasDesign && !printFiles.some((file) => file.type === "back")) missingSides.push("back");
-      if (missingSides.length) {
-        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", { userProductId: userProduct?.id ?? null, missingSides });
+      if (!frontPrintFile && !backPrintFile) {
+        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
+          userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+          missingSides: frontHasDesign ? ["front"] : [],
+        });
       }
 
       const quantity = Math.max(1, Number(cartRow.quantity) || 1);
-      resolvedItems.push({ cartItemId: cartRow.id, userProductId: userProduct?.id ?? cartRow.design_id ?? null, productUid, quantity, files: printFiles.filter((file) => file.type === "default" || file.type === "back") });
+      const resolvedPrintFiles = [
+        ...(frontPrintFile ? [{ type: "default", url: frontPrintFile }] : []),
+        ...(backPrintFile ? [{ type: "back", url: backPrintFile }] : []),
+      ];
+      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: resolvedPrintFiles });
       subtotal += 0;
     }
 
