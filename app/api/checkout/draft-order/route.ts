@@ -983,7 +983,6 @@ export async function POST(req: Request) {
     console.info("[checkout:draft:19-persist-result]", {
       hasData: Boolean(savedDraft),
       data: savedDraft,
-      error: saveError,
       draftOrderId: savedDraft?.id ?? null,
       gelatoDraftOrderId: savedDraft?.gelato_draft_order_id ?? null,
       status: savedDraft?.status ?? null,
