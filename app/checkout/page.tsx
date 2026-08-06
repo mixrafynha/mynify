@@ -1313,8 +1313,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           cartItemIds: items.map((item) => item.id),
           address: {
-            firstName: form.fullName.split(/\s+/).filter(Boolean).slice(0, -1).join(" ") || form.fullName,
-            lastName: form.fullName.split(/\s+/).filter(Boolean).at(-1) || ".",
+            fullName: form.fullName,
             addressLine1: form.address,
             addressLine2: form.apartment || null,
             city: form.city,
@@ -1324,31 +1323,30 @@ export default function CheckoutPage() {
             email: form.email,
             phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
           },
-          customer: {
-            fullName: form.fullName,
-            email: form.email,
-            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
-            country: form.country,
-            countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
-            address: form.address,
-            apartment: form.apartment,
-            city: form.city,
-            state: null,
-            postalCode: form.postalCode,
+          shippingMethod: {
+            id: selectedShippingMethod.id,
+            code: selectedShippingMethod.code ?? null,
+            name: selectedShippingMethod.name,
+            price: selectedShippingMethod.price,
+            currency: selectedShippingMethod.currency,
           },
-          selectedShippingMethod,
         }),
       });
       const draftData = await draftRes.json().catch(() => null);
       if (!draftRes.ok || !draftData?.success) {
         throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
       }
-      setDraftOrderId(draftData.draftOrderId ?? null);
+      const nextDraftOrderId = draftData.draftOrderId;
+      if (!nextDraftOrderId) {
+        throw new Error("Missing draft order id.");
+      }
+      setDraftOrderId(nextDraftOrderId);
+      setStep("payment");
 
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: draftData.draftOrderId }),
+        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: nextDraftOrderId }),
       });
 
       const data = await res.json().catch(() => null);
