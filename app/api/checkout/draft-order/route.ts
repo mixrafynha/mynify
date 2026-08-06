@@ -466,19 +466,6 @@ export async function POST(req: Request) {
         gelatoProductUidPrefix: typeof productUid === "string" ? productUid.slice(0, 45) : null,
       });
 
-      const printFiles = resolvedUserProduct
-        ? resolveGelatoPrintFiles({
-            id: cartRow.id,
-            user_product_id: resolvedUserProduct.id,
-            design_data: resolvedUserProduct.design_data,
-            designData: resolvedUserProduct.design_data,
-            print_files: resolvedUserProduct.print_files,
-            printFiles: resolvedUserProduct.print_files,
-            production: resolvedUserProduct.mockups ?? null,
-            product: { print_files: resolvedUserProduct.print_files, design_data: resolvedUserProduct.design_data, production: resolvedUserProduct.mockups ?? null },
-          } as unknown as CartItem)
-        : [];
-
       const designData = resolvedUserProduct?.design_data && typeof resolvedUserProduct.design_data === "object"
         ? (resolvedUserProduct.design_data as Record<string, unknown>)
         : null;
@@ -493,19 +480,33 @@ export async function POST(req: Request) {
       const printFilesRecord = resolvedUserProduct?.print_files && typeof resolvedUserProduct.print_files === "object"
         ? (resolvedUserProduct.print_files as Record<string, unknown>)
         : {};
+      const mockupsRecord = resolvedUserProduct?.mockups && typeof resolvedUserProduct.mockups === "object"
+        ? (resolvedUserProduct.mockups as Record<string, unknown>)
+        : {};
       const frontPrintFile =
         asUrl(printFilesRecord.front) ??
         asUrl(printFilesRecord.default) ??
         asUrl(printFilesRecord.front_url) ??
-        asUrl((designData?.printFiles as Record<string, unknown> | undefined)?.front) ??
-        asUrl((designData?.production as Record<string, unknown> | undefined)?.front) ??
         null;
       const backPrintFile =
         asUrl(printFilesRecord.back) ??
         asUrl(printFilesRecord.back_url) ??
-        asUrl((designData?.printFiles as Record<string, unknown> | undefined)?.back) ??
-        asUrl((designData?.production as Record<string, unknown> | undefined)?.back) ??
         null;
+      console.info("[checkout:draft:production-files]", {
+        cartItemId: cartRow.id,
+        printFilesFound: {
+          front: asUrl(printFilesRecord.front) ?? asUrl(printFilesRecord.default) ?? asUrl(printFilesRecord.front_url) ?? null,
+          back: asUrl(printFilesRecord.back) ?? asUrl(printFilesRecord.back_url) ?? null,
+        },
+        mockupsFound: {
+          front: asUrl(mockupsRecord.front) ?? asUrl(mockupsRecord.front_url) ?? null,
+          back: asUrl(mockupsRecord.back) ?? asUrl(mockupsRecord.back_url) ?? null,
+        },
+        filesSentToGelato: [
+          ...(frontPrintFile ? [{ type: "default", url: frontPrintFile }] : []),
+          ...(backPrintFile ? [{ type: "back", url: backPrintFile }] : []),
+        ],
+      });
       console.info("[checkout:draft:05-print-files]", {
         cartItemId: cartRow.id,
         userProductId: resolvedUserProduct?.id ?? null,
