@@ -25,7 +25,7 @@ type DraftBody = {
   shippingMethod?: {
     id: string;
     code?: string | null;
-    shipmentMethodUid?: string | null;
+    shipmentMethodUid: string;
     name: string;
     price: number;
     currency: string;
@@ -265,10 +265,7 @@ function gelatoRequestPayload(input: {
     orderReferenceId: input.idempotencyKey,
     customerReferenceId: input.email,
     currency: input.currency,
-    shipmentMethodUid:
-      input.shippingMethod.shipmentMethodUid ??
-      input.shippingMethod.code ??
-      input.shippingMethod.id,
+    shipmentMethodUid: input.shippingMethod.shipmentMethodUid,
     shippingAddress: {
       firstName: input.address.firstName,
       lastName: input.address.lastName,
@@ -334,7 +331,12 @@ export async function POST(req: Request) {
     if (!authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     if (!cartItemIds.length) return NextResponse.json({ code: "MISSING_CART_ITEMS", success: false }, { status: 400 });
-    if (!shippingMethodInput?.id || !shippingMethodInput.name || !shippingMethodInput.currency) {
+    if (
+      !shippingMethodInput?.id ||
+      !shippingMethodInput.shipmentMethodUid ||
+      !shippingMethodInput.name ||
+      shippingMethodInput.currency?.toUpperCase() !== "EUR"
+    ) {
       return NextResponse.json({ code: "MISSING_SHIPPING_METHOD", success: false }, { status: 400 });
     }
     if (!address.firstName || !address.lastName || !address.email || !address.addressLine1 || !address.city || !address.postalCode || !address.countryCode) {
@@ -415,7 +417,7 @@ export async function POST(req: Request) {
 
     const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
     let subtotal = 0;
-    const quoteCurrency = (body as { currency?: string | null } | null)?.currency?.trim() || "EUR";
+    const quoteCurrency = "EUR";
 
     for (const cartRow of cartRows ?? []) {
       const userProductId = cartRow.user_product_id;
@@ -715,19 +717,8 @@ export async function POST(req: Request) {
     }
     const matched =
       shippingMethods.find(
-        (method) =>
-          shippingMethodInput.shipmentMethodUid &&
-          method.shipmentMethodUid &&
-          method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
-      ) ??
-      shippingMethods.find((method) => method.code && shippingMethodInput.code && method.code === shippingMethodInput.code) ??
-      shippingMethods.find((method) => method.id === shippingMethodInput.id) ??
-      shippingMethods.find(
-        (method) =>
-          method.name.trim().toLowerCase() === shippingMethodInput.name.trim().toLowerCase() &&
-          method.currency === shippingMethodInput.currency,
-      ) ??
-      null;
+        (method) => method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
+      ) ?? null;
 
     console.info("[checkout:draft:12-shipping-match]", {
       selectedId: shippingMethodInput.id ?? null,
@@ -770,7 +761,7 @@ export async function POST(req: Request) {
       cartItemIds: [...cartItemIds].sort(),
       postalCode: address.postalCode,
       countryCode: address.countryCode,
-      shippingMethodId: shippingMethodInput.id,
+      shippingMethodId: shippingMethodInput.shipmentMethodUid,
     });
 
     const { data: existingDraft } = await supabase

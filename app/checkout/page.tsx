@@ -166,12 +166,12 @@ function resolveRealCanvasMockupUrl(args: {
   return canvasUrl;
 }
 
-function formatShippingCurrency(amount: number | null | undefined, currency?: string | null) {
+function formatShippingCurrency(amount: number | null | undefined, _currency?: string | null) {
   if (typeof amount !== "number" || !Number.isFinite(amount)) return "Calculated";
   return new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: currency || "USD",
-    currencyDisplay: currency === "USD" ? "symbol" : "narrowSymbol",
+    currency: "EUR",
+    currencyDisplay: "narrowSymbol",
   }).format(amount);
 }
 
@@ -571,7 +571,7 @@ export default function CheckoutPage() {
     if (!validatedShippingMethods?.length) return null;
 
     // The checkout is EUR-only. Always use the latest validated quote and
-    // normalize the UI value so an older USD selection cannot be submitted.
+    // normalize the UI value so every shipping method is submitted as EUR.
     return normalizeShippingMethods(validatedShippingMethods).map((method) => ({
       ...method,
       currency: "EUR",
@@ -583,9 +583,9 @@ export default function CheckoutPage() {
         const normalizedValue = typeof value === "string" ? value.trim() : "";
         if (!normalizedValue || !shippingMethodsForDisplay?.length) return null;
         return (
-          shippingMethodsForDisplay.find((method) => method.id === normalizedValue) ??
-          shippingMethodsForDisplay.find((method) => method.code === normalizedValue) ??
-          null
+          shippingMethodsForDisplay.find(
+            (method) => method.shipmentMethodUid === normalizedValue || method.id === normalizedValue,
+          ) ?? null
         );
       },
     [shippingMethodsForDisplay],
@@ -628,22 +628,14 @@ export default function CheckoutPage() {
 
     setShippingMethodSelection((current) => {
       if (current) {
-        // Gelato generates new shipping IDs for every quote. Refresh the
-        // selection using stable fields instead of keeping the stale object.
-        const currentName = String(current.name ?? "").trim().toLowerCase();
-        const currentCode = String(current.code ?? "").trim().toLowerCase();
-
-        const matched =
-          shippingMethodsForDisplay.find((method) => method.id === current.id) ??
-          shippingMethodsForDisplay.find((method) => {
-            const methodName = String(method.name ?? "").trim().toLowerCase();
-            const methodCode = String(method.code ?? "").trim().toLowerCase();
-            return Boolean(currentName) && methodName === currentName && methodCode === currentCode;
-          }) ??
-          shippingMethodsForDisplay.find((method) => {
-            const methodCode = String(method.code ?? "").trim().toLowerCase();
-            return Boolean(currentCode) && methodCode === currentCode;
-          });
+        // A shipping selection is identified only by Gelato's shipmentMethodUid.
+        // Never migrate a selection to another carrier by code/name after a quote refresh.
+        const currentShipmentMethodUid = String(current.shipmentMethodUid ?? "").trim();
+        const matched = currentShipmentMethodUid
+          ? shippingMethodsForDisplay.find(
+              (method) => method.shipmentMethodUid === currentShipmentMethodUid,
+            ) ?? null
+          : null;
 
         if (matched) {
           setSelectedShippingMethodId(matched.id);
@@ -1331,7 +1323,7 @@ export default function CheckoutPage() {
       setError("Some products are not available for this delivery country. Change country or product variant before paying.");
       return;
     }
-    if (!selectedShippingMethod?.id) {
+    if (!selectedShippingMethod?.id || !selectedShippingMethod.shipmentMethodUid) {
       setError("Please select a shipping method.");
       return;
     }
@@ -1370,7 +1362,7 @@ export default function CheckoutPage() {
             state: null,
             postalCode: form.postalCode,
           },
-          selectedShippingMethod,
+          shippingMethod: selectedShippingMethod,
         }),
       });
       const draftData = await draftRes.json().catch(() => null);
@@ -1808,6 +1800,7 @@ export default function CheckoutPage() {
                             console.info("[checkout:shipping-selected]", {
                               id: method.id,
                               code: method.code,
+                              shipmentMethodUid: method.shipmentMethodUid,
                               name: method.name,
                               price: method.price,
                               currency: method.currency,

@@ -116,14 +116,8 @@ function isUuid(value: unknown): value is string {
   );
 }
 
-function normalizeBaseCurrency(value: unknown): string {
-  const currency =
-    typeof value === "string" ? value.trim().toLowerCase() : "eur";
-
-  // Adiciona aqui outras moedas quando forem oficialmente suportadas.
-  const allowedCurrencies = new Set(["eur", "usd", "gbp", "cad"]);
-
-  return allowedCurrencies.has(currency) ? currency : "eur";
+function normalizeBaseCurrency(_value: unknown): string {
+  return "eur";
 }
 
 function moneyToCents(value: unknown): number | null {
@@ -272,7 +266,7 @@ export async function POST(req: Request) {
     let draftCheckout:
       | {
           cart_item_ids: string[] | null;
-          selected_shipping_method: { id?: string | null; code?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
+          selected_shipping_method: { id?: string | null; code?: string | null; shipmentMethodUid?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
           shipping_address: Record<string, unknown> | null;
         }
       | null = null;
@@ -528,7 +522,7 @@ export async function POST(req: Request) {
       }> = [];
 
       // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
-      // official numeric prices are charged as EUR without runtime FX conversion.
+      // official numeric prices are charged directly as EUR.
       const checkoutCurrency = "EUR";
 
       for (const cartItem of cartItems) {
@@ -713,7 +707,6 @@ export async function POST(req: Request) {
           storedCurrency: cartItem.currency ?? product.currency ?? null,
           officialBaseCurrency: baseCurrency,
           checkoutCurrency,
-          conversionRequired: false,
           policy: "eur_only_numeric_price",
         });
 
@@ -782,7 +775,18 @@ export async function POST(req: Request) {
             phone: normalizeAddressField(draftShippingAddress.phone) || undefined,
           }
         : buildShippingRecipient(body);
-      const shippingMethod = draftShippingMethod?.id || normalizeAddressField(body.shipping?.method)?.toLowerCase() || "standard";
+      const shipmentMethodUid = normalizeAddressField(draftShippingMethod?.shipmentMethodUid);
+
+      if (!shipmentMethodUid) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "MISSING_SHIPMENT_METHOD_UID",
+            message: "The prepared order has no valid shipping method.",
+          },
+          { status: 409 },
+        );
+      }
 
       const gelatoQuoteResult = gelatoQuoteItems.length
         ? await getGelatoCheckoutQuote({
@@ -821,18 +825,22 @@ export async function POST(req: Request) {
       }
 
       const selectedQuoteOption =
-        gelatoQuoteResult.shippingOptions.find((option) => option.serviceType === shippingMethod) ??
-        gelatoQuoteResult.shippingOptions.find((option) => option.id === shippingMethod) ??
-        gelatoQuoteResult.shippingOptions[0] ??
-        null;
+        gelatoQuoteResult.shippingOptions.find((option) => {
+          const record = option as typeof option & { shipmentMethodUid?: string | null; uid?: string | null };
+          const optionShipmentMethodUid =
+            normalizeAddressField(record.shipmentMethodUid) ??
+            normalizeAddressField(record.uid) ??
+            normalizeAddressField(record.id);
+          return optionShipmentMethodUid === shipmentMethodUid;
+        }) ?? null;
 
       if (!selectedQuoteOption) {
         return NextResponse.json(
           {
             ok: false,
             retryable: false,
-            code: "PRODUCT_NOT_AVAILABLE_FOR_ADDRESS",
-            message: "This product cannot be delivered to this address.",
+            code: "SHIPPING_METHOD_EXPIRED",
+            message: "The selected shipping method is no longer available.",
           },
           { status: 400 },
         );
