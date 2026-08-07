@@ -868,6 +868,7 @@ export async function POST(req: Request) {
       selected_shipping_method: {
         id: matched.id,
         code: matched.code,
+        shipmentMethodUid: matched.shipmentMethodUid,
         name: matched.name,
         price: matched.price,
         currency: matched.currency,
