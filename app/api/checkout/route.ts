@@ -4,7 +4,6 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { calculateSellingPrice } from "@/lib/gelato/pricing";
-import { getGelatoCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { resolveGelatoPrintFiles } from "@/app/checkout/_lib/checkout";
 
 export const runtime = "nodejs";
@@ -268,13 +267,15 @@ export async function POST(req: Request) {
           cart_item_ids: string[] | null;
           selected_shipping_method: { id?: string | null; code?: string | null; shipmentMethodUid?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
           shipping_address: Record<string, unknown> | null;
+          shipping_amount: number | null;
+          currency: string | null;
         }
       | null = null;
 
     if (body.draftOrderId) {
       const { data: draftRow, error: draftError } = await supabase
         .from("checkout_drafts")
-        .select("cart_item_ids, selected_shipping_method, shipping_address")
+        .select("cart_item_ids, selected_shipping_method, shipping_address, shipping_amount, currency")
         .eq("id", body.draftOrderId)
         .eq("user_id", user.id)
         .maybeSingle();
@@ -503,8 +504,6 @@ export async function POST(req: Request) {
         printFiles: Array<{ type: string; url: string }>;
         quantity: number;
       }> = [];
-      let totalShippingFromGelato: number | null = null;
-      let selectedShippingOptionId = normalizeAddressField(body.shipping?.method)?.toLowerCase() ?? null;
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
@@ -788,65 +787,57 @@ export async function POST(req: Request) {
         );
       }
 
-      const gelatoQuoteResult = gelatoQuoteItems.length
-        ? await getGelatoCheckoutQuote({
-            productUid: gelatoQuoteItems[0].productUid,
-            quantity: gelatoQuoteItems[0].quantity,
-            shippingAddress,
-            printFiles: gelatoQuoteItems[0].files,
-            items: gelatoQuoteItems,
-            currencyIsoCode: checkoutCurrency,
-            customerReferenceId: user.id,
-            orderReferenceId: createdOrderId ?? `ryfio-checkout-${Date.now()}`,
-          })
-        : {
-            available: true,
-            retryable: false,
-            productCost: null,
-            productCurrency: null,
-            shippingOptions: [],
-            reason: null,
-          };
+      const draftShippingPriceRaw =
+        draftCheckout?.shipping_amount ?? draftShippingMethod?.price ?? null;
+      const draftShippingPrice = Number(draftShippingPriceRaw);
+      const draftShippingCurrency =
+        normalizeAddressField(draftCheckout?.currency) ??
+        normalizeAddressField(draftShippingMethod?.currency) ??
+        checkoutCurrency;
 
-      if (!gelatoQuoteResult.available) {
-        const status = gelatoQuoteResult.retryable ? 503 : 400;
+      if (!Number.isFinite(draftShippingPrice) || draftShippingPrice < 0) {
         return NextResponse.json(
           {
-            ok: false,
-            retryable: gelatoQuoteResult.retryable,
-            code: gelatoQuoteResult.retryable ? "GELATO_TEMPORARILY_UNAVAILABLE" : "PRODUCT_NOT_AVAILABLE_FOR_ADDRESS",
-            message: gelatoQuoteResult.retryable
-              ? "Shipping could not be calculated. Please try again."
-              : "This product cannot be delivered to this address.",
-            reason: gelatoQuoteResult.reason,
+            success: false,
+            code: "INVALID_DRAFT_SHIPPING_AMOUNT",
+            message: "The prepared order has no valid shipping amount.",
           },
-          { status },
+          { status: 409 },
         );
       }
 
-      const selectedQuoteOption =
-        gelatoQuoteResult.shippingOptions.find((option) => {
-          const record = option as typeof option & { shipmentMethodUid?: string | null; uid?: string | null };
-          const optionShipmentMethodUid =
-            normalizeAddressField(record.shipmentMethodUid) ??
-            normalizeAddressField(record.uid) ??
-            normalizeAddressField(record.id);
-          return optionShipmentMethodUid === shipmentMethodUid;
-        }) ?? null;
-
-      if (!selectedQuoteOption) {
+      if (draftShippingCurrency.toUpperCase() !== checkoutCurrency) {
         return NextResponse.json(
           {
-            ok: false,
-            retryable: false,
-            code: "SHIPPING_METHOD_EXPIRED",
-            message: "The selected shipping method is no longer available.",
+            success: false,
+            code: "INVALID_DRAFT_CURRENCY",
+            message: "The prepared order currency is invalid.",
           },
-          { status: 400 },
+          { status: 409 },
         );
       }
 
-      totalShippingFromGelato = selectedQuoteOption.price;
+      // The Gelato draft was already created successfully with this exact
+      // shipmentMethodUid. Do not request a second quote here because Gelato
+      // may regenerate shipping UIDs between quotes. Stripe must use the
+      // server-persisted shipping method/amount from checkout_drafts.
+      const selectedQuoteOption = {
+        id: shipmentMethodUid,
+        shipmentMethodUid,
+        code: normalizeAddressField(draftShippingMethod?.code),
+        name: normalizeAddressField(draftShippingMethod?.name) || "Shipping",
+        price: draftShippingPrice,
+        currency: checkoutCurrency,
+      };
+
+      console.info("[checkout:final:shipping-from-draft]", {
+        draftOrderId: body.draftOrderId ?? null,
+        shipmentMethodUid,
+        name: selectedQuoteOption.name,
+        price: selectedQuoteOption.price,
+        currency: selectedQuoteOption.currency,
+        policy: "reuse_successful_gelato_draft_shipping",
+      });
 
       const baseUrl =
         process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
@@ -873,9 +864,7 @@ export async function POST(req: Request) {
         0,
       );
       // EUR-only checkout: use the validated numeric shipping amount as EUR.
-      const shippingAmount = totalShippingFromGelato
-        ? moneyToCents(totalShippingFromGelato) ?? 0
-        : 0;
+      const shippingAmount = moneyToCents(selectedQuoteOption.price) ?? 0;
 
       const { data: order, error: orderError } = await supabase
         .from("orders")
