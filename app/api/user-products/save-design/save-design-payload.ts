@@ -633,13 +633,12 @@ export async function buildUserProductSavePayload(args: {
     throw new Error("Selected variant does not belong to the base product");
   }
 
-  const productMarkup = Number(body.markup || 0);
   const basePrice = Number(databaseVariant?.price ?? baseProduct.price ?? 0);
   const hasFrontDesign = hasVisibleDesign(frontElements);
   const hasBackDesign = hasVisibleDesign(backElements);
-  const secondPrintCharge =
+  const productMarkup =
     hasFrontDesign && hasBackDesign ? SECOND_PRINT_PRICE : 0;
-  const finalPrice = basePrice + secondPrintCharge;
+  const finalPrice = basePrice + productMarkup;
 
   const printBox = objectValue<any>(body.printBox || body.print_box, {
     front: incomingSides?.front?.printBox || incomingDesignData?.sides?.front?.printBox || null,
@@ -728,7 +727,7 @@ export async function buildUserProductSavePayload(args: {
     title: body.title || baseProduct.title,
     description: body.description ?? baseProduct.description ?? null,
     price: basePrice,
-    currency: baseProduct.currency || "USD",
+    currency: "EUR",
     image: bestPreviewImage,
     images: Array.from(
       new Set([

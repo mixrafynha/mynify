@@ -72,7 +72,7 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
 
   const title = userProduct.title;
   const price = asNumber(userProduct.final_price ?? userProduct.price, 0);
-  const currency = userProduct.currency || "USD";
+  const currency = "EUR";
 
   const mockupUrl =
     mockups?.front ||
