@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
-import { normalizeShippingMethods, type NormalizedShippingMethod } from "@/lib/gelato/shipping-methods";
+import { buildGelatoCheckoutQuotePayload } from "@/lib/gelato/checkout-quote";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoPrintFiles, type CartItem, type CartVariant } from "@/app/checkout/_lib/checkout";
 
@@ -255,7 +254,14 @@ function log(event: string, data?: Record<string, unknown>) {
 function gelatoRequestPayload(input: {
   idempotencyKey: string;
   currency: string;
-  shippingMethod: NormalizedShippingMethod;
+  shippingMethod: {
+    id: string;
+    code?: string | null;
+    shipmentMethodUid: string;
+    name: string;
+    price: number;
+    currency: string;
+  };
   address: ReturnType<typeof normalizeAddress>;
   items: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }>;
   email: string;
@@ -630,131 +636,52 @@ export async function POST(req: Request) {
 
     console.info("[checkout:draft:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
 
-    const quote = await resolveCheckoutQuote({
-      productUid: quoteItems[0].productUid,
-      quantity: quoteItems[0].quantity,
-      shippingAddress: {
-        ...address,
-        countryCode: address.countryCode,
-      },
-      printFiles: quoteItems[0].printFiles,
-      items: quoteItems,
-      currencyIsoCode: quoteCurrency,
-    });
-
-    if (process.env.NODE_ENV !== "production") {
-      const rawQuote = quote.rawQuote && typeof quote.rawQuote === "object" ? (quote.rawQuote as Record<string, unknown>) : null;
-      const rawData = rawQuote?.data && typeof rawQuote.data === "object" ? (rawQuote.data as Record<string, unknown>) : null;
-      console.info("[checkout:draft:11-quote-shape]", {
-        responseKeys: rawQuote ? Object.keys(rawQuote) : [],
-        dataKeys: rawData ? Object.keys(rawData) : [],
-        shippingMethodsCount: quote.shippingOptions.length,
-      });
-    }
+    // IMPORTANT: Do not request a second Gelato quote here. Gelato shipmentMethodUid
+    // values are quote-scoped and can change between otherwise identical quotes.
+    // The UID selected from /api/checkout/availability must be forwarded unchanged
+    // to the Draft Order request.
+    const matched = {
+      id: shippingMethodInput.id,
+      code: shippingMethodInput.code ?? null,
+      shipmentMethodUid: shippingMethodInput.shipmentMethodUid,
+      name: shippingMethodInput.name,
+      price: Number(shippingMethodInput.price),
+      currency: "EUR",
+    };
 
     log("[checkout:draft-quote]", {
-      available: quote.available,
-      retryable: quote.retryable,
-      reason: quote.reason ?? null,
-      shippingMethodsCount: quote.shippingOptions.length,
+      available: true,
+      retryable: false,
+      reason: "reused_selected_shipping_method",
+      shippingMethodsCount: 1,
     });
 
     console.info("[checkout:draft:09-gelato-http]", {
-      status: quote.httpStatus,
-      ok: quote.httpStatus ? quote.httpStatus >= 200 && quote.httpStatus < 300 : null,
-      contentType: quote.contentType,
-      bodyLength: quote.bodyLength,
+      status: null,
+      ok: null,
+      contentType: null,
+      bodyLength: null,
     });
 
-    if (quote.errorCode || quote.errorMessage || quote.requestId || quote.details) {
-      console.error("[checkout:draft:10-gelato-error]", {
-        httpStatus: quote.httpStatus,
-        code: quote.errorCode ?? null,
-        message: quote.errorMessage ?? null,
-        requestId: quote.requestId ?? null,
-        details: quote.details ?? null,
-        responseKeys: quote.responseKeys,
-      });
-    }
-
-    if (quote.retryable) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "GELATO_QUOTE_FAILED",
-          message: "Shipping could not be recalculated for the draft order.",
-        },
-        { status: 503 },
-      );
-    }
-
-    if (!quote.available || quote.shippingOptions.length === 0) {
-      return conflict(
-        "INVALID_QUOTE_RESPONSE",
-        "Gelato did not return shipping methods for the validated cart and address.",
-        {
-          responseKeys: quote.responseKeys,
-          quoteReason: quote.quoteReason ?? quote.reason ?? null,
-          quoteItemCount: quoteItems.length,
-        },
-      );
-    }
-
-    const shippingMethods = normalizeShippingMethods(quote.shippingOptions).map((method) => ({
-      ...method,
-      // Ryfio is EUR-only. Keep the validated numeric shipping price and expose it as EUR.
-      currency: "EUR",
-    }));
-    for (const method of shippingMethods) {
-      console.info("[checkout:draft:11-shipping-method]", {
-        id: method.id,
-        code: method.code ?? null,
-        shipmentMethodUid: method.shipmentMethodUid ?? null,
-        name: method.name,
-        price: method.price,
-        currency: method.currency,
-      });
-    }
-    const matched =
-      shippingMethods.find(
-        (method) => method.shipmentMethodUid === shippingMethodInput.shipmentMethodUid,
-      ) ?? null;
+    console.info("[checkout:draft:11-shipping-method]", {
+      id: matched.id,
+      code: matched.code ?? null,
+      shipmentMethodUid: matched.shipmentMethodUid,
+      name: matched.name,
+      price: matched.price,
+      currency: matched.currency,
+    });
 
     console.info("[checkout:draft:12-shipping-match]", {
       selectedId: shippingMethodInput.id ?? null,
       selectedCode: shippingMethodInput.code ?? null,
       selectedShipmentMethodUid: shippingMethodInput.shipmentMethodUid ?? null,
-      availableCount: shippingMethods.length,
-      matched: Boolean(matched),
-      matchedId: matched?.id ?? null,
-      matchedCode: matched?.code ?? null,
-      matchedShipmentMethodUid: matched?.shipmentMethodUid ?? null,
+      availableCount: 1,
+      matched: true,
+      matchedId: matched.id,
+      matchedCode: matched.code ?? null,
+      matchedShipmentMethodUid: matched.shipmentMethodUid,
     });
-
-    if (!matched) {
-      return conflict("SHIPPING_METHOD_EXPIRED", "The selected shipping method is no longer available.", {
-        selectedId: shippingMethodInput.id,
-        selectedCode: shippingMethodInput.code ?? null,
-        availableIds: shippingMethods.map((method) => method.id),
-        availableCodes: shippingMethods.map((method) => method.code ?? null),
-      });
-    }
-
-    const selectedMinor = Math.round(Number(shippingMethodInput.price) * 100);
-    const validatedMinor = Math.round(Number(matched.price) * 100);
-    const priceChanged =
-      selectedMinor !== validatedMinor ||
-      matched.currency.toUpperCase() !== shippingMethodInput.currency.toUpperCase();
-    if (priceChanged) {
-      return conflict("SHIPPING_METHOD_CHANGED", "The selected shipping price has changed.", {
-        selectedId: shippingMethodInput.id,
-        selectedCode: shippingMethodInput.code ?? null,
-        selectedPrice: shippingMethodInput.price,
-        validatedPrice: matched.price,
-        selectedCurrency: shippingMethodInput.currency,
-        validatedCurrency: matched.currency,
-      });
-    }
 
     const idempotencyKey = hashIdempotencyKey({
       userId: authData.user.id,
@@ -785,7 +712,7 @@ export async function POST(req: Request) {
 
     const gelatoPayload = gelatoRequestPayload({
       idempotencyKey,
-      currency: quotePayload.order.currencyIsoCode,
+      currency: "EUR",
       shippingMethod: matched,
       address,
       items: resolvedItems,
@@ -795,6 +722,7 @@ export async function POST(req: Request) {
     console.info("[checkout:draft:13-create-start]", {
       itemCount: gelatoPayload.items.length,
       shipmentMethodUidPresent: Boolean(gelatoPayload.shipmentMethodUid),
+      shipmentMethodUid: gelatoPayload.shipmentMethodUid,
       currency: gelatoPayload.currency,
     });
 
