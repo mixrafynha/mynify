@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
-import { calculateSellingPrice } from "@/lib/gelato/pricing";
-import { resolveGelatoPrintFiles } from "@/app/checkout/_lib/checkout";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +74,8 @@ type ProductRow = {
   title: string;
   price: number | string | null;
   currency: string | null;
-  profit_markup_percentage?: number | string | null;
+  image: string | null;
+  images: string[] | null;
 };
 
 type VariantRow = {
@@ -90,21 +89,38 @@ type VariantRow = {
   gelato_variant_uid: string | null;
 };
 
-type VariantMarketRow = {
-  product_variant_id: string;
-  country_code: string;
-  currency: string;
-  is_available: boolean;
-  product_price: number | string | null;
-  quantity: number;
-};
-
 type UserProductRow = {
   id: string;
-  print_files: Record<string, unknown> | null;
+  price: number | string | null;
+  markup: number | string | null;
+  final_price: number | string | null;
+  currency: string | null;
+  image: string | null;
   mockups: Record<string, unknown> | null;
-  design_data: Record<string, unknown> | null;
 };
+
+function asPublicImageUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const url = value.trim();
+  if (!/^https:\/\//i.test(url)) return null;
+  return url;
+}
+
+function resolveStripeImage(userProduct: UserProductRow | null, product: ProductRow): string | null {
+  const mockups = userProduct?.mockups && typeof userProduct.mockups === "object"
+    ? userProduct.mockups as Record<string, unknown>
+    : null;
+
+  return (
+    asPublicImageUrl(mockups?.checkout_thumbnail_url) ??
+    asPublicImageUrl(mockups?.checkout_thumbnail_front_url) ??
+    asPublicImageUrl(mockups?.front) ??
+    asPublicImageUrl(mockups?.front_url) ??
+    asPublicImageUrl(userProduct?.image) ??
+    asPublicImageUrl(product.image) ??
+    (Array.isArray(product.images) ? product.images.map(asPublicImageUrl).find(Boolean) ?? null : null)
+  );
+}
 
 function isUuid(value: unknown): value is string {
   return (
@@ -380,7 +396,7 @@ export async function POST(req: Request) {
       const { data: productRows, error: productsError } =
         await supabase
           .from("products")
-          .select("id, title, price, currency, profit_markup_percentage")
+          .select("id, title, price, currency, image, images")
           .in("id", productIds);
 
       if (productsError) {
@@ -435,7 +451,7 @@ export async function POST(req: Request) {
       const { data: userProductRows, error: userProductsError } = userProductIds.length
         ? await supabase
             .from("user_products")
-            .select("id, print_files, mockups, design_data")
+            .select("id, price, markup, final_price, currency, image, mockups")
             .in("id", userProductIds)
         : { data: [], error: null };
 
@@ -447,29 +463,6 @@ export async function POST(req: Request) {
       }
 
       const shippingCountryCode = resolveCheckoutCountryCode(body);
-      let variantMarkets: VariantMarketRow[] = [];
-
-      if (variantIds.length > 0 && shippingCountryCode) {
-        const { data: marketRows, error: marketsError } = await supabase
-          .from("gelato_variant_markets")
-          .select("product_variant_id, country_code, currency, is_available, product_price, quantity")
-          .in("product_variant_id", variantIds)
-          .eq("country_code", shippingCountryCode)
-          .eq("quantity", 1);
-
-        if (marketsError) {
-          console.error("CHECKOUT_VARIANT_MARKETS_ERROR", {
-            code: marketsError.code,
-          });
-
-          return NextResponse.json(
-            { error: "Failed to validate Gelato variant markets" },
-            { status: 500 },
-          );
-        }
-
-        variantMarkets = (marketRows ?? []) as VariantMarketRow[];
-      }
 
       const productMap = new Map(
         ((productRows ?? []) as ProductRow[]).map((product) => [
@@ -484,9 +477,6 @@ export async function POST(req: Request) {
      const variantMap = new Map(
       variants.map((variant) => [variant.id, variant]),
     );
-      const variantMarketMap = new Map(
-        variantMarkets.map((market) => [market.product_variant_id, market]),
-      );
 
     type StripeSessionParams = NonNullable<
       Parameters<typeof stripe.checkout.sessions.create>[0]
@@ -497,13 +487,6 @@ export async function POST(req: Request) {
     >[number];
 
       const stripeLineItems: StripeLineItem[] = [];
-      const gelatoQuoteItems: Array<{
-        itemReferenceId: string;
-        productUid: string;
-        files: Array<{ type: string; url: string }>;
-        printFiles: Array<{ type: string; url: string }>;
-        quantity: number;
-      }> = [];
       const orderItems: Array<{
         cart_item_id: string;
         product_id: string;
@@ -574,112 +557,19 @@ export async function POST(req: Request) {
         }
 
         /*
-         * PREÇO OFICIAL:
-         * 1. product_variants.price, quando existe e é válido;
-         * 2. products.price como fallback.
-         *
-         * cart_items.price é deliberadamente ignorado.
-         * Qualquer price enviado pelo editor/browser também é ignorado.
+         * PREÇO OFICIAL FINAL:
+         * - para designs guardados, user_products.final_price é calculado no backend
+         *   (inclui +€6 quando existe impressão frente + costas);
+         * - para produto normal, usa variant.price e depois products.price.
+         * Nunca usamos cart_items.price nem preço enviado pelo browser.
          */
-        let officialPrice = Number(variant?.price ?? product.price);
-        let officialBaseCurrency = normalizeBaseCurrency(product.currency).toUpperCase();
-        const gelatoMarket = variant?.gelato_product_uid && shippingCountryCode
-          ? variantMarketMap.get(variant.id)
-          : null;
-
-        if (variant?.gelato_product_uid && !shippingCountryCode) {
-          return NextResponse.json(
-            {
-              error: "Delivery country is required to validate Gelato availability.",
-              variantId: variant.id,
-            },
-            { status: 400 },
-          );
-        }
-
-        if (variant?.gelato_product_uid && shippingCountryCode) {
-          if (!gelatoMarket) {
-            return NextResponse.json(
-              {
-                error: "Selected variant is not available for this destination.",
-                variantId: variant.id,
-                countryCode: shippingCountryCode,
-              },
-              { status: 409 },
-            );
-          }
-
-          const sellingPrice = calculateSellingPrice({
-            productionCost: gelatoMarket.product_price,
-            markupPercentage: product.profit_markup_percentage,
-          });
-
-          if (sellingPrice === null) {
-            return NextResponse.json(
-              {
-                error: "Invalid Gelato production cost for selected variant.",
-                variantId: variant.id,
-                countryCode: shippingCountryCode,
-              },
-              { status: 400 },
-            );
-          }
-
-          officialPrice = sellingPrice;
-          officialBaseCurrency = normalizeBaseCurrency(gelatoMarket.currency).toUpperCase();
-
-          const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
-          const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
-          const printFilesSource = userProduct
-            ? {
-                id: cartItem.id,
-                print_files: userProduct.print_files,
-                printFiles: userProduct.print_files,
-                mockups: userProduct.mockups,
-                design_data: userProduct.design_data,
-                designData: userProduct.design_data,
-                production: userProduct.design_data,
-                product: {
-                  print_files: userProduct.print_files,
-                  printFiles: userProduct.print_files,
-                  mockups: userProduct.mockups,
-                  design_data: userProduct.design_data,
-                  production: userProduct.design_data,
-                },
-              }
-            : { id: cartItem.id, product: {}, production: null, print_files: null, printFiles: null, mockups: null, design_data: null, designData: null };
-
-          const printFiles = resolveGelatoPrintFiles(printFilesSource as never);
-          const productUid = variant.gelato_product_uid;
-
-          if (!printFiles.length) {
-            return NextResponse.json(
-              {
-                error: "Missing print file for Gelato checkout.",
-                variantId: variant.id,
-              },
-              { status: 400 },
-            );
-          }
-
-          if (!productUid) {
-            return NextResponse.json(
-              {
-                error: "Missing Gelato product UID for selected variant.",
-                variantId: variant.id,
-              },
-              { status: 400 },
-            );
-          }
-
-          gelatoQuoteItems.push({
-            itemReferenceId: cartItem.id,
-            productUid,
-            files: printFiles,
-            printFiles,
-            quantity,
-          });
-        }
+        const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
+        const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
+        const savedDesignPrice = Number(userProduct?.final_price);
+        let officialPrice = Number.isFinite(savedDesignPrice) && savedDesignPrice > 0
+          ? savedDesignPrice
+          : Number(variant?.price ?? product.price);
+        const officialBaseCurrency = "EUR";
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
           return NextResponse.json(
@@ -720,12 +610,22 @@ export async function POST(req: Request) {
           .filter(Boolean)
           .join(" · ");
 
+        const stripeImage = resolveStripeImage(userProduct, product);
+
+        console.info("[checkout:final:stripe-image]", {
+          cartItemId: cartItem.id,
+          userProductId: userProduct?.id ?? null,
+          imagePresent: Boolean(stripeImage),
+          imageSource: stripeImage?.includes("/mockups/") ? "user_product_mockup" : stripeImage ? "product_fallback" : null,
+        });
+
         stripeLineItems.push({
           price_data: {
             currency: currency.toLowerCase(),
             product_data: {
               name: product.title,
               ...(description ? { description } : {}),
+              ...(stripeImage ? { images: [stripeImage] } : {}),
               metadata: {
                 product_id: product.id,
                 cart_item_id: cartItem.id,
