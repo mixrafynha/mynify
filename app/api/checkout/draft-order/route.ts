@@ -574,7 +574,6 @@ export async function POST(req: Request) {
       // Keep the draft financial snapshot aligned with the final Stripe checkout:
       // current server-side variant price + the trusted €6 second-print charge
       // persisted by Save Design. Never use a price supplied by the browser.
-      const product = productMap.get(cartRow.product_id);
       const currentVariantBasePrice = Number(variant?.price ?? resolvedUserProduct?.price ?? product?.price ?? 0);
       const storedMarkup = Number(resolvedUserProduct?.markup ?? 0);
       const trustedSecondPrintCharge = resolvedUserProduct && storedMarkup === 6 ? 6 : 0;
