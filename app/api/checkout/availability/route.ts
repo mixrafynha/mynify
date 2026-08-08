@@ -252,6 +252,13 @@ export async function POST(req: Request) {
       city: safeText(body?.shippingAddress?.city) || safeText(body?.city),
       state:
         safeText(body?.shippingAddress?.state) ||
+        safeText(body?.shippingAddress?.stateCode) ||
+        safeText(body?.state) ||
+        safeText(body?.stateCode) ||
+        undefined,
+      stateCode:
+        safeText(body?.shippingAddress?.stateCode) ||
+        safeText(body?.stateCode) ||
         safeText(body?.state) ||
         undefined,
       postalCode:

@@ -176,6 +176,8 @@ export type CheckoutForm = {
   address: string;
   apartment: string;
   city: string;
+  state: string;
+  stateCode: string;
   postalCode: string;
   country: string;
   shippingMethod: string;
@@ -525,6 +527,7 @@ export type AddressSuggestion = {
   city?: string;
   country?: string;
   state?: string;
+  stateCode?: string;
   postalCode?: string;
   address?: string;
   label: string;
@@ -2021,6 +2024,8 @@ export function readCheckoutSession(): CheckoutForm | null {
       address: typeof data.address === "string" ? data.address : "",
       apartment: typeof data.apartment === "string" ? data.apartment : "",
       city: typeof data.city === "string" ? data.city : "",
+      state: typeof data.state === "string" ? data.state : "",
+      stateCode: typeof data.stateCode === "string" ? data.stateCode : "",
       postalCode: typeof data.postalCode === "string" ? data.postalCode : "",
       country: typeof data.country === "string" ? data.country : "",
       shippingMethod: typeof data.shippingMethod === "string" ? data.shippingMethod : "",

@@ -30,6 +30,7 @@ type GelatoDraftOrderPayload = {
     addressLine1: string;
     addressLine2?: string;
     state?: string;
+    stateCode?: string;
     city: string;
     postCode: string;
     country: string;
@@ -363,7 +364,8 @@ function buildGelatoDraftPayload(rawPayload: unknown): {
     lastName,
     addressLine1: cleanStringFallback(customer.address, ""),
     addressLine2: cleanString(customer.apartment) ?? undefined,
-    state: cleanString(customer.state) ?? undefined,
+    state: cleanString(customer.stateCode) ?? cleanString(customer.state) ?? undefined,
+    stateCode: cleanString(customer.stateCode) ?? undefined,
     city: cleanStringFallback(customer.city, ""),
     postCode: cleanStringFallback(customer.postalCode, ""),
     country: country ?? "",

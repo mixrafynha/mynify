@@ -23,6 +23,7 @@ import {
 
 import EmptyCart from "./_components/EmptyCart";
 import ProductPreviewImage from "./_components/ProductPreviewImage";
+import { getAddressStateLabel, isStateRequiredForCountry } from "./_lib/address-rules";
 import {
   createAddressSessionToken,
   fieldClass,
@@ -468,6 +469,8 @@ export default function CheckoutPage() {
       address: "",
       apartment: "",
       city: "",
+      state: "",
+      stateCode: "",
       postalCode: "",
       country: "",
       shippingMethod: "standard",
@@ -478,7 +481,8 @@ export default function CheckoutPage() {
     form.country.trim() &&
       form.postalCode.trim() &&
       form.city.trim() &&
-      form.address.trim(),
+      form.address.trim() &&
+      (!isStateRequiredForCountry(form.country) || form.state.trim() || form.stateCode.trim()),
   );
 
   const customDesignItems = useMemo(() => items.filter((item) => isCustomDesignItem(item)), [items]);
@@ -507,10 +511,12 @@ export default function CheckoutPage() {
       apartment: form.apartment.trim(),
       city: form.city.trim(),
       postalCode: form.postalCode.trim(),
+      state: form.state.trim(),
+      stateCode: form.stateCode.trim(),
       hasCompleteShippingAddress,
       items: normalizedItems,
     });
-  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, items]);
+  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode, items]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -571,8 +577,10 @@ export default function CheckoutPage() {
         form.country.trim(),
         form.postalCode.trim(),
         form.city.trim(),
+        form.state.trim(),
+        form.stateCode.trim(),
       ].join("|"),
-    [form.address, form.city, form.country, form.postalCode],
+    [form.address, form.city, form.country, form.postalCode, form.state, form.stateCode],
   );
   useEffect(() => {
     if (!shippingMethodsForDisplay?.length) {
@@ -665,6 +673,7 @@ export default function CheckoutPage() {
   const phoneValidation = validatePhoneNumber(form.country, form.phoneCountry, form.phone);
   const phoneValid = phoneValidation.valid;
 
+  const stateRequired = isStateRequiredForCountry(form.country);
   const shippingComplete = Boolean(
     emailValid &&
       fullNameValid &&
@@ -673,6 +682,7 @@ export default function CheckoutPage() {
       form.city.trim() &&
       form.postalCode.trim() &&
       form.country.trim() &&
+      (!stateRequired || form.state.trim() || form.stateCode.trim()) &&
       !productAvailability.loading &&
       (step === "shipping" || printFilesReady) &&
       !hasAvailabilityBlock,
@@ -890,7 +900,8 @@ export default function CheckoutPage() {
             addressLine2: form.apartment.trim() || null,
             city: form.city.trim(),
             postalCode: form.postalCode.trim(),
-            state: null,
+            state: form.state.trim() || form.stateCode.trim() || null,
+            stateCode: form.stateCode.trim() || form.state.trim() || null,
             currency: "EUR",
             items: items.map((item) => ({
               itemId: item.id,
@@ -965,7 +976,7 @@ export default function CheckoutPage() {
       if (!addressSessionToken.current) addressSessionToken.current = createAddressSessionToken();
     }
 
-    if (key === "address" || key === "country" || key === "postalCode" || key === "city") {
+    if (key === "address" || key === "country" || key === "postalCode" || key === "city" || key === "state" || key === "stateCode") {
       setShippingMethodSelection(null);
       setDraftOrderId(null);
     }
@@ -974,6 +985,7 @@ export default function CheckoutPage() {
       ...prev,
       [key]: value,
       ...(key === "country" && value ? { phoneCountry: getCountryCode(value) } : null),
+      ...(key === "country" && value ? { state: "", stateCode: "" } : {}),
     }));
   };
 
@@ -1063,6 +1075,8 @@ export default function CheckoutPage() {
       selectedAddressLock.current = nextAddress;
       suppressAddressLookup.current = true;
       addressSessionToken.current = createAddressSessionToken();
+      const nextState = resolved.state || "";
+      const nextStateCode = resolved.stateCode || "";
 
       setForm((prev) => ({
         ...prev,
@@ -1071,6 +1085,8 @@ export default function CheckoutPage() {
         city: resolved.city || prev.city,
         country: nextCountry,
         phoneCountry: getCountryCode(nextCountry),
+        state: nextState,
+        stateCode: nextStateCode,
       }));
     } catch {
       const fallbackAddress = suggestion.address || suggestion.label || form.address;
@@ -1082,6 +1098,8 @@ export default function CheckoutPage() {
         address: fallbackAddress,
         postalCode: suggestion.postalCode || prev.postalCode,
         city: suggestion.city || prev.city,
+        state: suggestion.state || prev.state,
+        stateCode: suggestion.stateCode || prev.stateCode,
       }));
     } finally {
       setAddressSuggestions([]);
@@ -1313,7 +1331,8 @@ export default function CheckoutPage() {
             addressLine1: form.address,
             addressLine2: form.apartment || null,
             city: form.city,
-            state: null,
+            state: form.state.trim() || form.stateCode.trim() || null,
+            stateCode: form.stateCode.trim() || form.state.trim() || null,
             postalCode: form.postalCode,
             countryCode: form.country,
             email: form.email,
@@ -1328,7 +1347,8 @@ export default function CheckoutPage() {
             address: form.address,
             apartment: form.apartment,
             city: form.city,
-            state: null,
+            state: form.state.trim() || form.stateCode.trim() || null,
+            stateCode: form.stateCode.trim() || form.state.trim() || null,
             postalCode: form.postalCode,
           },
           shippingMethod: selectedShippingMethod,
@@ -1556,6 +1576,17 @@ export default function CheckoutPage() {
                     <label>
                       <span className="mb-2 block text-xs font-black text-white/55">City</span>
                       <input className={fieldClass} autoComplete="address-level2" value={form.city} onChange={(e) => updateField("city", e.target.value)} placeholder="City" />
+                    </label>
+                    <label>
+                      <span className="mb-2 block text-xs font-black text-white/55">{getAddressStateLabel(resolveCheckoutCountry(form.country)?.iso ?? form.country)}</span>
+                      <input
+                        className={fieldClass}
+                        autoComplete="address-level1"
+                        value={form.state}
+                        onChange={(e) => updateField("state", e.target.value)}
+                        placeholder={stateRequired ? "Required when needed" : "Optional"}
+                        aria-required={stateRequired}
+                      />
                     </label>
 
                     {productAvailability.checked && form.country && hasAvailabilityBlock && (

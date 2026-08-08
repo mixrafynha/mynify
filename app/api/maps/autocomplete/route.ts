@@ -8,6 +8,7 @@ type AddressSuggestion = {
   postalCode?: string;
   country?: string;
   state?: string;
+  stateCode?: string;
   countryCode?: string;
 };
 
@@ -93,6 +94,7 @@ function normalizePlace(place: any): AddressSuggestion {
   const country = getComponent(components, "country");
   const countryCode = getComponent(components, "country", "shortText");
   const state = getComponent(components, "administrative_area_level_1");
+  const stateCode = getComponent(components, "administrative_area_level_1", "shortText");
 
   const address = [streetNumber, route].filter(Boolean).join(" ") || [premise, subpremise].filter(Boolean).join(" ") || place?.displayName?.text || place?.formattedAddress || "";
 
@@ -104,6 +106,7 @@ function normalizePlace(place: any): AddressSuggestion {
     country,
     countryCode,
     state,
+    stateCode,
     placeId: typeof place?.id === "string" ? place.id : undefined,
   };
 }

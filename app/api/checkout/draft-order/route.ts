@@ -20,6 +20,7 @@ email?: string;
     addressLine2?: string;
     city?: string;
     state?: string;
+    stateCode?: string;
     postalCode?: string;
     countryCode?: string;
   };
@@ -122,7 +123,8 @@ function normalizeAddress(body: DraftBody) {
     addressLine1: cleanText(address.addressLine1),
     addressLine2: cleanText(address.addressLine2) || undefined,
     city: cleanText(address.city),
-    state: cleanText(address.state) || undefined,
+    state: cleanText(address.stateCode) || cleanText(address.state) || undefined,
+    stateCode: cleanText(address.stateCode) || undefined,
     postalCode: cleanText(address.postalCode),
     countryCode: resolveCountryCode(countryCode) ?? countryCode,
   };
@@ -636,6 +638,7 @@ export async function POST(req: Request) {
       cityPresent: Boolean(address.city),
       addressLine1Present: Boolean(address.addressLine1),
       statePresent: Boolean(address.state),
+      stateCodePresent: Boolean(address.stateCode),
       emailPresent: Boolean(address.email),
       phonePresent: Boolean(address.phone),
     });
