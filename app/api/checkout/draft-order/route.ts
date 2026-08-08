@@ -60,7 +60,6 @@ type VariantRow = {
   size: string | null;
   product_color_id: string | null;
   gelato_product_uid: string | null;
-  gelato_family_key?: string | null;
   price: number | string | null;
   name?: string | null;
 };
@@ -560,7 +559,7 @@ export async function POST(req: Request) {
     const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
 
     const productRowsPromise = supabase.from("products").select("id, gelato_product_uid, price").in("id", productIds);
-    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, gelato_family_key, price, name").in("id", variantHints);
+    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, price, name").in("id", variantHints);
     const syncStateRowsPromise = readGelatoSyncStates(productIds);
     const userProductRowsPromise = userProductIds.length
       ? supabase
@@ -631,7 +630,7 @@ export async function POST(req: Request) {
     if (fallbackVariantIds.length) {
       const { data: fallbackVariantRows, error: fallbackVariantRowsError } = await supabase
         .from("product_variants")
-        .select("id, sku, size, product_color_id, gelato_product_uid, gelato_family_key, price, name")
+        .select("id, sku, size, product_color_id, gelato_product_uid, price, name")
         .in("id", fallbackVariantIds);
       if (fallbackVariantRowsError) {
         console.error("[checkout:draft:fallback-variants-query-failed]", {
@@ -762,7 +761,7 @@ export async function POST(req: Request) {
       const syncState = syncStateMap.get(cartRow.product_id) ?? null;
       const catalogUid = syncState?.catalog_uid ?? null;
       const catalogUidSource = catalogUid ? "gelato_catalog_sync_state" : "missing";
-      const familyKey = variant?.gelato_family_key ?? null;
+      const familyKey = null;
 
       let printAreaResolution: GelatoPrintAreaResolution = {
         productUid,
