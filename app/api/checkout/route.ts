@@ -788,51 +788,176 @@ export async function POST(req: Request) {
       const computedShipping = shippingAmount / 100;
       const computedTotal = (totalAmount + shippingAmount) / 100;
 
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert({
-          user_id: user.id,
-          product_id: firstItem.product_id,
-          product_title:
-            orderItems.length === 1
-              ? firstItem.title
-              : `${orderItems.length} products`,
-          product_price: computedTotal,
-          product_currency: "EUR",
-          title:
-            orderItems.length === 1
-              ? firstItem.title
-              : `${orderItems.length} products`,
-          price: computedTotal,
-          currency: "EUR",
-          status: "pending",
-          payment_status: "pending",
-          gelato_status: "draft",
-          checkout_draft_id: body.draftOrderId ?? null,
-          gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? null,
-          subtotal: computedSubtotal,
-          shipping_amount: computedShipping,
-          total: computedTotal,
-          shipping_address: draftShippingAddress ?? shippingAddress,
-          shipping_method: draftShippingMethod ?? selectedQuoteOption,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
+      const orderSnapshot = {
+        user_id: user.id,
+        product_id: firstItem.product_id,
+        product_title:
+          orderItems.length === 1
+            ? firstItem.title
+            : `${orderItems.length} products`,
+        product_price: computedTotal,
+        product_currency: "EUR",
+        title:
+          orderItems.length === 1
+            ? firstItem.title
+            : `${orderItems.length} products`,
+        price: computedTotal,
+        currency: "EUR",
+        status: "pending",
+        payment_status: "pending",
+        gelato_status: "draft",
+        checkout_draft_id: body.draftOrderId ?? null,
+        gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? null,
+        subtotal: computedSubtotal,
+        shipping_amount: computedShipping,
+        total: computedTotal,
+        shipping_address: draftShippingAddress ?? shippingAddress,
+        shipping_method: draftShippingMethod ?? selectedQuoteOption,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (orderError || !order) {
-        console.error("CHECKOUT_ORDER_CREATE_ERROR", {
-          code: orderError?.code,
-        });
+      let order: { id: string; stripe_session_id?: string | null } | null = null;
+      let reusedPendingOrder = false;
 
-        return NextResponse.json(
-          { error: "Failed to create order" },
-          { status: 500 },
-        );
+      if (body.draftOrderId) {
+        const { data: existingOrder, error: existingOrderError } = await supabase
+          .from("orders")
+          .select("id, stripe_session_id, payment_status, status")
+          .eq("checkout_draft_id", body.draftOrderId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (existingOrderError) {
+          console.error("CHECKOUT_EXISTING_ORDER_LOOKUP_ERROR", {
+            code: existingOrderError.code,
+          });
+
+          return NextResponse.json(
+            { error: "Failed to check existing order" },
+            { status: 500 },
+          );
+        }
+
+        if (existingOrder) {
+          if (existingOrder.payment_status === "paid") {
+            return NextResponse.json(
+              {
+                success: false,
+                code: "ORDER_ALREADY_PAID",
+                message: "This checkout has already been paid.",
+                orderId: existingOrder.id,
+              },
+              { status: 409 },
+            );
+          }
+
+          if (existingOrder.stripe_session_id) {
+            try {
+              const existingSession = await stripe.checkout.sessions.retrieve(
+                existingOrder.stripe_session_id,
+              );
+
+              if (
+                existingSession.status === "open" &&
+                existingSession.url
+              ) {
+                console.info("[checkout:final:reuse-stripe-session]", {
+                  orderId: existingOrder.id,
+                  stripeSessionId: existingSession.id,
+                  draftOrderId: body.draftOrderId,
+                });
+
+                return NextResponse.json({
+                  url: existingSession.url,
+                  reused: true,
+                  orderId: existingOrder.id,
+                });
+              }
+            } catch (sessionLookupError) {
+              console.warn("[checkout:final:reuse-stripe-session-failed]", {
+                orderId: existingOrder.id,
+                stripeSessionId: existingOrder.stripe_session_id,
+                message:
+                  sessionLookupError instanceof Error
+                    ? sessionLookupError.message
+                    : "Unknown Stripe session lookup error",
+              });
+            }
+          }
+
+          const { data: updatedOrder, error: updateExistingOrderError } =
+            await supabase
+              .from("orders")
+              .update(orderSnapshot)
+              .eq("id", existingOrder.id)
+              .eq("user_id", user.id)
+              .select("id, stripe_session_id")
+              .single();
+
+          if (updateExistingOrderError || !updatedOrder) {
+            console.error("CHECKOUT_ORDER_REUSE_UPDATE_ERROR", {
+              code: updateExistingOrderError?.code,
+            });
+
+            return NextResponse.json(
+              { error: "Failed to refresh pending order" },
+              { status: 500 },
+            );
+          }
+
+          order = updatedOrder;
+          reusedPendingOrder = true;
+
+          const { error: deleteOldItemsError } = await supabase
+            .from("order_items")
+            .delete()
+            .eq("order_id", order.id)
+            .eq("user_id", user.id);
+
+          if (deleteOldItemsError) {
+            console.error("CHECKOUT_ORDER_ITEMS_RESET_ERROR", {
+              code: deleteOldItemsError.code,
+            });
+
+            return NextResponse.json(
+              { error: "Failed to refresh order items" },
+              { status: 500 },
+            );
+          }
+        }
+      }
+
+      if (!order) {
+        const { data: insertedOrder, error: orderError } = await supabase
+          .from("orders")
+          .insert({
+            ...orderSnapshot,
+            created_at: new Date().toISOString(),
+          })
+          .select("id, stripe_session_id")
+          .single();
+
+        if (orderError || !insertedOrder) {
+          console.error("CHECKOUT_ORDER_CREATE_ERROR", {
+            code: orderError?.code,
+          });
+
+          return NextResponse.json(
+            { error: "Failed to create order" },
+            { status: 500 },
+          );
+        }
+
+        order = insertedOrder;
       }
 
       createdOrderId = order.id;
+
+      console.info("[checkout:final:order-resolution]", {
+        orderId: order.id,
+        draftOrderId: body.draftOrderId ?? null,
+        reusedPendingOrder,
+      });
 
       const orderItemRows = orderItems.map((item) => ({
         order_id: order.id,
@@ -861,7 +986,11 @@ export async function POST(req: Request) {
           code: orderItemsError.code,
         });
 
-        await supabase.from("orders").delete().eq("id", order.id);
+        // Do not delete an existing pending order on retry; leave it available
+        // for another safe checkout attempt.
+        if (!reusedPendingOrder) {
+          await supabase.from("orders").delete().eq("id", order.id);
+        }
 
         return NextResponse.json(
           { error: "Failed to create order items" },
@@ -897,7 +1026,7 @@ export async function POST(req: Request) {
           checkout_draft_id: body.draftOrderId ?? "",
           gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? "",
           source: "ryfio_checkout",
-          cart_item_ids: requestedCartItemIds.join(",").slice(0, 500),
+          cart_item_ids: effectiveCartItemIds.join(",").slice(0, 500),
           item_count: String(orderItems.length),
           shipping_option_id: selectedQuoteOption.id,
           shipping_price: String(selectedQuoteOption.price),
