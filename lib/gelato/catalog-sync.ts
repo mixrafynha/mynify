@@ -755,10 +755,6 @@ function cleanPrintPricingMarketCurrency(value: unknown): string | null {
   return currency && /^[A-Z]{3}$/.test(currency) ? currency : null;
 }
 
-function extractVariantUidAttribute(attributes: Record<string, string>): string | null {
-  return extractVariantUidFromAttributes(attributes);
-}
-
 function derivePrintFamilyProductUids(
   products: GelatoCatalogSearchProduct[],
   referenceProduct: GelatoProductDetails,
@@ -784,6 +780,44 @@ function derivePrintFamilyProductUids(
     const size = deriveSizeData(product, new Map<string, GelatoCatalogAttribute>());
     return color.colorKey === referenceColor.colorKey && size.sizeKey === referenceSize.sizeKey;
   });
+}
+
+function extractCatalogUidFromGelatoProduct(product: GelatoProductDetails): string | null {
+  const record = product as Record<string, unknown>;
+  const catalog = isPlainObject(record.catalog) ? record.catalog as Record<string, unknown> : null;
+  const attributes = isPlainObject(product.attributes) ? product.attributes as Record<string, unknown> : {};
+
+  return (
+    cleanString(record.catalogUid) ??
+    cleanString(record.catalog_uid) ??
+    cleanString(record.catalogId) ??
+    cleanString(record.catalog_id) ??
+    cleanString(catalog?.catalogUid) ??
+    cleanString(catalog?.catalog_uid) ??
+    cleanString(catalog?.uid) ??
+    cleanString(attributes.CatalogUid) ??
+    cleanString(attributes.catalogUid)
+  );
+}
+
+async function findCatalogUidContainingProduct(
+  productUid: string,
+  familyFilters: CatalogSyncFilters,
+): Promise<string | null> {
+  const catalogs = await listGelatoCatalogs();
+
+  for (const catalog of catalogs) {
+    try {
+      const page = await searchGelatoCatalogProducts(catalog.catalogUid, familyFilters, SEARCH_PAGE_SIZE, 0);
+      if ((page.products ?? []).some((product) => product.productUid === productUid)) {
+        return catalog.catalogUid;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }
 
 export async function resolveGelatoPrintPricingForVariant(input: {
@@ -840,6 +874,11 @@ export async function resolveGelatoPrintPricingForVariant(input: {
 
   const colorName = cleanString((colorRow as { color?: string | null }).color ?? null);
   const sizeName = cleanString(variant.size);
+  const referenceProduct = await getGelatoProduct(frontUid);
+  const familyAttributes = extractGelatoFamilyAttributes({
+    ...referenceProduct,
+    productUid: frontUid,
+  } as GelatoProductDetails);
 
   const { data: syncState, error: syncStateError } = await supabase
     .from("gelato_catalog_sync_state")
@@ -847,12 +886,16 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     .eq("product_id", colorRow.product_id)
     .maybeSingle();
   if (syncStateError) throw new Error(syncStateError.message);
-  const catalogUid = cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null);
+  const catalogUid =
+    extractCatalogUidFromGelatoProduct(referenceProduct) ??
+    cleanString(familyAttributes.catalogUid) ??
+    cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null) ??
+    await findCatalogUidContainingProduct(frontUid, familyAttributes.familyFilters);
+
   if (!catalogUid) {
-    throw new Error("Missing gelato catalog UID for this product. Run family sync first.");
+    throw new Error("Unable to resolve Gelato catalog UID for this product variant.");
   }
 
-  const referenceProduct = await getGelatoProduct(frontUid);
   const familySearch = await searchGelatoProductFamily(catalogUid, frontUid);
   const familyCandidates = derivePrintFamilyProductUids(familySearch.familyProducts, referenceProduct);
   const referenceAttributes = isPlainObject(referenceProduct.attributes)
@@ -935,9 +978,8 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     throw new Error(`Resolved front+back cost is lower than front cost for ${variantId}.`);
   }
 
-  const currentAttributes = normalizePrintPricingCache(variant.gelato_attributes);
   const nextAttributes = mergeGelatoAttributesWithPrintPricing(
-    currentAttributes as JsonValue | null,
+    variant.gelato_attributes,
     countryCode,
     currency,
     {
