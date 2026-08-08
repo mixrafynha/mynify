@@ -558,18 +558,31 @@ export async function POST(req: Request) {
 
         /*
          * PREÇO OFICIAL FINAL:
-         * - para designs guardados, user_products.final_price é calculado no backend
-         *   (inclui +€6 quando existe impressão frente + costas);
-         * - para produto normal, usa variant.price e depois products.price.
+         * - a variante atual é sempre a fonte do preço base no checkout;
+         * - para designs guardados, o único suplemento aceite é o +€6 do segundo print,
+         *   persistido server-side em user_products.markup pelo Save Design;
+         * - user_products.final_price NÃO é usado como fonte principal porque pode ter
+         *   sido calculado para uma variante anterior antes de o utilizador trocar tamanho/cor.
          * Nunca usamos cart_items.price nem preço enviado pelo browser.
          */
         const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
         const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
-        const savedDesignPrice = Number(userProduct?.final_price);
-        let officialPrice = Number.isFinite(savedDesignPrice) && savedDesignPrice > 0
-          ? savedDesignPrice
-          : Number(variant?.price ?? product.price);
+        const currentVariantBasePrice = Number(variant?.price ?? userProduct?.price ?? product.price);
+        const storedMarkup = Number(userProduct?.markup ?? 0);
+        const trustedSecondPrintCharge = userProduct && storedMarkup === 6 ? 6 : 0;
+        const officialPrice = currentVariantBasePrice + trustedSecondPrintCharge;
         const officialBaseCurrency = "EUR";
+
+        console.info("[checkout:final:price-resolution]", {
+          cartItemId: cartItem.id,
+          variantId: variant?.id ?? null,
+          variantBasePrice: Number.isFinite(currentVariantBasePrice) ? currentVariantBasePrice : null,
+          userProductId: userProduct?.id ?? null,
+          storedFinalPrice: userProduct?.final_price ?? null,
+          trustedSecondPrintCharge,
+          officialPrice: Number.isFinite(officialPrice) ? officialPrice : null,
+          policy: "current_variant_plus_server_second_print",
+        });
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {
           return NextResponse.json(
