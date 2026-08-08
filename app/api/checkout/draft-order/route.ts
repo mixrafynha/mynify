@@ -46,6 +46,7 @@ type CartRow = {
 type ProductRow = {
   id: string;
   gelato_product_uid: string | null;
+  price: number | string | null;
 };
 
 type VariantRow = {
@@ -54,6 +55,7 @@ type VariantRow = {
   size: string | null;
   product_color_id: string | null;
   gelato_product_uid: string | null;
+  price: number | string | null;
   name?: string | null;
 };
 
@@ -61,6 +63,9 @@ type UserProductRow = {
   id: string;
   user_id: string | null;
   gelato_product_uid: string | null;
+  price: number | string | null;
+  markup: number | string | null;
+  final_price: number | string | null;
   design_data: Record<string, unknown> | null;
   print_files: Record<string, unknown> | null;
   mockups: Record<string, unknown> | null;
@@ -383,12 +388,12 @@ export async function POST(req: Request) {
     const productIds = Array.from(new Set((cartRows ?? []).map((row) => row.product_id)));
     const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
 
-    const productRowsPromise = supabase.from("products").select("id, gelato_product_uid").in("id", productIds);
-    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, name").in("id", variantHints);
+    const productRowsPromise = supabase.from("products").select("id, gelato_product_uid, price").in("id", productIds);
+    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, price, name").in("id", variantHints);
     const userProductRowsPromise = userProductIds.length
       ? supabase
           .from("user_products")
-          .select("id, user_id, design_data, print_files, mockups")
+          .select("id, user_id, price, markup, final_price, design_data, print_files, mockups")
           .eq("user_id", authData.user.id)
           .in("id", userProductIds)
       : Promise.resolve({ data: [] as UserProductRow[], error: null });
@@ -421,7 +426,7 @@ export async function POST(req: Request) {
     const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
     const userProductById = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
 
-    const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[] }> = [];
+    const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[]; unitPrice: number }> = [];
     let subtotal = 0;
     const quoteCurrency = "EUR";
 
@@ -566,8 +571,38 @@ export async function POST(req: Request) {
           missingSides: [],
         });
       }
-      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal });
-      subtotal += 0;
+      // Keep the draft financial snapshot aligned with the final Stripe checkout:
+      // current server-side variant price + the trusted €6 second-print charge
+      // persisted by Save Design. Never use a price supplied by the browser.
+      const product = productMap.get(cartRow.product_id);
+      const currentVariantBasePrice = Number(variant?.price ?? resolvedUserProduct?.price ?? product?.price ?? 0);
+      const storedMarkup = Number(resolvedUserProduct?.markup ?? 0);
+      const trustedSecondPrintCharge = resolvedUserProduct && storedMarkup === 6 ? 6 : 0;
+      const unitPrice = currentVariantBasePrice + trustedSecondPrintCharge;
+
+      if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+        return conflict("INVALID_OFFICIAL_PRICE", "Unable to resolve an official EUR price for this cart item.", {
+          cartItemId: cartRow.id,
+          variantId: variant?.id ?? null,
+        });
+      }
+
+      console.info("[checkout:draft:price-resolution]", {
+        cartItemId: cartRow.id,
+        variantId: variant?.id ?? null,
+        variantBasePrice: currentVariantBasePrice,
+        userProductId: resolvedUserProduct?.id ?? null,
+        storedFinalPrice: resolvedUserProduct?.final_price ?? null,
+        trustedSecondPrintCharge,
+        unitPrice,
+        quantity,
+        lineTotal: unitPrice * quantity,
+        currency: "EUR",
+        policy: "current_variant_plus_server_second_print",
+      });
+
+      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal, unitPrice });
+      subtotal += unitPrice * quantity;
     }
 
     const quoteItems = resolvedItems.map((item) => ({
