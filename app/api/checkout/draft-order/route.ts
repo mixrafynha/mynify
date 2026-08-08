@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload } from "@/lib/gelato/checkout-quote";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { getGelatoProduct, searchGelatoCatalogProducts, type GelatoCatalogSearchProduct, type GelatoProductDetails } from "@/lib/gelato/catalog-sync";
 import { resolveGelatoPrintFiles, type CartItem, type CartVariant } from "@/app/checkout/_lib/checkout";
 
 export const runtime = "nodejs";
@@ -75,6 +76,18 @@ type UserProductRow = {
 };
 
 type GelatoFile = { type: string; url: string };
+
+type GelatoPrintAreaResolution = {
+  productUid: string;
+  currentPrintAreas: string[];
+  resolvedPrintAreas: string[];
+  resolvedFrom: "current" | "catalog_search";
+};
+
+type GelatoSyncStateRow = {
+  product_id: string;
+  catalog_uid: string | null;
+};
 
 const conflict = (
   code: string,
@@ -241,6 +254,98 @@ function buildProductionFiles(printFiles: Record<string, unknown> | null | undef
   return files;
 }
 
+function uniqueStrings(values: Iterable<string>) {
+  return [...new Set([...values].map((value) => value.trim().toLowerCase()).filter(Boolean))];
+}
+
+function collectPrintAreasFromUnknown(value: unknown, path: string[] = []): string[] {
+  if (!value) return [];
+  if (typeof value === "string") {
+    const key = path.at(-1)?.toLowerCase() ?? "";
+    return /^(type|filetype|file_type|uid|name|id|printarea|print_area|area|placement|location)$/.test(key)
+      ? [value]
+      : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry, index) => collectPrintAreasFromUnknown(entry, [...path, String(index)]));
+  }
+  if (typeof value !== "object") return [];
+
+  const record = value as Record<string, unknown>;
+  return Object.entries(record).flatMap(([key, entry]) => {
+    const keyPath = [...path, key];
+    const keyLooksRelevant = /print.?areas?|print.?locations?|file.?types?|placements?/i.test(key);
+    if (keyLooksRelevant) return collectPrintAreasFromUnknown(entry, keyPath);
+    return collectPrintAreasFromUnknown(entry, keyPath).filter((area) => area === "default" || area === "back");
+  });
+}
+
+function extractProductPrintAreas(product: GelatoProductDetails | GelatoCatalogSearchProduct | null | undefined) {
+  if (!product) return [];
+  const direct = uniqueStrings(collectPrintAreasFromUnknown(product));
+  const supported = direct.filter((area) => area === "default" || area === "back");
+  return supported.length ? supported : ["default"];
+}
+
+function supportsRequiredPrintAreas(available: string[], required: string[]) {
+  const availableSet = new Set(available);
+  return required.every((area) => availableSet.has(area));
+}
+
+function isPrintConfigurationAttribute(attributeUid: string) {
+  return /print|area|placement|location|side|position|application/i.test(attributeUid);
+}
+
+function buildEquivalentProductFilters(attributes: Record<string, string>) {
+  return Object.fromEntries(
+    Object.entries(attributes)
+      .filter(([key, value]) => value.trim() && !isPrintConfigurationAttribute(key))
+      .map(([key, value]) => [key, [value.trim()]]),
+  );
+}
+
+async function resolveProductUidForPrintAreas(input: {
+  currentProductUid: string;
+  productId: string;
+  catalogUid: string | null;
+  requiredPrintAreas: string[];
+}): Promise<GelatoPrintAreaResolution> {
+  const currentDetails = await getGelatoProduct(input.currentProductUid);
+  const currentPrintAreas = extractProductPrintAreas(currentDetails);
+  if (supportsRequiredPrintAreas(currentPrintAreas, input.requiredPrintAreas)) {
+    return {
+      productUid: input.currentProductUid,
+      currentPrintAreas,
+      resolvedPrintAreas: currentPrintAreas,
+      resolvedFrom: "current",
+    };
+  }
+
+  if (!input.catalogUid) {
+    throw new Error("Missing Gelato catalog UID for back-print product resolution.");
+  }
+
+  const filters = buildEquivalentProductFilters(currentDetails.attributes ?? {});
+  const searchResult = await searchGelatoCatalogProducts(input.catalogUid, filters, 100, 0);
+  const candidates = Array.isArray(searchResult.products) ? searchResult.products : [];
+
+  for (const candidate of candidates) {
+    if (candidate.productUid === input.currentProductUid) continue;
+    const candidateDetails = await getGelatoProduct(candidate.productUid);
+    const candidatePrintAreas = extractProductPrintAreas(candidateDetails);
+    if (supportsRequiredPrintAreas(candidatePrintAreas, input.requiredPrintAreas)) {
+      return {
+        productUid: candidate.productUid,
+        currentPrintAreas,
+        resolvedPrintAreas: candidatePrintAreas,
+        resolvedFrom: "catalog_search",
+      };
+    }
+  }
+
+  throw new Error("Unable to resolve a Gelato product UID that supports front and back print areas.");
+}
+
 function determineRequiredSides(userProduct: UserProductRow | null) {
   const designData = userProduct?.design_data && typeof userProduct.design_data === "object" ? (userProduct.design_data as Record<string, unknown>) : null;
   const frontElements = designData?.sides && typeof designData.sides === "object"
@@ -396,6 +501,12 @@ export async function POST(req: Request) {
 
     const productRowsPromise = supabase.from("products").select("id, gelato_product_uid, price").in("id", productIds);
     const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, price, name").in("id", variantHints);
+    const syncStateRowsPromise = productIds.length
+      ? supabase
+          .from("gelato_catalog_sync_state")
+          .select("product_id, catalog_uid")
+          .in("product_id", productIds)
+      : Promise.resolve({ data: [] as GelatoSyncStateRow[], error: null });
     const userProductRowsPromise = userProductIds.length
       ? supabase
           .from("user_products")
@@ -404,11 +515,13 @@ export async function POST(req: Request) {
           .in("id", userProductIds)
       : Promise.resolve({ data: [] as UserProductRow[], error: null });
 
-    const [{ data: productRows }, { data: variantRows }, userProductResult] = await Promise.all([
+    const [{ data: productRows }, { data: variantRows }, syncStateResult, userProductResult] = await Promise.all([
       productRowsPromise,
       variantRowsPromise,
+      syncStateRowsPromise,
       userProductRowsPromise,
     ]);
+    const syncStateRows = "data" in syncStateResult ? syncStateResult.data : [];
     const userProductRows = "data" in userProductResult ? userProductResult.data : [];
     const userProductRowsError = "error" in userProductResult ? userProductResult.error : null;
 
@@ -430,6 +543,7 @@ export async function POST(req: Request) {
 
     const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
     const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
+    const syncStateMap = new Map((syncStateRows ?? []).map((row) => [(row as GelatoSyncStateRow).product_id, row as GelatoSyncStateRow]));
     const userProductById = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
 
     const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[]; unitPrice: number }> = [];
@@ -469,7 +583,8 @@ export async function POST(req: Request) {
       }
 
       const product = productMap.get(cartRow.product_id) ?? null;
-      const productUid = resolveProductUid(variant, cartRow as CartRow, userProduct, product);
+      const currentProductUid = resolveProductUid(variant, cartRow as CartRow, userProduct, product);
+      let productUid = currentProductUid;
       if (!productUid) {
         return conflict("MISSING_PRODUCT_UID", "Unable to resolve the Gelato product UID for this cart item.", { cartItemId: cartRow.id });
       }
@@ -524,6 +639,53 @@ export async function POST(req: Request) {
       const printFilesFinal = buildProductionFiles(printFilesRecord);
       const frontPrintFile = printFilesFinal.find((file) => file.type === "default")?.url ?? null;
       const backPrintFile = printFilesFinal.find((file) => file.type === "back")?.url ?? null;
+      const hasBack = backHasDesign && Boolean(backPrintFile);
+      const requiredPrintAreas = hasBack ? ["default", "back"] : ["default"];
+
+      let printAreaResolution: GelatoPrintAreaResolution = {
+        productUid,
+        currentPrintAreas: ["default"],
+        resolvedPrintAreas: ["default"],
+        resolvedFrom: "current",
+      };
+      if (hasBack) {
+        try {
+          printAreaResolution = await resolveProductUidForPrintAreas({
+            currentProductUid: productUid,
+            productId: cartRow.product_id,
+            catalogUid: syncStateMap.get(cartRow.product_id)?.catalog_uid ?? null,
+            requiredPrintAreas,
+          });
+          productUid = printAreaResolution.productUid;
+        } catch (error) {
+          console.error("[checkout:draft:print-area-resolution-failed]", {
+            cartItemId: cartRow.id,
+            currentProductUid,
+            hasFront: Boolean(frontPrintFile),
+            hasBack,
+            requiredPrintAreas,
+            message: error instanceof Error ? error.message : "Unknown Gelato print area resolution error.",
+          });
+          return conflict("GELATO_PRINT_AREAS_UNSUPPORTED", "Unable to resolve a Gelato product UID that supports front and back print areas.", {
+            cartItemId: cartRow.id,
+            currentProductUid,
+            requiredPrintAreas,
+          });
+        }
+      }
+
+      console.info("[checkout:draft:print-area-resolution]", {
+        cartItemId: cartRow.id,
+        currentProductUid,
+        hasFront: Boolean(frontPrintFile),
+        hasBack,
+        requiredPrintAreas,
+        currentPrintAreas: printAreaResolution.currentPrintAreas,
+        resolvedProductUid: productUid,
+        resolvedPrintAreas: printAreaResolution.resolvedPrintAreas,
+        resolvedFrom: printAreaResolution.resolvedFrom,
+        filesSent: printFilesFinal.map((file) => file.type),
+      });
       console.info("[checkout:draft:production-files]", {
         cartItemId: cartRow.id,
         printFilesFound: {
