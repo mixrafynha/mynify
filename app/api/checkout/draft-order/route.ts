@@ -185,6 +185,33 @@ function resolveVariantId(row: CartRow, userProduct: UserProductRow | null) {
   );
 }
 
+function getCartSelectedVariant(row: CartRow) {
+  return row.selected_variant && typeof row.selected_variant === "object" ? row.selected_variant : null;
+}
+
+function getSavedSelectedVariant(userProduct: UserProductRow | null) {
+  const designRecord =
+    userProduct?.design_data && typeof userProduct.design_data === "object"
+      ? (userProduct.design_data as Record<string, unknown>)
+      : null;
+  return designRecord?.selectedVariant && typeof designRecord.selectedVariant === "object"
+    ? (designRecord.selectedVariant as Record<string, unknown>)
+    : null;
+}
+
+function resolveSavedVariantId(userProduct: UserProductRow | null) {
+  const designRecord =
+    userProduct?.design_data && typeof userProduct.design_data === "object"
+      ? (userProduct.design_data as Record<string, unknown>)
+      : null;
+  const selectedVariant = getSavedSelectedVariant(userProduct);
+  return firstString(
+    designRecord ? designRecord.variantId : null,
+    selectedVariant?.id,
+    selectedVariant?.variantId,
+  );
+}
+
 function resolveProductUid(variant: VariantRow | null, row: CartRow, userProduct: UserProductRow | null, product: ProductRow | null | undefined) {
   const selectedVariant = row.selected_variant && typeof row.selected_variant === "object" ? row.selected_variant : null;
   const designData = userProduct?.design_data && typeof userProduct.design_data === "object" ? userProduct.design_data : null;
@@ -578,10 +605,48 @@ export async function POST(req: Request) {
       );
     }
 
-    const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
-    const variantMap = new Map((variantRows ?? []).map((row) => [(row as VariantRow).id, row as VariantRow]));
-    const syncStateMap = new Map((syncStateRows ?? []).map((row) => [(row as GelatoSyncStateRow).product_id, row as GelatoSyncStateRow]));
     const userProductById = new Map((userProductRows ?? []).map((row) => [(row as UserProductRow).id, row as UserProductRow]));
+    let allVariantRows = (variantRows ?? []) as VariantRow[];
+    const fallbackVariantIds = Array.from(
+      new Set(
+        (cartRows ?? [])
+          .flatMap((row) => {
+            const userProductId = row.user_product_id;
+            const userProduct =
+              typeof userProductId === "string"
+                ? userProductById.get(userProductId) ?? null
+                : null;
+            const legacyDesignUserProduct = !userProduct && row.design_id ? userProductById.get(row.design_id) ?? null : null;
+            const resolvedUserProduct = userProduct ?? legacyDesignUserProduct;
+            const cartSelectedVariant = getCartSelectedVariant(row as CartRow);
+            return [
+              firstString(cartSelectedVariant?.id, cartSelectedVariant?.variantId),
+              resolveSavedVariantId(resolvedUserProduct),
+            ];
+          })
+          .filter((value): value is string => Boolean(value) && !allVariantRows.some((variant) => variant.id === value)),
+      ),
+    );
+
+    if (fallbackVariantIds.length) {
+      const { data: fallbackVariantRows, error: fallbackVariantRowsError } = await supabase
+        .from("product_variants")
+        .select("id, sku, size, product_color_id, gelato_product_uid, gelato_family_key, price, name")
+        .in("id", fallbackVariantIds);
+      if (fallbackVariantRowsError) {
+        console.error("[checkout:draft:fallback-variants-query-failed]", {
+          message: fallbackVariantRowsError.message,
+          code: fallbackVariantRowsError.code,
+          fallbackVariantIds,
+        });
+      } else {
+        allVariantRows = [...allVariantRows, ...((fallbackVariantRows ?? []) as VariantRow[])];
+      }
+    }
+
+    const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
+    const variantMap = new Map(allVariantRows.map((row) => [row.id, row]));
+    const syncStateMap = new Map((syncStateRows ?? []).map((row) => [(row as GelatoSyncStateRow).product_id, row as GelatoSyncStateRow]));
 
     const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[]; unitPrice: number }> = [];
     let subtotal = 0;
@@ -603,16 +668,42 @@ export async function POST(req: Request) {
         loadedUserProductsCount: userProductRows?.length ?? 0,
         loadedUserProductIds: (userProductRows ?? []).map((item) => item.id),
       });
-      const variantId = resolveVariantId(cartRow as CartRow, resolvedUserProduct);
-      const fallbackVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) : undefined;
-      const variant = variantId ? variantMap.get(variantId) ?? fallbackVariant ?? null : fallbackVariant ?? null;
-      if (!variantId || !variant) {
+      const cartSelectedVariant = getCartSelectedVariant(cartRow as CartRow);
+      const savedSelectedVariant = getSavedSelectedVariant(resolvedUserProduct);
+      const savedSelectedVariantId = resolveSavedVariantId(resolvedUserProduct);
+      const cartSelectedVariantId = firstString(cartSelectedVariant?.id, cartSelectedVariant?.variantId);
+      const cartVariant = cartRow.variant_id ? variantMap.get(cartRow.variant_id) ?? null : null;
+      const cartSelectedVariantRow = cartSelectedVariantId ? variantMap.get(cartSelectedVariantId) ?? null : null;
+      const savedSelectedVariantRow = savedSelectedVariantId ? variantMap.get(savedSelectedVariantId) ?? null : null;
+      const variant = cartVariant ?? cartSelectedVariantRow ?? savedSelectedVariantRow ?? null;
+      const resolutionSource = cartVariant
+        ? "cart_items.variant_id"
+        : cartSelectedVariantRow
+          ? "cart_items.selected_variant"
+          : savedSelectedVariantRow
+            ? "user_products.design_data.selectedVariant"
+            : "missing";
+
+      console.info("[checkout:draft:variant-resolution]", {
+        cartItemId: cartRow.id,
+        cartVariantId: cartRow.variant_id ?? null,
+        cartVariantSku: cartVariant?.sku ?? null,
+        savedSelectedVariantId,
+        savedSelectedVariantSku: savedSelectedVariantRow?.sku ?? firstString(savedSelectedVariant?.sku),
+        resolvedVariantId: variant?.id ?? null,
+        resolvedVariantSku: variant?.sku ?? null,
+        resolutionSource,
+      });
+
+      if (!variant) {
         console.error("[checkout:draft:04-variant-failed]", {
           cartItemId: cartRow.id,
           productId: cartRow.product_id ?? null,
           variantId: cartRow.variant_id ?? null,
-          sku: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).sku ?? null : null,
-          size: cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? (cartRow.selected_variant as Record<string, unknown>).size ?? null : null,
+          cartSelectedVariantId,
+          savedSelectedVariantId,
+          sku: cartSelectedVariant?.sku ?? null,
+          size: cartSelectedVariant?.size ?? null,
           selectedVariantKeys:
             cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? Object.keys(cartRow.selected_variant) : [],
         });
@@ -633,16 +724,6 @@ export async function POST(req: Request) {
         ? (userDesignData.selectedVariant as Record<string, unknown>)
         : null;
 
-      const resolutionSource =
-        variant?.gelato_product_uid
-          ? "variant"
-          : cartRow.selected_variant && typeof cartRow.selected_variant === "object" && (cartRow.selected_variant as Record<string, unknown>).gelato_product_uid
-            ? "selected_variant"
-            : userProduct?.gelato_product_uid
-              ? "user_product"
-              : product?.gelato_product_uid
-                ? "product"
-                : "missing";
       console.info("[checkout:draft:04-variant-resolution]", {
         cartItemId: cartRow.id,
         originalVariantId: cartRow.variant_id ?? null,
