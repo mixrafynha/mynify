@@ -764,6 +764,21 @@ function cleanPrintPricingMarketCurrency(value: unknown): string | null {
   return currency && /^[A-Z]{3}$/.test(currency) ? currency : null;
 }
 
+function buildGelatoBaseGarmentKey(attributes: Record<string, unknown>): string {
+  // Deliberately excludes GarmentPrint. 4-0 (front) and 4-4 (front+back)
+  // are print configurations of the same commercial garment, not different garments.
+  const familyValues = [
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["GarmentCategory"]),
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["GarmentStyle"]),
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["GarmentCut"]),
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["GarmentQuality"]),
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["Brand", "ApparelManufacturer"]),
+    extractFamilyAttributeValue(attributes as Record<string, string>, ["Model", "ApparelManufacturerSKU"]),
+  ];
+
+  return familyValues.map((value) => normalizeKey(value ?? "")).join("|");
+}
+
 function derivePrintFamilyProductUids(
   products: GelatoCatalogSearchProduct[],
   referenceProduct: GelatoProductDetails,
@@ -779,16 +794,34 @@ function derivePrintFamilyProductUids(
     { productUid: referenceProduct.productUid, attributes: referenceAttributes },
     new Map<string, GelatoCatalogAttribute>(),
   );
-  const referenceFamilyKey = buildGelatoFamilyKey(referenceAttributes);
+  const referenceBaseGarmentKey = buildGelatoBaseGarmentKey(referenceAttributes);
 
   return products.filter((product) => {
     const attributes = isPlainObject(product.attributes) ? product.attributes as Record<string, string> : {};
-    const familyKey = buildGelatoFamilyKey(attributes);
-    if (familyKey !== referenceFamilyKey) return false;
+    if (buildGelatoBaseGarmentKey(attributes) !== referenceBaseGarmentKey) return false;
     const color = deriveColorData(product, new Map<string, GelatoCatalogAttribute>());
     const size = deriveSizeData(product, new Map<string, GelatoCatalogAttribute>());
     return color.colorKey === referenceColor.colorKey && size.sizeKey === referenceSize.sizeKey;
   });
+}
+
+async function searchGelatoPrintConfigurations(
+  catalogUid: string,
+  referenceProduct: GelatoProductDetails,
+): Promise<GelatoCatalogSearchProduct[]> {
+  const referenceAttributes = isPlainObject(referenceProduct.attributes)
+    ? referenceProduct.attributes as Record<string, string>
+    : {};
+  const { familyFilters } = extractGelatoFamilyAttributes({ ...referenceProduct, catalogUid } as GelatoProductDetails);
+  const filters = { ...(familyFilters as Record<string, unknown>) } as CatalogSyncFilters;
+  // Critical: searching with GarmentPrint=4-0 prevents Gelato from ever returning 4-4.
+  delete (filters as Record<string, unknown>).GarmentPrint;
+
+  const products = await fetchAllGelatoProducts(catalogUid, filters);
+  const withReference = products.some((product) => product.productUid === referenceProduct.productUid)
+    ? products
+    : [...products, { ...referenceProduct, attributes: referenceAttributes } as GelatoCatalogSearchProduct];
+  return dedupeProductsByUid(withReference);
 }
 
 function diagnosticShape(value: unknown) {
@@ -1017,16 +1050,20 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     throw new Error("Unable to resolve Gelato catalog UID for this product variant.");
   }
 
-  const familySearch = await searchGelatoProductFamily(catalogUid, frontUid);
-  const familyCandidates = derivePrintFamilyProductUids(
-    Array.isArray(familySearch.familyProducts) ? familySearch.familyProducts : [],
-    referenceProduct,
-  );
+  // Print-pricing resolution must search the base garment without GarmentPrint.
+  // The global family sync remains unchanged and can continue treating GarmentPrint as part of its family key.
+  const printConfigurationProducts = await searchGelatoPrintConfigurations(catalogUid, referenceProduct);
+  const familyCandidates = derivePrintFamilyProductUids(printConfigurationProducts, referenceProduct);
   const referenceAttributes = isPlainObject(referenceProduct.attributes)
     ? (referenceProduct.attributes as Record<string, string>)
     : {};
   const frontCandidate = familyCandidates.find((product) => product.productUid === frontUid) ?? null;
-  const frontBackCandidates = familyCandidates.filter((product) => product.productUid !== frontUid);
+  const frontBackCandidates = familyCandidates.filter((product) => {
+    if (product.productUid === frontUid) return false;
+    const attributes = isPlainObject(product.attributes) ? product.attributes as Record<string, string> : {};
+    const garmentPrint = normalizeKey(cleanString(attributes.GarmentPrint) ?? "");
+    return garmentPrint === "4-4";
+  });
 
   if (!frontCandidate) {
     throw new Error("Unable to resolve the canonical front product within the Gelato family.");
