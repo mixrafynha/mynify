@@ -71,6 +71,16 @@ type GelatoProductPrice = {
   [key: string]: unknown;
 };
 
+export type GelatoPrintPricingEntry = {
+  productUid: string;
+  cost: number;
+};
+
+export type GelatoPrintPricingCache = {
+  front?: GelatoPrintPricingEntry | null;
+  frontBack?: GelatoPrintPricingEntry | null;
+};
+
 type GelatoSelectedPrice = {
   country: string | null;
   currency: string;
@@ -690,6 +700,271 @@ function buildGelatoVariantSku(entry: DerivedVariantEntry): string {
   const size = entry.sizeKey.toUpperCase().replace(/-/g, "");
 
   return `RYFIO-GELATO-${color}-${size}-${suffix}`.slice(0, 96);
+}
+
+function normalizePrintPricingCache(value: unknown): GelatoPrintPricingCache {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const record = value as Record<string, unknown>;
+  const readEntry = (entry: unknown): GelatoPrintPricingEntry | null => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
+    const row = entry as Record<string, unknown>;
+    const productUid = cleanString(row.productUid);
+    const cost = cleanNumber(row.cost);
+    if (!productUid || cost === null || cost <= 0) return null;
+    return { productUid, cost: roundMoney(cost) };
+  };
+
+  return {
+    front: readEntry(record.front),
+    frontBack: readEntry(record.frontBack),
+  };
+}
+
+function mergeGelatoAttributesWithPrintPricing(
+  existing: JsonValue | null,
+  countryCode: string,
+  currency: string,
+  printPricing: GelatoPrintPricingCache,
+): JsonValue {
+  const base: Record<string, unknown> =
+    existing && typeof existing === "object" && !Array.isArray(existing)
+      ? { ...(existing as Record<string, unknown>) }
+      : {};
+  const currentPrintPricing = base.printPricing && typeof base.printPricing === "object" && !Array.isArray(base.printPricing)
+    ? { ...(base.printPricing as Record<string, unknown>) }
+    : {};
+  const currentCountry = currentPrintPricing[countryCode] && typeof currentPrintPricing[countryCode] === "object" && !Array.isArray(currentPrintPricing[countryCode])
+    ? { ...(currentPrintPricing[countryCode] as Record<string, unknown>) }
+    : {};
+
+  currentCountry[currency] = {
+    ...(printPricing.front ? { front: printPricing.front } : {}),
+    ...(printPricing.frontBack ? { frontBack: printPricing.frontBack } : {}),
+  };
+  currentPrintPricing[countryCode] = currentCountry;
+  base.printPricing = currentPrintPricing;
+  return base as JsonValue;
+}
+
+function cleanPrintPricingMarketCountry(value: unknown): string | null {
+  return cleanCountryIso(value);
+}
+
+function cleanPrintPricingMarketCurrency(value: unknown): string | null {
+  const currency = cleanString(value)?.toUpperCase() ?? null;
+  return currency && /^[A-Z]{3}$/.test(currency) ? currency : null;
+}
+
+function extractVariantUidAttribute(attributes: Record<string, string>): string | null {
+  return extractVariantUidFromAttributes(attributes);
+}
+
+function derivePrintFamilyProductUids(
+  products: GelatoCatalogSearchProduct[],
+  referenceProduct: GelatoProductDetails,
+): GelatoCatalogSearchProduct[] {
+  const referenceAttributes = isPlainObject(referenceProduct.attributes)
+    ? (referenceProduct.attributes as Record<string, string>)
+    : {};
+  const referenceColor = deriveColorData(
+    { productUid: referenceProduct.productUid, attributes: referenceAttributes },
+    new Map<string, GelatoCatalogAttribute>(),
+  );
+  const referenceSize = deriveSizeData(
+    { productUid: referenceProduct.productUid, attributes: referenceAttributes },
+    new Map<string, GelatoCatalogAttribute>(),
+  );
+  const referenceFamilyKey = buildGelatoFamilyKey(referenceAttributes);
+
+  return products.filter((product) => {
+    const attributes = isPlainObject(product.attributes) ? product.attributes as Record<string, string> : {};
+    const familyKey = buildGelatoFamilyKey(attributes);
+    if (familyKey !== referenceFamilyKey) return false;
+    const color = deriveColorData(product, new Map<string, GelatoCatalogAttribute>());
+    const size = deriveSizeData(product, new Map<string, GelatoCatalogAttribute>());
+    return color.colorKey === referenceColor.colorKey && size.sizeKey === referenceSize.sizeKey;
+  });
+}
+
+export async function resolveGelatoPrintPricingForVariant(input: {
+  productVariantId: string;
+  countryCode: string;
+  currency: string;
+}): Promise<{
+  variantId: string;
+  color: string | null;
+  size: string | null;
+  countryCode: string;
+  currency: string;
+  frontUid: string;
+  frontBackUid: string;
+  frontCost: number;
+  frontBackCost: number;
+  additionalBackCost: number;
+  cacheUpdated: boolean;
+}> {
+  const supabase = createSupabaseAdmin();
+  const countryCode = cleanPrintPricingMarketCountry(input.countryCode);
+  const currency = cleanPrintPricingMarketCurrency(input.currency);
+  const variantId = cleanString(input.productVariantId);
+
+  if (!variantId) throw new Error("Missing productVariantId.");
+  if (!countryCode) throw new Error("Missing or invalid countryCode.");
+  if (!currency) throw new Error("Missing or invalid currency.");
+
+  const { data: variantRow, error: variantError } = await supabase
+    .from("product_variants")
+    .select("id, product_color_id, size, gelato_product_uid, gelato_attributes")
+    .eq("id", variantId)
+    .maybeSingle();
+  if (variantError) throw new Error(variantError.message);
+  if (!variantRow) throw new Error("Product variant not found.");
+
+  const variant = variantRow as {
+    id: string;
+    product_color_id: string;
+    size: string | null;
+    gelato_product_uid: string | null;
+    gelato_attributes: JsonValue | null;
+  };
+  const frontUid = cleanString(variant.gelato_product_uid);
+  if (!frontUid) throw new Error("Missing canonical gelato_product_uid on product variant.");
+
+  const { data: colorRow, error: colorError } = await supabase
+    .from("product_colors")
+    .select("id, product_id, color")
+    .eq("id", variant.product_color_id)
+    .maybeSingle();
+  if (colorError) throw new Error(colorError.message);
+  if (!colorRow) throw new Error("Product color not found for variant.");
+
+  const colorName = cleanString((colorRow as { color?: string | null }).color ?? null);
+  const sizeName = cleanString(variant.size);
+
+  const { data: syncState, error: syncStateError } = await supabase
+    .from("gelato_catalog_sync_state")
+    .select("catalog_uid")
+    .eq("product_id", colorRow.product_id)
+    .maybeSingle();
+  if (syncStateError) throw new Error(syncStateError.message);
+  const catalogUid = cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null);
+  if (!catalogUid) {
+    throw new Error("Missing gelato catalog UID for this product. Run family sync first.");
+  }
+
+  const referenceProduct = await getGelatoProduct(frontUid);
+  const familySearch = await searchGelatoProductFamily(catalogUid, frontUid);
+  const familyCandidates = derivePrintFamilyProductUids(familySearch.familyProducts, referenceProduct);
+  const referenceAttributes = isPlainObject(referenceProduct.attributes)
+    ? (referenceProduct.attributes as Record<string, string>)
+    : {};
+  const frontCandidate = familyCandidates.find((product) => product.productUid === frontUid) ?? null;
+  const frontBackCandidates = familyCandidates.filter((product) => product.productUid !== frontUid);
+
+  if (!frontCandidate) {
+    throw new Error("Unable to resolve the canonical front product within the Gelato family.");
+  }
+
+  if (frontBackCandidates.length === 0) {
+    throw new Error("Unable to resolve a front+back Gelato product UID for this variant.");
+  }
+
+  const frontPriceRows = await getGelatoProductPricesForCountry(frontUid, countryCode, currency);
+  const frontPrice = frontPriceRows.find((row) =>
+    cleanCountryIso(row.requestedCountry) === countryCode &&
+    cleanString(row.currency)?.toUpperCase() === currency &&
+    typeof row.quantity === "number" &&
+    row.quantity === 1 &&
+    typeof row.price === "number" &&
+    row.price > 0
+  );
+  if (!frontPrice) {
+    throw new Error(`Missing front price for ${frontUid} in ${countryCode}/${currency}.`);
+  }
+
+  const referenceVariantUid = extractVariantUidFromAttributes(referenceAttributes);
+  const frontBackCandidateDetails = await Promise.all(
+    frontBackCandidates.map(async (candidate) => {
+      const candidateAttributes = isPlainObject(candidate.attributes)
+        ? (candidate.attributes as Record<string, string>)
+        : {};
+      const candidateVariantUid = extractVariantUidFromAttributes(candidateAttributes);
+      const prices = await getGelatoProductPricesForCountry(candidate.productUid, countryCode, currency);
+      const price = prices.find((row) =>
+        cleanCountryIso(row.requestedCountry) === countryCode &&
+        cleanString(row.currency)?.toUpperCase() === currency &&
+        typeof row.quantity === "number" &&
+        row.quantity === 1 &&
+        typeof row.price === "number" &&
+        row.price > 0
+      );
+      const printKeys = Object.keys(candidateAttributes).filter((key) =>
+        /print|area|side|layout|variantuid/i.test(key),
+      );
+      const printDeltaScore = printKeys.reduce((score, key) => {
+        const referenceValue = cleanString(referenceAttributes[key]);
+        const candidateValue = cleanString(candidateAttributes[key]);
+        return score + (referenceValue !== candidateValue ? 1 : 0);
+      }, 0);
+
+      return {
+        productUid: candidate.productUid,
+        price: price?.price ?? null,
+        variantUid: candidateVariantUid,
+        printDeltaScore,
+      };
+    }),
+  );
+
+  const validBackCandidates = frontBackCandidateDetails
+    .filter((candidate): candidate is { productUid: string; price: number; variantUid: string | null; printDeltaScore: number } => typeof candidate.price === "number" && candidate.price > 0)
+    .sort((left, right) =>
+      right.printDeltaScore - left.printDeltaScore ||
+      left.price - right.price ||
+      Number(Boolean(left.variantUid && left.variantUid === referenceVariantUid)) - Number(Boolean(right.variantUid && right.variantUid === referenceVariantUid)),
+    );
+
+  if (validBackCandidates.length === 0) {
+    throw new Error("Unable to resolve a priced front+back Gelato product UID for this variant.");
+  }
+
+  const frontBackUid = validBackCandidates[0].productUid;
+  const frontBackCost = roundMoney(validBackCandidates[0].price);
+  const frontCost = roundMoney(frontPrice.price as number);
+  if (frontBackCost < frontCost) {
+    throw new Error(`Resolved front+back cost is lower than front cost for ${variantId}.`);
+  }
+
+  const currentAttributes = normalizePrintPricingCache(variant.gelato_attributes);
+  const nextAttributes = mergeGelatoAttributesWithPrintPricing(
+    currentAttributes as JsonValue | null,
+    countryCode,
+    currency,
+    {
+      front: { productUid: frontUid, cost: frontCost },
+      frontBack: { productUid: frontBackUid, cost: frontBackCost },
+    },
+  );
+
+  const { error: updateError } = await supabase
+    .from("product_variants")
+    .update({ gelato_attributes: nextAttributes })
+    .eq("id", variantId);
+  if (updateError) throw new Error(updateError.message);
+
+  return {
+    variantId,
+    color: colorName,
+    size: sizeName,
+    countryCode,
+    currency,
+    frontUid,
+    frontBackUid,
+    frontCost,
+    frontBackCost,
+    additionalBackCost: roundMoney(frontBackCost - frontCost),
+    cacheUpdated: true,
+  };
 }
 
 async function getProductOrThrow(productId: string): Promise<ProductRow> {
