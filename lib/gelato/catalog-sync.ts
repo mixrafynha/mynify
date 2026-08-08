@@ -4,7 +4,7 @@ import { convertMoneyToCents } from "@/app/api/checkout/currency";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoColorHex } from "@/lib/gelato/gelato-color-map";
 import { calculateSellingPrice, pricesAlmostEqual, roundSellingPrice, normalizeProfitMarkupPercentage } from "@/lib/gelato/pricing";
-import { resolveMinimumProfit } from "@/lib/gelato/pricing-rules";
+import { resolvePricingRule } from "@/lib/gelato/pricing-rules";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
@@ -1574,23 +1574,47 @@ function calculateVariantSellingPrice(input: {
   category?: string | null;
   title?: string | null;
   slug?: string | null;
+  gelatoProductUid?: string | null;
+  variantName?: string | null;
   targetCurrency?: string | null;
   sourceCurrency?: string | null;
 }): number | null {
   if (input.productionCost === null) return null;
+  const pricingRule = resolvePricingRule({
+    category: input.category,
+    title: input.title,
+    slug: input.slug,
+    gelatoProductUid: input.gelatoProductUid,
+    variantName: input.variantName,
+  });
   const sellingPrice = calculateSellingPrice({
     productionCost: input.productionCost,
     markupPercentage: input.markupPercentage,
     category: input.category,
     title: input.title,
     slug: input.slug,
-    minimumProfit: resolveMinimumProfit({
-      category: input.category,
-      title: input.title,
-      slug: input.slug,
-    }),
+    gelatoProductUid: input.gelatoProductUid,
+    variantName: input.variantName,
+    minimumProfit: pricingRule.minimumProfit,
   });
   if (sellingPrice === null) return null;
+
+  if (
+    input.gelatoProductUid ===
+    "apparel_product_gca_t-shirt_gsc_crewneck_gcu_unisex_gqa_heavy-weight_gsi_s_gco_ash_gpr_4-0_gildan_5000"
+  ) {
+    const markupPercentage = normalizeProfitMarkupPercentage(input.markupPercentage);
+    console.info("[gelato:pricing:test-variant]", {
+      gelatoProductUid: input.gelatoProductUid,
+      cost: input.productionCost,
+      markupPercentage,
+      resolvedPricingRule: pricingRule.group,
+      minimumProfit: pricingRule.minimumProfit,
+      percentagePrice: roundSellingPrice(input.productionCost * (1 + markupPercentage / 100)),
+      minimumProfitPrice: roundSellingPrice(input.productionCost + pricingRule.minimumProfit),
+      finalSellingPrice: sellingPrice,
+    });
+  }
 
   const sourceCurrency = cleanString(input.sourceCurrency)?.toUpperCase() ?? "USD";
   const targetCurrency = cleanString(input.targetCurrency)?.toUpperCase() ?? sourceCurrency;
@@ -1862,6 +1886,8 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
       category: product.category,
       title: product.title,
       slug: product.slug,
+      gelatoProductUid: variant.gelato_product_uid,
+      variantName: variant.name ?? variant.size,
     });
 
     if (sellingPrice === null) {
@@ -2177,6 +2203,8 @@ export async function syncGelatoProductFamily(
         category: productRecord.category,
         title: productRecord.title,
         slug: productRecord.slug,
+        gelatoProductUid: entry.product.productUid,
+        variantName,
         targetCurrency: productCurrency,
         sourceCurrency: referenceProduction.currency,
       });
@@ -2554,6 +2582,8 @@ export async function syncGelatoCatalog(
           category: existingProduct.category,
           title: existingProduct.title,
           slug: existingProduct.slug,
+          gelatoProductUid: entry.product.productUid,
+          variantName,
           targetCurrency: productCurrency,
           sourceCurrency: referenceProduction.currency,
         });
@@ -2951,6 +2981,8 @@ export async function syncGelatoCatalogPage(
           category: existingProduct.category,
           title: existingProduct.title,
           slug: existingProduct.slug,
+          gelatoProductUid: entry.product.productUid,
+          variantName,
           targetCurrency: productCurrency,
           sourceCurrency: referenceProduction.currency,
         });

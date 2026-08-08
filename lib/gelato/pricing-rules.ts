@@ -13,17 +13,23 @@ export type PricingGroupKey =
   | "default";
 
 type PricingRule = {
+  group: PricingGroupKey;
   minimumProfit: number;
   match: readonly string[];
 };
 
 const PRICING_RULES: PricingRule[] = [
-  { minimumProfit: 10, match: ["premium-tshirt", "oversized-tshirt", "oversized tee", "oversized", "premium tee", "premium shirt"] },
-  { minimumProfit: 8, match: ["tshirt", "t-shirts", "tee", "shirt"] },
-  { minimumProfit: 9.5, match: ["crewneck", "sweatshirt", "sweatshirts"] },
-  { minimumProfit: 12.5, match: ["hoodie", "hoodies", "hooded"] },
-  { minimumProfit: 8, match: ["cap", "caps", "bag", "bags", "accessory", "accessories"] },
-  { minimumProfit: 7, match: ["mug", "mugs", "poster", "posters"] },
+  { group: "hoodie", minimumProfit: 12, match: ["hoodie", "hoodies", "hooded"] },
+  { group: "crewneck", minimumProfit: 10, match: ["crewneck"] },
+  { group: "sweatshirt", minimumProfit: 10, match: ["sweatshirt", "sweatshirts"] },
+  { group: "oversized-tshirt", minimumProfit: 10, match: ["oversized-tshirt", "oversized tee", "oversized"] },
+  { group: "premium-tshirt", minimumProfit: 10, match: ["premium-tshirt", "premium tee", "premium shirt"] },
+  { group: "tshirt", minimumProfit: 8, match: ["tshirt", "t-shirt", "t-shirts", "tee", "shirt"] },
+  { group: "cap", minimumProfit: 8, match: ["cap", "caps"] },
+  { group: "bag", minimumProfit: 8, match: ["bag", "bags"] },
+  { group: "mug", minimumProfit: 7, match: ["mug", "mugs"] },
+  { group: "poster", minimumProfit: 7, match: ["poster", "posters"] },
+  { group: "accessory", minimumProfit: 6, match: ["accessory", "accessories"] },
 ];
 
 function normalizeKey(value: string | null | undefined) {
@@ -39,58 +45,60 @@ export function resolvePricingGroup(input: {
   category?: string | null;
   title?: string | null;
   slug?: string | null;
+  gelatoProductUid?: string | null;
+  variantName?: string | null;
 }): PricingGroupKey {
   const haystack = normalizeKey(
-    [input.category, input.title, input.slug].filter(Boolean).join(" "),
+    [input.category, input.title, input.slug, input.gelatoProductUid, input.variantName].filter(Boolean).join(" "),
   );
 
   for (const rule of PRICING_RULES) {
     if (rule.match.some((token) => haystack.includes(normalizeKey(token)))) {
-      const first = rule.match[0];
-      if (first.includes("hoodie")) return "hoodie";
-      if (first.includes("sweat")) return "sweatshirt";
-      if (first.includes("crewneck")) return "crewneck";
-      if (first.includes("premium") && first.includes("oversized")) return "oversized-tshirt";
-      if (first.includes("premium")) return "premium-tshirt";
-      if (first.includes("tshirt") || first.includes("tee") || first.includes("shirt")) return "tshirt";
-      if (first.includes("cap")) return "cap";
-      if (first.includes("bag")) return "bag";
-      if (first.includes("mug")) return "mug";
-      if (first.includes("poster")) return "poster";
-      if (first.includes("accessory")) return "accessory";
+      return rule.group;
     }
   }
 
   return "default";
 }
 
-export function resolveMinimumProfit(input: {
+export function resolvePricingRule(input: {
   category?: string | null;
   title?: string | null;
   slug?: string | null;
-}): number {
+  gelatoProductUid?: string | null;
+  variantName?: string | null;
+}): { group: PricingGroupKey; minimumProfit: number } {
   const group = resolvePricingGroup(input);
   switch (group) {
     case "premium-tshirt":
     case "oversized-tshirt":
-      return 10;
+      return { group, minimumProfit: 10 };
     case "tshirt":
-      return 8;
+      return { group, minimumProfit: 8 };
     case "crewneck":
     case "sweatshirt":
-      return 10;
+      return { group, minimumProfit: 10 };
     case "hoodie":
-      return 12;
+      return { group, minimumProfit: 12 };
     case "cap":
     case "bag":
-      return 8;
+      return { group, minimumProfit: 8 };
     case "mug":
     case "poster":
-      return 7;
+      return { group, minimumProfit: 7 };
     case "accessory":
-      return 6;
+      return { group, minimumProfit: 6 };
     default:
-      return 8;
+      return { group, minimumProfit: 8 };
   }
 }
 
+export function resolveMinimumProfit(input: {
+  category?: string | null;
+  title?: string | null;
+  slug?: string | null;
+  gelatoProductUid?: string | null;
+  variantName?: string | null;
+}): number {
+  return resolvePricingRule(input).minimumProfit;
+}

@@ -25,6 +25,8 @@ export function calculateSellingPrice(input: {
   category?: string | null;
   title?: string | null;
   slug?: string | null;
+  gelatoProductUid?: string | null;
+  variantName?: string | null;
 }): number | null {
   const productionCost = cleanNumber(input.productionCost);
   if (productionCost === null || productionCost <= 0) return null;
@@ -39,6 +41,8 @@ export function calculateSellingPrice(input: {
           category: input.category,
           title: input.title,
           slug: input.slug,
+          gelatoProductUid: input.gelatoProductUid,
+          variantName: input.variantName,
         });
   const minimumProfitPrice = productionCost + resolvedMinimumProfit;
   return roundSellingPrice(Math.max(percentagePrice, minimumProfitPrice));
