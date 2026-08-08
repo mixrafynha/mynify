@@ -109,10 +109,12 @@ function normalizeAddress(body: DraftBody) {
   const address = body.address ?? {};
   const fullName = cleanText(address.fullName);
   const split = splitFullName(fullName);
+  const firstName = cleanText(address.firstName) || split.firstName;
+  const lastName = cleanText(address.lastName) || split.lastName;
   const countryCode = (cleanText(address.countryCode) || "").toUpperCase();
   return {
-    firstName: split.firstName,
-    lastName: split.lastName,
+    firstName,
+    lastName,
     email: cleanText(address.email),
     phone: cleanText(address.phone),
     addressLine1: cleanText(address.addressLine1),
