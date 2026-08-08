@@ -11,8 +11,10 @@ export const dynamic = "force-dynamic";
 type DraftBody = {
   cartItemIds?: string[];
   address?: {
+    firstName?: string;
+    lastName?: string;
     fullName?: string;
-    email?: string;
+email?: string;
     phone?: string;
     addressLine1?: string;
     addressLine2?: string;
