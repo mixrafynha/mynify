@@ -10,6 +10,7 @@ const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
 const GELATO_REQUEST_TIMEOUT_MS = 15000;
 const GELATO_COUNTRY_FETCH_CONCURRENCY = 8;
+const GELATO_COST_DEBUG_VARIANT_SIZES = new Set(["s", "2xl", "3xl", "4xl", "5xl"]);
 
 type JsonValue =
   | string
@@ -62,6 +63,8 @@ type GelatoProductPrice = {
   countryCode?: string;
   country_code?: string;
   isoCode?: string;
+  requestedCountry?: string;
+  requestedCurrency?: string;
   quantity?: number;
   price?: number;
   currency?: string;
@@ -786,16 +789,29 @@ export async function getGelatoProductPrices(productUid: string): Promise<Gelato
 async function getGelatoProductPricesForCountry(
   productUid: string,
   countryIso: string,
+  currencyIso?: string | null,
 ): Promise<GelatoProductPrice[]> {
   validateProductUid(productUid);
   const country = cleanCountryIso(countryIso);
   if (!country) return [];
+  const currency = cleanString(currencyIso)?.toUpperCase() ?? null;
+
+  const params = new URLSearchParams({ country });
+  if (currency) params.set("currency", currency);
 
   const prices = await gelatoFetch<unknown>(
-    `/v3/products/${productUid}/prices?country=${encodeURIComponent(country)}`,
+    `/v3/products/${productUid}/prices?${params.toString()}`,
     { method: "GET" },
   );
-  return Array.isArray(prices) ? prices.filter(isPlainObject) as GelatoProductPrice[] : [];
+  return Array.isArray(prices)
+    ? prices
+        .filter(isPlainObject)
+        .map((price) => ({
+          ...(price as GelatoProductPrice),
+          requestedCountry: country,
+          requestedCurrency: currency ?? undefined,
+        }))
+    : [];
 }
 
 async function mapWithConcurrency<T, R>(
@@ -824,6 +840,7 @@ async function mapWithConcurrency<T, R>(
 
 async function fetchGelatoPricesForAllCountries(
   productUid: string,
+  currencyIso?: string | null,
 ): Promise<{
   prices: GelatoProductPrice[];
   failedCountries: string[];
@@ -839,7 +856,7 @@ async function fetchGelatoPricesForAllCountries(
       try {
         return {
           country,
-          prices: await getGelatoProductPricesForCountry(productUid, country),
+          prices: await getGelatoProductPricesForCountry(productUid, country, currencyIso),
           error: false,
         };
       } catch {
@@ -1236,7 +1253,7 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
   const normalizedPrices: JsonValue[] = [];
 
   for (const price of prices) {
-    const country = resolveCountryCode(price);
+    const country = cleanCountryIso(price.requestedCountry) ?? resolveCountryCode(price);
     const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
       ? price.quantity
       : null;
@@ -1249,6 +1266,8 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
 
     normalizedPrices.push({
       country,
+      requestedCountry: cleanCountryIso(price.requestedCountry),
+      requestedCurrency: cleanString(price.requestedCurrency)?.toUpperCase() ?? null,
       quantity,
       price: roundMoney(amount),
       currency,
@@ -1268,7 +1287,7 @@ function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelecte
 
   const validPrices = prices
     .map((price) => ({
-      country: resolveCountryCode(price),
+      country: cleanCountryIso(price.requestedCountry) ?? resolveCountryCode(price),
       quantity: typeof price.quantity === "number" && Number.isFinite(price.quantity)
         ? Math.trunc(price.quantity)
         : null,
@@ -1375,6 +1394,59 @@ function isGelatoProductAvailable(product: GelatoProductDetails): boolean {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function isGelatoCostDebugVariant(productUid: string | null | undefined) {
+  const normalized = cleanString(productUid)?.toLowerCase() ?? "";
+  if (!normalized.includes("gco_ash") || !normalized.includes("gildan_5000")) return false;
+  const size = normalized.match(/(?:^|_)gsi_([^_]+)/)?.[1] ?? "";
+  return GELATO_COST_DEBUG_VARIANT_SIZES.has(size);
+}
+
+function logGelatoCostDebug(input: {
+  gelatoProductUid: string;
+  requestedCountry: string;
+  rawPrices: GelatoProductPrice[];
+  resolvedMarket: GelatoVariantMarketRow | null;
+  savedMarkets?: GelatoVariantMarketRow[];
+  costPassedToPricing: number | null;
+  finalSellingPrice: number | null;
+}) {
+  if (!isGelatoCostDebugVariant(input.gelatoProductUid)) return;
+  const rawForCountry = input.rawPrices.filter(
+    (price) => (cleanCountryIso(price.requestedCountry) ?? resolveCountryCode(price)) === input.requestedCountry,
+  );
+  console.info("[gelato:variant-cost-debug]", {
+    gelatoProductUid: input.gelatoProductUid,
+    requestedCountry: input.requestedCountry,
+    returnedCurrency: rawForCountry.map((price) => cleanString(price.currency)?.toUpperCase() ?? null),
+    rawGelatoPrice: rawForCountry.map((price) => ({
+      price: typeof price.price === "number" ? price.price : null,
+      currency: cleanString(price.currency)?.toUpperCase() ?? null,
+      quantity: typeof price.quantity === "number" ? price.quantity : null,
+      responseCountry: resolveCountryCode(price),
+      requestedCountry: cleanCountryIso(price.requestedCountry),
+      requestedCurrency: cleanString(price.requestedCurrency)?.toUpperCase() ?? null,
+    })),
+    resolvedMarketPrice: input.resolvedMarket
+      ? {
+          countryCode: input.resolvedMarket.country_code,
+          currency: input.resolvedMarket.currency,
+          productPrice: input.resolvedMarket.product_price,
+          quantity: input.resolvedMarket.quantity,
+        }
+      : null,
+    valueSavedToGelatoVariantMarkets: input.savedMarkets
+      ?.filter((market) => market.country_code === input.requestedCountry)
+      .map((market) => ({
+        countryCode: market.country_code,
+        currency: market.currency,
+        productPrice: market.product_price,
+        quantity: market.quantity,
+      })) ?? null,
+    costPassedToPricing: input.costPassedToPricing,
+    finalSellingPrice: input.finalSellingPrice,
+  });
 }
 
 async function saveSyncState(
@@ -1498,7 +1570,22 @@ function logGelatoMarketAvailabilityDiagnostic(input: {
   }
 }
 
-export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[]) {
+function pickBestMarketForCountry(
+  markets: GelatoVariantMarketRow[],
+  country: string,
+  preferredCurrency?: string | null,
+) {
+  const preferred = cleanString(preferredCurrency)?.toUpperCase() ?? null;
+  const countryMarkets = markets.filter((entry) => entry.country_code === country);
+  return (
+    (preferred ? countryMarkets.find((entry) => entry.currency === preferred) : null) ??
+    countryMarkets.find((entry) => entry.currency === "EUR") ??
+    countryMarkets[0] ??
+    null
+  );
+}
+
+export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[], preferredCurrency?: string | null) {
   const preferredCountries = [
     cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
     "FR",
@@ -1509,7 +1596,7 @@ export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[]) {
   );
 
   for (const country of preferredCountries) {
-    const market = validMarkets.find((entry) => entry.country_code === country);
+    const market = pickBestMarketForCountry(validMarkets, country, preferredCurrency);
     if (market) return market;
   }
 
@@ -1537,8 +1624,10 @@ function buildVariantPriceMetadataPayload(
 function extractReferenceVariantProductionCost(
   marketRows: GelatoVariantMarketRow[],
   gelatoPrices: JsonValue[],
+  preferredCurrency?: string | null,
 ): { productionCost: number | null; currency: string | null; source: string | null } {
-  const frMarket = marketRows.find((market) => market.country_code === "FR" && market.quantity === 1 && typeof market.product_price === "number" && market.product_price > 0);
+  const validFrMarkets = marketRows.filter((market) => market.country_code === "FR" && market.quantity === 1 && typeof market.product_price === "number" && market.product_price > 0);
+  const frMarket = pickBestMarketForCountry(validFrMarkets, "FR", preferredCurrency);
   if (frMarket?.product_price) {
     return {
       productionCost: frMarket.product_price,
@@ -1547,14 +1636,19 @@ function extractReferenceVariantProductionCost(
     };
   }
 
-  const fallback = gelatoPrices.find((entry) => {
+  const preferred = cleanString(preferredCurrency)?.toUpperCase() ?? null;
+  const fallbackCandidates = gelatoPrices.filter((entry) => {
     if (!isPlainObject(entry)) return false;
     return (
       cleanCountryIso((entry as Record<string, unknown>).country) === "FR" &&
       Number((entry as Record<string, unknown>).quantity ?? 0) === 1 &&
       Number((entry as Record<string, unknown>).price ?? 0) > 0
     );
-  }) as Record<string, unknown> | undefined;
+  }) as Record<string, unknown>[];
+  const fallback =
+    (preferred ? fallbackCandidates.find((entry) => cleanString(entry.currency)?.toUpperCase() === preferred) : null) ??
+    fallbackCandidates.find((entry) => cleanString(entry.currency)?.toUpperCase() === "EUR") ??
+    fallbackCandidates[0];
 
   const fallbackPrice = Number(fallback?.price);
   if (Number.isFinite(fallbackPrice) && fallbackPrice > 0) {
@@ -1659,7 +1753,7 @@ export function buildGelatoVariantMarketRows(input: {
   const productStatus = input.productStatus ?? (input.productIsAvailable ? "activated" : "inactive");
 
   for (const price of input.prices) {
-    const country = resolveCountryCode(price);
+    const country = cleanCountryIso(price.requestedCountry) ?? resolveCountryCode(price);
     const currency = cleanString(price.currency)?.toUpperCase() ?? null;
     const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
       ? Math.trunc(price.quantity)
@@ -1859,16 +1953,20 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
 
   if (marketError) throw new Error(marketError.message);
 
-  const marketsByVariantId = new Map(
-    (marketRows ?? []).map((market) => [market.product_variant_id, market]),
-  );
+  const marketsByVariantId = new Map<string, GelatoVariantMarketRow[]>();
+  for (const market of (marketRows ?? []) as GelatoVariantMarketRow[]) {
+    const list = marketsByVariantId.get(market.product_variant_id) ?? [];
+    list.push(market);
+    marketsByVariantId.set(market.product_variant_id, list);
+  }
 
   let updatedVariants = 0;
   let unsoldVariants = 0;
   const sellingPrices: number[] = [];
 
   for (const variant of variants) {
-    const market = marketsByVariantId.get(variant.id) ?? null;
+    const variantMarkets = marketsByVariantId.get(variant.id) ?? [];
+    const market = pickVariantReferenceMarket(variantMarkets, cleanString(product.currency)?.toUpperCase() ?? null);
     const gelatoAttributes = isPlainObject(variant.gelato_attributes)
       ? (variant.gelato_attributes as Record<string, unknown>)
       : null;
@@ -1878,6 +1976,7 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
     const reference = extractReferenceVariantProductionCost(
       market ? [market as GelatoVariantMarketRow] : [],
       fallbackPrices,
+      cleanString(product.currency)?.toUpperCase() ?? null,
     );
     const currentPrice = Number(variant.price);
     const sellingPrice = calculateVariantSellingPrice({
@@ -1975,7 +2074,7 @@ export async function syncGelatoProductFamily(
   validateCatalogUid(catalogUid);
   validateProductUid(referenceProductUid);
   const productRecord = await getProductOrThrow(productId);
-  const productCurrency = cleanString(productRecord.currency)?.toUpperCase() ?? "USD";
+  const productCurrency = cleanString(productRecord.currency)?.toUpperCase() ?? "EUR";
   const markupPercentage = normalizeProfitMarkupPercentage(productRecord.profit_markup_percentage);
 
   const syncStartedAt = nowIso();
@@ -2167,7 +2266,7 @@ export async function syncGelatoProductFamily(
         existingVariantsByFamily.get(variantLookupKey) ??
         existingVariantsByGelatoProductUid.get(entry.product.productUid);
       const entryDetails = (await getGelatoProduct(entry.product.productUid)) as GelatoProductDetails;
-      const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid);
+      const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid, productCurrency);
       const entryPriceRows = entryPriceResult.prices;
       const normalizedEntryPrices = normalizeGelatoProductPrices(entryPriceRows);
       const entrySupportedResult = extractSupportedCountries(entryDetails);
@@ -2192,10 +2291,11 @@ export async function syncGelatoProductFamily(
         syncedAt: syncStartedAt,
       });
 
-      const referenceMarket = pickVariantReferenceMarket(familyRowPreview);
+      const referenceMarket = pickVariantReferenceMarket(familyRowPreview, productCurrency);
       const referenceProduction = extractReferenceVariantProductionCost(
         familyRowPreview,
         normalizedEntryPrices,
+        productCurrency,
       );
       const sellingPrice = calculateVariantSellingPrice({
         productionCost: referenceProduction.productionCost,
@@ -2244,7 +2344,7 @@ export async function syncGelatoProductFamily(
         if (error) throw new Error(error.message);
         touchedVariantIds.add(existingVariant.id);
         touchedFamilyVariantKeys.add(variantLookupKey);
-        await saveGelatoVariantMarkets({
+        const savedMarkets = await saveGelatoVariantMarkets({
           productUid: entry.product.productUid,
           productVariantId: existingVariant.id,
           prices: entryPriceRows,
@@ -2257,6 +2357,15 @@ export async function syncGelatoProductFamily(
           isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
         });
+        logGelatoCostDebug({
+          gelatoProductUid: entry.product.productUid,
+          requestedCountry: "FR",
+          rawPrices: entryPriceRows,
+          resolvedMarket: referenceMarket,
+          savedMarkets,
+          costPassedToPricing: referenceProduction.productionCost,
+          finalSellingPrice: sellingPrice,
+        });
         variantsUpdated += 1;
       } else {
         const { data, error } = await supabase.from("product_variants").insert(variantPayload).select("id").single();
@@ -2264,7 +2373,7 @@ export async function syncGelatoProductFamily(
         const productVariantId = data.id as string;
         touchedVariantIds.add(productVariantId);
         touchedFamilyVariantKeys.add(variantLookupKey);
-        await saveGelatoVariantMarkets({
+        const savedMarkets = await saveGelatoVariantMarkets({
           productUid: entry.product.productUid,
           productVariantId,
           prices: entryPriceRows,
@@ -2276,6 +2385,15 @@ export async function syncGelatoProductFamily(
           productStatus: entryProductStatus,
           isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
+        });
+        logGelatoCostDebug({
+          gelatoProductUid: entry.product.productUid,
+          requestedCountry: "FR",
+          rawPrices: entryPriceRows,
+          resolvedMarket: referenceMarket,
+          savedMarkets,
+          costPassedToPricing: referenceProduction.productionCost,
+          finalSellingPrice: sellingPrice,
         });
         variantsCreated += 1;
       }
@@ -2378,7 +2496,7 @@ export async function syncGelatoCatalog(
       getGelatoCatalog(catalogUid),
       getProductOrThrow(productId),
     ]);
-    const productCurrency = cleanString(existingProduct.currency)?.toUpperCase() ?? "USD";
+    const productCurrency = cleanString(existingProduct.currency)?.toUpperCase() ?? "EUR";
     const markupPercentage = normalizeProfitMarkupPercentage(
       existingProduct.profit_markup_percentage,
     );
@@ -2393,6 +2511,7 @@ export async function syncGelatoCatalog(
     const rawNotSupportedCountries = extractNotSupportedCountries(matchedProductDetails);
     const gelatoPriceResult = await fetchGelatoPricesForAllCountries(
       matchedProduct.productUid,
+      productCurrency,
     );
     const gelatoPriceRows = gelatoPriceResult.prices;
     const gelatoPrices = normalizeGelatoProductPrices(gelatoPriceRows);
@@ -2571,10 +2690,11 @@ export async function syncGelatoCatalog(
         const variantGelatoAvailable = variantMarketPreview.some(
           (market) => market.is_available === true,
         );
-        const referenceMarket = pickVariantReferenceMarket(variantMarketPreview);
+        const referenceMarket = pickVariantReferenceMarket(variantMarketPreview, productCurrency);
         const referenceProduction = extractReferenceVariantProductionCost(
           variantMarketPreview,
           gelatoPrices,
+          productCurrency,
         );
         const sellingPrice = calculateVariantSellingPrice({
           productionCost: referenceProduction.productionCost,
@@ -2627,7 +2747,7 @@ export async function syncGelatoCatalog(
             .eq("id", existingVariant.id);
           if (error) throw new Error(error.message);
           touchedVariantIds.add(existingVariant.id);
-          await saveGelatoVariantMarkets({
+          const savedMarkets = await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
             productVariantId: existingVariant.id,
             prices: gelatoPriceRows,
@@ -2639,6 +2759,15 @@ export async function syncGelatoCatalog(
             productStatus: gelatoProductStatus,
             isPrintable: gelatoIsPrintable,
             syncedAt: startedAt,
+          });
+          logGelatoCostDebug({
+            gelatoProductUid: entry.product.productUid,
+            requestedCountry: "FR",
+            rawPrices: gelatoPriceRows,
+            resolvedMarket: referenceMarket,
+            savedMarkets,
+            costPassedToPricing: referenceProduction.productionCost,
+            finalSellingPrice: sellingPrice,
           });
           variantsUpdated += 1;
         } else {
@@ -2652,7 +2781,7 @@ export async function syncGelatoCatalog(
           }
           const productVariantId = data.id as string;
           touchedVariantIds.add(productVariantId);
-          await saveGelatoVariantMarkets({
+          const savedMarkets = await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
             productVariantId,
             prices: gelatoPriceRows,
@@ -2664,6 +2793,15 @@ export async function syncGelatoCatalog(
             productStatus: gelatoProductStatus,
             isPrintable: gelatoIsPrintable,
             syncedAt: startedAt,
+          });
+          logGelatoCostDebug({
+            gelatoProductUid: entry.product.productUid,
+            requestedCountry: "FR",
+            rawPrices: gelatoPriceRows,
+            resolvedMarket: referenceMarket,
+            savedMarkets,
+            costPassedToPricing: referenceProduction.productionCost,
+            finalSellingPrice: sellingPrice,
           });
           variantsCreated += 1;
         }
@@ -2800,7 +2938,7 @@ export async function syncGelatoCatalogPage(
       getGelatoCatalog(catalogUid),
       getProductOrThrow(productId),
     ]);
-    const productCurrency = cleanString(existingProduct.currency)?.toUpperCase() ?? "USD";
+    const productCurrency = cleanString(existingProduct.currency)?.toUpperCase() ?? "EUR";
     const markupPercentage = normalizeProfitMarkupPercentage(
       existingProduct.profit_markup_percentage,
     );
@@ -2947,7 +3085,7 @@ export async function syncGelatoCatalogPage(
           variantsByColorIdAndKey.get(variantLookupKey) ??
           variantsByGelatoProductUid.get(entry.product.productUid);
         const entryDetails = (await getGelatoProduct(entry.product.productUid)) as GelatoProductDetails;
-        const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid);
+        const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid, productCurrency);
         const entryPriceRows = entryPriceResult.prices;
         const normalizedEntryPrices = normalizeGelatoProductPrices(entryPriceRows);
         const entrySupportedResult = extractSupportedCountries(entryDetails);
@@ -2970,10 +3108,11 @@ export async function syncGelatoCatalogPage(
           isPrintable: entryIsPrintable,
           syncedAt: startedAt,
         });
-        const referenceMarket = pickVariantReferenceMarket(variantMarketPreview);
+        const referenceMarket = pickVariantReferenceMarket(variantMarketPreview, productCurrency);
         const referenceProduction = extractReferenceVariantProductionCost(
           variantMarketPreview,
           normalizedEntryPrices,
+          productCurrency,
         );
         const sellingPrice = calculateVariantSellingPrice({
           productionCost: referenceProduction.productionCost,
@@ -3019,7 +3158,7 @@ export async function syncGelatoCatalogPage(
           const { error } = await supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
           if (error) throw new Error(error.message);
           touchedVariantIds.add(existingVariant.id);
-          await saveGelatoVariantMarkets({
+          const savedMarkets = await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
             productVariantId: existingVariant.id,
             prices: entryPriceRows,
@@ -3032,6 +3171,15 @@ export async function syncGelatoCatalogPage(
             isPrintable: entryIsPrintable,
             syncedAt: startedAt,
           });
+          logGelatoCostDebug({
+            gelatoProductUid: entry.product.productUid,
+            requestedCountry: "FR",
+            rawPrices: entryPriceRows,
+            resolvedMarket: referenceMarket,
+            savedMarkets,
+            costPassedToPricing: referenceProduction.productionCost,
+            finalSellingPrice: sellingPrice,
+          });
           variantsUpdated += 1;
         } else {
           const { data, error } = await supabase
@@ -3043,7 +3191,7 @@ export async function syncGelatoCatalogPage(
             throw new Error(error?.message || "Failed to create product variant.");
           }
           touchedVariantIds.add(data.id as string);
-          await saveGelatoVariantMarkets({
+          const savedMarkets = await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
             productVariantId: data.id as string,
             prices: entryPriceRows,
@@ -3055,6 +3203,15 @@ export async function syncGelatoCatalogPage(
             productStatus: entryProductStatus,
             isPrintable: entryIsPrintable,
             syncedAt: startedAt,
+          });
+          logGelatoCostDebug({
+            gelatoProductUid: entry.product.productUid,
+            requestedCountry: "FR",
+            rawPrices: entryPriceRows,
+            resolvedMarket: referenceMarket,
+            savedMarkets,
+            costPassedToPricing: referenceProduction.productionCost,
+            finalSellingPrice: sellingPrice,
           });
           variantsCreated += 1;
         }
