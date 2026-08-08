@@ -907,9 +907,12 @@ export async function resolveGelatoPrintPricingForVariant(input: {
 
   const { data: variantRow, error: variantError } = await supabase
     .from("product_variants")
-    .select("id, product_color_id, size, gelato_product_uid, gelato_attributes")
+    .select("id, product_color_id, size, gelato_product_uid, gelato_catalog_uid, gelato_attributes")
     .eq("id", variantId)
     .maybeSingle();
+  const variantGelatoCatalogUid = variantRow && typeof variantRow === "object"
+    ? cleanString((variantRow as { gelato_catalog_uid?: string | null }).gelato_catalog_uid)
+    : null;
   console.info("[gelato:variant-print-pricing:variant-query]", {
     productVariantId: variantId,
     variantFound: Boolean(variantRow),
@@ -919,6 +922,7 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     frontUid: variantRow && typeof variantRow === "object"
       ? cleanString((variantRow as { gelato_product_uid?: string | null }).gelato_product_uid)
       : null,
+    variantGelatoCatalogUid,
     catalogResolutionStep: "variant-query",
     catalogResolutionRawType: diagnosticShape(variantRow),
   });
@@ -930,9 +934,11 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     product_color_id: string;
     size: string | null;
     gelato_product_uid: string | null;
+    gelato_catalog_uid: string | null;
     gelato_attributes: JsonValue | null;
   };
   const frontUid = cleanString(variant.gelato_product_uid);
+  const variantCatalogUid = cleanString(variant.gelato_catalog_uid);
   if (!frontUid) throw new Error("Missing canonical gelato_product_uid on product variant.");
 
   const { data: colorRow, error: colorError } = await supabase
@@ -965,22 +971,44 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     .eq("product_id", colorRow.product_id)
     .maybeSingle();
   if (syncStateError) throw new Error(syncStateError.message);
-  const catalogUid =
-    extractCatalogUidFromGelatoProduct(referenceProduct) ??
-    cleanString(familyAttributes.catalogUid) ??
-    cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null) ??
-    await findCatalogUidContainingProduct(frontUid, familyAttributes.familyFilters);
+  const productCatalogUid = extractCatalogUidFromGelatoProduct(referenceProduct);
+  const familyAttributeCatalogUid = cleanString(familyAttributes.catalogUid);
+  const syncStateCatalogUid = cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null);
+  let catalogUidSource: string | null = null;
+  let catalogUid =
+    variantCatalogUid ??
+    productCatalogUid ??
+    familyAttributeCatalogUid ??
+    syncStateCatalogUid;
+
+  if (catalogUid) {
+    catalogUidSource =
+      catalogUid === variantCatalogUid
+        ? "product_variants.gelato_catalog_uid"
+        : catalogUid === productCatalogUid
+          ? "getGelatoProduct"
+          : catalogUid === familyAttributeCatalogUid
+            ? "familyAttributes"
+            : "gelato_catalog_sync_state";
+  } else {
+    catalogUid = await findCatalogUidContainingProduct(frontUid, familyAttributes.familyFilters);
+    catalogUidSource = catalogUid ? "listGelatoCatalogs/searchGelatoCatalogProducts" : null;
+  }
+
   console.info("[gelato:variant-print-pricing:catalog-resolution]", {
     productVariantId: variantId,
     variantFound: true,
     variantQueryError: null,
     frontUid,
+    variantGelatoCatalogUid: variantCatalogUid,
     catalogResolutionStep: "resolved-catalogUid",
     catalogUid: catalogUid ?? null,
+    catalogUidSource,
     catalogResolutionRawType: {
-      gelatoProductCatalogUid: extractCatalogUidFromGelatoProduct(referenceProduct),
-      familyAttributeCatalogUid: cleanString(familyAttributes.catalogUid),
-      syncStateCatalogUid: cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null),
+      variantGelatoCatalogUid: variantCatalogUid,
+      gelatoProductCatalogUid: productCatalogUid,
+      familyAttributeCatalogUid,
+      syncStateCatalogUid,
       syncStateShape: diagnosticShape(syncState),
     },
   });
