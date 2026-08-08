@@ -101,14 +101,14 @@ function cleanText(value: unknown) {
 
 function splitFullName(fullName: string) {
   const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return { firstName: parts[0] || "Customer", lastName: "." };
-  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) || "." };
+  if (parts.length < 2) return { firstName: parts[0] || "", lastName: "" };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) || "" };
 }
 
 function normalizeAddress(body: DraftBody) {
   const address = body.address ?? {};
   const fullName = cleanText(address.fullName);
-  const split = fullName ? splitFullName(fullName) : { firstName: "Customer", lastName: "." };
+  const split = splitFullName(fullName);
   const countryCode = (cleanText(address.countryCode) || "").toUpperCase();
   return {
     firstName: split.firstName,

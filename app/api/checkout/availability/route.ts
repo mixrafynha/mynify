@@ -24,6 +24,15 @@ function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function splitFullName(fullName: string) {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts.at(-1) ?? "",
+  };
+}
+
 function safeLog(value: unknown) {
   if (process.env.NODE_ENV === "production") return "[redacted]";
   try {
@@ -212,18 +221,70 @@ export async function POST(req: Request) {
     }
 
     const resolvedCountryIso = resolveCountryCode(countryIso ?? country);
+    const fullName =
+      safeText(body?.fullName) ||
+      safeText(body?.name) ||
+      safeText(body?.shippingAddress?.fullName) ||
+      safeText(body?.shippingAddress?.name);
+    const splitName = splitFullName(fullName);
+    const firstName =
+      safeText(body?.firstName) ||
+      safeText(body?.shippingAddress?.firstName) ||
+      splitName?.firstName ||
+      "";
+    const lastName =
+      safeText(body?.lastName) ||
+      safeText(body?.shippingAddress?.lastName) ||
+      splitName?.lastName ||
+      "";
+
     const shippingAddress = {
-      firstName: "Customer",
-      lastName: ".",
-      addressLine1: safeText(body?.addressLine1) || safeText(body?.address) || "Address",
-      addressLine2: safeText(body?.addressLine2) || undefined,
-      city: safeText(body?.city) || "City",
-      state: safeText(body?.state) || undefined,
-      postalCode: safeText(body?.postalCode) || "0000",
+      firstName,
+      lastName,
+      addressLine1:
+        safeText(body?.shippingAddress?.addressLine1) ||
+        safeText(body?.addressLine1) ||
+        safeText(body?.address),
+      addressLine2:
+        safeText(body?.shippingAddress?.addressLine2) ||
+        safeText(body?.addressLine2) ||
+        undefined,
+      city: safeText(body?.shippingAddress?.city) || safeText(body?.city),
+      state:
+        safeText(body?.shippingAddress?.state) ||
+        safeText(body?.state) ||
+        undefined,
+      postalCode:
+        safeText(body?.shippingAddress?.postalCode) ||
+        safeText(body?.postalCode),
       countryCode: resolvedCountryIso ?? countryIso ?? country,
-      email: safeText(body?.email) || undefined,
-      phone: safeText(body?.phone) || undefined,
+      email:
+        safeText(body?.shippingAddress?.email) ||
+        safeText(body?.email) ||
+        undefined,
+      phone:
+        safeText(body?.shippingAddress?.phone) ||
+        safeText(body?.phone) ||
+        undefined,
     };
+
+    if (
+      !shippingAddress.firstName ||
+      !shippingAddress.lastName ||
+      !shippingAddress.addressLine1 ||
+      !shippingAddress.city ||
+      !shippingAddress.postalCode ||
+      !shippingAddress.countryCode
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "INCOMPLETE_SHIPPING_ADDRESS",
+          message: "Complete the delivery name and address before calculating shipping.",
+        },
+        { status: 400 },
+      );
+    }
 
     const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, authData?.user?.id ?? null, items);
 

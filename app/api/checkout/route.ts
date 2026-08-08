@@ -186,8 +186,8 @@ function normalizeAddressField(value: unknown): string | null {
 
 function splitFullName(fullName: string): { firstName: string; lastName: string } {
   const parts = fullName.split(/\s+/).filter(Boolean);
-  if (parts.length <= 1) return { firstName: parts[0] || "Customer", lastName: "." };
-  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) || "." };
+  if (parts.length < 2) return { firstName: parts[0] || "", lastName: "" };
+  return { firstName: parts.slice(0, -1).join(" "), lastName: parts.at(-1) || "" };
 }
 
 function buildShippingRecipient(body: CheckoutBody) {
@@ -199,8 +199,8 @@ function buildShippingRecipient(body: CheckoutBody) {
   const countryCode = resolveCheckoutCountryCode(body);
 
   return {
-    firstName: normalizeAddressField(customer.firstName) ?? fromFullName?.firstName ?? "Customer",
-    lastName: normalizeAddressField(customer.lastName) ?? fromFullName?.lastName ?? ".",
+    firstName: normalizeAddressField(customer.firstName) ?? fromFullName?.firstName ?? "",
+    lastName: normalizeAddressField(customer.lastName) ?? fromFullName?.lastName ?? "",
     addressLine1: normalizeAddressField(customer.address) ?? "",
     addressLine2: normalizeAddressField(customer.apartment) ?? undefined,
     city: normalizeAddressField(customer.city) ?? "",
@@ -680,8 +680,8 @@ export async function POST(req: Request) {
 
       const shippingAddress = draftShippingAddress
         ? {
-            firstName: normalizeAddressField(draftShippingAddress.firstName) || "Customer",
-            lastName: normalizeAddressField(draftShippingAddress.lastName) || ".",
+            firstName: normalizeAddressField(draftShippingAddress.firstName) || "",
+            lastName: normalizeAddressField(draftShippingAddress.lastName) || "",
             addressLine1: normalizeAddressField(draftShippingAddress.addressLine1) || "",
             addressLine2: normalizeAddressField(draftShippingAddress.addressLine2) || undefined,
             city: normalizeAddressField(draftShippingAddress.city) || "",
@@ -1000,6 +1000,7 @@ export async function POST(req: Request) {
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
+        automatic_tax: { enabled: true },
         customer_email: user.email ?? undefined,
         line_items: [
           ...stripeLineItems,
@@ -1156,6 +1157,7 @@ export async function POST(req: Request) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      automatic_tax: { enabled: true },
       customer_email: user.email ?? undefined,
 
       line_items: [
