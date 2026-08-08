@@ -147,6 +147,15 @@ type GelatoFamilySyncResult = SyncCatalogResult & {
   familySyncCompleted: boolean;
 };
 
+type GelatoCatalogListResponse =
+  | GelatoCatalogListItem[]
+  | {
+      catalogs?: GelatoCatalogListItem[];
+      items?: GelatoCatalogListItem[];
+      data?: GelatoCatalogListItem[];
+      [key: string]: unknown;
+    };
+
 export type GelatoCatalogSearchResponse = {
   products: GelatoCatalogSearchProduct[];
   hits?: {
@@ -782,6 +791,45 @@ function derivePrintFamilyProductUids(
   });
 }
 
+function diagnosticShape(value: unknown) {
+  return {
+    typeofResult: typeof value,
+    isArray: Array.isArray(value),
+    keys: value && typeof value === "object" ? Object.keys(value as Record<string, unknown>).slice(0, 12) : [],
+    rawShape: value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.entries(value as Record<string, unknown>)
+            .slice(0, 6)
+            .map(([key, entry]) => [
+              key,
+              Array.isArray(entry)
+                ? { type: "array", length: entry.length }
+                : entry && typeof entry === "object"
+                  ? { type: "object", keys: Object.keys(entry as Record<string, unknown>).slice(0, 8) }
+                  : { type: typeof entry, value: typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean" ? entry : null },
+            ]),
+        )
+      : value ?? null,
+  };
+}
+
+function normalizeGelatoCatalogList(value: GelatoCatalogListResponse): GelatoCatalogListItem[] {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  return (
+    (Array.isArray(value.catalogs) ? value.catalogs : null) ??
+    (Array.isArray(value.items) ? value.items : null) ??
+    (Array.isArray(value.data) ? value.data : null) ??
+    []
+  );
+}
+
+function normalizeGelatoSearchProducts(value: GelatoCatalogSearchResponse | unknown): GelatoCatalogSearchProduct[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const products = (value as Record<string, unknown>).products;
+  return Array.isArray(products) ? products as GelatoCatalogSearchProduct[] : [];
+}
+
 function extractCatalogUidFromGelatoProduct(product: GelatoProductDetails): string | null {
   const record = product as Record<string, unknown>;
   const catalog = isPlainObject(record.catalog) ? record.catalog as Record<string, unknown> : null;
@@ -805,11 +853,22 @@ async function findCatalogUidContainingProduct(
   familyFilters: CatalogSyncFilters,
 ): Promise<string | null> {
   const catalogs = await listGelatoCatalogs();
+  console.info("[gelato:variant-print-pricing:catalog-list]", {
+    catalogResolutionStep: "listGelatoCatalogs",
+    catalogResolutionRawType: diagnosticShape(catalogs),
+  });
 
   for (const catalog of catalogs) {
     try {
       const page = await searchGelatoCatalogProducts(catalog.catalogUid, familyFilters, SEARCH_PAGE_SIZE, 0);
-      if ((page.products ?? []).some((product) => product.productUid === productUid)) {
+      const products = normalizeGelatoSearchProducts(page);
+      console.info("[gelato:variant-print-pricing:catalog-search]", {
+        catalogResolutionStep: "searchGelatoCatalogProducts",
+        catalogUid: catalog.catalogUid,
+        catalogResolutionRawType: diagnosticShape(page),
+        productsCount: products.length,
+      });
+      if (products.some((product) => product.productUid === productUid)) {
         return catalog.catalogUid;
       }
     } catch {
@@ -851,6 +910,18 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     .select("id, product_color_id, size, gelato_product_uid, gelato_attributes")
     .eq("id", variantId)
     .maybeSingle();
+  console.info("[gelato:variant-print-pricing:variant-query]", {
+    productVariantId: variantId,
+    variantFound: Boolean(variantRow),
+    variantQueryError: variantError
+      ? { code: variantError.code, message: variantError.message, details: variantError.details ?? null }
+      : null,
+    frontUid: variantRow && typeof variantRow === "object"
+      ? cleanString((variantRow as { gelato_product_uid?: string | null }).gelato_product_uid)
+      : null,
+    catalogResolutionStep: "variant-query",
+    catalogResolutionRawType: diagnosticShape(variantRow),
+  });
   if (variantError) throw new Error(variantError.message);
   if (!variantRow) throw new Error("Product variant not found.");
 
@@ -875,6 +946,14 @@ export async function resolveGelatoPrintPricingForVariant(input: {
   const colorName = cleanString((colorRow as { color?: string | null }).color ?? null);
   const sizeName = cleanString(variant.size);
   const referenceProduct = await getGelatoProduct(frontUid);
+  console.info("[gelato:variant-print-pricing:catalog-resolution]", {
+    productVariantId: variantId,
+    variantFound: true,
+    variantQueryError: null,
+    frontUid,
+    catalogResolutionStep: "getGelatoProduct",
+    catalogResolutionRawType: diagnosticShape(referenceProduct),
+  });
   const familyAttributes = extractGelatoFamilyAttributes({
     ...referenceProduct,
     productUid: frontUid,
@@ -891,13 +970,30 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     cleanString(familyAttributes.catalogUid) ??
     cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null) ??
     await findCatalogUidContainingProduct(frontUid, familyAttributes.familyFilters);
+  console.info("[gelato:variant-print-pricing:catalog-resolution]", {
+    productVariantId: variantId,
+    variantFound: true,
+    variantQueryError: null,
+    frontUid,
+    catalogResolutionStep: "resolved-catalogUid",
+    catalogUid: catalogUid ?? null,
+    catalogResolutionRawType: {
+      gelatoProductCatalogUid: extractCatalogUidFromGelatoProduct(referenceProduct),
+      familyAttributeCatalogUid: cleanString(familyAttributes.catalogUid),
+      syncStateCatalogUid: cleanString((syncState as { catalog_uid?: string | null } | null)?.catalog_uid ?? null),
+      syncStateShape: diagnosticShape(syncState),
+    },
+  });
 
   if (!catalogUid) {
     throw new Error("Unable to resolve Gelato catalog UID for this product variant.");
   }
 
   const familySearch = await searchGelatoProductFamily(catalogUid, frontUid);
-  const familyCandidates = derivePrintFamilyProductUids(familySearch.familyProducts, referenceProduct);
+  const familyCandidates = derivePrintFamilyProductUids(
+    Array.isArray(familySearch.familyProducts) ? familySearch.familyProducts : [],
+    referenceProduct,
+  );
   const referenceAttributes = isPlainObject(referenceProduct.attributes)
     ? (referenceProduct.attributes as Record<string, string>)
     : {};
@@ -1061,7 +1157,8 @@ function resolveProductMarkupPercentage(product: ProductRow): number {
 }
 
 export async function listGelatoCatalogs(): Promise<GelatoCatalogListItem[]> {
-  return gelatoFetch<GelatoCatalogListItem[]>("/v3/catalogs", { method: "GET" });
+  const response = await gelatoFetch<GelatoCatalogListResponse>("/v3/catalogs", { method: "GET" });
+  return normalizeGelatoCatalogList(response);
 }
 
 export async function getGelatoCatalog(catalogUid: string): Promise<GelatoCatalog> {
