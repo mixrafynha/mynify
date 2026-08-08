@@ -4,6 +4,7 @@ import { convertMoneyToCents } from "@/app/api/checkout/currency";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { resolveGelatoColorHex } from "@/lib/gelato/gelato-color-map";
 import { calculateSellingPrice, pricesAlmostEqual, roundSellingPrice, normalizeProfitMarkupPercentage } from "@/lib/gelato/pricing";
+import { resolveMinimumProfit } from "@/lib/gelato/pricing-rules";
 
 const DEFAULT_GELATO_PRODUCT_BASE_URL = "https://product.gelatoapis.com";
 const SEARCH_PAGE_SIZE = 100;
@@ -149,6 +150,8 @@ type ProductRow = {
   price?: number | string | null;
   currency?: string | null;
   category?: string | null;
+  title?: string | null;
+  slug?: string | null;
   profit_markup_percentage?: number | string | null;
 };
 
@@ -691,7 +694,7 @@ async function getProductOrThrow(productId: string): Promise<ProductRow> {
   const supabase = createSupabaseAdmin();
   const { data, error } = await supabase
     .from("products")
-    .select("id, image, price, currency, category, profit_markup_percentage")
+    .select("id, image, price, currency, category, title, slug, profit_markup_percentage")
     .eq("id", productId)
     .maybeSingle();
 
@@ -1568,6 +1571,9 @@ function extractReferenceVariantProductionCost(
 function calculateVariantSellingPrice(input: {
   productionCost: number | null;
   markupPercentage: unknown;
+  category?: string | null;
+  title?: string | null;
+  slug?: string | null;
   targetCurrency?: string | null;
   sourceCurrency?: string | null;
 }): number | null {
@@ -1575,6 +1581,14 @@ function calculateVariantSellingPrice(input: {
   const sellingPrice = calculateSellingPrice({
     productionCost: input.productionCost,
     markupPercentage: input.markupPercentage,
+    category: input.category,
+    title: input.title,
+    slug: input.slug,
+    minimumProfit: resolveMinimumProfit({
+      category: input.category,
+      title: input.title,
+      slug: input.slug,
+    }),
   });
   if (sellingPrice === null) return null;
 
@@ -1845,6 +1859,9 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
     const sellingPrice = calculateVariantSellingPrice({
       productionCost: reference.productionCost,
       markupPercentage,
+      category: product.category,
+      title: product.title,
+      slug: product.slug,
     });
 
     if (sellingPrice === null) {
@@ -2157,6 +2174,9 @@ export async function syncGelatoProductFamily(
       const sellingPrice = calculateVariantSellingPrice({
         productionCost: referenceProduction.productionCost,
         markupPercentage,
+        category: productRecord.category,
+        title: productRecord.title,
+        slug: productRecord.slug,
         targetCurrency: productCurrency,
         sourceCurrency: referenceProduction.currency,
       });
@@ -2531,6 +2551,9 @@ export async function syncGelatoCatalog(
         const sellingPrice = calculateVariantSellingPrice({
           productionCost: referenceProduction.productionCost,
           markupPercentage,
+          category: existingProduct.category,
+          title: existingProduct.title,
+          slug: existingProduct.slug,
           targetCurrency: productCurrency,
           sourceCurrency: referenceProduction.currency,
         });
@@ -2925,6 +2948,9 @@ export async function syncGelatoCatalogPage(
         const sellingPrice = calculateVariantSellingPrice({
           productionCost: referenceProduction.productionCost,
           markupPercentage,
+          category: existingProduct.category,
+          title: existingProduct.title,
+          slug: existingProduct.slug,
           targetCurrency: productCurrency,
           sourceCurrency: referenceProduction.currency,
         });

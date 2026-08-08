@@ -18,6 +18,8 @@ import {
   Percent,
   Star,
 } from "lucide-react";
+import { calculateSellingPrice } from "@/lib/gelato/pricing";
+import { resolveMinimumProfit } from "@/lib/gelato/pricing-rules";
 
 type Variant = {
   id?: string;
@@ -201,10 +203,19 @@ export default function EditProductPage() {
 
   const sellingPricePreview = useMemo(() => {
     if (gelatoCostPreview === null) return null;
-    return Math.round(
-      (gelatoCostPreview * (1 + form.profit_markup_percentage / 100) + Number.EPSILON) * 100,
-    ) / 100;
-  }, [gelatoCostPreview, form.profit_markup_percentage]);
+    return calculateSellingPrice({
+      productionCost: gelatoCostPreview,
+      markupPercentage: form.profit_markup_percentage,
+      minimumProfit: resolveMinimumProfit({
+        category: form.category,
+        title: form.title,
+        slug: form.slug,
+      }),
+      category: form.category,
+      title: form.title,
+      slug: form.slug,
+    });
+  }, [gelatoCostPreview, form.category, form.profit_markup_percentage, form.slug, form.title]);
 
   const updateField = <K extends keyof ProductForm>(
     key: K,

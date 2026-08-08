@@ -1,3 +1,5 @@
+import { resolveMinimumProfit } from "@/lib/gelato/pricing-rules";
+
 export const DEFAULT_PROFIT_MARKUP_PERCENTAGE = 30;
 
 function cleanNumber(value: unknown): number | null {
@@ -19,12 +21,27 @@ export function roundSellingPrice(value: number): number {
 export function calculateSellingPrice(input: {
   productionCost: unknown;
   markupPercentage: unknown;
+  minimumProfit?: unknown;
+  category?: string | null;
+  title?: string | null;
+  slug?: string | null;
 }): number | null {
   const productionCost = cleanNumber(input.productionCost);
   if (productionCost === null || productionCost <= 0) return null;
 
   const markupPercentage = normalizeProfitMarkupPercentage(input.markupPercentage);
-  return roundSellingPrice(productionCost * (1 + markupPercentage / 100));
+  const percentagePrice = productionCost * (1 + markupPercentage / 100);
+  const minimumProfit = cleanNumber(input.minimumProfit);
+  const resolvedMinimumProfit =
+    minimumProfit !== null && minimumProfit >= 0
+      ? minimumProfit
+      : resolveMinimumProfit({
+          category: input.category,
+          title: input.title,
+          slug: input.slug,
+        });
+  const minimumProfitPrice = productionCost + resolvedMinimumProfit;
+  return roundSellingPrice(Math.max(percentagePrice, minimumProfitPrice));
 }
 
 export function pricesAlmostEqual(left: unknown, right: unknown, tolerance = 0.0001): boolean {
