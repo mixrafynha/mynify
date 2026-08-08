@@ -1625,6 +1625,13 @@ function calculateVariantSellingPrice(input: {
   sourceCurrency?: string | null;
 }): number | null {
   if (input.productionCost === null) return null;
+  const sizeKey = cleanString(input.variantName)
+    ?.split("/")
+    .pop()
+    ?.trim()
+    .toLowerCase();
+  const uidSizeKey = cleanString(input.gelatoProductUid)?.toLowerCase().match(/(?:^|_)gsi_([^_]+)/)?.[1] ?? null;
+  const usesLargeSizePricing = sizeKey === "4xl" || sizeKey === "5xl" || uidSizeKey === "4xl" || uidSizeKey === "5xl";
   const pricingRule = resolvePricingRule({
     category: input.category,
     title: input.title,
@@ -1632,16 +1639,18 @@ function calculateVariantSellingPrice(input: {
     gelatoProductUid: input.gelatoProductUid,
     variantName: input.variantName,
   });
-  const sellingPrice = calculateSellingPrice({
-    productionCost: input.productionCost,
-    markupPercentage: input.markupPercentage,
-    category: input.category,
-    title: input.title,
-    slug: input.slug,
-    gelatoProductUid: input.gelatoProductUid,
-    variantName: input.variantName,
-    minimumProfit: pricingRule.minimumProfit,
-  });
+  const sellingPrice = usesLargeSizePricing
+    ? roundSellingPrice(input.productionCost * 1.5)
+    : calculateSellingPrice({
+        productionCost: input.productionCost,
+        markupPercentage: input.markupPercentage,
+        category: input.category,
+        title: input.title,
+        slug: input.slug,
+        gelatoProductUid: input.gelatoProductUid,
+        variantName: input.variantName,
+        minimumProfit: pricingRule.minimumProfit,
+      });
   if (sellingPrice === null) return null;
 
   const targetCurrency = cleanString(input.targetCurrency)?.toUpperCase() ?? "EUR";
