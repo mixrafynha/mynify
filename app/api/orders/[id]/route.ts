@@ -5,8 +5,8 @@ import type { NextRequest } from "next/server";
 export const runtime = "nodejs";
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: { id: string } },
 ) {
   try {
     const supabase = createSupabaseServer();
@@ -17,19 +17,13 @@ export async function GET(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const orderId = params?.id;
 
     if (!orderId) {
-      return NextResponse.json(
-        { error: "Missing order id" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Missing order id" }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -37,47 +31,87 @@ export async function GET(
       .select(`
         id,
         status,
+        payment_status,
+        gelato_status,
         created_at,
+        updated_at,
         stripe_session_id,
+        checkout_draft_id,
+        gelato_draft_order_id,
+        subtotal,
+        shipping_amount,
+        total,
+        currency,
+        shipping_address,
+        shipping_method,
         product_id,
         product_title,
         product_price,
         product_currency,
-        product_image
+        product_image,
+        order_items (
+          id,
+          cart_item_id,
+          user_product_id,
+          product_id,
+          variant_id,
+          title,
+          quantity,
+          size,
+          color,
+          sku,
+          unit_price,
+          currency,
+          image,
+          mockup_front,
+          mockup_back,
+          print_files,
+          selected_variant,
+          gelato_product_uid,
+          created_at
+        )
       `)
       .eq("id", orderId)
       .eq("user_id", user.id)
       .single();
 
     if (error || !data) {
-      return NextResponse.json(
-        { error: "Order not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
+
+    const items = Array.isArray(data.order_items) ? data.order_items : [];
+    const firstItem = items[0] ?? null;
 
     return NextResponse.json({
       data: {
         id: data.id,
         status: data.status,
+        payment_status: data.payment_status,
+        gelato_status: data.gelato_status,
         created_at: data.created_at,
+        updated_at: data.updated_at,
         stripe_session_id: data.stripe_session_id,
-        product_id: data.product_id,
+        checkout_draft_id: data.checkout_draft_id,
+        gelato_draft_order_id: data.gelato_draft_order_id,
+        subtotal: data.subtotal,
+        shipping_amount: data.shipping_amount,
+        total: data.total ?? data.product_price,
+        currency: data.currency ?? data.product_currency ?? "EUR",
+        shipping_address: data.shipping_address,
+        shipping_method: data.shipping_method,
+        items,
+        // Legacy shape kept for the current order detail UI.
+        product_id: firstItem?.product_id ?? data.product_id,
         product: {
-          title: data.product_title,
-          price: data.product_price,
-          currency: data.product_currency,
-          image: data.product_image,
+          title: firstItem?.title ?? data.product_title,
+          price: firstItem?.unit_price ?? data.product_price,
+          currency: firstItem?.currency ?? data.product_currency ?? "EUR",
+          image: firstItem?.image ?? data.product_image ?? null,
         },
       },
     });
-
   } catch (err) {
     console.error("ORDER API ERROR:", err);
-
-    return NextResponse.json(
-      { error: "Server error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Server error" }, { status: 500 });
   }
 }

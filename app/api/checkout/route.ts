@@ -281,9 +281,12 @@ export async function POST(req: Request) {
     let draftCheckout:
       | {
           cart_item_ids: string[] | null;
+          gelato_draft_order_id: string | null;
           selected_shipping_method: { id?: string | null; code?: string | null; shipmentMethodUid?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
           shipping_address: Record<string, unknown> | null;
+          subtotal: number | null;
           shipping_amount: number | null;
+          total: number | null;
           currency: string | null;
         }
       | null = null;
@@ -291,7 +294,7 @@ export async function POST(req: Request) {
     if (body.draftOrderId) {
       const { data: draftRow, error: draftError } = await supabase
         .from("checkout_drafts")
-        .select("cart_item_ids, selected_shipping_method, shipping_address, shipping_amount, currency")
+        .select("cart_item_ids, gelato_draft_order_id, selected_shipping_method, shipping_address, subtotal, shipping_amount, total, currency")
         .eq("id", body.draftOrderId)
         .eq("user_id", user.id)
         .maybeSingle();
@@ -501,6 +504,7 @@ export async function POST(req: Request) {
         color: string | null;
         sku: string | null;
         gelato_product_uid: string | null;
+        image: string | null;
       }> = [];
 
       // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
@@ -670,6 +674,7 @@ export async function POST(req: Request) {
           sku,
           gelato_product_uid:
             variant?.gelato_product_uid ?? null,
+          image: stripeImage,
         });
       }
 
@@ -779,6 +784,10 @@ export async function POST(req: Request) {
       // EUR-only checkout: use the validated numeric shipping amount as EUR.
       const shippingAmount = moneyToCents(selectedQuoteOption.price) ?? 0;
 
+      const computedSubtotal = totalAmount / 100;
+      const computedShipping = shippingAmount / 100;
+      const computedTotal = (totalAmount + shippingAmount) / 100;
+
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
@@ -788,10 +797,26 @@ export async function POST(req: Request) {
             orderItems.length === 1
               ? firstItem.title
               : `${orderItems.length} products`,
-          product_price: (totalAmount + shippingAmount) / 100,
-          product_currency: checkoutCurrency.toLowerCase(),
+          product_price: computedTotal,
+          product_currency: "EUR",
+          title:
+            orderItems.length === 1
+              ? firstItem.title
+              : `${orderItems.length} products`,
+          price: computedTotal,
+          currency: "EUR",
           status: "pending",
+          payment_status: "pending",
+          gelato_status: "draft",
+          checkout_draft_id: body.draftOrderId ?? null,
+          gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? null,
+          subtotal: computedSubtotal,
+          shipping_amount: computedShipping,
+          total: computedTotal,
+          shipping_address: draftShippingAddress ?? shippingAddress,
+          shipping_method: draftShippingMethod ?? selectedQuoteOption,
           created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         })
         .select("id")
         .single();
@@ -808,6 +833,41 @@ export async function POST(req: Request) {
       }
 
       createdOrderId = order.id;
+
+      const orderItemRows = orderItems.map((item) => ({
+        order_id: order.id,
+        user_id: user.id,
+        cart_item_id: item.cart_item_id,
+        user_product_id: item.user_product_id,
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        title: item.title,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+        sku: item.sku,
+        unit_price: item.unit_amount / 100,
+        currency: "EUR",
+        image: item.image,
+        gelato_product_uid: item.gelato_product_uid,
+      }));
+
+      const { error: orderItemsError } = await supabase
+        .from("order_items")
+        .insert(orderItemRows);
+
+      if (orderItemsError) {
+        console.error("CHECKOUT_ORDER_ITEMS_CREATE_ERROR", {
+          code: orderItemsError.code,
+        });
+
+        await supabase.from("orders").delete().eq("id", order.id);
+
+        return NextResponse.json(
+          { error: "Failed to create order items" },
+          { status: 500 },
+        );
+      }
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
@@ -831,8 +891,11 @@ export async function POST(req: Request) {
         ],
 
         metadata: {
+          type: "ryfio_order",
           order_id: order.id,
           user_id: user.id,
+          checkout_draft_id: body.draftOrderId ?? "",
+          gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? "",
           source: "ryfio_checkout",
           cart_item_ids: requestedCartItemIds.join(",").slice(0, 500),
           item_count: String(orderItems.length),
@@ -845,8 +908,11 @@ export async function POST(req: Request) {
 
         payment_intent_data: {
           metadata: {
+            type: "ryfio_order",
             order_id: order.id,
             user_id: user.id,
+            checkout_draft_id: body.draftOrderId ?? "",
+            gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? "",
             source: "ryfio_checkout",
           },
         },
