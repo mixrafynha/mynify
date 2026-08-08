@@ -123,30 +123,11 @@ function getObjectValue(source: unknown, keys: string[]): unknown {
   return null;
 }
 
-function stringifyForDisplay(value: unknown) {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
 
 function cleanUrl(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function shortUrl(field: string, value: unknown) {
-  const url = cleanUrl(value);
-  if (!url) return { field, value: null };
-  return {
-    field,
-    value: {
-      start: url.slice(0, 80),
-      end: url.slice(-30),
-      length: url.length,
-    },
-  };
-}
 
 function resolveRealCanvasMockupUrl(args: {
   mockups: Record<string, unknown>;
@@ -243,31 +224,6 @@ function resolvePreviewImageSources(item: CartItem) {
     cleanUrl(mergedMockups.checkout_thumbnail_back_url) ||
     cleanUrl(mergedMockups.checkout_thumbnail_back);
 
-  console.info("[checkout-preview:checkout-ui] source candidates", {
-    cartItemId: item.id,
-    userProductId: item.user_product_id ?? null,
-    frontCandidates: [
-      shortUrl("previewFront", item.previewFront),
-      shortUrl("mockups.front", mergedMockups.front),
-      shortUrl("frontSide.mockupUrl", frontSide.mockupUrl),
-      shortUrl("frontSide.mockup_url", frontSide.mockup_url),
-      shortUrl("checkout_thumbnail_url", mergedMockups.checkout_thumbnail_url),
-      shortUrl("checkout_thumbnail_front_url", mergedMockups.checkout_thumbnail_front_url),
-      shortUrl("item.image", item.image),
-    ],
-    backCandidates: [
-      shortUrl("previewBack", item.previewBack),
-      shortUrl("mockups.back", mergedMockups.back),
-      shortUrl("backSide.mockupUrl", backSide.mockupUrl),
-      shortUrl("backSide.mockup_url", backSide.mockup_url),
-      shortUrl("checkout_thumbnail_back_url", mergedMockups.checkout_thumbnail_back_url),
-      shortUrl("checkout_thumbnail_back", mergedMockups.checkout_thumbnail_back),
-    ],
-    selected: {
-      front: shortUrl("front", front),
-      back: shortUrl("back", back),
-    },
-  });
 
   return { front, back };
 }
@@ -543,6 +499,9 @@ export default function CheckoutPage() {
     }));
 
     return JSON.stringify({
+      fullName: form.fullName.trim(),
+      email: form.email.trim(),
+      phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
       country: form.country.trim(),
       address: form.address.trim(),
       apartment: form.apartment.trim(),
@@ -551,7 +510,7 @@ export default function CheckoutPage() {
       hasCompleteShippingAddress,
       items: normalizedItems,
     });
-  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.postalCode, items]);
+  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, items]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -700,13 +659,15 @@ export default function CheckoutPage() {
   const taxDisplay = form.country ? "Calculated at payment" : "Calculated after delivery country";
   const total = totalBeforeTax;
   const hasAvailabilityBlock = productAvailability.checked && productAvailability.configured && !productAvailability.available;
+  const fullNameParts = form.fullName.trim().split(/\s+/).filter(Boolean);
+  const fullNameValid = fullNameParts.length >= 2;
   const emailValid = isValidEmail(form.email);
   const phoneValidation = validatePhoneNumber(form.country, form.phoneCountry, form.phone);
   const phoneValid = phoneValidation.valid;
 
   const shippingComplete = Boolean(
     emailValid &&
-      form.fullName.trim() &&
+      fullNameValid &&
       phoneValid &&
       form.address.trim() &&
       form.city.trim() &&
@@ -767,12 +728,10 @@ export default function CheckoutPage() {
     }
 
     try {
-      console.info("[checkout] fetching cart");
       const res = await fetch("/api/cart", { method: "GET", cache: "no-store" });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Error loading cart");
       const nextItems = safeArray<CartItem>(data?.items);
-      console.info("[checkout] cart received", { itemCount: nextItems.length });
       setItems((current) => mergeCartItemsPreservingPreview(current, nextItems));
       void fetchVariantsForItems(nextItems);
     } catch {
@@ -816,7 +775,6 @@ export default function CheckoutPage() {
   }, [items]);
 
   useEffect(() => {
-    console.info("[checkout] component mounted");
     loadCart();
   }, [loadCart]);
 
@@ -923,6 +881,9 @@ export default function CheckoutPage() {
           cache: "no-store",
           signal: controller.signal,
           body: JSON.stringify({
+            fullName: form.fullName.trim(),
+            email: form.email.trim(),
+            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
             country,
             countryIso: countryData?.iso ?? null,
             addressLine1: form.address.trim(),
@@ -1331,6 +1292,14 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      const nameParts = form.fullName.trim().split(/\s+/).filter(Boolean);
+      const firstName = nameParts.slice(0, -1).join(" ");
+      const lastName = nameParts.at(-1) ?? "";
+
+      if (!firstName || !lastName) {
+        throw new Error("Enter your first and last name.");
+      }
+
       const draftRes = await fetch("/api/checkout/draft-order", {
         method: "POST",
         credentials: "include",
@@ -1339,8 +1308,8 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           cartItemIds: items.map((item) => item.id),
           address: {
-            firstName: form.fullName.split(/\s+/).filter(Boolean).slice(0, -1).join(" ") || form.fullName,
-            lastName: form.fullName.split(/\s+/).filter(Boolean).at(-1) || ".",
+            firstName,
+            lastName,
             addressLine1: form.address,
             addressLine2: form.apartment || null,
             city: form.city,
@@ -1458,8 +1427,8 @@ export default function CheckoutPage() {
     <main data-ryfio-checkout-page className="fixed inset-0 z-[9999] min-h-dvh overflow-y-auto bg-[#05050b] text-white">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_-8%,rgba(168,85,247,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.026),transparent_28%)]" />
 
-      <div className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-4 pb-28 pt-4 sm:px-6 lg:px-8">
-        <header className="mb-5 flex items-center justify-between gap-4">
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-4 lg:px-8">
+        <header className="mb-4 flex items-center justify-between gap-2 sm:mb-5 sm:gap-4">
           <button
             type="button"
             onClick={() => router.back()}
@@ -1475,10 +1444,10 @@ export default function CheckoutPage() {
 
         <section className="mb-6">
           <p className="text-[11px] font-black uppercase tracking-[0.28em] text-purple-200/70">Ryfio checkout</p>
-          <h1 className="mt-2 text-4xl font-black tracking-[-0.08em] sm:text-5xl">Finish your order</h1>
+          <h1 className="mt-2 text-3xl font-black tracking-[-0.07em] sm:text-5xl sm:tracking-[-0.08em]">Finish your order</h1>
         </section>
 
-        <nav className="mb-6 grid grid-cols-3 gap-2 rounded-full border border-white/10 bg-white/[0.025] p-1">
+        <nav className="mb-5 grid grid-cols-3 gap-1 rounded-full border border-white/10 bg-white/[0.025] p-1 sm:mb-6 sm:gap-2">
           {[
             ["shipping", "Shipping"],
             ["review", "Review"],
@@ -1508,17 +1477,17 @@ export default function CheckoutPage() {
 
         {error && <div className="mb-5 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">{error}</div>}
 
-        <div className="grid flex-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
           <section className="min-w-0">
             {step === "shipping" && (
               <div className="mx-auto max-w-2xl">
-                <div className="mb-8 border-b border-white/10 pb-5">
+                <div className="mb-6 border-b border-white/10 pb-4 sm:mb-8 sm:pb-5">
                   <h2 className="text-2xl font-black tracking-[-0.06em]">Shipping details</h2>
                   <p className="mt-2 text-sm font-medium leading-6 text-white/45">Type your street and choose the right result. The checkout fills city, postal code and country when the API can detect them.</p>
                 </div>
 
-                <div className="space-y-7">
-                  <div className="grid gap-5 sm:grid-cols-2">
+                <div className="space-y-6 sm:space-y-7">
+                  <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                     <label className="sm:col-span-2">
                       <span className="mb-2 flex items-center gap-2 text-xs font-black text-white/55"><Mail size={13} /> Email</span>
                       <input className={fieldClass} type="email" autoComplete="email" required value={form.email} onChange={(e) => updateField("email", e.target.value)} placeholder="you@example.com" aria-invalid={Boolean(form.email.trim()) && !emailValid} />
@@ -1526,7 +1495,8 @@ export default function CheckoutPage() {
                     </label>
                     <label>
                       <span className="mb-2 block text-xs font-black text-white/55">Full name</span>
-                      <input className={fieldClass} autoComplete="name" value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="Your name" />
+                      <input className={fieldClass} autoComplete="name" value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="First and last name" aria-invalid={Boolean(form.fullName.trim()) && !fullNameValid} />
+                      {form.fullName.trim() && !fullNameValid && <span className="mt-2 block text-xs font-bold text-red-200/85">Enter your first and last name.</span>}
                     </label>
                     <label>
                       <span className="mb-2 flex items-center gap-2 text-xs font-black text-white/55"><Phone size={13} /> Phone</span>
@@ -1542,7 +1512,7 @@ export default function CheckoutPage() {
 
                   <div className="h-px bg-white/10" />
 
-                  <div className="grid gap-5 sm:grid-cols-2">
+                  <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                     <label>
                       <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black text-white/55">
                         <span>Delivery country</span>
@@ -1669,8 +1639,8 @@ export default function CheckoutPage() {
                       ).map(([, variant]) => variant);
 
                       return (
-                        <article key={item.id} className="py-5">
-                          <div className="grid grid-cols-[124px_1fr] gap-4 sm:grid-cols-[152px_1fr] sm:gap-5">
+                        <article key={item.id} className="py-4 sm:py-5">
+                          <div className="grid grid-cols-[104px_minmax(0,1fr)] gap-3 sm:grid-cols-[152px_minmax(0,1fr)] sm:gap-5">
   <ProductPreviewImage
     title={item.title}
     frontImage={previewImages.front}
@@ -1797,14 +1767,6 @@ export default function CheckoutPage() {
                           const isFastest = index === shippingMethodsForDisplay.length - 1;
                           return (
                             <button key={method.id} type="button" onClick={() => {
-                            console.info("[checkout:shipping-selected]", {
-                              id: method.id,
-                              code: method.code,
-                              shipmentMethodUid: method.shipmentMethodUid,
-                              name: method.name,
-                              price: method.price,
-                              currency: method.currency,
-                            });
                             setSelectedShippingMethodId(method.id);
                             setShippingMethodSelection(method);
                             setForm((prev) => ({ ...prev, shippingMethod: method.id }));
@@ -1847,7 +1809,7 @@ export default function CheckoutPage() {
 
             {step === "payment" && (
               <div className="mx-auto max-w-2xl">
-                <div className="mb-8 border-b border-white/10 pb-5">
+                <div className="mb-6 border-b border-white/10 pb-4 sm:mb-8 sm:pb-5">
                   <h2 className="text-2xl font-black tracking-[-0.06em]">Payment</h2>
                   <p className="mt-2 text-sm font-medium leading-6 text-white/45">You are one step away. Confirm the total and continue to payment.</p>
                 </div>
@@ -1907,7 +1869,7 @@ export default function CheckoutPage() {
           </section>
 
           <aside className="lg:sticky lg:top-5 lg:self-start">
-            <div className="rounded-[30px] border border-white/10 bg-white/[0.025] p-5 backdrop-blur-xl">
+            <div className="rounded-[26px] border border-white/10 bg-white/[0.025] p-4 backdrop-blur-xl sm:rounded-[30px] sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-purple-200/70">Summary</p>
@@ -1961,19 +1923,19 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-[10000] border-t border-white/10 bg-[#05050b]/92 px-4 py-3 backdrop-blur-xl lg:hidden">
-        <div className="mx-auto flex max-w-6xl items-center gap-3">
+      <div className="fixed inset-x-0 bottom-0 z-[10000] border-t border-white/10 bg-[#05050b]/92 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-4 sm:py-3 lg:hidden">
+        <div className="mx-auto flex max-w-6xl items-center gap-2.5 sm:gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Total before tax</p>
             <p className="text-xl font-black tracking-[-0.05em]">{money(totalBeforeTax)}</p>
             <p className="text-[10px] font-bold text-white/32">Tax calculated at payment</p>
           </div>
           {step === "payment" ? (
-            <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-12 min-w-[150px] items-center justify-center gap-2 rounded-full bg-purple-600 px-5 text-sm font-black text-white disabled:opacity-40">
+            <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-full bg-purple-600 px-4 text-sm font-black text-white disabled:opacity-40 sm:h-12 sm:min-w-[150px] sm:px-5">
               {submitting ? <Loader2 size={16} className="animate-spin" /> : "Pay now"}
             </button>
           ) : (
-            <button type="button" disabled={(step === "shipping" && !shippingComplete) || (step === "review" && items.length === 0)} onClick={goNext} className="flex h-12 min-w-[150px] items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] disabled:opacity-40">
+            <button type="button" disabled={(step === "shipping" && !shippingComplete) || (step === "review" && items.length === 0)} onClick={goNext} className="flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-black text-[#080812] disabled:opacity-40 sm:h-12 sm:min-w-[150px] sm:px-5">
               {step === "shipping" ? "Continue to review" : "Continue"} <ArrowRight size={15} />
             </button>
           )}
