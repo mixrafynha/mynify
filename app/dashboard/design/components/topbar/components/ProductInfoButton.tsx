@@ -101,10 +101,26 @@ function ProductInfoButton({
           ? null
           : basePrice + Number(secondPrintCharge || 0),
     };
-  }, [backElements, countryCode, frontElements, selectedVariant?.price, selectedVariant?.printPricing, selectedVariant?.variantPrice]);
+  }, [
+    backElements,
+    countryCode,
+    frontElements,
+    selectedVariant?.colorHex,
+    selectedVariant?.gelatoProductUid,
+    selectedVariant?.gelato_product_uid,
+    selectedVariant?.printPricing,
+    selectedVariant?.price,
+    selectedVariant?.size,
+    selectedVariant?.variantId,
+    selectedVariant?.variantPrice,
+  ]);
 
   useEffect(() => {
-    console.info("[editor:price-resolution]", {
+    console.info("[editor:second-print-variant-resolution]", {
+      variantId: selectedVariant?.variantId ?? null,
+      gelatoProductUid: selectedVariant?.gelatoProductUid ?? selectedVariant?.gelato_product_uid ?? null,
+      color: selectedVariant?.colorName ?? selectedVariant?.colorHex ?? null,
+      size: selectedVariant?.size ?? null,
       variantBasePrice: pricing.basePrice,
       hasFrontPrint: pricing.frontPrinted,
       hasBackPrint: pricing.backPrinted,
@@ -113,7 +129,7 @@ function ProductInfoButton({
       countryCode,
       currency: "EUR",
     });
-  }, [countryCode, pricing]);
+  }, [countryCode, pricing, selectedVariant?.colorHex, selectedVariant?.colorName, selectedVariant?.gelatoProductUid, selectedVariant?.gelato_product_uid, selectedVariant?.size, selectedVariant?.variantId]);
 
   const productName = productConfig?.gelatoProductName || category || "Custom product";
   const productUid = selectedVariant?.gelatoProductUid || selectedVariant?.gelato_product_uid || selectedVariant?.productUid || selectedVariant?.product_uid;

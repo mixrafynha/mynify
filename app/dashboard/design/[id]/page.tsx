@@ -60,6 +60,8 @@ type EditorVariantSelection = {
   currency: string | null;
   image: string | null;
   imageUrl: string | null;
+  gelatoProductUid?: string | null;
+  gelato_product_uid?: string | null;
   printPricing?: Record<string, any> | null;
   gelatoAttributes?: Record<string, any> | null;
 };
@@ -1804,8 +1806,10 @@ export default function EditorPage() {
       currency: current?.currency || null,
       image: null,
       imageUrl: null,
-      printPricing: option.printPricing || current?.printPricing || null,
-      gelatoAttributes: option.gelatoAttributes || current?.gelatoAttributes || null,
+      gelatoProductUid: option.gelatoProductUid || null,
+      gelato_product_uid: option.gelatoProductUid || null,
+      printPricing: option.printPricing || null,
+      gelatoAttributes: option.gelatoAttributes || null,
     }));
 
     // Variant images are product previews, not editor mockups. Keep the

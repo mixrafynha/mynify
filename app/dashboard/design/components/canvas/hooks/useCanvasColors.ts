@@ -10,6 +10,7 @@ export type CanvasColorOption = {
   size?: string | null;
   sku?: string | null;
   price?: number | string | null;
+  gelatoProductUid?: string | null;
   imageUrl?: string | null;
   frontUrl?: string | null;
   backUrl?: string | null;
@@ -69,6 +70,7 @@ function normalizeColors(input: any, selectedSize?: string | null): CanvasColorO
       size: text(variant?.size) || selectedSize || null,
       sku: text(variant?.sku),
       price: variant?.variantPrice ?? variant?.variant_price ?? variant?.price ?? color?.price ?? null,
+      gelatoProductUid: text(variant?.gelato_product_uid || variant?.gelatoProductUid),
       imageUrl: text(variant?.imageUrl || variant?.image_url || variant?.image),
       frontUrl,
       backUrl,

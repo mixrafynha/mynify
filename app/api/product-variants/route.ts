@@ -30,6 +30,8 @@ type VariantRow = {
   sku: string | null;
   stock: number | null;
   price: number | string | null;
+  gelato_product_uid: string | null;
+  gelato_attributes: Record<string, unknown> | null;
 };
 
 export async function GET(req: Request) {
@@ -82,7 +84,7 @@ export async function GET(req: Request) {
 
     const { data: variantRows, error: variantsError } = await supabase
       .from("product_variants")
-      .select("id, product_color_id, size, name, sku, stock, price")
+      .select("id, product_color_id, size, name, sku, stock, price, gelato_product_uid, gelato_attributes")
       .in("product_color_id", colorIds)
       .order("size", { ascending: true });
 
@@ -107,6 +109,8 @@ export async function GET(req: Request) {
         sku: variant.sku,
         stock: Number(variant.stock ?? 0),
         price: variant.price,
+        gelato_product_uid: variant.gelato_product_uid,
+        gelato_attributes: variant.gelato_attributes,
         color: color?.color ?? null,
         color_name: color?.color ?? null,
         color_hex: color?.color_hex ?? "#d1d5db",
