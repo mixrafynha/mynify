@@ -1139,7 +1139,11 @@ export default function CheckoutPage() {
       const res = await fetch("/api/cart/update", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: item.id, ...payload }),
+        body: JSON.stringify({
+          id: item.id,
+          ...payload,
+          countryCode: resolveCheckoutCountry(form.country)?.iso ?? null,
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Error updating item");
@@ -1581,8 +1585,12 @@ export default function CheckoutPage() {
                         checkoutCountryIso,
                         item.currency || "EUR",
                       );
-                      const price = customDesign
-                        ? Math.max(0, Number(item.price) || 0)
+                      const price = customDesign && checkoutCountryIso
+                        ? (current
+                            ? variantPrice(current, Math.max(0, Number(item.price) || 0))
+                            : Math.max(0, (Number(item.price) || 0) - secondPrintCharge)) + secondPrintCharge
+                        : customDesign
+                          ? Math.max(0, Number(item.price) || 0)
                         : variantPrice(current, Math.max(0, Number(item.price) || 0));
                       const busy = updatingItemId === item.id || removingItemId === item.id;
                       const previewImages = resolvePreviewImageSources(item);

@@ -1,5 +1,6 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveVariantById } from "../_variant";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,6 +28,8 @@ type UpdateCartBody = {
   quantity?: unknown;
   variantId?: unknown;
   variant_id?: unknown;
+  countryCode?: unknown;
+  country_code?: unknown;
 };
 
 type CartPatch = {
@@ -45,18 +48,7 @@ function nullableString(value: unknown): string | null {
   return parsed ? parsed : null;
 }
 
-function hasVisibleDesign(elements: unknown) {
-  return Array.isArray(elements) && elements.some((element) => {
-    if (!element || typeof element !== "object") return false;
-    const value = element as { type?: unknown; meta?: { hidden?: unknown } };
-    return (
-      value.meta?.hidden !== true &&
-      ["image", "text", "shape"].includes(String(value.type || ""))
-    );
-  });
-}
-
-async function getSecondPrintCharge(
+async function hasSecondPrint(
   supabase: ReturnType<typeof createSupabaseServer>,
   userProductId: string,
 ) {
@@ -66,10 +58,7 @@ async function getSecondPrintCharge(
     .eq("id", userProductId)
     .maybeSingle();
 
-  return hasVisibleDesign(data?.design_front) &&
-    hasVisibleDesign(data?.design_back)
-    ? 6
-    : 0;
+  return hasVisiblePrintElements(data?.design_front) && hasVisiblePrintElements(data?.design_back);
 }
 
 export async function PATCH(req: Request) {
@@ -141,10 +130,17 @@ export async function PATCH(req: Request) {
           patch.price = selectedVariant.price;
         }
       } else if (selectedVariant.price !== null && selectedVariant.price > 0) {
-        const secondPrintCharge = await getSecondPrintCharge(
-          supabase,
-          cartItem.user_product_id,
-        );
+        const secondPrintCharge = await hasSecondPrint(supabase, cartItem.user_product_id)
+          ? resolveSecondPrintCharge({
+              attributes: selectedVariant.gelato_attributes,
+              countryCode: nullableString(body.countryCode ?? body.country_code),
+              currency: "EUR",
+              allowMarketFallback: false,
+            })
+          : 0;
+        if (secondPrintCharge === null) {
+          return Response.json({ error: "Print pricing is not ready for this variant and country" }, { status: 409 });
+        }
         patch.price = selectedVariant.price + secondPrintCharge;
       }
     } else if (cartItem.variant_id && patch.quantity !== undefined) {

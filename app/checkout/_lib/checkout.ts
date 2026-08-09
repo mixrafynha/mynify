@@ -1,3 +1,5 @@
+import { resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
+
 export type Step = "shipping" | "review" | "payment";
 
 export type GelatoCheckoutPrintFile = {
@@ -166,11 +168,6 @@ function asRecord(value: unknown): FlexibleRecord | null {
     : null;
 }
 
-function numericCost(value: unknown) {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export function customSecondPrintCharge(
   item: CartItem,
   variant?: CartVariant | null,
@@ -185,19 +182,12 @@ export function customSecondPrintCharge(
     return 0;
   }
 
-  const attributes = asRecord(variant?.gelato_attributes ?? variant?.gelatoAttributes);
-  const printPricing = asRecord(attributes?.printPricing);
-  const normalizedCountry = String(countryCode || "").trim().toUpperCase();
-  const normalizedCurrency = String(currency || "EUR").trim().toUpperCase();
-  const market = normalizedCountry ? asRecord(printPricing?.[normalizedCountry]) : null;
-  const pricing = market ? asRecord(market[normalizedCurrency]) : null;
-  const front = asRecord(pricing?.front);
-  const frontBack = asRecord(pricing?.frontBack);
-  const frontCost = numericCost(front?.cost);
-  const frontBackCost = numericCost(frontBack?.cost);
-
-  if (frontCost === null || frontBackCost === null) return 0;
-  return Math.max(0, Math.round((frontBackCost - frontCost) * 100) / 100);
+  return resolveSecondPrintCharge({
+    attributes: variant?.gelato_attributes ?? variant?.gelatoAttributes,
+    countryCode,
+    currency,
+    allowMarketFallback: false,
+  }) ?? 0;
 }
 
 export type CheckoutForm = {

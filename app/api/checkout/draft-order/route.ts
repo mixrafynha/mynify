@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload } from "@/lib/gelato/checkout-quote";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
@@ -604,8 +605,9 @@ export async function POST(req: Request) {
       const backElements = designData?.sides && typeof designData.sides === "object" && (designData.sides as Record<string, unknown>).back && typeof (designData.sides as Record<string, unknown>).back === "object"
         ? ((designData.sides as Record<string, unknown>).back as Record<string, unknown>).elements
         : null;
-      const frontHasDesign = Array.isArray(frontElements) && frontElements.length > 0;
-      const backHasDesign = Array.isArray(backElements) && backElements.length > 0;
+      const frontHasDesign = hasVisiblePrintElements(frontElements);
+      const backHasDesign = hasVisiblePrintElements(backElements);
+      const hasSecondPrint = frontHasDesign && backHasDesign;
       const printFilesRecord = resolvedUserProduct?.print_files && typeof resolvedUserProduct.print_files === "object"
         ? (resolvedUserProduct.print_files as Record<string, unknown>)
         : {};
@@ -694,17 +696,16 @@ export async function POST(req: Request) {
       // the delivery market. Never trust a browser-supplied surcharge.
       const currentVariantBasePrice = Number(variant?.price ?? resolvedUserProduct?.price ?? product?.price ?? 0);
       const marketCountryCode = resolveCountryCode(address.countryCode) ?? cleanText(address.countryCode).toUpperCase();
-      const variantAttributes = asRecord(variant?.gelato_attributes);
-      const printPricing = asRecord(asRecord(asRecord(variantAttributes.printPricing)[marketCountryCode]).EUR);
-      const frontPricing = asRecord(printPricing.front);
-      const frontBackPricing = asRecord(printPricing.frontBack);
-      const frontCost = Number(frontPricing.cost);
-      const frontBackCost = Number(frontBackPricing.cost);
-      const dynamicSecondPrintCharge = backHasDesign && Number.isFinite(frontCost) && Number.isFinite(frontBackCost)
-        ? Math.max(0, frontBackCost - frontCost)
+      const resolvedSecondPrintCharge = hasSecondPrint
+        ? resolveSecondPrintCharge({
+            attributes: variant?.gelato_attributes,
+            countryCode: marketCountryCode,
+            currency: "EUR",
+            allowMarketFallback: false,
+          })
         : 0;
 
-      if (backHasDesign && (!Number.isFinite(frontCost) || !Number.isFinite(frontBackCost))) {
+      if (resolvedSecondPrintCharge === null) {
         return conflict("PRINT_PRICING_NOT_READY", "Print pricing is not ready for this variant and delivery country.", {
           cartItemId: cartRow.id,
           variantId: variant?.id ?? null,
@@ -713,6 +714,7 @@ export async function POST(req: Request) {
         });
       }
 
+      const dynamicSecondPrintCharge = resolvedSecondPrintCharge ?? 0;
       const unitPrice = currentVariantBasePrice + dynamicSecondPrintCharge;
 
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
@@ -728,6 +730,7 @@ export async function POST(req: Request) {
         variantBasePrice: currentVariantBasePrice,
         userProductId: resolvedUserProduct?.id ?? null,
         storedFinalPrice: resolvedUserProduct?.final_price ?? null,
+        hasSecondPrint,
         dynamicSecondPrintCharge,
         printPricingCountryCode: marketCountryCode,
         unitPrice,

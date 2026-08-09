@@ -9,6 +9,7 @@ import {
 import type { DesignAssetKind, DesignSide } from "./image-utils";
 import { uploadBufferToR2, type R2UploadResult } from "./r2";
 import { resolveVariantById } from "../../cart/_variant";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 export function isUuid(value: unknown) {
   return (
@@ -34,63 +35,11 @@ function arrayValue(value: unknown) {
   return Array.isArray(parsed) ? parsed : [];
 }
 
-function hasVisibleDesign(elements: unknown[]) {
-  return elements.some((element) => {
-    if (!element || typeof element !== "object") return false;
-    const value = element as { type?: unknown; meta?: { hidden?: unknown } };
-    return value.meta?.hidden !== true &&
-      ["image", "text", "shape"].includes(String(value.type || ""));
-  });
-}
-
 function objectValue<T extends Record<string, unknown>>(value: unknown, fallback: T): T {
   const parsed = parseJsonIfString<unknown>(value, value);
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? (parsed as T)
     : fallback;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function numericCost(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function resolvePrintPricingRecord(
-  attributes: unknown,
-  countryCode: unknown,
-  currency = "EUR",
-) {
-  const printPricing = asRecord(asRecord(attributes).printPricing);
-  const normalizedCountry = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : "";
-  const normalizedCurrency = currency.trim().toUpperCase();
-  const preferredMarket = normalizedCountry ? asRecord(printPricing[normalizedCountry]) : {};
-  const fallbackMarket = Object.values(printPricing)
-    .map((market) => asRecord(market))
-    .find((market) => Object.keys(asRecord(market[normalizedCurrency])).length > 0);
-  const market = Object.keys(preferredMarket).length > 0 ? preferredMarket : fallbackMarket;
-
-  return asRecord(market?.[normalizedCurrency]);
-}
-
-function resolveSecondPrintCharge(args: {
-  attributes: unknown;
-  countryCode: unknown;
-  currency?: string;
-}) {
-  const pricing = resolvePrintPricingRecord(args.attributes, args.countryCode, args.currency ?? "EUR");
-  const front = asRecord(pricing.front);
-  const frontBack = asRecord(pricing.frontBack);
-  const frontCost = numericCost(front.cost);
-  const frontBackCost = numericCost(frontBack.cost);
-
-  if (frontCost === null || frontBackCost === null) return 0;
-  return Math.max(0, Math.round((frontBackCost - frontCost) * 100) / 100);
 }
 
 function isHttpUrl(value: unknown): value is string {
@@ -675,31 +624,35 @@ export async function buildUserProductSavePayload(args: {
   }
 
   const basePrice = Number(databaseVariant?.price ?? baseProduct.price ?? 0);
-  const hasFrontDesign = hasVisibleDesign(frontElements);
-  const hasBackDesign = hasVisibleDesign(backElements);
+  const hasFrontDesign = hasVisiblePrintElements(frontElements);
+  const hasBackDesign = hasVisiblePrintElements(backElements);
   const selectedVariantRecord = selectedVariant ? (selectedVariant as Record<string, unknown>) : null;
-  const productMarkup =
-    hasFrontDesign && hasBackDesign
-      ? resolveSecondPrintCharge({
-          attributes:
-            databaseVariant?.gelato_attributes ??
-            selectedVariantRecord?.gelato_attributes ??
-            selectedVariantRecord?.gelatoAttributes,
-          countryCode: firstValue(
-            body.countryCode,
-            body.country_code,
-            body.marketCountryCode,
-            body.market_country_code,
-            body.country,
-            incomingDesignData.countryCode,
-            incomingDesignData.country_code,
-            incomingDesignData.marketCountryCode,
-            incomingDesignData.market_country_code,
-            incomingDesignData.country,
-          ),
-          currency: "EUR",
-        })
-      : 0;
+  const secondPrintCharge = hasFrontDesign && hasBackDesign
+    ? resolveSecondPrintCharge({
+        attributes:
+          databaseVariant?.gelato_attributes ??
+          selectedVariantRecord?.gelato_attributes ??
+          selectedVariantRecord?.gelatoAttributes,
+        countryCode: String(firstValue(
+          body.countryCode,
+          body.country_code,
+          body.marketCountryCode,
+          body.market_country_code,
+          body.country,
+          incomingDesignData.countryCode,
+          incomingDesignData.country_code,
+          incomingDesignData.marketCountryCode,
+          incomingDesignData.market_country_code,
+          incomingDesignData.country,
+        ) ?? ""),
+        currency: "EUR",
+        allowMarketFallback: false,
+      })
+    : 0;
+  if (secondPrintCharge === null) {
+    throw new Error("Print pricing is not ready for the selected variant and country");
+  }
+  const productMarkup = secondPrintCharge;
   const finalPrice = basePrice + productMarkup;
 
   const printBox = objectValue<any>(body.printBox || body.print_box, {

@@ -1382,6 +1382,13 @@ export default function EditorPage() {
       const requestPayload = {
         ...parsedDesignPayload,
         designId: resolvedDesignId,
+        countryCode: (() => {
+          try {
+            return new Intl.Locale(navigator.language || "").region?.toUpperCase() || null;
+          } catch {
+            return navigator.language.match(/[-_]([A-Za-z]{2})$/)?.[1]?.toUpperCase() || null;
+          }
+        })(),
       };
       console.log("[editor-save] payload inspection", {
         hasFront: Boolean(frontData),

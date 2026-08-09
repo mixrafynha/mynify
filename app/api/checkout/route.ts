@@ -1,5 +1,6 @@
 import Stripe from "stripe";
 import { NextResponse } from "next/server";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
@@ -220,29 +221,13 @@ function asRecord(value: unknown): Record<string, unknown> {
     : {};
 }
 
-function userProductHasBackDesign(userProduct: UserProductRow | null): boolean {
+function userProductHasSecondPrint(userProduct: UserProductRow | null): boolean {
   if (!userProduct) return false;
   const designData = asRecord(userProduct.design_data);
   const sides = asRecord(designData.sides);
+  const front = asRecord(sides.front);
   const back = asRecord(sides.back);
-  return Array.isArray(back.elements) && back.elements.length > 0;
-}
-
-function resolveDynamicSecondPrintCharge(
-  variant: VariantRow | null,
-  countryCode: string | null,
-): number | null {
-  if (!variant || !countryCode) return null;
-  const attributes = asRecord(variant.gelato_attributes);
-  const printPricing = asRecord(attributes.printPricing);
-  const market = asRecord(printPricing[countryCode]);
-  const eur = asRecord(market.EUR);
-  const front = asRecord(eur.front);
-  const frontBack = asRecord(eur.frontBack);
-  const frontCost = Number(front.cost);
-  const frontBackCost = Number(frontBack.cost);
-  if (!Number.isFinite(frontCost) || !Number.isFinite(frontBackCost)) return null;
-  return Math.max(0, frontBackCost - frontCost);
+  return hasVisiblePrintElements(front.elements) && hasVisiblePrintElements(back.elements);
 }
 
 function getBearerToken(req: Request): string | null {
@@ -605,12 +590,17 @@ export async function POST(req: Request) {
         const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
         const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
         const currentVariantBasePrice = Number(variant?.price ?? userProduct?.price ?? product.price);
-        const hasBackDesign = userProductHasBackDesign(userProduct);
-        const dynamicSecondPrintCharge = hasBackDesign
-          ? resolveDynamicSecondPrintCharge(variant, shippingCountryCode)
+        const hasSecondPrint = userProductHasSecondPrint(userProduct);
+        const dynamicSecondPrintCharge = hasSecondPrint
+          ? resolveSecondPrintCharge({
+              attributes: variant?.gelato_attributes,
+              countryCode: shippingCountryCode,
+              currency: "EUR",
+              allowMarketFallback: false,
+            })
           : 0;
 
-        if (hasBackDesign && dynamicSecondPrintCharge === null) {
+        if (hasSecondPrint && dynamicSecondPrintCharge === null) {
           return NextResponse.json(
             { error: `Print pricing is not ready for ${product.title}` },
             { status: 409 },
@@ -626,7 +616,7 @@ export async function POST(req: Request) {
           variantBasePrice: Number.isFinite(currentVariantBasePrice) ? currentVariantBasePrice : null,
           userProductId: userProduct?.id ?? null,
           storedFinalPrice: userProduct?.final_price ?? null,
-          hasBackDesign,
+          hasSecondPrint,
           dynamicSecondPrintCharge,
           printPricingCountryCode: shippingCountryCode,
           officialPrice: Number.isFinite(officialPrice) ? officialPrice : null,

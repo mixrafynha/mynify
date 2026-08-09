@@ -6,6 +6,7 @@ import { Layers3, Package, Palette, Ruler, Tag, X } from "lucide-react";
 import type { ProductDisplayConfig } from "../../canvas/productConfig";
 import type { SelectedProductVariant } from "../types";
 import TopBarButton from "./TopBarButton";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 function parsePrice(value: number | string | null | undefined) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
@@ -35,34 +36,6 @@ function resolveBrowserCountryCode() {
     const match = locale.match(/[-_]([A-Za-z]{2})$/);
     return match?.[1]?.toUpperCase() || null;
   }
-}
-
-function resolvePrintPricing(
-  printPricing: Record<string, any> | null | undefined,
-  currency: string,
-  countryCode: string | null,
-) {
-  if (!printPricing || typeof printPricing !== "object") return null;
-
-  const preferred = countryCode ? printPricing[countryCode]?.[currency] : null;
-  const market = preferred || Object.values(printPricing)
-    .map((entry: any) => entry?.[currency])
-    .find(Boolean);
-
-  if (!market) return null;
-  const front = parsePrice(market?.front?.cost);
-  const frontBack = parsePrice(market?.frontBack?.cost);
-  if (front == null || frontBack == null) return null;
-
-  return {
-    frontCost: front,
-    frontBackCost: frontBack,
-    additionalBackCost: Math.max(0, frontBack - front),
-  };
-}
-
-function hasVisibleDesign(elements?: any[]) {
-  return Array.isArray(elements) && elements.some((element) => element && element.meta?.hidden !== true);
 }
 
 function ProductInfoButton({
@@ -103,12 +76,16 @@ function ProductInfoButton({
     const raw = String(rawPrice ?? "");
     const currency = raw.includes("$") ? "USD" : raw.includes("£") ? "GBP" : "EUR";
     const formatter = new Intl.NumberFormat("en-IE", { style: "currency", currency });
-    const frontPrinted = hasVisibleDesign(frontElements);
-    const backPrinted = hasVisibleDesign(backElements);
+    const frontPrinted = hasVisiblePrintElements(frontElements);
+    const backPrinted = hasVisiblePrintElements(backElements);
     const printSideCount = Number(frontPrinted) + Number(backPrinted);
-    const marketPricing = resolvePrintPricing(selectedVariant?.printPricing, currency, countryCode);
     const secondPrintCharge = printSideCount >= 2
-      ? marketPricing?.additionalBackCost ?? null
+      ? resolveSecondPrintCharge({
+          printPricing: selectedVariant?.printPricing,
+          countryCode,
+          currency,
+          allowMarketFallback: false,
+        })
       : 0;
     return {
       basePrice,
@@ -125,6 +102,18 @@ function ProductInfoButton({
           : basePrice + Number(secondPrintCharge || 0),
     };
   }, [backElements, countryCode, frontElements, selectedVariant?.price, selectedVariant?.printPricing, selectedVariant?.variantPrice]);
+
+  useEffect(() => {
+    console.info("[editor:price-resolution]", {
+      variantBasePrice: pricing.basePrice,
+      hasFrontPrint: pricing.frontPrinted,
+      hasBackPrint: pricing.backPrinted,
+      secondPrintCharge: pricing.secondPrintCharge,
+      displayedPrice: pricing.total,
+      countryCode,
+      currency: "EUR",
+    });
+  }, [countryCode, pricing]);
 
   const productName = productConfig?.gelatoProductName || category || "Custom product";
   const productUid = selectedVariant?.gelatoProductUid || selectedVariant?.gelato_product_uid || selectedVariant?.productUid || selectedVariant?.product_uid;
