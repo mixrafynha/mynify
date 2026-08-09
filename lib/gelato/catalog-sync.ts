@@ -2693,6 +2693,7 @@ export async function syncGelatoProductFamily(
     referenceProductUid: string;
     productUids?: string[];
     preserveFamilyState?: boolean;
+    skipSellingPriceRefresh?: boolean;
   },
 ): Promise<GelatoFamilySyncResult> {
   const productId = cleanString(input.productId);
@@ -3092,7 +3093,9 @@ export async function syncGelatoProductFamily(
     failed: 0,
   });
 
-  await refreshProductVariantSellingPrices(productId);
+  if (!input.skipSellingPriceRefresh) {
+    await refreshProductVariantSellingPrices(productId);
+  }
 
   return result;
 }

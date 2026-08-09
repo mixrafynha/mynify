@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { syncGelatoProductFamily } from "@/lib/gelato/catalog-sync";
+import { refreshProductVariantSellingPrices, syncGelatoProductFamily } from "@/lib/gelato/catalog-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,6 +9,13 @@ export const maxDuration = 300;
 
 const BATCH_SIZE = 3;
 const TEMPORARY_ERROR_CODES = [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524];
+
+type ClaimedGelatoSyncJobItem = {
+  id: string;
+  gelato_product_uid: string;
+  attempts: number;
+  position: number;
+};
 
 function isoNow() {
   return new Date().toISOString();
@@ -76,33 +83,26 @@ async function claimGelatoSyncJobItems(
   jobId: string,
   batchSize: number,
 ) {
-  const fallbackResult = await supabase
-    .from("gelato_sync_job_items")
-    .select("id, gelato_product_uid, attempts, position")
-    .eq("job_id", jobId)
-    .eq("status", "pending")
-    .order("position", { ascending: true })
-    .limit(batchSize);
+  const { data, error } = await supabase.rpc("claim_gelato_sync_job_items", {
+    batch_size: batchSize,
+    target_job_id: jobId,
+  });
 
-  if (fallbackResult.error) throw new Error(fallbackResult.error.message);
+  if (error) throw new Error(error.message);
 
-  const claimed = (fallbackResult.data ?? []) as Array<{
-    id: string;
-    gelato_product_uid: string;
-    attempts: number;
-    position: number;
+  const claimedItems = (data ?? []) as Array<{
+    id: unknown;
+    gelato_product_uid: unknown;
+    attempts: unknown;
+    position: unknown;
   }>;
 
-  if (claimed.length === 0) return [];
-
-  const { error: claimUpdateError } = await supabase
-    .from("gelato_sync_job_items")
-    .update({ status: "processing", started_at: isoNow(), updated_at: isoNow() })
-    .in("id", claimed.map((item) => item.id))
-    .eq("status", "pending");
-  if (claimUpdateError) throw new Error(claimUpdateError.message);
-
-  return claimed;
+  return claimedItems.map((item) => ({
+    id: String(item.id),
+    gelato_product_uid: String(item.gelato_product_uid),
+    attempts: Number(item.attempts ?? 0),
+    position: Number(item.position ?? 0),
+  })) satisfies ClaimedGelatoSyncJobItem[];
 }
 
 async function releaseProcessingItems(
@@ -258,6 +258,7 @@ export async function POST(request: Request) {
           referenceProductUid: String(job.reference_product_uid),
           productUids: [item.gelato_product_uid],
           preserveFamilyState: true,
+          skipSellingPriceRefresh: true,
         });
 
         successful += 1;
@@ -271,8 +272,6 @@ export async function POST(request: Request) {
           })
           .eq("id", item.id)
           .eq("status", "processing");
-
-        await refreshGelatoSyncJobCounters(supabase, jobId);
       } catch (error) {
         if (isTemporaryUpstreamError(error)) {
           await releaseProcessingItems(supabase, claimedItemIds);
@@ -310,11 +309,10 @@ export async function POST(request: Request) {
             last_processed_at: isoNow(),
           })
           .eq("id", jobId);
-
-        await refreshGelatoSyncJobCounters(supabase, jobId);
       }
     }
 
+    await refreshProductVariantSellingPrices(String(job.product_id));
     const finalizeResult = await finalizeJobIfReady(supabase, jobId);
 
     return NextResponse.json({
