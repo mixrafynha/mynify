@@ -59,6 +59,7 @@ type VariantRow = {
   gelato_product_uid: string | null;
   price: number | string | null;
   name?: string | null;
+  gelato_attributes?: Record<string, unknown> | null;
 };
 
 type UserProductRow = {
@@ -423,7 +424,7 @@ export async function POST(req: Request) {
     const variantHints = Array.from(new Set((cartRows ?? []).map((row) => row.variant_id).filter((value): value is string => Boolean(value))));
 
     const productRowsPromise = supabase.from("products").select("id, gelato_product_uid, price").in("id", productIds);
-    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, price, name").in("id", variantHints);
+    const variantRowsPromise = supabase.from("product_variants").select("id, sku, size, product_color_id, gelato_product_uid, price, name, gelato_attributes").in("id", variantHints);
     const userProductRowsPromise = userProductIds.length
       ? supabase
           .from("user_products")
@@ -483,7 +484,7 @@ export async function POST(req: Request) {
     if (fallbackVariantIds.length) {
       const { data: fallbackVariantRows, error: fallbackVariantRowsError } = await supabase
         .from("product_variants")
-        .select("id, sku, size, product_color_id, gelato_product_uid, price, name")
+        .select("id, sku, size, product_color_id, gelato_product_uid, price, name, gelato_attributes")
         .in("id", fallbackVariantIds);
       if (fallbackVariantRowsError) {
         console.error("[checkout:draft:fallback-variants-query-failed]", {
@@ -681,13 +682,32 @@ export async function POST(req: Request) {
           missingSides: [],
         });
       }
-      // Keep the draft financial snapshot aligned with the final Stripe checkout:
-      // current server-side variant price + the trusted €6 second-print charge
-      // persisted by Save Design. Never use a price supplied by the browser.
+      // Keep the draft financial snapshot aligned with the final Stripe checkout.
+      // The current variant is the authoritative base price. If the saved design really
+      // has a back print, derive the second-print charge from Gelato printPricing for
+      // the delivery market. Never trust a browser-supplied surcharge.
       const currentVariantBasePrice = Number(variant?.price ?? resolvedUserProduct?.price ?? product?.price ?? 0);
-      const storedMarkup = Number(resolvedUserProduct?.markup ?? 0);
-      const trustedSecondPrintCharge = resolvedUserProduct && storedMarkup === 6 ? 6 : 0;
-      const unitPrice = currentVariantBasePrice + trustedSecondPrintCharge;
+      const marketCountryCode = resolveCountryCode(address.countryCode) ?? cleanText(address.countryCode).toUpperCase();
+      const variantAttributes = asRecord(variant?.gelato_attributes);
+      const printPricing = asRecord(asRecord(asRecord(variantAttributes.printPricing)[marketCountryCode]).EUR);
+      const frontPricing = asRecord(printPricing.front);
+      const frontBackPricing = asRecord(printPricing.frontBack);
+      const frontCost = Number(frontPricing.cost);
+      const frontBackCost = Number(frontBackPricing.cost);
+      const dynamicSecondPrintCharge = backHasDesign && Number.isFinite(frontCost) && Number.isFinite(frontBackCost)
+        ? Math.max(0, frontBackCost - frontCost)
+        : 0;
+
+      if (backHasDesign && (!Number.isFinite(frontCost) || !Number.isFinite(frontBackCost))) {
+        return conflict("PRINT_PRICING_NOT_READY", "Print pricing is not ready for this variant and delivery country.", {
+          cartItemId: cartRow.id,
+          variantId: variant?.id ?? null,
+          countryCode: marketCountryCode,
+          currency: "EUR",
+        });
+      }
+
+      const unitPrice = currentVariantBasePrice + dynamicSecondPrintCharge;
 
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
         return conflict("INVALID_OFFICIAL_PRICE", "Unable to resolve an official EUR price for this cart item.", {
@@ -702,12 +722,13 @@ export async function POST(req: Request) {
         variantBasePrice: currentVariantBasePrice,
         userProductId: resolvedUserProduct?.id ?? null,
         storedFinalPrice: resolvedUserProduct?.final_price ?? null,
-        trustedSecondPrintCharge,
+        dynamicSecondPrintCharge,
+        printPricingCountryCode: marketCountryCode,
         unitPrice,
         quantity,
         lineTotal: unitPrice * quantity,
         currency: "EUR",
-        policy: "current_variant_plus_server_second_print",
+        policy: "current_variant_plus_dynamic_gelato_second_print",
       });
 
       resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal, unitPrice, adjustProductUidByFileTypes });

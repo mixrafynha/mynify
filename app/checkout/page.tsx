@@ -1177,12 +1177,25 @@ export default function CheckoutPage() {
     const nextSize = variantSize(selected) ?? item.size ?? null;
     const nextVariantId = selected.id || selected.variant_id || item.variant_id || null;
     const customDesign = isCustomDesignItem(item);
-    const secondPrintCharge = customSecondPrintCharge(item);
+    const countryIso = resolveCheckoutCountry(form.country)?.iso ?? null;
+    const currentVariant = getCurrentVariant(item);
+    const currentSecondPrintCharge = customSecondPrintCharge(
+      item,
+      currentVariant,
+      countryIso,
+      item.currency || "EUR",
+    );
+    const nextSecondPrintCharge = customSecondPrintCharge(
+      item,
+      selected,
+      countryIso,
+      item.currency || "EUR",
+    );
     const nextPrice = customDesign
       ? variantPrice(
           selected,
-          Math.max(0, (Number(item.price) || 0) - secondPrintCharge),
-        ) + secondPrintCharge
+          Math.max(0, (Number(item.price) || 0) - currentSecondPrintCharge),
+        ) + nextSecondPrintCharge
       : variantPrice(selected, Math.max(0, Number(item.price) || 0));
     const nextImage = customDesign
       ? item.image || variantImage(selected) || null
@@ -1633,7 +1646,13 @@ export default function CheckoutPage() {
                       const currentSize = current ? variantSize(current) : item.size;
                       const quantity = Math.max(1, Number(item.quantity) || 1);
                       const customDesign = isCustomDesignItem(item);
-                      const secondPrintCharge = customSecondPrintCharge(item);
+                      const checkoutCountryIso = resolveCheckoutCountry(form.country)?.iso ?? null;
+                      const secondPrintCharge = customSecondPrintCharge(
+                        item,
+                        current,
+                        checkoutCountryIso,
+                        item.currency || "EUR",
+                      );
                       const price = customDesign
                         ? Math.max(0, Number(item.price) || 0)
                         : variantPrice(current, Math.max(0, Number(item.price) || 0));
@@ -1704,8 +1723,14 @@ export default function CheckoutPage() {
                                     {colorGroups.map(({ color, variant }) => {
                                       const active = color === currentColor;
                                       const available = isVariantAvailable(variant);
+                                      const optionSecondPrintCharge = customSecondPrintCharge(
+                                        item,
+                                        variant,
+                                        checkoutCountryIso,
+                                        item.currency || "EUR",
+                                      );
                                       const optionPrice = customDesign
-                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + secondPrintCharge
+                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + optionSecondPrintCharge
                                         : variantPrice(variant, price);
                                       return (
                                         <button key={`${color}-${variantId(variant)}`} type="button" title={`${color} · ${money(optionPrice)}`} aria-label={`Select ${color}`} disabled={busy || !available} onClick={() => changeVariantByColor(item, color)} className={`group grid h-10 w-10 place-items-center rounded-full border transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white/12 ring-2 ring-white/25" : "border-white/15 hover:border-white/35"}`}>
@@ -1728,8 +1753,14 @@ export default function CheckoutPage() {
                                       const size = variantSize(variant);
                                       const active = size === currentSize;
                                       const available = isVariantAvailable(variant);
+                                      const optionSecondPrintCharge = customSecondPrintCharge(
+                                        item,
+                                        variant,
+                                        checkoutCountryIso,
+                                        item.currency || "EUR",
+                                      );
                                       const optionPrice = customDesign
-                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + secondPrintCharge
+                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + optionSecondPrintCharge
                                         : variantPrice(variant, price);
                                       return (
                                         <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-12 rounded-2xl border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white text-[#080812]" : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"}`}>

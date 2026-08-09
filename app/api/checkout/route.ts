@@ -87,6 +87,7 @@ type VariantRow = {
   product_color_id: string | null;
   gelato_product_uid: string | null;
   gelato_variant_uid: string | null;
+  gelato_attributes: Record<string, unknown> | null;
 };
 
 type UserProductRow = {
@@ -97,6 +98,7 @@ type UserProductRow = {
   currency: string | null;
   image: string | null;
   mockups: Record<string, unknown> | null;
+  design_data: Record<string, unknown> | null;
 };
 
 function asPublicImageUrl(value: unknown): string | null {
@@ -210,6 +212,37 @@ function buildShippingRecipient(body: CheckoutBody) {
     email: email ?? undefined,
     phone: phone ?? undefined,
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function userProductHasBackDesign(userProduct: UserProductRow | null): boolean {
+  if (!userProduct) return false;
+  const designData = asRecord(userProduct.design_data);
+  const sides = asRecord(designData.sides);
+  const back = asRecord(sides.back);
+  return Array.isArray(back.elements) && back.elements.length > 0;
+}
+
+function resolveDynamicSecondPrintCharge(
+  variant: VariantRow | null,
+  countryCode: string | null,
+): number | null {
+  if (!variant || !countryCode) return null;
+  const attributes = asRecord(variant.gelato_attributes);
+  const printPricing = asRecord(attributes.printPricing);
+  const market = asRecord(printPricing[countryCode]);
+  const eur = asRecord(market.EUR);
+  const front = asRecord(eur.front);
+  const frontBack = asRecord(eur.frontBack);
+  const frontCost = Number(front.cost);
+  const frontBackCost = Number(frontBack.cost);
+  if (!Number.isFinite(frontCost) || !Number.isFinite(frontBackCost)) return null;
+  return Math.max(0, frontBackCost - frontCost);
 }
 
 function getBearerToken(req: Request): string | null {
@@ -426,7 +459,8 @@ export async function POST(req: Request) {
               size,
               sku,
               product_color_id,
-              gelato_product_uid
+              gelato_product_uid,
+              gelato_attributes
             `)
             .in("id", variantIds);
 
@@ -454,7 +488,7 @@ export async function POST(req: Request) {
       const { data: userProductRows, error: userProductsError } = userProductIds.length
         ? await supabase
             .from("user_products")
-            .select("id, price, markup, final_price, currency, image, mockups")
+            .select("id, price, markup, final_price, currency, image, mockups, design_data")
             .in("id", userProductIds)
         : { data: [], error: null };
 
@@ -563,18 +597,27 @@ export async function POST(req: Request) {
         /*
          * PREÇO OFICIAL FINAL:
          * - a variante atual é sempre a fonte do preço base no checkout;
-         * - para designs guardados, o único suplemento aceite é o +€6 do segundo print,
-         *   persistido server-side em user_products.markup pelo Save Design;
-         * - user_products.final_price NÃO é usado como fonte principal porque pode ter
-         *   sido calculado para uma variante anterior antes de o utilizador trocar tamanho/cor.
+         * - se existir artwork real no back, o suplemento vem do printPricing Gelato
+         *   da variante atual e do país de entrega;
+         * - user_products.final_price e markup não são usados como fonte de preço.
          * Nunca usamos cart_items.price nem preço enviado pelo browser.
          */
         const userProductKey = cartItem.user_product_id ?? cartItem.design_id;
         const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
         const currentVariantBasePrice = Number(variant?.price ?? userProduct?.price ?? product.price);
-        const storedMarkup = Number(userProduct?.markup ?? 0);
-        const trustedSecondPrintCharge = userProduct && storedMarkup === 6 ? 6 : 0;
-        const officialPrice = currentVariantBasePrice + trustedSecondPrintCharge;
+        const hasBackDesign = userProductHasBackDesign(userProduct);
+        const dynamicSecondPrintCharge = hasBackDesign
+          ? resolveDynamicSecondPrintCharge(variant, shippingCountryCode)
+          : 0;
+
+        if (hasBackDesign && dynamicSecondPrintCharge === null) {
+          return NextResponse.json(
+            { error: `Print pricing is not ready for ${product.title}` },
+            { status: 409 },
+          );
+        }
+
+        const officialPrice = currentVariantBasePrice + (dynamicSecondPrintCharge ?? 0);
         const officialBaseCurrency = "EUR";
 
         console.info("[checkout:final:price-resolution]", {
@@ -583,9 +626,11 @@ export async function POST(req: Request) {
           variantBasePrice: Number.isFinite(currentVariantBasePrice) ? currentVariantBasePrice : null,
           userProductId: userProduct?.id ?? null,
           storedFinalPrice: userProduct?.final_price ?? null,
-          trustedSecondPrintCharge,
+          hasBackDesign,
+          dynamicSecondPrintCharge,
+          printPricingCountryCode: shippingCountryCode,
           officialPrice: Number.isFinite(officialPrice) ? officialPrice : null,
-          policy: "current_variant_plus_server_second_print",
+          policy: "current_variant_plus_dynamic_gelato_second_print",
         });
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {

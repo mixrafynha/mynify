@@ -42,6 +42,8 @@ export type CartVariant = {
   price?: number | string | null;
   final_price?: number | string | null;
   base_price?: number | string | null;
+  gelato_attributes?: FlexibleRecord | null;
+  gelatoAttributes?: FlexibleRecord | null;
   product_color?: {
     id?: string | null;
     color?: string | null;
@@ -158,14 +160,44 @@ function sideHasVisibleDesign(item: CartItem, side: "front" | "back") {
   });
 }
 
-export function customSecondPrintCharge(item: CartItem) {
-  return (
-    isCustomDesignItem(item) &&
-    sideHasVisibleDesign(item, "front") &&
-    sideHasVisibleDesign(item, "back")
-  )
-    ? 6
-    : 0;
+function asRecord(value: unknown): FlexibleRecord | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as FlexibleRecord)
+    : null;
+}
+
+function numericCost(value: unknown) {
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function customSecondPrintCharge(
+  item: CartItem,
+  variant?: CartVariant | null,
+  countryCode?: string | null,
+  currency = "EUR",
+) {
+  if (
+    !isCustomDesignItem(item) ||
+    !sideHasVisibleDesign(item, "front") ||
+    !sideHasVisibleDesign(item, "back")
+  ) {
+    return 0;
+  }
+
+  const attributes = asRecord(variant?.gelato_attributes ?? variant?.gelatoAttributes);
+  const printPricing = asRecord(attributes?.printPricing);
+  const normalizedCountry = String(countryCode || "").trim().toUpperCase();
+  const normalizedCurrency = String(currency || "EUR").trim().toUpperCase();
+  const market = normalizedCountry ? asRecord(printPricing?.[normalizedCountry]) : null;
+  const pricing = market ? asRecord(market[normalizedCurrency]) : null;
+  const front = asRecord(pricing?.front);
+  const frontBack = asRecord(pricing?.frontBack);
+  const frontCost = numericCost(front?.cost);
+  const frontBackCost = numericCost(frontBack?.cost);
+
+  if (frontCost === null || frontBackCost === null) return 0;
+  return Math.max(0, Math.round((frontBackCost - frontCost) * 100) / 100);
 }
 
 export type CheckoutForm = {
