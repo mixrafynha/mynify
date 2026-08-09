@@ -13,6 +13,11 @@ export type CanvasColorOption = {
   imageUrl?: string | null;
   frontUrl?: string | null;
   backUrl?: string | null;
+  printPricing?: Record<string, Record<string, {
+    front?: { cost?: number | string | null; productUid?: string | null };
+    frontBack?: { cost?: number | string | null; productUid?: string | null };
+  }>> | null;
+  gelatoAttributes?: Record<string, any> | null;
 };
 
 const FALLBACK_COLORS: CanvasColorOption[] = [
@@ -67,6 +72,8 @@ function normalizeColors(input: any, selectedSize?: string | null): CanvasColorO
       imageUrl: text(variant?.imageUrl || variant?.image_url || variant?.image),
       frontUrl,
       backUrl,
+      printPricing: variant?.gelato_attributes?.printPricing || variant?.gelatoAttributes?.printPricing || null,
+      gelatoAttributes: variant?.gelato_attributes || variant?.gelatoAttributes || null,
     }];
   });
 }

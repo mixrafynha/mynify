@@ -43,6 +43,8 @@ export type SelectedProductVariant = {
   gelato_product_uid?: string | null;
   productUid?: string | null;
   product_uid?: string | null;
+  printPricing?: Record<string, any> | null;
+  gelatoAttributes?: Record<string, any> | null;
 };
 
 export interface PreviewPayloadInput {

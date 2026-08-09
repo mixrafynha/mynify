@@ -7,8 +7,6 @@ import type { ProductDisplayConfig } from "../../canvas/productConfig";
 import type { SelectedProductVariant } from "../types";
 import TopBarButton from "./TopBarButton";
 
-const SECOND_PRINT_PRICE = 6;
-
 function parsePrice(value: number | string | null | undefined) {
   if (typeof value === "number") return Number.isFinite(value) ? value : null;
   if (!value) return null;
@@ -24,6 +22,43 @@ function parsePrice(value: number | string | null | undefined) {
   }
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+
+function resolveBrowserCountryCode() {
+  if (typeof navigator === "undefined") return null;
+  const locale = navigator.language || "";
+  try {
+    const region = new Intl.Locale(locale).region;
+    return region ? region.toUpperCase() : null;
+  } catch {
+    const match = locale.match(/[-_]([A-Za-z]{2})$/);
+    return match?.[1]?.toUpperCase() || null;
+  }
+}
+
+function resolvePrintPricing(
+  printPricing: Record<string, any> | null | undefined,
+  currency: string,
+  countryCode: string | null,
+) {
+  if (!printPricing || typeof printPricing !== "object") return null;
+
+  const preferred = countryCode ? printPricing[countryCode]?.[currency] : null;
+  const market = preferred || Object.values(printPricing)
+    .map((entry: any) => entry?.[currency])
+    .find(Boolean);
+
+  if (!market) return null;
+  const front = parsePrice(market?.front?.cost);
+  const frontBack = parsePrice(market?.frontBack?.cost);
+  if (front == null || frontBack == null) return null;
+
+  return {
+    frontCost: front,
+    frontBackCost: frontBack,
+    additionalBackCost: Math.max(0, frontBack - front),
+  };
 }
 
 function hasVisibleDesign(elements?: any[]) {
@@ -49,8 +84,12 @@ function ProductInfoButton({
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [countryCode, setCountryCode] = useState<string | null>(null);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    setCountryCode(resolveBrowserCountryCode());
+  }, []);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpen(false);
@@ -67,17 +106,25 @@ function ProductInfoButton({
     const frontPrinted = hasVisibleDesign(frontElements);
     const backPrinted = hasVisibleDesign(backElements);
     const printSideCount = Number(frontPrinted) + Number(backPrinted);
-    const secondPrintCharge = printSideCount >= 2 ? SECOND_PRINT_PRICE : 0;
+    const marketPricing = resolvePrintPricing(selectedVariant?.printPricing, currency, countryCode);
+    const secondPrintCharge = printSideCount >= 2
+      ? marketPricing?.additionalBackCost ?? null
+      : 0;
     return {
       basePrice,
       frontPrinted,
       backPrinted,
       printSideCount,
       secondPrintCharge,
+      hasSecondPrintPrice: printSideCount < 2 || secondPrintCharge != null,
       format: (amount: number) => formatter.format(amount),
-      total: basePrice == null ? null : basePrice + secondPrintCharge,
+      total: basePrice == null
+        ? null
+        : printSideCount >= 2 && secondPrintCharge == null
+          ? null
+          : basePrice + Number(secondPrintCharge || 0),
     };
-  }, [backElements, frontElements, selectedVariant?.price, selectedVariant?.variantPrice]);
+  }, [backElements, countryCode, frontElements, selectedVariant?.price, selectedVariant?.printPricing, selectedVariant?.variantPrice]);
 
   const productName = productConfig?.gelatoProductName || category || "Custom product";
   const productUid = selectedVariant?.gelatoProductUid || selectedVariant?.gelato_product_uid || selectedVariant?.productUid || selectedVariant?.product_uid;
@@ -121,10 +168,10 @@ function ProductInfoButton({
             <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/25">
               <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 text-sm"><span className="text-white/55">Base product price</span><strong>{pricing.basePrice == null ? "Price unavailable" : pricing.format(pricing.basePrice)}</strong></div>
               <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 text-sm"><span className="text-white/55">First print side</span><strong className="text-emerald-300">Included</strong></div>
-              <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 text-sm"><span className="text-white/55">Second print side</span><strong className={pricing.secondPrintCharge ? "text-amber-300" : "text-white/40"}>{pricing.secondPrintCharge ? `+ ${pricing.format(pricing.secondPrintCharge)}` : pricing.printSideCount === 0 ? "Not used" : "Not used"}</strong></div>
+              <div className="flex items-center justify-between border-b border-white/8 px-4 py-3 text-sm"><span className="text-white/55">Second print side</span><strong className={pricing.secondPrintCharge ? "text-amber-300" : "text-white/40"}>{pricing.printSideCount < 2 ? "Not used" : pricing.secondPrintCharge == null ? "Calculated at checkout" : `+ ${pricing.format(pricing.secondPrintCharge)}`}</strong></div>
               <div className="flex items-center justify-between px-4 py-4"><span className="font-bold">Total</span><strong className="text-xl font-black text-cyan-300">{pricing.total == null ? "—" : pricing.format(pricing.total)}</strong></div>
             </div>
-            <p className="mt-3 text-center text-[11px] leading-relaxed text-white/35">One print side is included. {pricing.format(SECOND_PRINT_PRICE)} is added only when both front and back contain a visible design.</p>
+            <p className="mt-3 text-center text-[11px] leading-relaxed text-white/35">One print side is included. When both front and back contain a visible design, the second-side price uses the synced Gelato cost for the selected variant and market.</p>
           </section>
         </div>,
         document.body,

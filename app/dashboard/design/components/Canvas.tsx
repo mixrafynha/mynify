@@ -229,10 +229,13 @@ export default function Canvas({
 
   useEffect(() => {
     if (!availableColors.length || typeof onProductColorChange !== "function") return;
+    const hasExplicitVariant = Boolean(selectedVariant?.variantId || selectedVariant?.productColorId);
     const target = availableColors.find((color) =>
       (selectedVariant?.variantId && color.variantId === selectedVariant.variantId) ||
       (selectedVariant?.productColorId && color.productColorId === selectedVariant.productColorId),
-    ) || availableColors.find((color) => color.hex.toLowerCase() === String(mockupColor).toLowerCase());
+    ) || (!hasExplicitVariant
+      ? availableColors[0]
+      : availableColors.find((color) => color.hex.toLowerCase() === String(mockupColor).toLowerCase()));
     if (!target) return;
     const signature = `${target.variantId || target.productColorId || target.hex}:${target.frontUrl || ""}:${target.backUrl || ""}`;
     if (appliedVariantMockupRef.current === signature) return;

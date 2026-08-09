@@ -60,6 +60,8 @@ type EditorVariantSelection = {
   currency: string | null;
   image: string | null;
   imageUrl: string | null;
+  printPricing?: Record<string, any> | null;
+  gelatoAttributes?: Record<string, any> | null;
 };
 
 type SearchParamReader = { get: (name: string) => string | null };
@@ -444,6 +446,8 @@ function buildVariantSelection(
     currency,
     image: null,
     imageUrl: null,
+    printPricing: null,
+    gelatoAttributes: null,
   };
 }
 
@@ -531,6 +535,44 @@ export default function EditorPage() {
       setMockupColor(selectedVariant.colorHex);
     }
   }, [selectedVariant?.colorHex, draftHydrated]);
+
+  useEffect(() => {
+    const variantId = selectedVariant?.variantId;
+    if (!variantId) return;
+
+    let cancelled = false;
+
+    async function hydrateVariantPricing() {
+      const { data, error } = await supabase
+        .from("product_variants")
+        .select("id,gelato_attributes")
+        .eq("id", variantId)
+        .maybeSingle();
+
+      if (cancelled || error || !data) return;
+      const gelatoAttributes = data.gelato_attributes && typeof data.gelato_attributes === "object"
+        ? data.gelato_attributes as Record<string, any>
+        : null;
+      const printPricing = gelatoAttributes?.printPricing && typeof gelatoAttributes.printPricing === "object"
+        ? gelatoAttributes.printPricing as Record<string, any>
+        : null;
+
+      setSelectedVariant((current) => {
+        if (!current || current.variantId !== variantId) return current;
+        if (current.gelatoAttributes === gelatoAttributes && current.printPricing === printPricing) return current;
+        return {
+          ...current,
+          gelatoAttributes,
+          printPricing,
+        };
+      });
+    }
+
+    void hydrateVariantPricing();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedVariant?.variantId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1755,6 +1797,8 @@ export default function EditorPage() {
       currency: current?.currency || null,
       image: null,
       imageUrl: null,
+      printPricing: option.printPricing || current?.printPricing || null,
+      gelatoAttributes: option.gelatoAttributes || current?.gelatoAttributes || null,
     }));
 
     // Variant images are product previews, not editor mockups. Keep the
