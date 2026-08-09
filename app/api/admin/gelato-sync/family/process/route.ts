@@ -88,7 +88,17 @@ async function claimGelatoSyncJobItems(
     target_job_id: jobId,
   });
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[gelato-family-sync:claim-rpc-failed]", {
+      jobId,
+      batchSize,
+      code: error.code ?? null,
+      message: error.message,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+    });
+    throw new Error(error.message);
+  }
 
   const claimedItems = (data ?? []) as Array<{
     id: unknown;
