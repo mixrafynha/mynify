@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import { getAuthenticatedSupabase } from "@/app/api/user-products/save-design/auth";
 
 export const runtime = "nodejs";
 
 type SaveDesignPayload = {
+  id?: string;
+  designId?: string;
   schemaVersion?: number;
   productId?: string;
   category?: string;
@@ -30,6 +33,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function isUuid(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+  );
+}
+
 function normalizeDesignPayload(value: unknown): SaveDesignPayload | null {
   if (!isObject(value)) return null;
 
@@ -43,39 +53,42 @@ function normalizeDesignPayload(value: unknown): SaveDesignPayload | null {
   return payload;
 }
 
-async function insertWithSupabaseRest(payload: SaveDesignPayload) {
+function designInsertPayload(payload: SaveDesignPayload, userId: string) {
+  const quality = payload.production?.quality || {};
+
+  return {
+    user_id: userId,
+    product_id: payload.productId,
+    category: payload.category,
+    variant_id: payload.variantId || null,
+    status: payload.status || "draft",
+    color: payload.color || payload.mockupColor || "#ffffff",
+    mockup_color: payload.mockupColor || payload.color || "#ffffff",
+    schema_version: payload.schemaVersion || 2,
+    design_data: payload,
+    production_status: typeof quality.status === "string" ? quality.status : "review",
+    print_ready: Boolean(quality.printReady),
+    production_issue_count: Number(quality.issueCount || 0),
+  };
+}
+
+async function insertWithSupabaseRest(payload: SaveDesignPayload, userId: string) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const key = serviceKey || anonKey;
 
-  if (!supabaseUrl || !key) {
-    throw new Error("Missing Supabase env: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error("Missing Supabase env: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
   }
-
-  const quality = payload.production?.quality || {};
 
   const response = await fetch(`${supabaseUrl}/rest/v1/designs`, {
     method: "POST",
     headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
       "Content-Type": "application/json",
       Prefer: "return=representation",
     },
-    body: JSON.stringify({
-      product_id: payload.productId,
-      category: payload.category,
-      variant_id: payload.variantId || null,
-      status: payload.status || "draft",
-      color: payload.color || payload.mockupColor || "#ffffff",
-      mockup_color: payload.mockupColor || payload.color || "#ffffff",
-      schema_version: payload.schemaVersion || 2,
-      design_data: payload,
-      production_status: typeof quality.status === "string" ? quality.status : "review",
-      print_ready: Boolean(quality.printReady),
-      production_issue_count: Number(quality.issueCount || 0),
-    }),
+    body: JSON.stringify(designInsertPayload(payload, userId)),
   });
 
   const data = await response.json().catch(() => null);
@@ -95,6 +108,12 @@ async function insertWithSupabaseRest(payload: SaveDesignPayload) {
 
 export async function POST(request: Request) {
   try {
+    const { supabase, user } = await getAuthenticatedSupabase(request);
+
+    if (!user) {
+      return jsonError("Unauthorized", 401);
+    }
+
     const body = await request.json().catch(() => null);
     const payload = normalizeDesignPayload(body);
 
@@ -102,7 +121,25 @@ export async function POST(request: Request) {
       return jsonError("Invalid design payload", 422);
     }
 
-    const result = await insertWithSupabaseRest(payload);
+    const requestedDesignId = isUuid(payload.designId) ? payload.designId : isUuid(payload.id) ? payload.id : null;
+
+    if (requestedDesignId) {
+      const { data: existingDesign, error: ownershipError } = await supabase
+        .from("designs")
+        .select("id,user_id")
+        .eq("id", requestedDesignId)
+        .maybeSingle();
+
+      if (ownershipError) {
+        throw new Error(ownershipError.message);
+      }
+
+      if (existingDesign && existingDesign.user_id !== user.id) {
+        return jsonError("Forbidden", 403);
+      }
+    }
+
+    const result = await insertWithSupabaseRest(payload, user.id);
 
     return NextResponse.json({
       ok: true,

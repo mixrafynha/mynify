@@ -1,6 +1,7 @@
 import { tasks } from "@trigger.dev/sdk/v3";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,17 +12,19 @@ type FontPreviewPayload = {
   category?: string;
 };
 
-export async function GET(request: Request) {
-  return handleTrigger(request);
-}
-
 export async function POST(request: Request) {
+  const check = await requireAdmin();
+
+  if ("error" in check) {
+    return NextResponse.json({ error: check.error }, { status: check.status });
+  }
+
   return handleTrigger(request);
 }
 
 async function handleTrigger(request: Request) {
   try {
-    const body = request.method === "GET" ? null : await readJson<FontPreviewPayload>(request);
+    const body = await readJson<FontPreviewPayload>(request);
     const url = new URL(request.url);
 
     const fontId = String(body?.fontId || url.searchParams.get("fontId") || "").trim();

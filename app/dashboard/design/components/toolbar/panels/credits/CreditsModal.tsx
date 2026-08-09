@@ -57,18 +57,6 @@ export default function CreditsModal({
     return [...packs].sort((a, b) => getPricePerCredit(a) - getPricePerCredit(b))[0]?.id ?? null;
   }, [packs]);
 
-  console.group("STRIPE EMBEDDED DEBUG");
-  console.log("Publishable key:", stripePublishableKey);
-  console.log("Has stripePromise:", Boolean(stripePromise));
-  console.log("Client Secret:", checkoutClientSecret);
-  console.log("Embedded Options:", embeddedOptions);
-
-  if (checkoutClientSecret) {
-    console.log("Client Secret Prefix:", checkoutClientSecret.substring(0, 25));
-  }
-
-  console.groupEnd();
-
   if (!open) return null;
 
   return (

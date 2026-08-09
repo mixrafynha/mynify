@@ -1,5 +1,6 @@
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,11 +16,6 @@ type R2Env = {
 function readEnv(name: string): string | null {
   const value = process.env[name]?.trim();
   return value && value.length > 0 ? value : null;
-}
-
-function mask(value: string): string {
-  if (value.length <= 8) return "***";
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
 function getEnv(): R2Env {
@@ -93,25 +89,24 @@ function serializeError(error: unknown) {
 }
 
 export async function GET() {
+  const check = await requireAdmin();
+
+  if ("error" in check) {
+    return NextResponse.json({ error: check.error }, { status: check.status });
+  }
+
   const startedAt = Date.now();
 
   let env: R2Env | null = null;
-  let endpoint: string | null = null;
   let key: string | null = null;
 
   try {
     env = getEnv();
-    endpoint = `https://${env.accountId}.r2.cloudflarestorage.com`;
     key = `debug/r2-health-${Date.now()}.txt`;
 
-    console.log("========== R2 DEBUG CONFIG ==========");
-    console.log({
-      endpoint,
-      accountId: env.accountId,
+    console.log("R2 debug healthcheck started", {
       bucketName: env.bucketName,
       publicUrl: env.publicUrl,
-      accessKeyId: mask(env.accessKeyId),
-      secretAccessKey: "***",
       key,
     });
 
@@ -139,12 +134,8 @@ export async function GET() {
       message: "R2 upload and delete worked.",
       durationMs: Date.now() - startedAt,
       config: {
-        endpoint,
-        accountId: env.accountId,
         bucketName: env.bucketName,
         publicUrl: env.publicUrl,
-        accessKeyId: mask(env.accessKeyId),
-        secretAccessKey: "***",
       },
       testKey: key,
     });
@@ -156,12 +147,8 @@ export async function GET() {
         durationMs: Date.now() - startedAt,
         config: env
           ? {
-              endpoint,
-              accountId: env.accountId,
               bucketName: env.bucketName,
               publicUrl: env.publicUrl,
-              accessKeyId: mask(env.accessKeyId),
-              secretAccessKey: "***",
               testKey: key,
             }
           : null,

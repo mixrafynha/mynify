@@ -343,7 +343,10 @@ export async function POST(req: Request) {
 
     const removeBgResponse = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        cookie: req.headers.get("cookie") ?? "",
+      },
       body: JSON.stringify(
         generatedImageBuffer
           ? { imageBase64: generatedImageBuffer.toString("base64") }

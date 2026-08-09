@@ -55,7 +55,6 @@ import {
   CHECKOUT_SESSION_KEY,
   CHECKOUT_STEP_SESSION_KEY,
   GELATO_COUNTRIES,
-  createCheckoutRequestPayload,
   createSecureCheckoutRequestPayload,
   resolveGelatoPrintFiles,
 } from "./_lib/checkout";
@@ -68,18 +67,8 @@ import type {
   ProductAvailability,
   ProductAvailabilityItem,
   Step,
-  CheckoutRequestPayload,
   SecureCheckoutRequestPayload,
 } from "./_lib/checkout";
-
-type GelatoDraftTestResult = {
-  ok?: boolean;
-  requestPayload?: unknown;
-  responsePayload?: unknown;
-  headers?: Record<string, string>;
-  status?: number;
-  durationMs?: number;
-};
 
 type CheckoutShippingMethod = {
   id: string;
@@ -92,8 +81,6 @@ type CheckoutShippingMethod = {
   serviceType?: string | null;
   description?: string | null;
 };
-
-const isProduction = process.env.NODE_ENV === "production";
 
 const countryDisplayNames =
   typeof Intl !== "undefined" && "DisplayNames" in Intl
@@ -440,8 +427,6 @@ export default function CheckoutPage() {
   const [variantMap, setVariantMap] = useState<Record<string, CartVariant[]>>({});
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [testingGelato, setTestingGelato] = useState(false);
-  const [gelatoTestResult, setGelatoTestResult] = useState<GelatoDraftTestResult | null>(null);
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
   const [shippingMethodSelection, setShippingMethodSelection] = useState<NormalizedShippingMethod | null>(null);
   const [selectedShippingMethodId, setSelectedShippingMethodId] = useState<string>("");
@@ -1292,18 +1277,6 @@ export default function CheckoutPage() {
   }, [shippingMethodsForDisplay]);
 
 
-  // Payload completo apenas para o teste interno da Gelato.
-  // Nunca deve ser usado para autorizar preços no Stripe.
-  const buildGelatoDraftPayload = () =>
-    createCheckoutRequestPayload(
-      form,
-      items.map((item) => ({
-        ...item,
-        selectedVariant: item.selectedVariant ?? getCurrentVariant(item),
-      })),
-      typeof shipping === "number" ? shipping : 0,
-    );
-
   // Payload mínimo para pagamento. O servidor recebe apenas os IDs do carrinho
   // e recalcula produtos, variantes, quantidades, preços e envio.
   const buildSecureCheckoutPayload = (): SecureCheckoutRequestPayload =>
@@ -1401,51 +1374,6 @@ export default function CheckoutPage() {
       setError(error instanceof Error ? error.message : "Checkout is not connected yet. Please check your /api/checkout route.");
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleGelatoDraftOrderTest = async () => {
-    if (!canPay || submitting || testingGelato || loading || updatingItemId || removingItemId) return;
-    if (hasAvailabilityBlock) {
-      setError("Some products are not available for this delivery country. Change country or product variant before testing Gelato.");
-      return;
-    }
-
-    const requestPayload: CheckoutRequestPayload = buildGelatoDraftPayload();
-    const startedAt = performance.now();
-
-    setTestingGelato(true);
-    setError(null);
-    setGelatoTestResult(null);
-
-    try {
-      const res = await fetch("/api/gelato/draft-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify(requestPayload),
-      });
-
-      const data = (await res.json().catch(() => null)) as GelatoDraftTestResult | null;
-      const durationMs = Math.round(performance.now() - startedAt);
-      const nextResult: GelatoDraftTestResult = data ?? { ok: false, status: res.status, durationMs };
-
-      setGelatoTestResult({ ...nextResult, durationMs: nextResult.durationMs ?? durationMs, status: nextResult.status ?? res.status });
-    } catch (cause) {
-      const durationMs = Math.round(performance.now() - startedAt);
-      const message = cause instanceof Error ? cause.message : "Gelato Draft Order request failed";
-      const nextResult: GelatoDraftTestResult = {
-        ok: false,
-        requestPayload,
-        responsePayload: { error: message },
-        headers: {},
-        status: 0,
-        durationMs,
-      };
-
-      setGelatoTestResult(nextResult);
-    } finally {
-      setTestingGelato(false);
     }
   };
 
@@ -1897,30 +1825,6 @@ export default function CheckoutPage() {
                       <button type="button" onClick={() => setStep("shipping")} className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-white/60 hover:bg-white/[0.05]">Edit</button>
                     </div>
                   </div>
-
-                  {!isProduction && (
-                    <>
-                      <button type="button" disabled={!canPay || submitting || testingGelato || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleGelatoDraftOrderTest} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
-                        {testingGelato ? <><Loader2 size={16} className="animate-spin" /> Testing Gelato...</> : <>Test Gelato</>}
-                      </button>
-
-                      {gelatoTestResult ? (
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4 text-xs font-semibold leading-5 text-white/60">
-                          {gelatoTestResult.ok ? (
-                            <div className="space-y-2">
-                              <p className="text-sm font-black text-emerald-200">Draft Order created successfully</p>
-                              <p>Production test completed.</p>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <p className="text-sm font-black text-red-200">Gelato test failed</p>
-                              <p>HTTP status: {gelatoTestResult.status ?? "Unknown"}</p>
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
-                    </>
-                  )}
 
                   <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}

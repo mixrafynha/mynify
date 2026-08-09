@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -482,6 +483,12 @@ function buildGelatoDraftPayload(rawPayload: unknown): {
 }
 
 export async function POST(request: NextRequest) {
+  const check = await requireAdmin();
+
+  if ("error" in check) {
+    return NextResponse.json({ error: check.error }, { status: check.status });
+  }
+
   const startedAt = performance.now();
   const rawPayload = await request.json().catch(() => null);
   const inboundPayload = toJsonValue(rawPayload);

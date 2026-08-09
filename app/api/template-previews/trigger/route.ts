@@ -1,5 +1,6 @@
 import { tasks } from "@trigger.dev/sdk/v3";
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,6 +12,12 @@ type TemplatePreviewPayload = {
 };
 
 export async function POST(request: Request) {
+  const check = await requireAdmin();
+
+  if ("error" in check) {
+    return NextResponse.json({ error: check.error }, { status: check.status });
+  }
+
   try {
     const body = (await request.json()) as TemplatePreviewPayload;
     const templateId = String(body.templateId || "").trim();

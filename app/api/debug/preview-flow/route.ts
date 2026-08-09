@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/requireAdmin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,6 +28,12 @@ function asNumber(value: unknown) {
 }
 
 export async function POST(req: Request) {
+  const check = await requireAdmin();
+
+  if ("error" in check) {
+    return NextResponse.json({ error: check.error }, { status: check.status });
+  }
+
   try {
     const body = (await req.json().catch(() => null)) as PreviewFlowDebugPayload | null;
 
