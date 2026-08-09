@@ -143,7 +143,7 @@ async function resolveCartItemSources(
   if (userId && userProductIds.length) {
     const { data: userProductRows } = await supabase
       .from("user_products")
-      .select("id, print_files, design_data, mockups, production")
+      .select("id, print_files, design_data, mockups")
       .eq("user_id", userId)
       .in("id", userProductIds);
 
@@ -333,8 +333,7 @@ export async function POST(req: Request) {
         userProductRecord?.print_files ??
           userProductRecord?.printFiles ??
           userProductRecord?.design_data ??
-          userProductRecord?.designData ??
-          userProductRecord?.production,
+          userProductRecord?.designData,
       );
       const frontendFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
       const resolvedPrintFiles = serverFiles.length > 0
