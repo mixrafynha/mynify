@@ -10,8 +10,6 @@ import type { DesignAssetKind, DesignSide } from "./image-utils";
 import { uploadBufferToR2, type R2UploadResult } from "./r2";
 import { resolveVariantById } from "../../cart/_variant";
 
-const SECOND_PRINT_PRICE = 6;
-
 export function isUuid(value: unknown) {
   return (
     typeof value === "string" &&
@@ -50,6 +48,49 @@ function objectValue<T extends Record<string, unknown>>(value: unknown, fallback
   return parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? (parsed as T)
     : fallback;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function numericCost(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function resolvePrintPricingRecord(
+  attributes: unknown,
+  countryCode: unknown,
+  currency = "EUR",
+) {
+  const printPricing = asRecord(asRecord(attributes).printPricing);
+  const normalizedCountry = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : "";
+  const normalizedCurrency = currency.trim().toUpperCase();
+  const preferredMarket = normalizedCountry ? asRecord(printPricing[normalizedCountry]) : {};
+  const fallbackMarket = Object.values(printPricing)
+    .map((market) => asRecord(market))
+    .find((market) => Object.keys(asRecord(market[normalizedCurrency])).length > 0);
+  const market = Object.keys(preferredMarket).length > 0 ? preferredMarket : fallbackMarket;
+
+  return asRecord(market?.[normalizedCurrency]);
+}
+
+function resolveSecondPrintCharge(args: {
+  attributes: unknown;
+  countryCode: unknown;
+  currency?: string;
+}) {
+  const pricing = resolvePrintPricingRecord(args.attributes, args.countryCode, args.currency ?? "EUR");
+  const front = asRecord(pricing.front);
+  const frontBack = asRecord(pricing.frontBack);
+  const frontCost = numericCost(front.cost);
+  const frontBackCost = numericCost(frontBack.cost);
+
+  if (frontCost === null || frontBackCost === null) return 0;
+  return Math.max(0, Math.round((frontBackCost - frontCost) * 100) / 100);
 }
 
 function isHttpUrl(value: unknown): value is string {
@@ -636,8 +677,29 @@ export async function buildUserProductSavePayload(args: {
   const basePrice = Number(databaseVariant?.price ?? baseProduct.price ?? 0);
   const hasFrontDesign = hasVisibleDesign(frontElements);
   const hasBackDesign = hasVisibleDesign(backElements);
+  const selectedVariantRecord = selectedVariant ? (selectedVariant as Record<string, unknown>) : null;
   const productMarkup =
-    hasFrontDesign && hasBackDesign ? SECOND_PRINT_PRICE : 0;
+    hasFrontDesign && hasBackDesign
+      ? resolveSecondPrintCharge({
+          attributes:
+            databaseVariant?.gelato_attributes ??
+            selectedVariantRecord?.gelato_attributes ??
+            selectedVariantRecord?.gelatoAttributes,
+          countryCode: firstValue(
+            body.countryCode,
+            body.country_code,
+            body.marketCountryCode,
+            body.market_country_code,
+            body.country,
+            incomingDesignData.countryCode,
+            incomingDesignData.country_code,
+            incomingDesignData.marketCountryCode,
+            incomingDesignData.market_country_code,
+            incomingDesignData.country,
+          ),
+          currency: "EUR",
+        })
+      : 0;
   const finalPrice = basePrice + productMarkup;
 
   const printBox = objectValue<any>(body.printBox || body.print_box, {
