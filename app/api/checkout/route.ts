@@ -569,7 +569,7 @@ export async function POST(req: Request) {
         }
 
         const variant = cartItem.variant_id
-          ? variantMap.get(cartItem.variant_id)
+          ? variantMap.get(cartItem.variant_id) ?? null
           : null;
 
         if (cartItem.variant_id && !variant) {
