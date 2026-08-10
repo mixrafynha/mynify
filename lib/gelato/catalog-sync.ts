@@ -109,6 +109,11 @@ type GelatoVariantMarketRow = {
   updated_at: string;
 };
 
+type GelatoVariantPriceRow = Pick<
+  GelatoVariantMarketRow,
+  "product_variant_id" | "country_code" | "currency" | "product_price" | "quantity" | "price_source" | "price_checked_at" | "updated_at"
+>;
+
 type GelatoMarketAvailability = {
   isAvailable: boolean;
   reason: string | null;
@@ -1965,6 +1970,12 @@ function normalizeGelatoProductPrices(prices: GelatoProductPrice[]): JsonValue[]
   return normalizedPrices;
 }
 
+function withoutRegionalAvailabilityAttributes(value: unknown): Record<string, unknown> {
+  if (!isPlainObject(value)) return {};
+  const { countries: _countries, notSupportedCountries: _notSupportedCountries, ...stableAttributes } = value;
+  return stableAttributes;
+}
+
 function pickGelatoBaseVariantPrice(prices: GelatoProductPrice[]): GelatoSelectedPrice | null {
   const preferredCountries = [
     cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
@@ -2191,7 +2202,7 @@ function logGelatoMarketAvailabilityDiagnostic(input: {
 }
 
 function pickBestMarketForCountry(
-  markets: GelatoVariantMarketRow[],
+  markets: GelatoVariantPriceRow[],
   country: string,
   preferredCurrency?: string | null,
 ) {
@@ -2205,7 +2216,7 @@ function pickBestMarketForCountry(
   );
 }
 
-export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[], preferredCurrency?: string | null) {
+export function pickVariantReferenceMarket(markets: GelatoVariantPriceRow[], preferredCurrency?: string | null) {
   const preferredCountries = [
     cleanCountryIso(process.env.GELATO_DEFAULT_PRICE_COUNTRY),
     "FR",
@@ -2224,7 +2235,7 @@ export function pickVariantReferenceMarket(markets: GelatoVariantMarketRow[], pr
 }
 
 function buildVariantPriceMetadataPayload(
-  market: GelatoVariantMarketRow | null,
+  market: GelatoVariantPriceRow | null,
 ) {
   return {
     price: market?.product_price ?? null,
@@ -2232,7 +2243,7 @@ function buildVariantPriceMetadataPayload(
 }
 
 function extractReferenceVariantProductionCost(
-  marketRows: GelatoVariantMarketRow[],
+  marketRows: GelatoVariantPriceRow[],
   gelatoPrices: JsonValue[],
   preferredCurrency?: string | null,
 ): { productionCost: number | null; currency: string | null; source: string | null } {
@@ -2418,6 +2429,57 @@ export function buildGelatoVariantMarketRows(input: {
   }
 
   return Array.from(marketsByKey.values());
+}
+
+function buildGelatoVariantPriceRows(input: {
+  productVariantId: string;
+  prices: GelatoProductPrice[];
+  syncedAt: string;
+}): GelatoVariantPriceRow[] {
+  const rowsByKey = new Map<string, GelatoVariantPriceRow>();
+
+  for (const price of input.prices) {
+    const country = cleanCountryIso(price.requestedCountry) ?? resolveCountryCode(price);
+    const currency = cleanString(price.currency)?.toUpperCase() ?? null;
+    const quantity = typeof price.quantity === "number" && Number.isFinite(price.quantity)
+      ? Math.trunc(price.quantity)
+      : null;
+    const amount = typeof price.price === "number" && Number.isFinite(price.price)
+      ? price.price
+      : null;
+
+    if (!country || !currency || quantity !== 1) continue;
+
+    rowsByKey.set(`${country}:${currency}:${quantity}`, {
+      product_variant_id: input.productVariantId,
+      country_code: country,
+      currency,
+      product_price: amount !== null && amount > 0 ? roundMoney(amount) : null,
+      quantity: 1,
+      price_source: "gelato_product_prices",
+      price_checked_at: input.syncedAt,
+      updated_at: nowIso(),
+    });
+  }
+
+  return Array.from(rowsByKey.values());
+}
+
+async function saveGelatoVariantPrices(input: {
+  productVariantId: string;
+  prices: GelatoProductPrice[];
+  syncedAt: string;
+}): Promise<GelatoVariantPriceRow[]> {
+  const rows = buildGelatoVariantPriceRows(input);
+  if (rows.length === 0) return rows;
+
+  const supabase = createSupabaseAdmin();
+  const { error } = await supabase.from("gelato_variant_markets").upsert(rows, {
+    onConflict: "product_variant_id,country_code,currency,quantity",
+  });
+  if (error && !shouldIgnoreMissingGelatoMarketTable(error)) throw new Error(error.message);
+
+  return rows;
 }
 
 async function saveGelatoVariantMarkets(input: {
@@ -2704,12 +2766,7 @@ export async function syncGelatoProductFamily(
     "Família identificada",
   );
 
-  const referenceDetails = referenceProduct as GelatoProductDetails;
   const supabase = createSupabaseAdmin();
-  const rawNotSupportedCountries = extractNotSupportedCountries(referenceDetails);
-  const supportedCountriesResult = extractSupportedCountries(referenceDetails);
-  const explicitSupportedCountries = supportedCountriesResult.countries;
-  const notSupportedCountries = rawNotSupportedCountries;
 
   getProductFamilyProgressPayload(
     productId,
@@ -2824,8 +2881,6 @@ export async function syncGelatoProductFamily(
         attributeUid: firstEntry.colorAttributeUid,
         attributeValueUid: firstEntry.colorValueUid,
         colorHex: firstEntry.colorHex,
-        countries: explicitSupportedCountries,
-        notSupportedCountries,
       },
       gelato_sync_status: "active",
       gelato_last_seen_at: syncStartedAt,
@@ -2855,31 +2910,18 @@ export async function syncGelatoProductFamily(
       const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid, productCurrency);
       const entryPriceRows = entryPriceResult.prices;
       const normalizedEntryPrices = normalizeGelatoProductPrices(entryPriceRows);
-      const entrySupportedResult = extractSupportedCountries(entryDetails);
-      const entryExplicitSupportedCountries = entrySupportedResult.countries;
-      const entryNotSupportedCountries = extractNotSupportedCountries(entryDetails);
-      const entryProductIsAvailable = isGelatoProductAvailable(entryDetails);
-      const entryProductStatus = extractGelatoProductStatus(entryDetails);
-      const entryIsPrintable = extractGelatoIsPrintable(entryDetails);
       const gelatoVariantUid =
         extractVariantUidFromAttributes(entry.product.attributes) ?? entry.product.productUid;
       const variantName = `${entry.colorName} / ${entry.sizeName}`;
-      const familyRowPreview = buildGelatoVariantMarketRows({
-        productUid: entry.product.productUid,
+      const familyPriceRows = buildGelatoVariantPriceRows({
         productVariantId: existingVariant?.id ?? "pending",
         prices: entryPriceRows,
-        notSupportedCountries: entryNotSupportedCountries,
-        explicitSupportedCountries: entryExplicitSupportedCountries,
-        hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
-        productIsAvailable: entryProductIsAvailable,
-        productStatus: entryProductStatus,
-        isPrintable: entryIsPrintable,
         syncedAt: syncStartedAt,
       });
 
-      const referenceMarket = pickVariantReferenceMarket(familyRowPreview, productCurrency);
+      const referenceMarket = pickVariantReferenceMarket(familyPriceRows, productCurrency);
       const referenceProduction = extractReferenceVariantProductionCost(
-        familyRowPreview,
+        familyPriceRows,
         normalizedEntryPrices,
         productCurrency,
       );
@@ -2899,7 +2941,7 @@ export async function syncGelatoProductFamily(
         size: entry.sizeName,
         name: variantName,
         sku: buildGelatoVariantSku(entry),
-        stock: existingVariant?.stock && existingVariant.stock > 0 ? existingVariant.stock : 999,
+        ...(!existingVariant ? { stock: 999 } : {}),
         ...buildVariantPriceMetadataPayload(referenceMarket),
         price: sellingPrice ?? existingVariant?.price ?? null,
         gelato_product_uid: entry.product.productUid,
@@ -2908,17 +2950,12 @@ export async function syncGelatoProductFamily(
         gelato_variant_uid: gelatoVariantUid,
         gelato_variant_key: entry.variantKey,
         gelato_attributes: {
-          ...(existingVariant?.gelato_attributes && typeof existingVariant.gelato_attributes === "object" && !Array.isArray(existingVariant.gelato_attributes)
-            ? existingVariant.gelato_attributes as Record<string, unknown>
-            : {}),
-          ...entry.product.attributes,
+          ...withoutRegionalAvailabilityAttributes(existingVariant?.gelato_attributes),
+          ...withoutRegionalAvailabilityAttributes(entry.product.attributes),
           colorHex: entry.colorHex,
-          countries: entryExplicitSupportedCountries,
-          notSupportedCountries: entryNotSupportedCountries,
           gelatoPrices: normalizedEntryPrices,
         },
         gelato_sync_status: "active",
-        gelato_available: familyRowPreview.some((market) => market.is_available),
         gelato_last_synced_at: syncStartedAt,
         gelato_last_seen_at: syncStartedAt,
       };
@@ -2928,17 +2965,9 @@ export async function syncGelatoProductFamily(
         if (error) throw new Error(error.message);
         touchedVariantIds.add(existingVariant.id);
         touchedFamilyVariantKeys.add(variantLookupKey);
-        await saveGelatoVariantMarkets({
-          productUid: entry.product.productUid,
+        await saveGelatoVariantPrices({
           productVariantId: existingVariant.id,
           prices: entryPriceRows,
-          failedCountries: entryPriceResult.failedCountries,
-          notSupportedCountries: entryNotSupportedCountries,
-          explicitSupportedCountries: entryExplicitSupportedCountries,
-          hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
-          productIsAvailable: entryProductIsAvailable,
-          productStatus: entryProductStatus,
-          isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
         });
         await enrichSyncedVariantPrintPricing({
@@ -2956,17 +2985,9 @@ export async function syncGelatoProductFamily(
         const productVariantId = data.id as string;
         touchedVariantIds.add(productVariantId);
         touchedFamilyVariantKeys.add(variantLookupKey);
-        await saveGelatoVariantMarkets({
-          productUid: entry.product.productUid,
+        await saveGelatoVariantPrices({
           productVariantId,
           prices: entryPriceRows,
-          failedCountries: entryPriceResult.failedCountries,
-          notSupportedCountries: entryNotSupportedCountries,
-          explicitSupportedCountries: entryExplicitSupportedCountries,
-          hasExplicitSupportedCountries: entrySupportedResult.hasExplicitSupportedCountries,
-          productIsAvailable: entryProductIsAvailable,
-          productStatus: entryProductStatus,
-          isPrintable: entryIsPrintable,
           syncedAt: syncStartedAt,
         });
         await enrichSyncedVariantPrintPricing({
