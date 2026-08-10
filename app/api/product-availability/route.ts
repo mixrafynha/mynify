@@ -72,14 +72,21 @@ function safeText(value: unknown) {
 }
 
 function mapAvailability(status: string | undefined) {
-  switch (status) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+
+  switch (normalized) {
+    case "available":
     case "in-stock":
       return "available" as const;
+    case "unavailable":
     case "out-of-stock":
       return "unavailable" as const;
     case "out-of-stock-replenishable":
     case "non-stockable":
     case "not-supported":
+    case "unknown":
+    case "":
+      return "unknown" as const;
     default:
       return "unknown" as const;
   }
