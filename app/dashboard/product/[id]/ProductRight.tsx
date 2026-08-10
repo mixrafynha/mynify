@@ -402,7 +402,7 @@ export function ProductRight({
   };
 
   const handleAddToCart = async () => {
-    if (!selectedVariant || isOutOfStock || loading) return;
+    if (!selectedVariant || isOutOfStock || loading || availabilityStatus === "unavailable") return;
 
     setLoading(true);
 
@@ -442,7 +442,7 @@ export function ProductRight({
   };
 
   const handleStartDesigning = async () => {
-    if (!product?.id || loading) return;
+    if (!product?.id || loading || availabilityStatus === "unavailable") return;
 
     if (!selectedVariant) {
       showToast("error", "This product has no available variant.");
@@ -781,7 +781,7 @@ export function ProductRight({
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
-            disabled={!selectedVariant || isOutOfStock || loading}
+            disabled={!selectedVariant || isOutOfStock || loading || availabilityStatus === "unavailable"}
             onClick={handleAddToCart}
             className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
@@ -799,7 +799,7 @@ export function ProductRight({
 
           <button
             type="button"
-            disabled={loading}
+            disabled={loading || availabilityStatus === "unavailable"}
             onClick={handleStartDesigning}
             className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-4 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
