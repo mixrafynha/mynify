@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Globe2,
   Minus,
+  AlertTriangle,
   Palette,
   Plus,
   ShoppingCart,
@@ -778,15 +779,25 @@ export function ProductRight({
           </div>
         </div>
 
+        {availabilityStatus === "unavailable" && (
+          <div className="flex w-full items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-[11px] leading-snug text-red-200/90">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-300" />
+            <p>
+              This color and size aren&apos;t available for delivery to the selected country.
+              Choose another variant or country.
+            </p>
+          </div>
+        )}
+
         <div className="grid gap-2 sm:grid-cols-2">
           <button
             type="button"
             disabled={!selectedVariant || isOutOfStock || loading || availabilityStatus === "unavailable"}
             onClick={handleAddToCart}
-            className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[58px] items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
               {loading ? (
                 <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
               ) : (
@@ -801,11 +812,11 @@ export function ProductRight({
             type="button"
             disabled={loading || availabilityStatus === "unavailable"}
             onClick={handleStartDesigning}
-            className="group relative flex h-[54px] items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-4 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-[58px] items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-4 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
-            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
-              <Palette size={15} />
+            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
+              <Palette size={16} />
             </span>
             <span className="relative">Start Designing</span>
           </button>
