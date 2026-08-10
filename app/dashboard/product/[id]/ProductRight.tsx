@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Check,
@@ -23,6 +23,8 @@ type ShippingMethod = {
   price: number | null;
   estimatedDays: string | null;
 };
+
+type ProductAvailabilityStatus = "available" | "unavailable" | "unknown";
 
 function CountryFlag({
   iso,
@@ -83,6 +85,10 @@ export function ProductRight({
   const [shippingMenuOpen, setShippingMenuOpen] = useState(false);
   const [shippingMethods, setShippingMethods] = useState<ShippingMethod[]>([]);
   const [shippingAvailable, setShippingAvailable] = useState(true);
+  const [availabilityStatus, setAvailabilityStatus] = useState<ProductAvailabilityStatus>("unknown");
+  const [availabilityChecking, setAvailabilityChecking] = useState(false);
+  const availabilityCacheRef = useRef(new Map<string, ProductAvailabilityStatus>());
+  const availabilityRequestIdRef = useRef(0);
 
   const stock = selectedVariant?.stock ?? null;
   const isOutOfStock = typeof stock === "number" && stock <= 0;
@@ -127,6 +133,11 @@ export function ProductRight({
     product?.gelato_product_uid ||
     product?.gelatoProductUid ||
     null;
+  const availabilityVariantId = selectedVariant?.id ? String(selectedVariant.id) : null;
+  const availabilityCountryCode = selectedShippingCountry?.iso ?? null;
+  const availabilityCacheKey = availabilityVariantId && availabilityCountryCode
+    ? `${availabilityVariantId}:${availabilityCountryCode}`
+    : null;
   const shippingPrintFiles = useMemo(() => {
     const files = product?.print_files ?? product?.printFiles ?? null;
 
@@ -286,6 +297,65 @@ export function ProductRight({
     selectedVariant?.color,
     selectedVariant?.size,
   ]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadAvailability() {
+      if (!availabilityVariantId || !availabilityCountryCode) {
+        setAvailabilityStatus("unknown");
+        setAvailabilityChecking(false);
+        return;
+      }
+
+      if (availabilityCacheKey && availabilityCacheRef.current.has(availabilityCacheKey)) {
+        setAvailabilityStatus(availabilityCacheRef.current.get(availabilityCacheKey) ?? "unknown");
+        setAvailabilityChecking(false);
+        return;
+      }
+
+      const requestId = ++availabilityRequestIdRef.current;
+      setAvailabilityChecking(true);
+
+      try {
+        const response = await fetch("/api/product-availability", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            variantId: availabilityVariantId,
+            countryCode: availabilityCountryCode,
+          }),
+        });
+
+        const data = await response.json().catch(() => null);
+        if (!active || requestId !== availabilityRequestIdRef.current) return;
+
+        const status: ProductAvailabilityStatus =
+          data?.status === "available" || data?.status === "unavailable"
+            ? data.status
+            : "unknown";
+
+        if (availabilityCacheKey) {
+          availabilityCacheRef.current.set(availabilityCacheKey, status);
+        }
+
+        setAvailabilityStatus(status);
+      } catch {
+        if (!active || requestId !== availabilityRequestIdRef.current) return;
+        setAvailabilityStatus("unknown");
+      } finally {
+        if (active && requestId === availabilityRequestIdRef.current) {
+          setAvailabilityChecking(false);
+        }
+      }
+    }
+
+    void loadAvailability();
+
+    return () => {
+      active = false;
+    };
+  }, [availabilityCacheKey, availabilityCountryCode, availabilityVariantId]);
 
   const formatShippingPrice = (value: number | null) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "—";
@@ -690,15 +760,20 @@ export function ProductRight({
           </div>
 
           <div className="mt-3 border-t border-[#e8ebf1] pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
-            {shippingError ? (
-              <span className="text-[#d94660]">{shippingError}</span>
-            ) : shippingAvailable ? (
+            {availabilityChecking ? (
+              <span className="inline-flex items-center gap-1.5 text-[#6b7280]">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-[#6b7280]" />
+                CHECKING...
+              </span>
+            ) : availabilityStatus === "available" ? (
               <span className="inline-flex items-center gap-1.5 text-[#0f9d58]">
                 <Check size={12} />
-                Available
+                AVAILABLE
               </span>
+            ) : availabilityStatus === "unavailable" ? (
+              <span className="text-[#d94660]">UNAVAILABLE</span>
             ) : (
-              <span className="text-[#d94660]">Not available</span>
+              <span className="text-[#6b7280]">UNABLE TO VERIFY</span>
             )}
           </div>
         </div>
