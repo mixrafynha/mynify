@@ -39,10 +39,16 @@ type ProductClientProps = {
 
 type InfoItem = [string, string];
 
-const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "3XL", "4XL", "5XL"];
+const SIZE_ORDER = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
 const normalizeSize = (size: unknown) =>
   String(size ?? "").trim().toUpperCase();
+
+const sizeRank = (size: unknown) => {
+  const normalized = normalizeSize(size);
+  const index = SIZE_ORDER.indexOf(normalized);
+  return index === -1 ? 999 : index;
+};
 
 export default function ProductClient({
   product,
@@ -73,10 +79,9 @@ export default function ProductClient({
       : [];
 
     mapped.sort((a, b) => {
-      const aIndex = SIZE_ORDER.indexOf(normalizeSize(a.size));
-      const bIndex = SIZE_ORDER.indexOf(normalizeSize(b.size));
-
-      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+      const aIndex = sizeRank(a.size);
+      const bIndex = sizeRank(b.size);
+      return aIndex - bIndex;
     });
 
     const initial =
@@ -127,7 +132,7 @@ export default function ProductClient({
   const sizesText = useMemo(() => {
     const sizes = Array.from(
       new Set(variants.map((variant) => variant.size).filter(Boolean))
-    );
+    ).sort((a, b) => sizeRank(a) - sizeRank(b));
 
     return sizes.length ? sizes.join(", ") : "Select size";
   }, [variants]);
@@ -173,9 +178,21 @@ export default function ProductClient({
   const handleColorChange = useCallback(
     (color: string, variant?: Variant) => {
       const colorKey = String(color).toLowerCase();
+      const currentSize = normalizeSize(selectedVariant?.size);
 
       const nextVariant =
         variant ||
+        variants.find(
+          (item) =>
+            String(item.color).toLowerCase() === colorKey &&
+            normalizeSize(item.size) === currentSize &&
+            (item.stock ?? 0) > 0
+        ) ||
+        variants.find(
+          (item) =>
+            String(item.color).toLowerCase() === colorKey &&
+            normalizeSize(item.size) === currentSize
+        ) ||
         variants.find(
           (item) =>
             String(item.color).toLowerCase() === colorKey &&
@@ -186,9 +203,9 @@ export default function ProductClient({
 
       setSelectedColor(color);
       setSelectedVariant(nextVariant);
-        saveSelection(nextVariant, color);
+      saveSelection(nextVariant, color);
     },
-    [variants, saveSelection]
+    [selectedVariant?.size, variants, saveSelection]
   );
 
   const handleSizeChange = useCallback(

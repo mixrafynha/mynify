@@ -66,6 +66,20 @@ type EditorVariantSelection = {
   gelatoAttributes?: Record<string, any> | null;
 };
 
+type EditorVariantRow = {
+  id: string;
+  product_color_id: string | null;
+  size: string | null;
+  color?: string | null;
+  color_hex?: string | null;
+  sku?: string | null;
+  price?: number | null;
+  stock?: number | null;
+  gelato_product_uid?: string | null;
+  gelato_attributes?: Record<string, any> | null;
+  product_colors?: any;
+};
+
 type SearchParamReader = { get: (name: string) => string | null };
 
 type StoredEditorDraft = {
@@ -115,6 +129,14 @@ function normalizeHexColor(value: string | null) {
     return `#${trimmed}`;
   }
   return null;
+}
+
+function normalizeSize(value: unknown) {
+  return String(value ?? "").trim().toUpperCase();
+}
+
+function normalizeColor(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function clampEditorZoom(value: unknown, fallback = 1) {
@@ -453,6 +475,75 @@ function buildVariantSelection(
   };
 }
 
+function mapSelectedVariantRow(row: EditorVariantRow | null): EditorVariantSelection | null {
+  if (!row?.id) return null;
+  const productColorId = row.product_color_id ?? row.product_colors?.id ?? null;
+  const colorName = row.color ?? row.product_colors?.color ?? null;
+  const colorHex = normalizeHexColor(row.color_hex ?? row.product_colors?.color_hex ?? null);
+  const gelatoAttributes = row.gelato_attributes && typeof row.gelato_attributes === "object"
+    ? row.gelato_attributes
+    : null;
+  const printPricing = gelatoAttributes?.printPricing && typeof gelatoAttributes.printPricing === "object"
+    ? gelatoAttributes.printPricing as Record<string, any>
+    : null;
+
+  return {
+    variantId: row.id,
+    productColorId,
+    colorId: productColorId,
+    size: normalizeSize(row.size) || null,
+    colorName: colorName ? String(colorName) : null,
+    colorHex,
+    sku: row.sku ?? null,
+    price: row.price == null ? null : String(row.price),
+    variantPrice: row.price == null ? null : String(row.price),
+    currency: null,
+    image: null,
+    imageUrl: null,
+    gelatoProductUid: row.gelato_product_uid ?? null,
+    gelato_product_uid: row.gelato_product_uid ?? null,
+    printPricing,
+    gelatoAttributes,
+  };
+}
+
+function resolveVariantFromRows(
+  rows: EditorVariantRow[],
+  selection: EditorVariantSelection | null,
+) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  if (!normalizedRows.length) return null;
+
+  const variantId = selection?.variantId?.trim() || null;
+  const productColorId = selection?.productColorId?.trim() || selection?.colorId?.trim() || null;
+  const size = normalizeSize(selection?.size);
+  const colorName = normalizeColor(selection?.colorName);
+  const colorHex = normalizeHexColor(selection?.colorHex || null)?.toLowerCase() || null;
+
+  const byVariantId = variantId
+    ? normalizedRows.find((row) => String(row.id) === variantId)
+    : null;
+  if (byVariantId) return byVariantId;
+
+  const candidatesByColor = normalizedRows.filter((row) => {
+    const rowColorId = row.product_color_id ?? row.product_colors?.id ?? null;
+    const rowColorName = normalizeColor(row.color ?? row.product_colors?.color);
+    const rowColorHex = normalizeHexColor(row.color_hex ?? row.product_colors?.color_hex ?? null)?.toLowerCase() || null;
+    return (
+      (productColorId && String(rowColorId || "") === productColorId) ||
+      (colorName && rowColorName === colorName) ||
+      (colorHex && rowColorHex === colorHex)
+    );
+  });
+
+  if (!candidatesByColor.length) return null;
+
+  const bySize = size
+    ? candidatesByColor.find((row) => normalizeSize(row.size) === size)
+    : null;
+  return bySize || candidatesByColor[0] || null;
+}
+
 export default function EditorPage() {
   const params = useParams();
   const searchParams = useSearchParams();
@@ -465,6 +556,7 @@ export default function EditorPage() {
     [searchParams],
   );
   const [selectedVariant, setSelectedVariant] = useState<EditorVariantSelection | null>(initialSelectedVariant);
+  const [variantRows, setVariantRows] = useState<EditorVariantRow[]>([]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const previewCanvasRef = useRef<HTMLDivElement>(null);
@@ -503,6 +595,73 @@ export default function EditorPage() {
   useEffect(() => {
     setSelectedVariant(initialSelectedVariant);
   }, [initialSelectedVariant]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadVariantRows() {
+      if (!productId && !category) {
+        if (!cancelled) setVariantRows([]);
+        return;
+      }
+
+      const productQuery = supabase
+        .from("products")
+        .select("id,category")
+        .limit(1);
+
+      const { data: product } = productId
+        ? await productQuery.eq("id", productId).maybeSingle()
+        : await productQuery.eq("category", category).maybeSingle();
+
+      if (!product) {
+        if (!cancelled) setVariantRows([]);
+        return;
+      }
+
+      const { data: colors } = await supabase
+        .from("product_colors")
+        .select("id,color,color_hex")
+        .eq("product_id", product.id);
+
+      const colorMap = new Map(
+        (Array.isArray(colors) ? colors : []).map((color: any) => [String(color.id), color]),
+      );
+      const { data: rows } = await supabase
+        .from("product_variants")
+        .select("id,product_color_id,size,color,sku,price,stock,gelato_product_uid,gelato_attributes,product_colors:product_color_id(id,color,color_hex)")
+        .in("product_color_id", Array.from(colorMap.keys()));
+
+      if (!cancelled) {
+        setVariantRows(Array.isArray(rows) ? rows : []);
+      }
+    }
+
+    void loadVariantRows();
+    return () => {
+      cancelled = true;
+    };
+  }, [productId, category]);
+
+  useEffect(() => {
+    if (!variantRows.length) return;
+    setSelectedVariant((current) => {
+      const resolved = resolveVariantFromRows(variantRows, current || initialSelectedVariant);
+      const mapped = mapSelectedVariantRow(resolved);
+      if (!mapped) return current;
+      if (
+        current &&
+        current.variantId === mapped.variantId &&
+        current.productColorId === mapped.productColorId &&
+        current.size === mapped.size &&
+        current.colorHex === mapped.colorHex &&
+        current.gelatoProductUid === mapped.gelatoProductUid
+      ) {
+        return current;
+      }
+      return mapped;
+    });
+  }, [initialSelectedVariant, variantRows]);
 
   const editorStorageKey = useMemo(
     () =>
@@ -1792,25 +1951,59 @@ export default function EditorPage() {
   }, []);
 
   const handleProductColorChange = useCallback((option: CanvasColorOption) => {
+    const normalizedColor = normalizeColor(option.name);
+    const normalizedSize = normalizeSize(option.size || selectedVariant?.size);
+    const resolvedRow =
+      variantRows.find((row) =>
+        String(row.id) === String(option.variantId || "") ||
+        (
+          normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor &&
+          normalizeSize(row.size) === normalizedSize
+        ) ||
+        (
+          normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor &&
+          (!normalizedSize || normalizeSize(row.size) === normalizeSize(selectedVariant?.size))
+        )
+      ) ||
+      variantRows.find(
+        (row) => normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor,
+      ) ||
+      null;
+
+    const mapped = mapSelectedVariantRow(resolvedRow);
+
     setMockupColor(option.hex);
-    setSelectedVariant((current) => ({
-      variantId: option.variantId || current?.variantId || null,
-      productColorId: option.productColorId || current?.productColorId || null,
-      colorId: option.productColorId || current?.colorId || null,
-      size: option.size || current?.size || null,
-      colorName: option.name,
-      colorHex: option.hex,
-      sku: option.sku || current?.sku || null,
-      price: option.price == null ? current?.price || null : String(option.price),
-      variantPrice: option.price == null ? current?.variantPrice || null : String(option.price),
-      currency: current?.currency || null,
-      image: null,
-      imageUrl: null,
-      gelatoProductUid: option.gelatoProductUid || null,
-      gelato_product_uid: option.gelatoProductUid || null,
-      printPricing: option.printPricing || null,
-      gelatoAttributes: option.gelatoAttributes || null,
-    }));
+    setSelectedVariant((current) => {
+      if (mapped) {
+        return {
+          ...mapped,
+          price: mapped.price ?? current?.price ?? null,
+          variantPrice: mapped.variantPrice ?? current?.variantPrice ?? null,
+          currency: current?.currency || null,
+          printPricing: mapped.printPricing || current?.printPricing || null,
+          gelatoAttributes: mapped.gelatoAttributes || current?.gelatoAttributes || null,
+        };
+      }
+
+      return {
+        variantId: option.variantId || current?.variantId || null,
+        productColorId: option.productColorId || current?.productColorId || null,
+        colorId: option.productColorId || current?.colorId || null,
+        size: option.size || current?.size || null,
+        colorName: option.name,
+        colorHex: option.hex,
+        sku: option.sku || current?.sku || null,
+        price: option.price == null ? current?.price || null : String(option.price),
+        variantPrice: option.price == null ? current?.variantPrice || null : String(option.price),
+        currency: current?.currency || null,
+        image: null,
+        imageUrl: null,
+        gelatoProductUid: option.gelatoProductUid || null,
+        gelato_product_uid: option.gelatoProductUid || null,
+        printPricing: option.printPricing || null,
+        gelatoAttributes: option.gelatoAttributes || null,
+      };
+    });
 
     // Variant images are product previews, not editor mockups. Keep the
     // configured print-area mockup fixed and apply only the selected colour.
@@ -1819,7 +2012,7 @@ export default function EditorPage() {
       mockups: baseMockupsRef.current,
       useVariantMockups: false,
     } : current);
-  }, []);
+  }, [selectedVariant?.size, variantRows]);
 
   if (!productConfigLoaded) {
     return (

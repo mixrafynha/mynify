@@ -1,5 +1,7 @@
 "use client";
 
+const SIZE_ORDER = ["S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+
 export default function SizeSelector({
   variants,
   selectedVariant,
@@ -11,6 +13,12 @@ export default function SizeSelector({
       .trim()
       .toLowerCase()
       .replace(/\s+/g, " ");
+
+  const sizeRank = (size: any) => {
+    const normalized = String(size ?? "").trim().toUpperCase();
+    const index = SIZE_ORDER.indexOf(normalized);
+    return index === -1 ? 999 : index;
+  };
 
   const safeVariants = Array.isArray(variants) ? variants : [];
 
@@ -32,7 +40,9 @@ export default function SizeSelector({
     }
   });
 
-  const sizes = Array.from(uniqueSizesMap.values());
+  const sizes = Array.from(uniqueSizesMap.values()).sort(
+    (a: any, b: any) => sizeRank(a.size) - sizeRank(b.size)
+  );
 
   return (
     <div className="min-w-0">
