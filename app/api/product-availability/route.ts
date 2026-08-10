@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,90 +11,8 @@ type ProductAvailabilityRequest = {
   countryCode?: unknown;
 };
 
-type GelatoRegionAvailability = {
-  stockRegionUid?: string;
-  status?: string;
-  replenishmentDate?: string | null;
-};
-
-const GELATO_REGION_BY_COUNTRY: Record<string, string> = {
-  US: "US-CA",
-  CA: "US-CA",
-  BR: "SA",
-  AR: "SA",
-  BO: "SA",
-  CL: "SA",
-  CO: "SA",
-  EC: "SA",
-  GY: "SA",
-  PY: "SA",
-  PE: "SA",
-  SR: "SA",
-  UY: "SA",
-  VE: "SA",
-  AU: "OC",
-  NZ: "OC",
-  SG: "AS",
-  VN: "AS",
-  BN: "AS",
-  KH: "AS",
-  CN: "AS",
-  ID: "AS",
-  JP: "AS",
-  LA: "AS",
-  TH: "AS",
-  TW: "AS",
-  KR: "AS",
-  MM: "AS",
-  PH: "AS",
-  MY: "AS",
-  GB: "UK",
-  PT: "EU",
-  FR: "EU",
-  ES: "EU",
-  DE: "EU",
-  IT: "EU",
-  BE: "EU",
-  NL: "EU",
-  LU: "EU",
-  AT: "EU",
-  CH: "EU",
-  IE: "EU",
-  PL: "EU",
-  CZ: "EU",
-  DK: "EU",
-  SE: "EU",
-  NO: "EU",
-  FI: "EU",
-};
-
 function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function mapAvailability(status: string | undefined) {
-  const normalized = String(status ?? "").trim().toLowerCase();
-
-  switch (normalized) {
-    case "available":
-    case "in-stock":
-      return "available" as const;
-    case "unavailable":
-    case "out-of-stock":
-      return "unavailable" as const;
-    case "out-of-stock-replenishable":
-    case "non-stockable":
-    case "not-supported":
-    case "unknown":
-    case "":
-      return "unknown" as const;
-    default:
-      return "unknown" as const;
-  }
-}
-
-function resolveGelatoRegion(countryCode: string) {
-  return GELATO_REGION_BY_COUNTRY[countryCode] ?? (countryCode ? "ROW" : null);
 }
 
 export async function POST(req: Request) {
@@ -152,84 +71,47 @@ export async function POST(req: Request) {
       );
     }
 
-    const region = resolveGelatoRegion(countryCode);
-    if (!region) {
-      return NextResponse.json(
-        { status: "unknown", variantId, countryCode, reason: "unsupported_country_region" },
-        { status: 200, headers: { "Cache-Control": "no-store" } },
-      );
-    }
+    const availability = await checkGelatoRegionalAvailability({
+      variantId,
+      countryCode,
+      gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+      resolveVariant: async (resolvedVariantId) => {
+        const { data: variant, error: variantError } = await supabase
+          .from("product_variants")
+          .select("id, product_color_id, size, gelato_product_uid")
+          .eq("id", resolvedVariantId)
+          .maybeSingle();
 
-    const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
-    if (!gelatoApiKey) {
-      return NextResponse.json(
-        { status: "unknown", variantId, countryCode, reason: "missing_gelato_api_key" },
-        { status: 200, headers: { "Cache-Control": "no-store" } },
-      );
-    }
+        console.info("[product:regional-availability:resolved-variant]", {
+          variantId: resolvedVariantId,
+          productColorId: variant?.product_color_id ?? null,
+          size: variant?.size ?? null,
+          hasGelatoProductUid: Boolean(variant?.gelato_product_uid),
+        });
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+        if (variantError || !variant) return null;
+        return variant;
+      },
+    });
 
-    try {
-      const gelatoResponse = await fetch("https://product.gelatoapis.com/v3/stock/region-availability", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-KEY": gelatoApiKey,
-        },
-        body: JSON.stringify({ products: [gelatoProductUid] }),
-        cache: "no-store",
-        signal: controller.signal,
-      });
+    console.info("[product:regional-availability:result]", {
+      variantId,
+      countryCode,
+      region: availability.region,
+      gelatoStatus: availability.gelatoStatus,
+      status: availability.status,
+      elapsedMs: Date.now() - requestStartedAt,
+    });
 
-      const gelatoData = await gelatoResponse.json().catch(() => null);
-      console.info("[product:regional-availability:gelato]", {
+    return NextResponse.json(
+      {
+        status: availability.status,
         variantId,
-        gelatoProductUid,
         countryCode,
-        region,
-        httpStatus: gelatoResponse.status,
-      });
-
-      if (!gelatoResponse.ok) {
-        return NextResponse.json(
-          { status: "unknown", variantId, countryCode, reason: "gelato_http_error" },
-          { status: 200, headers: { "Cache-Control": "no-store" } },
-        );
-      }
-
-      const productAvailability = Array.isArray(gelatoData?.productsAvailability)
-        ? gelatoData.productsAvailability.find((entry: any) => safeText(entry?.productUid) === gelatoProductUid)
-        : null;
-      const availabilityList = Array.isArray(productAvailability?.availability)
-        ? (productAvailability.availability as GelatoRegionAvailability[])
-        : [];
-      const regionAvailability = availabilityList.find((entry) => entry.stockRegionUid === region) || null;
-      const status = mapAvailability(regionAvailability?.status);
-
-      console.info("[product:regional-availability:result]", {
-        variantId,
-        gelatoProductUid,
-        countryCode,
-        region,
-        gelatoStatus: regionAvailability?.status ?? null,
-        status,
-        elapsedMs: Date.now() - requestStartedAt,
-      });
-
-      return NextResponse.json(
-        {
-          status,
-          variantId,
-          countryCode,
-          reason: regionAvailability?.status ?? null,
-        },
-        { status: 200, headers: { "Cache-Control": "no-store" } },
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
+        reason: availability.reason,
+      },
+      { status: 200, headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     console.error("[product:regional-availability:error]", {
       message: error instanceof Error ? error.message : String(error),

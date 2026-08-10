@@ -4,6 +4,7 @@ import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload } from "@/lib/gelato/checkout-quote";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -567,6 +568,38 @@ export async function POST(req: Request) {
             cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? Object.keys(cartRow.selected_variant) : [],
         });
         return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
+      }
+
+      const regionalAvailability = await checkGelatoRegionalAvailability({
+        variantId: variant.id,
+        countryCode: address.countryCode,
+        gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+        resolveVariant: async () => variant,
+      });
+      console.info("[checkout:availability:item]", {
+        cartItemId: cartRow.id,
+        variantId: variant.id,
+        gelatoProductUid: variant.gelato_product_uid ?? null,
+        countryCode: address.countryCode,
+      });
+      console.info("[checkout:availability:result]", {
+        cartItemId: cartRow.id,
+        variantId: variant.id,
+        countryCode: address.countryCode,
+        gelatoStatus: regionalAvailability.gelatoStatus,
+        status: regionalAvailability.status,
+      });
+      if (regionalAvailability.status === "unavailable" || regionalAvailability.status === "unknown") {
+        console.info("[checkout:availability:blocked]", {
+          countryCode: address.countryCode,
+          unavailableCount: 1,
+        });
+        return conflict("PRODUCT_UNAVAILABLE", "One or more cart items are not available for delivery to the selected country.", {
+          cartItemId: cartRow.id,
+          variantId: variant.id,
+          countryCode: address.countryCode,
+          status: regionalAvailability.status,
+        });
       }
 
       const product = productMap.get(cartRow.product_id) ?? null;

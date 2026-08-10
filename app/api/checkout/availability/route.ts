@@ -3,6 +3,7 @@ import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
 type AvailabilityItem = {
   itemId?: string;
@@ -294,6 +295,86 @@ export async function POST(req: Request) {
     }
 
     const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, authData?.user?.id ?? null, items);
+
+    const regionalAvailabilityIssues: Array<{
+      itemId: string;
+      title: string;
+      productId: string;
+      variantId?: string | null;
+      color?: string | null;
+      size?: string | null;
+      quantity: number;
+      available: boolean;
+      reason?: string | null;
+    }> = [];
+
+    for (const item of items) {
+      const variantId = safeText(item.variantId);
+      if (!variantId) continue;
+      const availability = await checkGelatoRegionalAvailability({
+        variantId,
+        countryCode: shippingAddress.countryCode,
+        gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+        resolveVariant: async (resolvedVariantId) => {
+          const { data: variant } = await supabase
+            .from("product_variants")
+            .select("id, product_color_id, size, gelato_product_uid")
+            .eq("id", resolvedVariantId)
+            .maybeSingle();
+          return variant ?? null;
+        },
+      });
+
+      console.info("[checkout:availability:item]", {
+        cartItemId: item.cartItemId ?? item.itemId ?? null,
+        variantId,
+        gelatoProductUid: null,
+        countryCode: shippingAddress.countryCode,
+      });
+
+      console.info("[checkout:availability:result]", {
+        cartItemId: item.cartItemId ?? item.itemId ?? null,
+        variantId,
+        countryCode: shippingAddress.countryCode,
+        gelatoStatus: availability.gelatoStatus,
+        status: availability.status,
+      });
+
+      if (availability.status === "unavailable" || availability.status === "unknown") {
+        regionalAvailabilityIssues.push({
+          itemId: item.itemId ?? item.cartItemId ?? variantId,
+          title: item.title ?? "Item",
+          productId: item.productId ?? "unknown",
+          variantId,
+          color: item.color ?? null,
+          size: item.size ?? null,
+          quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+          available: false,
+          reason: availability.reason ?? availability.status,
+        });
+      }
+    }
+
+    if (regionalAvailabilityIssues.length) {
+      console.info("[checkout:availability:blocked]", {
+        countryCode: shippingAddress.countryCode,
+        unavailableCount: regionalAvailabilityIssues.length,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        available: false,
+        configured: true,
+        country: country,
+        countryIso: shippingAddress.countryCode,
+        unavailableItems: regionalAvailabilityIssues,
+        message:
+          regionalAvailabilityIssues.length > 0
+            ? "Some items aren't available for delivery to this country."
+            : null,
+        shippingMethods: [],
+      });
+    }
 
     const quoteItems: Array<{
       itemReferenceId: string;

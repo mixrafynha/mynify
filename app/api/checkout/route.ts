@@ -4,6 +4,7 @@ import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
+import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -564,6 +565,51 @@ export async function POST(req: Request) {
             },
             { status: 404 },
           );
+        }
+
+        if (variant) {
+          const regionalAvailability = await checkGelatoRegionalAvailability({
+            variantId: variant.id,
+            countryCode: shippingCountryCode ?? "",
+            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+            resolveVariant: async () => variant,
+          });
+
+          console.info("[checkout:availability:item]", {
+            cartItemId: cartItem.id,
+            variantId: variant.id,
+            gelatoProductUid: variant.gelato_product_uid ?? null,
+            countryCode: shippingCountryCode,
+          });
+          console.info("[checkout:availability:result]", {
+            cartItemId: cartItem.id,
+            variantId: variant.id,
+            countryCode: shippingCountryCode,
+            gelatoStatus: regionalAvailability.gelatoStatus,
+            status: regionalAvailability.status,
+          });
+
+          if (regionalAvailability.status === "unavailable" || regionalAvailability.status === "unknown") {
+            console.info("[checkout:availability:blocked]", {
+              countryCode: shippingCountryCode,
+              unavailableCount: 1,
+            });
+            return NextResponse.json(
+              {
+                error: "PRODUCT_UNAVAILABLE",
+                unavailableItems: [
+                  {
+                    cartItemId: cartItem.id,
+                    variantId: variant.id,
+                    title: cartItem.title,
+                    size: variant.size ?? null,
+                    color: cartItem.color ?? null,
+                  },
+                ],
+              },
+              { status: 409 },
+            );
+          }
         }
 
         if (
