@@ -123,6 +123,13 @@ export async function POST(req: Request) {
       .eq("id", variantId)
       .maybeSingle();
 
+    console.info("[product:regional-availability:resolved-variant]", {
+      variantId,
+      productColorId: variant?.product_color_id ?? null,
+      size: variant?.size ?? null,
+      hasGelatoProductUid: Boolean(variant?.gelato_product_uid),
+    });
+
     if (variantError || !variant) {
       return NextResponse.json(
         { status: "unknown", variantId, countryCode, reason: "variant_not_found" },
@@ -170,7 +177,7 @@ export async function POST(req: Request) {
       });
 
       const gelatoData = await gelatoResponse.json().catch(() => null);
-      console.info("[product:availability:gelato]", {
+      console.info("[product:regional-availability:gelato]", {
         variantId,
         gelatoProductUid,
         countryCode,
@@ -194,7 +201,7 @@ export async function POST(req: Request) {
       const regionAvailability = availabilityList.find((entry) => entry.stockRegionUid === region) || null;
       const status = mapAvailability(regionAvailability?.status);
 
-      console.info("[product:availability:result]", {
+      console.info("[product:regional-availability:result]", {
         variantId,
         gelatoProductUid,
         countryCode,
@@ -217,7 +224,7 @@ export async function POST(req: Request) {
       clearTimeout(timeout);
     }
   } catch (error) {
-    console.error("[product:availability:error]", {
+    console.error("[product:regional-availability:error]", {
       message: error instanceof Error ? error.message : String(error),
     });
 
