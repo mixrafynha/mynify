@@ -7,6 +7,7 @@ const VISIBLE_COLOR_COUNT = 9;
 export default function ColorSelector({
   variants,
   selectedColor,
+  selectedSize,
   selectedVariant,
   onChange,
 }: any) {
@@ -22,6 +23,9 @@ export default function ColorSelector({
   const colorMap = new Map();
 
   safeVariants.forEach((v: any) => {
+    if (selectedSize && String(v.size).trim().toLowerCase() !== normalize(selectedSize)) {
+      return;
+    }
     if (!v.color) return;
 
     const key = normalize(v.color);
@@ -69,7 +73,9 @@ export default function ColorSelector({
         {visibleColors.map((c: any, i: number) => {
           const normalizedColor = normalize(c.label);
           const available = safeVariants.filter(
-            (v: any) => normalize(v.color) === normalizedColor
+            (v: any) =>
+              normalize(v.color) === normalizedColor &&
+              (!selectedSize || normalize(v.size) === normalize(selectedSize))
           );
           const hasStock = available.some((v: any) => Number(v.stock ?? 0) > 0);
           const isActive = normalize(selectedColor || "") === normalizedColor;

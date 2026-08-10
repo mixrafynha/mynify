@@ -249,12 +249,13 @@ export default function ProductClient({
           </div>
 
           <div className="min-w-0">
-            <ColorSelector
-              variants={variants}
-              selectedColor={selectedColor}
-              selectedVariant={selectedVariant}
-              onChange={handleColorChange}
-            />
+          <ColorSelector
+            variants={variants}
+            selectedColor={selectedColor}
+            selectedSize={selectedVariant?.size}
+            selectedVariant={selectedVariant}
+            onChange={handleColorChange}
+          />
           </div>
         </div>
       </section>

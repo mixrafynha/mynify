@@ -57,7 +57,11 @@ function normalizeColors(input: any, selectedSize?: string | null): CanvasColorO
   const source = Array.isArray(input) ? input : [];
   return source.flatMap((color: any) => {
     const variants = Array.isArray(color?.variants) ? color.variants : [];
-    const variant = variants.find((item: any) => String(item?.size || "").toLowerCase() === String(selectedSize || "").toLowerCase()) || variants[0] || color;
+    const matchingVariant = selectedSize
+      ? variants.find((item: any) => String(item?.size || "").toLowerCase() === String(selectedSize || "").toLowerCase())
+      : null;
+    const variant = matchingVariant || variants[0] || color;
+    if (selectedSize && !matchingVariant) return [];
     const hex = String(color?.hex || color?.hexCode || color?.hex_code || color?.colorHex || color?.color_hex || color?.value || color?.color || variant?.colorHex || variant?.color_hex || "").trim();
     if (!isValidHexColor(hex)) return [];
     const frontUrl = readUrl(variant, "front") || readUrl(color, "front");
