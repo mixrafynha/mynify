@@ -174,6 +174,9 @@ export function customSecondPrintCharge(
   countryCode?: string | null,
   currency = "EUR",
 ) {
+  void variant;
+  void countryCode;
+  void currency;
   if (
     !isCustomDesignItem(item) ||
     !sideHasVisibleDesign(item, "front") ||
@@ -183,11 +186,9 @@ export function customSecondPrintCharge(
   }
 
   return resolveSecondPrintCharge({
-    attributes: variant?.gelato_attributes ?? variant?.gelatoAttributes,
-    countryCode,
-    currency,
-    allowMarketFallback: false,
-  }) ?? 0;
+    hasFrontDesign: true,
+    hasBackDesign: true,
+  });
 }
 
 export type CheckoutForm = {

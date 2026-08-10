@@ -132,15 +132,10 @@ export async function PATCH(req: Request) {
       } else if (selectedVariant.price !== null && selectedVariant.price > 0) {
         const secondPrintCharge = await hasSecondPrint(supabase, cartItem.user_product_id)
           ? resolveSecondPrintCharge({
-              attributes: selectedVariant.gelato_attributes,
-              countryCode: nullableString(body.countryCode ?? body.country_code),
-              currency: "EUR",
-              allowMarketFallback: false,
+              hasFrontDesign: true,
+              hasBackDesign: true,
             })
           : 0;
-        if (secondPrintCharge === null) {
-          return Response.json({ error: "Print pricing is not ready for this variant and country" }, { status: 409 });
-        }
         patch.price = selectedVariant.price + secondPrintCharge;
       }
     } else if (cartItem.variant_id && patch.quantity !== undefined) {

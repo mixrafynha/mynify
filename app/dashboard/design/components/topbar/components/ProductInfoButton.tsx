@@ -79,14 +79,10 @@ function ProductInfoButton({
     const frontPrinted = hasVisiblePrintElements(frontElements);
     const backPrinted = hasVisiblePrintElements(backElements);
     const printSideCount = Number(frontPrinted) + Number(backPrinted);
-    const secondPrintCharge = printSideCount >= 2
-      ? resolveSecondPrintCharge({
-          printPricing: selectedVariant?.printPricing,
-          countryCode,
-          currency,
-          allowMarketFallback: false,
-        })
-      : 0;
+    const secondPrintCharge = resolveSecondPrintCharge({
+      hasFrontDesign: frontPrinted,
+      hasBackDesign: backPrinted,
+    });
     return {
       basePrice,
       frontPrinted,
@@ -108,7 +104,6 @@ function ProductInfoButton({
     selectedVariant?.colorHex,
     selectedVariant?.gelatoProductUid,
     selectedVariant?.gelato_product_uid,
-    selectedVariant?.printPricing,
     selectedVariant?.price,
     selectedVariant?.size,
     selectedVariant?.variantId,

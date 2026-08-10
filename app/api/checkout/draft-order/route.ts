@@ -729,25 +729,10 @@ export async function POST(req: Request) {
       // the delivery market. Never trust a browser-supplied surcharge.
       const currentVariantBasePrice = Number(variant?.price ?? resolvedUserProduct?.price ?? product?.price ?? 0);
       const marketCountryCode = resolveCountryCode(address.countryCode) ?? cleanText(address.countryCode).toUpperCase();
-      const resolvedSecondPrintCharge = hasSecondPrint
-        ? resolveSecondPrintCharge({
-            attributes: variant?.gelato_attributes,
-            countryCode: marketCountryCode,
-            currency: "EUR",
-            allowMarketFallback: false,
-          })
-        : 0;
-
-      if (resolvedSecondPrintCharge === null) {
-        return conflict("PRINT_PRICING_NOT_READY", "Print pricing is not ready for this variant and delivery country.", {
-          cartItemId: cartRow.id,
-          variantId: variant?.id ?? null,
-          countryCode: marketCountryCode,
-          currency: "EUR",
-        });
-      }
-
-      const dynamicSecondPrintCharge = resolvedSecondPrintCharge ?? 0;
+      const dynamicSecondPrintCharge = resolveSecondPrintCharge({
+        hasFrontDesign: true,
+        hasBackDesign: hasSecondPrint,
+      });
       const unitPrice = currentVariantBasePrice + dynamicSecondPrintCharge;
 
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
@@ -770,7 +755,7 @@ export async function POST(req: Request) {
         quantity,
         lineTotal: unitPrice * quantity,
         currency: "EUR",
-        policy: "current_variant_plus_dynamic_gelato_second_print",
+        policy: "current_variant_plus_fixed_second_print_fee_eur",
       });
 
       resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal, unitPrice, adjustProductUidByFileTypes });

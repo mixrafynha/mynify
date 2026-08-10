@@ -1338,171 +1338,7 @@ export async function resolveGelatoPrintPricingForVariant(input: {
 }
 
 
-type GelatoPrintPricingEnrichmentResult = {
-  productVariantId: string;
-  frontUid: string;
-  frontBackUid: string | null;
-  marketsCached: number;
-  status: "ready" | "skipped" | "error";
-  error: string | null;
-};
-
-function priceRowsByMarket(prices: GelatoProductPrice[]): Map<string, { countryCode: string; currency: string; cost: number }> {
-  const rows = new Map<string, { countryCode: string; currency: string; cost: number }>();
-  for (const row of prices) {
-    const countryCode = cleanCountryIso(row.requestedCountry) ?? resolveCountryCode(row);
-    const currency = cleanString(row.currency)?.toUpperCase() ?? null;
-    const quantity = typeof row.quantity === "number" && Number.isFinite(row.quantity)
-      ? Math.trunc(row.quantity)
-      : null;
-    const price = typeof row.price === "number" && Number.isFinite(row.price)
-      ? row.price
-      : null;
-    if (!countryCode || !currency || quantity !== 1 || price === null || price <= 0) continue;
-    rows.set(`${countryCode}:${currency}`, {
-      countryCode,
-      currency,
-      cost: roundMoney(price),
-    });
-  }
-  return rows;
-}
-
-async function enrichSyncedVariantPrintPricing(input: {
-  productVariantId: string;
-  catalogUid: string;
-  frontUid: string;
-  referenceProduct: GelatoProductDetails;
-  frontPrices: GelatoProductPrice[];
-  pricingCurrency: string;
-  perf?: FamilySyncPerfContext | null;
-}): Promise<GelatoPrintPricingEnrichmentResult> {
-  const supabase = createSupabaseAdmin();
-  try {
-    let searchMs = 0;
-    let selectMs = 0;
-    let updateMs = 0;
-
-    const searchStartedAt = Date.now();
-    const printConfigurationProducts = await searchGelatoPrintConfigurations(
-      input.catalogUid,
-      input.referenceProduct,
-      input.perf,
-    );
-    const familyCandidates = derivePrintFamilyProductUids(
-      printConfigurationProducts,
-      input.referenceProduct,
-    );
-    searchMs += Date.now() - searchStartedAt;
-    const frontBackCandidate = familyCandidates.find((product) => {
-      if (product.productUid === input.frontUid) return false;
-      const attributes = isPlainObject(product.attributes)
-        ? product.attributes as Record<string, string>
-        : {};
-      return normalizeKey(cleanString(attributes.GarmentPrint) ?? "") === "4-4";
-    }) ?? null;
-
-    if (!frontBackCandidate) {
-      const result: GelatoPrintPricingEnrichmentResult = {
-        productVariantId: input.productVariantId,
-        frontUid: input.frontUid,
-        frontBackUid: null,
-        marketsCached: 0,
-        status: "skipped",
-        error: "No matching 4-4 Gelato product found.",
-      };
-      console.warn({ event: "gelato_print_pricing_enrichment", ...result });
-      return result;
-    }
-
-    const frontBackPriceResult = await fetchGelatoPricesForAllCountries(
-      frontBackCandidate.productUid,
-      input.pricingCurrency,
-      input.perf,
-    );
-    const frontByMarket = priceRowsByMarket(input.frontPrices);
-    const backByMarket = priceRowsByMarket(frontBackPriceResult.prices);
-
-    const selectStartedAt = Date.now();
-    const { data: currentVariant, error: currentVariantError } = await supabase
-      .from("product_variants")
-      .select("gelato_attributes")
-      .eq("id", input.productVariantId)
-      .maybeSingle();
-    if (currentVariantError) throw new Error(currentVariantError.message);
-    selectMs += Date.now() - selectStartedAt;
-    if (input.perf) input.perf.metrics.supabaseReads += 1;
-
-    let nextAttributes = (currentVariant as { gelato_attributes?: JsonValue | null } | null)?.gelato_attributes ?? null;
-    let marketsCached = 0;
-
-    for (const [marketKey, frontMarket] of frontByMarket.entries()) {
-      const frontBackMarket = backByMarket.get(marketKey);
-      if (!frontBackMarket) continue;
-      if (frontBackMarket.cost < frontMarket.cost) continue;
-
-      nextAttributes = mergeGelatoAttributesWithPrintPricing(
-        nextAttributes,
-        frontMarket.countryCode,
-        frontMarket.currency,
-        {
-          front: { productUid: input.frontUid, cost: frontMarket.cost },
-          frontBack: { productUid: frontBackCandidate.productUid, cost: frontBackMarket.cost },
-        },
-      );
-      marketsCached += 1;
-    }
-
-    if (marketsCached === 0) {
-      const result: GelatoPrintPricingEnrichmentResult = {
-        productVariantId: input.productVariantId,
-        frontUid: input.frontUid,
-        frontBackUid: frontBackCandidate.productUid,
-        marketsCached: 0,
-        status: "skipped",
-        error: "No overlapping priced markets for 4-0 and 4-4.",
-      };
-      console.warn({ event: "gelato_print_pricing_enrichment", ...result });
-      return result;
-    }
-
-    const updateStartedAt = Date.now();
-    const { error: updateError } = await supabase
-      .from("product_variants")
-      .update({ gelato_attributes: nextAttributes })
-      .eq("id", input.productVariantId);
-    if (updateError) throw new Error(updateError.message);
-    updateMs += Date.now() - updateStartedAt;
-    if (input.perf) input.perf.metrics.supabaseWrites += 1;
-
-    const result: GelatoPrintPricingEnrichmentResult = {
-      productVariantId: input.productVariantId,
-      frontUid: input.frontUid,
-      frontBackUid: frontBackCandidate.productUid,
-      marketsCached,
-      status: "ready",
-      error: null,
-    };
-    console.info({ event: "gelato_print_pricing_enrichment", ...result });
-    if (input.perf) {
-      input.perf.metrics.printPricingMs += searchMs + selectMs + updateMs;
-    }
-    return result;
-  } catch (error) {
-    const result: GelatoPrintPricingEnrichmentResult = {
-      productVariantId: input.productVariantId,
-      frontUid: input.frontUid,
-      frontBackUid: null,
-      marketsCached: 0,
-      status: "error",
-      error: error instanceof Error ? error.message : String(error),
-    };
-    // Print pricing enrichment is non-fatal by design: the canonical 4-0 variant
-    // remains valid and the family sync continues with the next variant.
-    console.error({ event: "gelato_print_pricing_enrichment", ...result });
-    return result;
-  }
-}
+// printPricing enrichment removed in favor of a fixed second-print fee.
 
 async function getProductOrThrow(productId: string): Promise<ProductRow> {
   const supabase = createSupabaseAdmin();
@@ -3143,15 +2979,6 @@ export async function syncSingleGelatoFamilyVariant(input: {
       syncedAt: context.syncStartedAt,
       perf: context.perf,
     });
-    await enrichSyncedVariantPrintPricing({
-      productVariantId: existingVariant.id,
-      catalogUid: context.catalogUid,
-      frontUid: productUid,
-      referenceProduct: entryDetails,
-      frontPrices: entryPriceRows,
-      pricingCurrency: context.productCurrency,
-      perf: context.perf,
-    });
     if (context.perf) {
       context.perf.metrics.variantsProcessed += 1;
       context.perf.metrics.singleVariantSyncMs += Date.now() - startedAt;
@@ -3171,15 +2998,6 @@ export async function syncSingleGelatoFamilyVariant(input: {
     productVariantId,
     prices: entryPriceRows,
     syncedAt: context.syncStartedAt,
-    perf: context.perf,
-  });
-  await enrichSyncedVariantPrintPricing({
-    productVariantId,
-    catalogUid: context.catalogUid,
-    frontUid: productUid,
-    referenceProduct: entryDetails,
-    frontPrices: entryPriceRows,
-    pricingCurrency: context.productCurrency,
     perf: context.perf,
   });
   if (context.perf) {
@@ -3453,16 +3271,6 @@ export async function syncGelatoProductFamily(
           syncedAt: syncStartedAt,
           perf: input.perf,
         });
-        if (input.perf) input.perf.metrics.marketsWriteMs += 0;
-        await enrichSyncedVariantPrintPricing({
-          productVariantId: existingVariant.id,
-          catalogUid,
-          frontUid: entry.product.productUid,
-          referenceProduct: entryDetails,
-          frontPrices: entryPriceRows,
-          pricingCurrency: productCurrency,
-          perf: input.perf,
-        });
         variantsUpdated += 1;
       } else {
         const variantInsertStartedAt = Date.now();
@@ -3477,15 +3285,6 @@ export async function syncGelatoProductFamily(
           productVariantId,
           prices: entryPriceRows,
           syncedAt: syncStartedAt,
-          perf: input.perf,
-        });
-        await enrichSyncedVariantPrintPricing({
-          productVariantId,
-          catalogUid,
-          frontUid: entry.product.productUid,
-          referenceProduct: entryDetails,
-          frontPrices: entryPriceRows,
-          pricingCurrency: productCurrency,
           perf: input.perf,
         });
         variantsCreated += 1;

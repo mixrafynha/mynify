@@ -627,31 +627,10 @@ export async function buildUserProductSavePayload(args: {
   const hasFrontDesign = hasVisiblePrintElements(frontElements);
   const hasBackDesign = hasVisiblePrintElements(backElements);
   const selectedVariantRecord = selectedVariant ? (selectedVariant as Record<string, unknown>) : null;
-  const secondPrintCharge = hasFrontDesign && hasBackDesign
-    ? resolveSecondPrintCharge({
-        attributes:
-          databaseVariant?.gelato_attributes ??
-          selectedVariantRecord?.gelato_attributes ??
-          selectedVariantRecord?.gelatoAttributes,
-        countryCode: String(firstValue(
-          body.countryCode,
-          body.country_code,
-          body.marketCountryCode,
-          body.market_country_code,
-          body.country,
-          incomingDesignData.countryCode,
-          incomingDesignData.country_code,
-          incomingDesignData.marketCountryCode,
-          incomingDesignData.market_country_code,
-          incomingDesignData.country,
-        ) ?? ""),
-        currency: "EUR",
-        allowMarketFallback: false,
-      })
-    : 0;
-  if (secondPrintCharge === null) {
-    throw new Error("Print pricing is not ready for the selected variant and country");
-  }
+  const secondPrintCharge = resolveSecondPrintCharge({
+    hasFrontDesign,
+    hasBackDesign,
+  });
   const productMarkup = secondPrintCharge;
   const finalPrice = basePrice + productMarkup;
 

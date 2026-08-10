@@ -637,21 +637,10 @@ export async function POST(req: Request) {
         const userProduct = userProductKey ? userProductMap.get(userProductKey) ?? null : null;
         const currentVariantBasePrice = Number(variant?.price ?? userProduct?.price ?? product.price);
         const hasSecondPrint = userProductHasSecondPrint(userProduct);
-        const dynamicSecondPrintCharge = hasSecondPrint
-          ? resolveSecondPrintCharge({
-              attributes: variant?.gelato_attributes,
-              countryCode: shippingCountryCode,
-              currency: "EUR",
-              allowMarketFallback: false,
-            })
-          : 0;
-
-        if (hasSecondPrint && dynamicSecondPrintCharge === null) {
-          return NextResponse.json(
-            { error: `Print pricing is not ready for ${product.title}` },
-            { status: 409 },
-          );
-        }
+        const dynamicSecondPrintCharge = resolveSecondPrintCharge({
+          hasFrontDesign: true,
+          hasBackDesign: hasSecondPrint,
+        });
 
         const officialPrice = currentVariantBasePrice + (dynamicSecondPrintCharge ?? 0);
         const officialBaseCurrency = "EUR";
@@ -666,7 +655,7 @@ export async function POST(req: Request) {
           dynamicSecondPrintCharge,
           printPricingCountryCode: shippingCountryCode,
           officialPrice: Number.isFinite(officialPrice) ? officialPrice : null,
-          policy: "current_variant_plus_dynamic_gelato_second_print",
+          policy: "current_variant_plus_fixed_second_print_fee_eur",
         });
 
         if (!Number.isFinite(officialPrice) || officialPrice <= 0) {

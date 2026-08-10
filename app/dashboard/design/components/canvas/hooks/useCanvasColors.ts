@@ -78,7 +78,6 @@ function normalizeColors(input: any, selectedSize?: string | null): CanvasColorO
       imageUrl: text(variant?.imageUrl || variant?.image_url || variant?.image),
       frontUrl,
       backUrl,
-      printPricing: variant?.gelato_attributes?.printPricing || variant?.gelatoAttributes?.printPricing || null,
       gelatoAttributes: variant?.gelato_attributes || variant?.gelatoAttributes || null,
     }];
   });
