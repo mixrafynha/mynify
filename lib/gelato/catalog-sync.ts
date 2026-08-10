@@ -114,6 +114,80 @@ type GelatoVariantPriceRow = Pick<
   "product_variant_id" | "country_code" | "currency" | "product_price" | "quantity" | "price_source" | "price_checked_at" | "updated_at"
 >;
 
+type FamilySyncPerfMetrics = {
+  jobId?: string | null;
+  batchSize?: number | null;
+  variantsProcessed: number;
+  gelatoRequests: number;
+  supabaseReads: number;
+  supabaseWrites: number;
+  marketRowsWritten: number;
+  variantRowsUpdatedByRefresh: number;
+  claimMs: number;
+  detailsMs: number;
+  pricesMs: number;
+  marketsWriteMs: number;
+  variantWriteMs: number;
+  printPricingMs: number;
+  refreshSellingPricesMs: number;
+  countersMs: number;
+  totalMs: number;
+};
+
+type GelatoPriceFetchPerf = {
+  requestedCountries: number;
+  successfulResponses: number;
+  failedResponses: number;
+  elapsedMs: number;
+};
+
+export type FamilySyncPerfContext = {
+  metrics: FamilySyncPerfMetrics;
+  priceFetches: GelatoPriceFetchPerf[];
+  productUidCountryCalls: Map<string, number>;
+};
+
+export function createFamilySyncPerfContext(input?: Partial<Pick<FamilySyncPerfMetrics, "jobId" | "batchSize">>): FamilySyncPerfContext {
+  return {
+    metrics: {
+      jobId: input?.jobId ?? null,
+      batchSize: input?.batchSize ?? null,
+      variantsProcessed: 0,
+      gelatoRequests: 0,
+      supabaseReads: 0,
+      supabaseWrites: 0,
+      marketRowsWritten: 0,
+      variantRowsUpdatedByRefresh: 0,
+      claimMs: 0,
+      detailsMs: 0,
+      pricesMs: 0,
+      marketsWriteMs: 0,
+      variantWriteMs: 0,
+      printPricingMs: 0,
+      refreshSellingPricesMs: 0,
+      countersMs: 0,
+      totalMs: 0,
+    },
+    priceFetches: [],
+    productUidCountryCalls: new Map(),
+  };
+}
+
+function addPerf(ctx: FamilySyncPerfContext | undefined, key: keyof Omit<FamilySyncPerfMetrics, "jobId" | "batchSize" | "variantsProcessed" | "gelatoRequests" | "supabaseReads" | "supabaseWrites" | "marketRowsWritten" | "variantRowsUpdatedByRefresh">, deltaMs: number) {
+  if (!ctx) return;
+  ctx.metrics[key] += deltaMs;
+}
+
+function addCount(ctx: FamilySyncPerfContext | undefined, key: keyof Pick<FamilySyncPerfMetrics, "variantsProcessed" | "gelatoRequests" | "supabaseReads" | "supabaseWrites" | "marketRowsWritten" | "variantRowsUpdatedByRefresh">, delta = 1) {
+  if (!ctx) return;
+  ctx.metrics[key] += delta;
+}
+
+export function logFamilySyncPerf(ctx: FamilySyncPerfContext | undefined) {
+  if (!ctx) return;
+  console.info("[gelato-family-sync:perf]", ctx.metrics);
+}
+
 type GelatoMarketAvailability = {
   isAvailable: boolean;
   reason: string | null;
@@ -827,6 +901,7 @@ function derivePrintFamilyProductUids(
 async function searchGelatoPrintConfigurations(
   catalogUid: string,
   referenceProduct: GelatoProductDetails,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<GelatoCatalogSearchProduct[]> {
   const referenceAttributes = isPlainObject(referenceProduct.attributes)
     ? referenceProduct.attributes as Record<string, string>
@@ -871,6 +946,7 @@ async function searchGelatoPrintConfigurations(
     filters,
     SEARCH_PAGE_SIZE,
     0,
+    perf,
   );
   const products = normalizeGelatoSearchProducts(page);
 
@@ -1273,17 +1349,25 @@ async function enrichSyncedVariantPrintPricing(input: {
   referenceProduct: GelatoProductDetails;
   frontPrices: GelatoProductPrice[];
   pricingCurrency: string;
+  perf?: FamilySyncPerfContext | null;
 }): Promise<GelatoPrintPricingEnrichmentResult> {
   const supabase = createSupabaseAdmin();
   try {
+    let searchMs = 0;
+    let selectMs = 0;
+    let updateMs = 0;
+
+    const searchStartedAt = Date.now();
     const printConfigurationProducts = await searchGelatoPrintConfigurations(
       input.catalogUid,
       input.referenceProduct,
+      input.perf,
     );
     const familyCandidates = derivePrintFamilyProductUids(
       printConfigurationProducts,
       input.referenceProduct,
     );
+    searchMs += Date.now() - searchStartedAt;
     const frontBackCandidate = familyCandidates.find((product) => {
       if (product.productUid === input.frontUid) return false;
       const attributes = isPlainObject(product.attributes)
@@ -1308,16 +1392,20 @@ async function enrichSyncedVariantPrintPricing(input: {
     const frontBackPriceResult = await fetchGelatoPricesForAllCountries(
       frontBackCandidate.productUid,
       input.pricingCurrency,
+      input.perf,
     );
     const frontByMarket = priceRowsByMarket(input.frontPrices);
     const backByMarket = priceRowsByMarket(frontBackPriceResult.prices);
 
+    const selectStartedAt = Date.now();
     const { data: currentVariant, error: currentVariantError } = await supabase
       .from("product_variants")
       .select("gelato_attributes")
       .eq("id", input.productVariantId)
       .maybeSingle();
     if (currentVariantError) throw new Error(currentVariantError.message);
+    selectMs += Date.now() - selectStartedAt;
+    if (input.perf) input.perf.metrics.supabaseReads += 1;
 
     let nextAttributes = (currentVariant as { gelato_attributes?: JsonValue | null } | null)?.gelato_attributes ?? null;
     let marketsCached = 0;
@@ -1352,11 +1440,14 @@ async function enrichSyncedVariantPrintPricing(input: {
       return result;
     }
 
+    const updateStartedAt = Date.now();
     const { error: updateError } = await supabase
       .from("product_variants")
       .update({ gelato_attributes: nextAttributes })
       .eq("id", input.productVariantId);
     if (updateError) throw new Error(updateError.message);
+    updateMs += Date.now() - updateStartedAt;
+    if (input.perf) input.perf.metrics.supabaseWrites += 1;
 
     const result: GelatoPrintPricingEnrichmentResult = {
       productVariantId: input.productVariantId,
@@ -1367,6 +1458,9 @@ async function enrichSyncedVariantPrintPricing(input: {
       error: null,
     };
     console.info({ event: "gelato_print_pricing_enrichment", ...result });
+    if (input.perf) {
+      input.perf.metrics.printPricingMs += searchMs + selectMs + updateMs;
+    }
     return result;
   } catch (error) {
     const result: GelatoPrintPricingEnrichmentResult = {
@@ -1440,8 +1534,9 @@ export async function listGelatoCatalogs(): Promise<GelatoCatalogListItem[]> {
   return normalizeGelatoCatalogList(response);
 }
 
-export async function getGelatoCatalog(catalogUid: string): Promise<GelatoCatalog> {
+export async function getGelatoCatalog(catalogUid: string, perf?: FamilySyncPerfContext | null): Promise<GelatoCatalog> {
   validateCatalogUid(catalogUid);
+  if (perf) perf.metrics.gelatoRequests += 1;
   return gelatoFetch<GelatoCatalog>(`/v3/catalogs/${catalogUid}`, { method: "GET" });
 }
 
@@ -1450,8 +1545,10 @@ export async function searchGelatoCatalogProducts(
   filters: CatalogSyncFilters,
   limit = SEARCH_PAGE_SIZE,
   offset = 0,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<GelatoCatalogSearchResponse> {
   validateCatalogUid(catalogUid);
+  if (perf) perf.metrics.gelatoRequests += 1;
   return gelatoFetch<GelatoCatalogSearchResponse>(
     `/v3/catalogs/${catalogUid}/products:search`,
     {
@@ -1465,13 +1562,15 @@ export async function searchGelatoCatalogProducts(
   );
 }
 
-export async function getGelatoProduct(productUid: string): Promise<GelatoProductDetails> {
+export async function getGelatoProduct(productUid: string, perf?: FamilySyncPerfContext | null): Promise<GelatoProductDetails> {
   validateProductUid(productUid);
+  if (perf) perf.metrics.gelatoRequests += 1;
   return gelatoFetch<GelatoProductDetails>(`/v3/products/${productUid}`, { method: "GET" });
 }
 
-export async function getGelatoProductPrices(productUid: string): Promise<GelatoProductPrice[]> {
+export async function getGelatoProductPrices(productUid: string, perf?: FamilySyncPerfContext | null): Promise<GelatoProductPrice[]> {
   validateProductUid(productUid);
+  if (perf) perf.metrics.gelatoRequests += 1;
   const prices = await gelatoFetch<unknown>(`/v3/products/${productUid}/prices`, {
     method: "GET",
   });
@@ -1482,6 +1581,7 @@ async function getGelatoProductPricesForCountry(
   productUid: string,
   countryIso: string,
   currencyIso?: string | null,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<GelatoProductPrice[]> {
   validateProductUid(productUid);
   const country = cleanCountryIso(countryIso);
@@ -1495,6 +1595,7 @@ async function getGelatoProductPricesForCountry(
     `/v3/products/${productUid}/prices?${params.toString()}`,
     { method: "GET" },
   );
+  if (perf) perf.metrics.gelatoRequests += 1;
   return Array.isArray(prices)
     ? prices
         .filter(isPlainObject)
@@ -1533,41 +1634,63 @@ async function mapWithConcurrency<T, R>(
 async function fetchGelatoPricesForAllCountries(
   productUid: string,
   currencyIso?: string | null,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<{
   prices: GelatoProductPrice[];
   failedCountries: string[];
+  perf: GelatoPriceFetchPerf;
 }> {
   const countries = GELATO_COUNTRIES
     .map((country) => cleanCountryIso(country.iso))
     .filter((country): country is string => Boolean(country));
+  const startedAt = Date.now();
+  let successfulResponses = 0;
+  let failedResponses = 0;
 
   const batches = await mapWithConcurrency<string, GelatoCountryPriceResult>(
     countries,
     GELATO_COUNTRY_FETCH_CONCURRENCY,
     async (country) => {
+      if (perf) {
+        const key = `${productUid}:${country}:${cleanString(currencyIso)?.toUpperCase() ?? ""}`;
+        perf.productUidCountryCalls.set(key, (perf.productUidCountryCalls.get(key) ?? 0) + 1);
+      }
       try {
-        return {
+        const result = {
           country,
-          prices: await getGelatoProductPricesForCountry(productUid, country, currencyIso),
+          prices: await getGelatoProductPricesForCountry(productUid, country, currencyIso, perf),
           error: false,
         };
+        successfulResponses += 1;
+        return result;
       } catch {
+        failedResponses += 1;
         return { country, prices: [], error: true };
       }
     },
   );
+
+  const perfResult: GelatoPriceFetchPerf = {
+    requestedCountries: countries.length,
+    successfulResponses,
+    failedResponses,
+    elapsedMs: Date.now() - startedAt,
+  };
+  if (perf) perf.priceFetches.push(perfResult);
 
   return {
     prices: batches.flatMap((batch) => batch.prices),
     failedCountries: batches
       .filter((batch) => batch.error)
       .map((batch) => batch.country),
+    perf: perfResult,
   };
 }
 
 async function fetchAllGelatoProducts(
   catalogUid: string,
   filters: CatalogSyncFilters,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<GelatoCatalogSearchProduct[]> {
   const allProducts: GelatoCatalogSearchProduct[] = [];
   const seenProductUids = new Set<string>();
@@ -1579,6 +1702,7 @@ async function fetchAllGelatoProducts(
       filters,
       SEARCH_PAGE_SIZE,
       offset,
+      perf,
     );
 
     const products = Array.isArray(page.products) ? page.products : [];
@@ -1612,12 +1736,14 @@ async function fetchGelatoProductPage(
   catalogUid: string,
   filters: CatalogSyncFilters,
   offset: number,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<GelatoCatalogSearchProduct[]> {
   const page = await searchGelatoCatalogProducts(
     catalogUid,
     filters,
     SEARCH_PAGE_SIZE,
     offset,
+    perf,
   );
 
   const seenProductUids = new Set<string>();
@@ -2047,6 +2173,7 @@ export function filterGelatoProductsByFamilyKey(
 export async function searchGelatoProductFamily(
   catalogUid: string,
   referenceProductUid: string,
+  perf?: FamilySyncPerfContext | null,
 ): Promise<{
   referenceProduct: GelatoCatalogSearchProduct;
   familyAttributes: GelatoFamilyAttributes;
@@ -2055,13 +2182,13 @@ export async function searchGelatoProductFamily(
   validateCatalogUid(catalogUid);
   validateProductUid(referenceProductUid);
 
-  const referenceProduct = await getGelatoProduct(referenceProductUid);
+  const referenceProduct = await getGelatoProduct(referenceProductUid, perf);
   const familyAttributes = extractGelatoFamilyAttributes({
     ...referenceProduct,
     productUid: referenceProductUid,
     catalogUid,
   } as GelatoProductDetails);
-  const products = await fetchAllGelatoProducts(catalogUid, familyAttributes.familyFilters);
+  const products = await fetchAllGelatoProducts(catalogUid, familyAttributes.familyFilters, perf);
   const familyProducts = filterGelatoProductsByFamilyKey(products, familyAttributes.familyKey);
   const withReference = familyProducts.some((product) => product.productUid === referenceProductUid)
     ? familyProducts
@@ -2455,15 +2582,22 @@ async function saveGelatoVariantPrices(input: {
   productVariantId: string;
   prices: GelatoProductPrice[];
   syncedAt: string;
+  perf?: FamilySyncPerfContext | null;
 }): Promise<GelatoVariantPriceRow[]> {
   const rows = buildGelatoVariantPriceRows(input);
   if (rows.length === 0) return rows;
 
   const supabase = createSupabaseAdmin();
+  const startedAt = Date.now();
   const { error } = await supabase.from("gelato_variant_markets").upsert(rows, {
     onConflict: "product_variant_id,country_code,currency,quantity",
   });
   if (error && !shouldIgnoreMissingGelatoMarketTable(error)) throw new Error(error.message);
+  if (input.perf) {
+    input.perf.metrics.supabaseWrites += 1;
+    input.perf.metrics.marketRowsWritten += rows.length;
+    input.perf.metrics.marketsWriteMs += Date.now() - startedAt;
+  }
 
   return rows;
 }
@@ -2480,8 +2614,10 @@ async function saveGelatoVariantMarkets(input: {
   productStatus?: string | null;
   isPrintable?: boolean | null;
   syncedAt: string;
+  perf?: FamilySyncPerfContext | null;
 }): Promise<GelatoVariantMarketRow[]> {
   const supabase = createSupabaseAdmin();
+  const startedAt = Date.now();
   const marketRows = buildGelatoVariantMarketRows({
     ...input,
     logAvailabilityConflicts: true,
@@ -2524,6 +2660,11 @@ async function saveGelatoVariantMarkets(input: {
       throw new Error(error.message);
     }
   }
+  if (input.perf) {
+    input.perf.metrics.supabaseWrites += 1;
+    input.perf.metrics.marketRowsWritten += marketRows.length;
+    input.perf.metrics.marketsWriteMs += Date.now() - startedAt;
+  }
 
   const failedCountries = input.failedCountries
     .map((country) => cleanCountryIso(country))
@@ -2545,24 +2686,34 @@ async function saveGelatoVariantMarkets(input: {
       throw new Error(error.message);
     }
   }
+  if (input.perf && failedCountries.length > 0) {
+    input.perf.metrics.supabaseWrites += 1;
+  }
 
   return marketRows;
 }
 
-export async function refreshProductVariantSellingPrices(productId: string): Promise<{
+export async function refreshProductVariantSellingPrices(productId: string, perf?: FamilySyncPerfContext | null): Promise<{
   updatedVariants: number;
   updatedProductPrice: number | null;
   unsoldVariants: number;
 }> {
+  const perfStartedAt = Date.now();
+  let selectMs = 0;
+  let updateMs = 0;
   const supabase = createSupabaseAdmin();
+  const selectStartedAt = Date.now();
   const product = await getProductOrThrow(productId);
+  if (perf) perf.metrics.supabaseReads += 1;
   const manualMarkup = cleanString(product.profit_markup_percentage);
   const markupPercentage =
     manualMarkup !== null && manualMarkup !== ""
       ? normalizeProfitMarkupPercentage(manualMarkup)
       : resolveCategoryMarkupPercentage(product.category);
+  selectMs += Date.now() - selectStartedAt;
 
   if (manualMarkup === null || manualMarkup === "") {
+    const markupUpdateStartedAt = Date.now();
     const { error: markupUpdateError } = await supabase
       .from("products")
       .update({
@@ -2571,8 +2722,11 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
       })
       .eq("id", productId);
     if (markupUpdateError) throw new Error(markupUpdateError.message);
+    if (perf) perf.metrics.supabaseWrites += 1;
+    updateMs += Date.now() - markupUpdateStartedAt;
   }
 
+  const variantSelectStartedAt = Date.now();
   const { data: variantRows, error: variantError } = await supabase
     .from("product_variants")
     .select(
@@ -2585,24 +2739,32 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
           .from("product_colors")
           .select("id")
           .eq("product_id", productId)
-      ).data?.map((color) => color.id).filter(Boolean) ?? [],
+    ).data?.map((color) => color.id).filter(Boolean) ?? [],
     );
+  selectMs += Date.now() - variantSelectStartedAt;
 
   if (variantError) throw new Error(variantError.message);
+  if (perf) perf.metrics.supabaseReads += 2;
 
   const variants = (variantRows ?? []) as ProductVariantPricingRow[];
   const variantIds = variants.map((variant) => variant.id).filter(Boolean);
 
   const { data: marketRows, error: marketError } = variantIds.length
-    ? await supabase
-        .from("gelato_variant_markets")
-        .select("product_variant_id, country_code, currency, is_available, product_price, quantity")
-        .in("product_variant_id", variantIds)
-        .eq("country_code", "FR")
-        .eq("quantity", 1)
+    ? await (async () => {
+        const started = Date.now();
+        const result = await supabase
+          .from("gelato_variant_markets")
+          .select("product_variant_id, country_code, currency, is_available, product_price, quantity")
+          .in("product_variant_id", variantIds)
+          .eq("country_code", "FR")
+          .eq("quantity", 1);
+        selectMs += Date.now() - started;
+        return result;
+      })()
     : { data: [], error: null };
 
   if (marketError) throw new Error(marketError.message);
+  if (perf) perf.metrics.supabaseReads += 1;
 
   const marketsByVariantId = new Map<string, GelatoVariantMarketRow[]>();
   for (const market of (marketRows ?? []) as GelatoVariantMarketRow[]) {
@@ -2645,6 +2807,7 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
       pricesAlmostEqual(currentPrice, sellingPrice) === false;
 
     if (shouldUpdate) {
+      const updateStartedAt = Date.now();
       const { error } = await supabase
         .from("product_variants")
         .update({
@@ -2654,6 +2817,8 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
         })
         .eq("id", variant.id);
       if (error) throw new Error(error.message);
+      if (perf) perf.metrics.supabaseWrites += 1;
+      updateMs += Date.now() - updateStartedAt;
       updatedVariants += 1;
     }
 
@@ -2662,6 +2827,7 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
 
   const updatedProductPrice = sellingPrices.length > 0 ? Math.min(...sellingPrices) : null;
   if (updatedProductPrice !== null) {
+    const productUpdateStartedAt = Date.now();
     const { error } = await supabase
       .from("products")
       .update({
@@ -2670,6 +2836,23 @@ export async function refreshProductVariantSellingPrices(productId: string): Pro
       })
       .eq("id", productId);
     if (error) throw new Error(error.message);
+    if (perf) perf.metrics.supabaseWrites += 1;
+    updateMs += Date.now() - productUpdateStartedAt;
+  }
+
+  const totalMs = Date.now() - perfStartedAt;
+  console.info("[gelato-family-sync:refresh-perf]", {
+    productId,
+    variantsScanned: variants.length,
+    variantsUpdated: updatedVariants,
+    selectMs,
+    updateMs,
+    totalMs,
+  });
+
+  if (perf) {
+    perf.metrics.refreshSellingPricesMs += totalMs;
+    perf.metrics.variantRowsUpdatedByRefresh += updatedVariants;
   }
 
   return {
@@ -2706,8 +2889,10 @@ export async function syncGelatoProductFamily(
     productUids?: string[];
     preserveFamilyState?: boolean;
     skipSellingPriceRefresh?: boolean;
+    perf?: FamilySyncPerfContext | null;
   },
 ): Promise<GelatoFamilySyncResult> {
+  const startedAt = Date.now();
   const productId = cleanString(input.productId);
   const catalogUid = cleanString(input.catalogUid);
   const referenceProductUid = cleanString(input.referenceProductUid);
@@ -2719,16 +2904,20 @@ export async function syncGelatoProductFamily(
   validateCatalogUid(catalogUid);
   validateProductUid(referenceProductUid);
   const productRecord = await getProductOrThrow(productId);
+  if (input.perf) input.perf.metrics.supabaseReads += 1;
   const productCurrency = resolvePricingCurrency(productRecord.currency);
   const markupPercentage = normalizeProfitMarkupPercentage(productRecord.profit_markup_percentage);
 
   const syncStartedAt = nowIso();
   getProductFamilyProgressPayload(productId, referenceProductUid, "", "A analisar UID");
 
+  const searchStartedAt = Date.now();
   const { referenceProduct, familyAttributes, familyProducts } = await searchGelatoProductFamily(
     catalogUid,
     referenceProductUid,
+    input.perf,
   );
+  if (input.perf) input.perf.metrics.detailsMs += Date.now() - searchStartedAt;
   const productUidFilter = Array.isArray(input.productUids)
     ? new Set(input.productUids.map((value) => cleanString(value)).filter((value): value is string => Boolean(value)))
     : null;
@@ -2755,10 +2944,13 @@ export async function syncGelatoProductFamily(
   );
 
   const colorSelect = "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status";
+  const colorSelectStartedAt = Date.now();
   const { data: colorRows, error: colorsError } = await supabase
     .from("product_colors")
     .select(colorSelect)
     .eq("product_id", productId);
+  if (input.perf) input.perf.metrics.supabaseReads += 1;
+  if (input.perf) input.perf.metrics.detailsMs += Date.now() - colorSelectStartedAt;
 
   if (colorsError) throw new Error(colorsError.message);
 
@@ -2768,11 +2960,14 @@ export async function syncGelatoProductFamily(
 
   if (existingColorIds.length > 0) {
     const variantSelect = "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status, gelato_attributes";
+    const variantSelectStartedAt = Date.now();
     const { data: variantRows, error: variantsError } = await supabase
       .from("product_variants")
       .select(variantSelect)
       .in("product_color_id", existingColorIds);
     if (variantsError) throw new Error(variantsError.message);
+    if (input.perf) input.perf.metrics.supabaseReads += 1;
+    if (input.perf) input.perf.metrics.detailsMs += Date.now() - variantSelectStartedAt;
     existingVariants = (variantRows ?? []) as unknown as ExistingVariantRow[];
   }
 
@@ -2787,16 +2982,12 @@ export async function syncGelatoProductFamily(
   }
 
   const existingVariantsByFamily = new Map<string, ExistingVariantRow>();
-  const existingVariantsByGelatoProductUid = new Map<string, ExistingVariantRow>();
   for (const variant of existingVariants) {
     const familyKey = cleanString((variant as Record<string, unknown>).gelato_family_key) ?? "";
     const key = `${familyKey}::${variant.product_color_id}::${
       variant.gelato_variant_key ?? normalizeKey(`${variant.product_color_id}__${variant.size ?? variant.id}`)
     }`;
     if (familyKey && !existingVariantsByFamily.has(key)) existingVariantsByFamily.set(key, variant);
-    if (variant.gelato_product_uid && !existingVariantsByGelatoProductUid.has(variant.gelato_product_uid)) {
-      existingVariantsByGelatoProductUid.set(variant.gelato_product_uid, variant);
-    }
   }
 
   const productsByUid = new Map(processedFamilyProducts.map((product) => [product.productUid, product]));
@@ -2821,7 +3012,9 @@ export async function syncGelatoProductFamily(
   const allFamilyProducts = familyGroup.get(familyAttributes.familyKey) ?? [];
 
   const colorsToProducts = new Map<string, DerivedVariantEntry[]>();
-  const attributeMap = buildAttributeTitleMap(await getGelatoCatalog(catalogUid));
+  const catalogStartedAt = Date.now();
+  const attributeMap = buildAttributeTitleMap(await getGelatoCatalog(catalogUid, input.perf));
+  if (input.perf) input.perf.metrics.detailsMs += Date.now() - catalogStartedAt;
   for (const product of allFamilyProducts) {
     const variantMeta = variantKeyFromProduct(product, attributeMap);
     const existing = colorsToProducts.get(variantMeta.colorKey) ?? [];
@@ -2882,11 +3075,13 @@ export async function syncGelatoProductFamily(
 
     for (const entry of entries) {
       const variantLookupKey = `${familyAttributes.familyKey}::${colorId}::${entry.variantKey}`;
-      const existingVariant =
-        existingVariantsByFamily.get(variantLookupKey) ??
-        existingVariantsByGelatoProductUid.get(entry.product.productUid);
-      const entryDetails = (await getGelatoProduct(entry.product.productUid)) as GelatoProductDetails;
-      const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid, productCurrency);
+      const existingVariant = existingVariantsByFamily.get(variantLookupKey) ?? null;
+      const detailsStartedAt = Date.now();
+      const entryDetails = (await getGelatoProduct(entry.product.productUid, input.perf)) as GelatoProductDetails;
+      if (input.perf) input.perf.metrics.detailsMs += Date.now() - detailsStartedAt;
+      const pricesStartedAt = Date.now();
+      const entryPriceResult = await fetchGelatoPricesForAllCountries(entry.product.productUid, productCurrency, input.perf);
+      if (input.perf) input.perf.metrics.pricesMs += Date.now() - pricesStartedAt;
       const entryPriceRows = entryPriceResult.prices;
       const gelatoVariantUid =
         extractVariantUidFromAttributes(entry.product.attributes) ?? entry.product.productUid;
@@ -2937,15 +3132,20 @@ export async function syncGelatoProductFamily(
       };
 
       if (existingVariant) {
+        const variantWriteStartedAt = Date.now();
         const { error } = await supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
         if (error) throw new Error(error.message);
+        if (input.perf) input.perf.metrics.variantWriteMs += Date.now() - variantWriteStartedAt;
+        if (input.perf) input.perf.metrics.supabaseWrites += 1;
         touchedVariantIds.add(existingVariant.id);
         touchedFamilyVariantKeys.add(variantLookupKey);
         await saveGelatoVariantPrices({
           productVariantId: existingVariant.id,
           prices: entryPriceRows,
           syncedAt: syncStartedAt,
+          perf: input.perf,
         });
+        if (input.perf) input.perf.metrics.marketsWriteMs += 0;
         await enrichSyncedVariantPrintPricing({
           productVariantId: existingVariant.id,
           catalogUid,
@@ -2953,11 +3153,15 @@ export async function syncGelatoProductFamily(
           referenceProduct: entryDetails,
           frontPrices: entryPriceRows,
           pricingCurrency: productCurrency,
+          perf: input.perf,
         });
         variantsUpdated += 1;
       } else {
+        const variantInsertStartedAt = Date.now();
         const { data, error } = await supabase.from("product_variants").insert(variantPayload).select("id").single();
         if (error || !data?.id) throw new Error(error?.message || "Failed to create product variant.");
+        if (input.perf) input.perf.metrics.variantWriteMs += Date.now() - variantInsertStartedAt;
+        if (input.perf) input.perf.metrics.supabaseWrites += 1;
         const productVariantId = data.id as string;
         touchedVariantIds.add(productVariantId);
         touchedFamilyVariantKeys.add(variantLookupKey);
@@ -2965,6 +3169,7 @@ export async function syncGelatoProductFamily(
           productVariantId,
           prices: entryPriceRows,
           syncedAt: syncStartedAt,
+          perf: input.perf,
         });
         await enrichSyncedVariantPrintPricing({
           productVariantId,
@@ -2973,6 +3178,7 @@ export async function syncGelatoProductFamily(
           referenceProduct: entryDetails,
           frontPrices: entryPriceRows,
           pricingCurrency: productCurrency,
+          perf: input.perf,
         });
         variantsCreated += 1;
       }
@@ -2998,7 +3204,7 @@ export async function syncGelatoProductFamily(
     productId,
     catalogUid,
     productUid: referenceProductUid,
-    catalogTitle: (await getGelatoCatalog(catalogUid)).title,
+    catalogTitle: (await getGelatoCatalog(catalogUid, input.perf)).title,
     filters: familyAttributes.familyFilters,
     gelatoProductUid: referenceProductUid,
     pageOffset: 0,
@@ -3031,7 +3237,13 @@ export async function syncGelatoProductFamily(
   });
 
   if (!input.skipSellingPriceRefresh) {
-    await refreshProductVariantSellingPrices(productId);
+    const refreshStartedAt = Date.now();
+    await refreshProductVariantSellingPrices(productId, input.perf);
+    if (input.perf) input.perf.metrics.refreshSellingPricesMs += Date.now() - refreshStartedAt;
+  }
+
+  if (input.perf) {
+    input.perf.metrics.totalMs += Date.now() - startedAt;
   }
 
   return result;

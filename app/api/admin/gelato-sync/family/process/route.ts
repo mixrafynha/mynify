@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
-import { refreshProductVariantSellingPrices, syncGelatoProductFamily } from "@/lib/gelato/catalog-sync";
+import {
+  createFamilySyncPerfContext,
+  logFamilySyncPerf,
+  refreshProductVariantSellingPrices,
+  syncGelatoProductFamily,
+  type FamilySyncPerfContext,
+} from "@/lib/gelato/catalog-sync";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,13 +41,18 @@ function isTemporaryUpstreamError(error: unknown) {
   );
 }
 
-async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
+async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string, perf?: FamilySyncPerfContext | null) {
+  const startedAt = Date.now();
   const { data: items, error } = await supabase
     .from("gelato_sync_job_items")
     .select("status")
     .eq("job_id", jobId);
 
   if (error) throw new Error(error.message);
+  if (perf) {
+    perf.metrics.supabaseReads += 1;
+    perf.metrics.countersMs += Date.now() - startedAt;
+  }
 
   const rows = items ?? [];
   const completedItems = rows.filter((item) => item.status === "completed").length;
@@ -62,8 +73,10 @@ async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jo
 async function refreshGelatoSyncJobCounters(
   supabase: ReturnType<typeof createSupabaseAdmin>,
   jobId: string,
+  perf?: FamilySyncPerfContext | null,
 ) {
-  const counts = await getJobCounts(supabase, jobId);
+  const counts = await getJobCounts(supabase, jobId, perf);
+  const startedAt = Date.now();
   const { error } = await supabase
     .from("gelato_sync_jobs")
     .update({
@@ -75,6 +88,10 @@ async function refreshGelatoSyncJobCounters(
     })
     .eq("id", jobId);
   if (error) throw new Error(error.message);
+  if (perf) {
+    perf.metrics.supabaseWrites += 1;
+    perf.metrics.countersMs += Date.now() - startedAt;
+  }
   return counts;
 }
 
@@ -82,7 +99,9 @@ async function claimGelatoSyncJobItems(
   supabase: ReturnType<typeof createSupabaseAdmin>,
   jobId: string,
   batchSize: number,
+  perf?: FamilySyncPerfContext | null,
 ) {
+  const startedAt = Date.now();
   const { data, error } = await supabase.rpc("claim_gelato_sync_job_items", {
     batch_size: batchSize,
     target_job_id: jobId,
@@ -99,6 +118,8 @@ async function claimGelatoSyncJobItems(
     });
     throw new Error(error.message);
   }
+  if (perf) perf.metrics.supabaseWrites += 1;
+  if (perf) perf.metrics.claimMs += Date.now() - startedAt;
 
   const claimedItems = (data ?? []) as Array<{
     id: unknown;
@@ -118,6 +139,7 @@ async function claimGelatoSyncJobItems(
 async function releaseProcessingItems(
   supabase: ReturnType<typeof createSupabaseAdmin>,
   itemIds: string[],
+  perf?: FamilySyncPerfContext | null,
 ) {
   if (itemIds.length === 0) return;
 
@@ -128,6 +150,7 @@ async function releaseProcessingItems(
     .eq("status", "processing");
 
   if (error) throw new Error(error.message);
+  if (perf) perf.metrics.supabaseWrites += 1;
 }
 
 function retryableProcessResponse(jobId: string) {
@@ -144,8 +167,8 @@ function retryableProcessResponse(jobId: string) {
   );
 }
 
-async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string) {
-  const counters = await refreshGelatoSyncJobCounters(supabase, jobId);
+async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmin>, jobId: string, perf?: FamilySyncPerfContext | null) {
+  const counters = await refreshGelatoSyncJobCounters(supabase, jobId, perf);
   const { data: job, error: jobError } = await supabase
     .from("gelato_sync_jobs")
     .select("id, total_variants, processed_variants, successful_variants, failed_variants")
@@ -153,6 +176,7 @@ async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmi
     .maybeSingle();
   if (jobError) throw new Error(jobError.message);
   if (!job) throw new Error("Job not found.");
+  if (perf) perf.metrics.supabaseReads += 1;
 
   if (job.total_variants > 0 && counters.totalItems === 0) {
     await supabase
@@ -201,6 +225,7 @@ async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmi
       last_processed_at: isoNow(),
     })
     .eq("id", jobId);
+  if (perf) perf.metrics.supabaseWrites += 1;
 
   return { completed: true, inconsistent: false, finalStatus };
 }
@@ -214,6 +239,8 @@ export async function POST(request: Request) {
   let supabase: ReturnType<typeof createSupabaseAdmin> | null = null;
   let jobId = "";
   let claimedItemIds: string[] = [];
+  const perf = createFamilySyncPerfContext();
+  const totalStartedAt = Date.now();
 
   try {
     const body = await request.json().catch(() => ({}));
@@ -221,6 +248,7 @@ export async function POST(request: Request) {
     if (!jobId) return NextResponse.json({ ok: false, error: "Missing jobId." }, { status: 400 });
 
     supabase = createSupabaseAdmin();
+    const jobSelectStartedAt = Date.now();
     const { data: job, error: jobError } = await supabase
       .from("gelato_sync_jobs")
       .select("id, product_id, catalog_uid, reference_product_uid, family_key, status, processed_variants, successful_variants, failed_variants, total_variants")
@@ -228,11 +256,17 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (jobError) throw new Error(jobError.message);
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
+    perf.metrics.supabaseReads += 1;
+    perf.metrics.detailsMs += Date.now() - jobSelectStartedAt;
 
-    const claimed = await claimGelatoSyncJobItems(supabase, jobId, BATCH_SIZE);
+    perf.metrics.batchSize = BATCH_SIZE;
+    perf.metrics.jobId = jobId;
+    const claimed = await claimGelatoSyncJobItems(supabase, jobId, BATCH_SIZE, perf);
     claimedItemIds = claimed.map((item) => item.id);
     if (claimed.length === 0) {
-      const finalizeResult = await finalizeJobIfReady(supabase, jobId);
+      const finalizeResult = await finalizeJobIfReady(supabase, jobId, perf);
+      perf.metrics.totalMs += Date.now() - totalStartedAt;
+      logFamilySyncPerf(perf);
       return NextResponse.json({
         ok: !finalizeResult.inconsistent,
         jobId,
@@ -250,10 +284,13 @@ export async function POST(request: Request) {
       current_error: null,
       last_processed_at: isoNow(),
     };
+    const processingUpdateStartedAt = Date.now();
     if (job.status === "pending") {
       processingPayload.started_at = isoNow();
     }
     await supabase.from("gelato_sync_jobs").update(processingPayload).eq("id", jobId);
+    perf.metrics.supabaseWrites += 1;
+    perf.metrics.countersMs += Date.now() - processingUpdateStartedAt;
 
     let successful = 0;
     let failed = 0;
@@ -269,6 +306,7 @@ export async function POST(request: Request) {
           productUids: [item.gelato_product_uid],
           preserveFamilyState: true,
           skipSellingPriceRefresh: true,
+          perf,
         });
 
         successful += 1;
@@ -282,9 +320,10 @@ export async function POST(request: Request) {
           })
           .eq("id", item.id)
           .eq("status", "processing");
+        perf.metrics.supabaseWrites += 1;
       } catch (error) {
         if (isTemporaryUpstreamError(error)) {
-          await releaseProcessingItems(supabase, claimedItemIds);
+          await releaseProcessingItems(supabase, claimedItemIds, perf);
           await supabase
             .from("gelato_sync_jobs")
             .update({
@@ -293,7 +332,10 @@ export async function POST(request: Request) {
               last_processed_at: isoNow(),
             })
             .eq("id", jobId);
-          await refreshGelatoSyncJobCounters(supabase, jobId);
+          perf.metrics.supabaseWrites += 1;
+          await refreshGelatoSyncJobCounters(supabase, jobId, perf);
+          perf.metrics.totalMs += Date.now() - totalStartedAt;
+          logFamilySyncPerf(perf);
           return retryableProcessResponse(jobId);
         }
 
@@ -310,6 +352,7 @@ export async function POST(request: Request) {
           })
           .eq("id", item.id)
           .eq("status", "processing");
+        perf.metrics.supabaseWrites += 1;
 
         await supabase
           .from("gelato_sync_jobs")
@@ -319,11 +362,14 @@ export async function POST(request: Request) {
             last_processed_at: isoNow(),
           })
           .eq("id", jobId);
+        perf.metrics.supabaseWrites += 1;
       }
     }
 
-    await refreshProductVariantSellingPrices(String(job.product_id));
-    const finalizeResult = await finalizeJobIfReady(supabase, jobId);
+    await refreshProductVariantSellingPrices(String(job.product_id), perf);
+    const finalizeResult = await finalizeJobIfReady(supabase, jobId, perf);
+    perf.metrics.totalMs += Date.now() - totalStartedAt;
+    logFamilySyncPerf(perf);
 
     return NextResponse.json({
       ok: true,
@@ -338,7 +384,7 @@ export async function POST(request: Request) {
   } catch (error) {
     if (jobId && supabase && isTemporaryUpstreamError(error)) {
       try {
-        await releaseProcessingItems(supabase, claimedItemIds);
+        await releaseProcessingItems(supabase, claimedItemIds, perf);
         await supabase
           .from("gelato_sync_jobs")
           .update({
@@ -347,9 +393,12 @@ export async function POST(request: Request) {
             last_processed_at: isoNow(),
           })
           .eq("id", jobId);
-        await refreshGelatoSyncJobCounters(supabase, jobId);
+        perf.metrics.supabaseWrites += 1;
+        await refreshGelatoSyncJobCounters(supabase, jobId, perf);
       } catch {}
 
+      perf.metrics.totalMs += Date.now() - totalStartedAt;
+      logFamilySyncPerf(perf);
       return retryableProcessResponse(jobId);
     }
 
