@@ -24,6 +24,38 @@ type ClaimedGelatoSyncJobItem = {
   position: number;
 };
 
+type SupabaseErrorLogContext = {
+  jobId: string | null;
+  operation: string;
+  table: string | null;
+  code: string | number | null | undefined;
+  message: string | null | undefined;
+  details: unknown;
+  hint: unknown;
+  status: number | null | undefined;
+  elapsedMs: number | null | undefined;
+};
+
+type SupabaseAnnotatedError = Error & {
+  supabaseErrorContext?: SupabaseErrorLogContext;
+};
+
+function logSupabaseError(context: SupabaseErrorLogContext) {
+  console.error("[gelato-family-sync:supabase-error]", context);
+}
+
+function annotateSupabaseError(error: unknown, context: SupabaseErrorLogContext): SupabaseAnnotatedError {
+  const original = error instanceof Error ? error : new Error(String(error ?? "Unknown Supabase error."));
+  logSupabaseError(context);
+  const annotated = original as SupabaseAnnotatedError;
+  annotated.supabaseErrorContext = context;
+  return annotated;
+}
+
+function getSupabaseErrorStatus(error: unknown): number | null | undefined {
+  return (error as { status?: number | null } | null | undefined)?.status ?? null;
+}
+
 function isoNow() {
   return new Date().toISOString();
 }
@@ -49,7 +81,19 @@ async function getJobCounts(supabase: ReturnType<typeof createSupabaseAdmin>, jo
     .select("status")
     .eq("job_id", jobId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw annotateSupabaseError(error, {
+      jobId,
+      operation: "select",
+      table: "gelato_sync_job_items",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
   if (perf) {
     perf.metrics.supabaseReads += 1;
     perf.metrics.countersMs += Date.now() - startedAt;
@@ -88,7 +132,19 @@ async function refreshGelatoSyncJobCounters(
       updated_at: isoNow(),
     })
     .eq("id", jobId);
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw annotateSupabaseError(error, {
+      jobId,
+      operation: "update",
+      table: "gelato_sync_jobs",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
   if (perf) {
     perf.metrics.supabaseWrites += 1;
     perf.metrics.countersMs += Date.now() - startedAt;
@@ -117,7 +173,17 @@ async function claimGelatoSyncJobItems(
       details: error.details ?? null,
       hint: error.hint ?? null,
     });
-    throw new Error(error.message);
+    throw annotateSupabaseError(error, {
+      jobId,
+      operation: "rpc",
+      table: "claim_gelato_sync_job_items",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: Date.now() - startedAt,
+    });
   }
   if (perf) perf.metrics.supabaseWrites += 1;
   if (perf) perf.metrics.claimMs += Date.now() - startedAt;
@@ -150,7 +216,19 @@ async function releaseProcessingItems(
     .in("id", itemIds)
     .eq("status", "processing");
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw annotateSupabaseError(error, {
+      jobId: null,
+      operation: "update",
+      table: "gelato_sync_job_items",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: 0,
+    });
+  }
   if (perf) perf.metrics.supabaseWrites += 1;
 }
 
@@ -175,7 +253,19 @@ async function finalizeJobIfReady(supabase: ReturnType<typeof createSupabaseAdmi
     .select("id, total_variants, processed_variants, successful_variants, failed_variants")
     .eq("id", jobId)
     .maybeSingle();
-  if (jobError) throw new Error(jobError.message);
+  if (jobError) {
+    throw annotateSupabaseError(jobError, {
+      jobId,
+      operation: "select",
+      table: "gelato_sync_jobs",
+      code: jobError.code ?? null,
+      message: jobError.message ?? null,
+      details: jobError.details ?? null,
+      hint: jobError.hint ?? null,
+      status: getSupabaseErrorStatus(jobError),
+      elapsedMs: 0,
+    });
+  }
   if (!job) throw new Error("Job not found.");
   if (perf) perf.metrics.supabaseReads += 1;
 
@@ -255,7 +345,19 @@ export async function POST(request: Request) {
       .select("id, product_id, catalog_uid, reference_product_uid, family_key, status, processed_variants, successful_variants, failed_variants, total_variants")
       .eq("id", jobId)
       .maybeSingle();
-    if (jobError) throw new Error(jobError.message);
+    if (jobError) {
+      throw annotateSupabaseError(jobError, {
+        jobId,
+        operation: "select",
+        table: "gelato_sync_jobs",
+        code: jobError.code ?? null,
+        message: jobError.message ?? null,
+        details: jobError.details ?? null,
+        hint: jobError.hint ?? null,
+        status: getSupabaseErrorStatus(jobError),
+        elapsedMs: Date.now() - jobSelectStartedAt,
+      });
+    }
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
     perf.metrics.supabaseReads += 1;
     perf.metrics.detailsMs += Date.now() - jobSelectStartedAt;
@@ -326,6 +428,16 @@ export async function POST(request: Request) {
         perf.metrics.supabaseWrites += 1;
       } catch (error) {
         if (isTemporaryUpstreamError(error)) {
+          const originalContext = error instanceof Error ? (error as SupabaseAnnotatedError).supabaseErrorContext ?? null : null;
+          if (originalContext) {
+            console.error("[gelato-family-sync:temporary-error]", {
+              jobId,
+              originalCode: originalContext.code ?? null,
+              originalMessage: originalContext.message ?? null,
+              operation: originalContext.operation,
+              table: originalContext.table,
+            });
+          }
           await releaseProcessingItems(supabase, claimedItemIds, perf);
           await supabase
             .from("gelato_sync_jobs")
@@ -386,6 +498,16 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (jobId && supabase && isTemporaryUpstreamError(error)) {
+      const originalContext = error instanceof Error ? (error as SupabaseAnnotatedError).supabaseErrorContext ?? null : null;
+      if (originalContext) {
+        console.error("[gelato-family-sync:temporary-error]", {
+          jobId,
+          originalCode: originalContext.code ?? null,
+          originalMessage: originalContext.message ?? null,
+          operation: originalContext.operation,
+          table: originalContext.table,
+        });
+      }
       try {
         await releaseProcessingItems(supabase, claimedItemIds, perf);
         await supabase

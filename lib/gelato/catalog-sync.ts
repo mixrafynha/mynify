@@ -94,6 +94,37 @@ type GelatoCountryPriceResult = {
   error: boolean;
 };
 
+type SupabaseErrorLogContext = {
+  jobId?: string | null;
+  operation: string;
+  table: string | null;
+  code: string | number | null | undefined;
+  message: string | null | undefined;
+  details: unknown;
+  hint: unknown;
+  status: number | null | undefined;
+  elapsedMs: number | null | undefined;
+};
+
+type SupabaseAnnotatedError = Error & {
+  supabaseErrorContext?: SupabaseErrorLogContext;
+};
+
+function logSupabaseError(context: SupabaseErrorLogContext) {
+  console.error("[gelato-family-sync:supabase-error]", context);
+}
+function annotateSupabaseError(error: unknown, context: SupabaseErrorLogContext): SupabaseAnnotatedError {
+  const original = error instanceof Error ? error : new Error(String(error ?? "Unknown Supabase error."));
+  logSupabaseError(context);
+  const annotated = original as SupabaseAnnotatedError;
+  annotated.supabaseErrorContext = context;
+  return annotated;
+}
+
+function getSupabaseErrorStatus(error: unknown): number | null | undefined {
+  return (error as { status?: number | null } | null | undefined)?.status ?? null;
+}
+
 type GelatoVariantMarketRow = {
   product_variant_id: string;
   country_code: string;
@@ -1336,8 +1367,6 @@ export async function resolveGelatoPrintPricingForVariant(input: {
     cacheUpdated: true,
   };
 }
-
-
 // printPricing enrichment removed in favor of a fixed second-print fee.
 
 async function getProductOrThrow(productId: string): Promise<ProductRow> {
@@ -2120,7 +2149,16 @@ async function saveSyncState(
   }
 
   if (error) {
-    throw new Error(error.message);
+    throw annotateSupabaseError(error, {
+      operation: "upsert",
+      table: "gelato_catalog_sync_state",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: 0,
+    });
   }
 }
 
@@ -2454,7 +2492,18 @@ async function saveGelatoVariantPrices(input: {
   const { error } = await supabase.from("gelato_variant_markets").upsert(rows, {
     onConflict: "product_variant_id,country_code,currency,quantity",
   });
-  if (error && !shouldIgnoreMissingGelatoMarketTable(error)) throw new Error(error.message);
+  if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
+    throw annotateSupabaseError(error, {
+      operation: "upsert",
+      table: "gelato_variant_markets",
+      code: error.code ?? null,
+      message: error.message ?? null,
+      details: error.details ?? null,
+      hint: error.hint ?? null,
+      status: getSupabaseErrorStatus(error),
+      elapsedMs: Date.now() - startedAt,
+    });
+  }
   if (input.perf) {
     input.perf.metrics.supabaseWrites += 1;
     input.perf.metrics.marketRowsWritten += rows.length;
@@ -2509,17 +2558,44 @@ async function saveGelatoVariantMarkets(input: {
         .eq("product_variant_id", input.productVariantId)
         .in("country_code", syncedCountries);
       if (deleteError && !shouldIgnoreMissingGelatoMarketTable(deleteError)) {
-        throw new Error(deleteError.message);
+        throw annotateSupabaseError(deleteError, {
+          operation: "delete",
+          table: "gelato_variant_markets",
+          code: deleteError.code ?? null,
+          message: deleteError.message ?? null,
+          details: deleteError.details ?? null,
+          hint: deleteError.hint ?? null,
+          status: getSupabaseErrorStatus(deleteError),
+          elapsedMs: Date.now() - startedAt,
+        });
       }
 
       const { error: insertError } = await supabase
         .from("gelato_variant_markets")
         .insert(marketRows);
       if (insertError && !shouldIgnoreMissingGelatoMarketTable(insertError)) {
-        throw new Error(insertError.message);
+        throw annotateSupabaseError(insertError, {
+          operation: "insert",
+          table: "gelato_variant_markets",
+          code: insertError.code ?? null,
+          message: insertError.message ?? null,
+          details: insertError.details ?? null,
+          hint: insertError.hint ?? null,
+          status: getSupabaseErrorStatus(insertError),
+          elapsedMs: Date.now() - startedAt,
+        });
       }
     } else if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
-      throw new Error(error.message);
+      throw annotateSupabaseError(error, {
+        operation: "upsert",
+        table: "gelato_variant_markets",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - startedAt,
+      });
     }
   }
   if (input.perf) {
@@ -2532,20 +2608,29 @@ async function saveGelatoVariantMarkets(input: {
     .map((country) => cleanCountryIso(country))
     .filter((country): country is string => Boolean(country));
 
-  if (failedCountries.length > 0) {
-    const { error } = await supabase
-      .from("gelato_variant_markets")
-      .update({
+    if (failedCountries.length > 0) {
+      const { error } = await supabase
+        .from("gelato_variant_markets")
+        .update({
         is_available: false,
         availability_source: "gelato_api_error",
         unavailable_reason: "gelato_api_error",
         availability_checked_at: input.syncedAt,
         updated_at: nowIso(),
       })
-      .eq("product_variant_id", input.productVariantId)
-      .in("country_code", failedCountries);
+        .eq("product_variant_id", input.productVariantId)
+        .in("country_code", failedCountries);
     if (error && !shouldIgnoreMissingGelatoMarketTable(error)) {
-      throw new Error(error.message);
+      throw annotateSupabaseError(error, {
+        operation: "update",
+        table: "gelato_variant_markets",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - startedAt,
+      });
     }
   }
   if (input.perf && failedCountries.length > 0) {
@@ -2583,7 +2668,18 @@ export async function refreshProductVariantSellingPrices(productId: string, perf
         updated_at: nowIso(),
       })
       .eq("id", productId);
-    if (markupUpdateError) throw new Error(markupUpdateError.message);
+    if (markupUpdateError) {
+      throw annotateSupabaseError(markupUpdateError, {
+        operation: "update",
+        table: "products",
+        code: markupUpdateError.code ?? null,
+        message: markupUpdateError.message ?? null,
+        details: markupUpdateError.details ?? null,
+        hint: markupUpdateError.hint ?? null,
+        status: getSupabaseErrorStatus(markupUpdateError),
+        elapsedMs: Date.now() - markupUpdateStartedAt,
+      });
+    }
     if (perf) perf.metrics.supabaseWrites += 1;
     updateMs += Date.now() - markupUpdateStartedAt;
   }
@@ -2678,7 +2774,18 @@ export async function refreshProductVariantSellingPrices(productId: string, perf
           gelato_last_synced_at: nowIso(),
         })
         .eq("id", variant.id);
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw annotateSupabaseError(error, {
+          operation: "update",
+          table: "product_variants",
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+          status: getSupabaseErrorStatus(error),
+          elapsedMs: Date.now() - updateStartedAt,
+        });
+      }
       if (perf) perf.metrics.supabaseWrites += 1;
       updateMs += Date.now() - updateStartedAt;
       updatedVariants += 1;
@@ -2697,7 +2804,18 @@ export async function refreshProductVariantSellingPrices(productId: string, perf
         updated_at: nowIso(),
       })
       .eq("id", productId);
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw annotateSupabaseError(error, {
+        operation: "update",
+        table: "products",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - productUpdateStartedAt,
+      });
+    }
     if (perf) perf.metrics.supabaseWrites += 1;
     updateMs += Date.now() - productUpdateStartedAt;
   }
@@ -2898,7 +3016,18 @@ export async function syncSingleGelatoFamilyVariant(input: {
 
   if (existingColor) {
     const { error } = await context.supabase.from("product_colors").update(colorPayload).eq("id", existingColor.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw annotateSupabaseError(error, {
+        operation: "update",
+        table: "product_colors",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
     colorId = existingColor.id;
   } else {
     const { data, error } = await context.supabase.from("product_colors").insert(colorPayload).select("id").single();
@@ -2968,7 +3097,18 @@ export async function syncSingleGelatoFamilyVariant(input: {
   if (existingVariant) {
     const variantWriteStartedAt = Date.now();
     const { error } = await context.supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw annotateSupabaseError(error, {
+        operation: "update",
+        table: "product_colors",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
     if (context.perf) {
       context.perf.metrics.variantWriteMs += Date.now() - variantWriteStartedAt;
       context.perf.metrics.supabaseWrites += 1;
@@ -3057,7 +3197,7 @@ export async function syncGelatoProductFamily(
     productId,
     referenceProductUid,
     familyAttributes.familyKey,
-    "Família identificada",
+    "FamÃ­lia identificada",
   );
 
   const supabase = createSupabaseAdmin();
@@ -3186,7 +3326,18 @@ export async function syncGelatoProductFamily(
 
     if (existingColor) {
       const { error } = await supabase.from("product_colors").update(colorPayload).eq("id", existingColor.id);
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw annotateSupabaseError(error, {
+          operation: "update",
+          table: "product_colors",
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+          status: getSupabaseErrorStatus(error),
+          elapsedMs: Date.now(),
+        });
+      }
       colorId = existingColor.id;
       colorsUpdated += 1;
     } else {
@@ -3260,7 +3411,18 @@ export async function syncGelatoProductFamily(
       if (existingVariant) {
         const variantWriteStartedAt = Date.now();
         const { error } = await supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
-        if (error) throw new Error(error.message);
+        if (error) {
+          throw annotateSupabaseError(error, {
+            operation: "update",
+            table: "product_variants",
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+            status: getSupabaseErrorStatus(error),
+            elapsedMs: Date.now() - variantWriteStartedAt,
+          });
+        }
         if (input.perf) input.perf.metrics.variantWriteMs += Date.now() - variantWriteStartedAt;
         if (input.perf) input.perf.metrics.supabaseWrites += 1;
         touchedVariantIds.add(existingVariant.id);
@@ -3304,7 +3466,18 @@ export async function syncGelatoProductFamily(
         gelato_available: false,
       })
       .in("id", staleVariantIds);
-    if (error) throw new Error(error.message);
+    if (error) {
+      throw annotateSupabaseError(error, {
+        operation: "update",
+        table: "product_variants",
+        code: error.code ?? null,
+        message: error.message ?? null,
+        details: error.details ?? null,
+        hint: error.hint ?? null,
+        status: getSupabaseErrorStatus(error),
+        elapsedMs: Date.now() - startedAt,
+      });
+    }
   }
 
   const result: GelatoFamilySyncResult = {
@@ -3531,7 +3704,18 @@ export async function syncGelatoCatalog(
           .from("product_colors")
           .update(colorPayload)
           .eq("id", existingColor.id);
-        if (error) throw new Error(error.message);
+        if (error) {
+          throw annotateSupabaseError(error, {
+            operation: "update",
+            table: "product_colors",
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+            status: getSupabaseErrorStatus(error),
+            elapsedMs: Date.now(),
+          });
+        }
         colorId = existingColor.id;
         colorsUpdated += 1;
       } else {
@@ -3621,7 +3805,18 @@ export async function syncGelatoCatalog(
             .from("product_variants")
             .update(variantPayload)
             .eq("id", existingVariant.id);
-          if (error) throw new Error(error.message);
+          if (error) {
+            throw annotateSupabaseError(error, {
+              operation: "update",
+              table: "product_variants",
+              code: error.code ?? null,
+              message: error.message ?? null,
+              details: error.details ?? null,
+              hint: error.hint ?? null,
+              status: getSupabaseErrorStatus(error),
+              elapsedMs: Date.now(),
+            });
+          }
           touchedVariantIds.add(existingVariant.id);
           await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
@@ -3677,23 +3872,47 @@ export async function syncGelatoCatalog(
       .map((variant) => variant.id);
 
     if (staleColorIds.length > 0 && !input.preserveFamilyState) {
+      const staleColorUpdateStartedAt = Date.now();
       const { error } = await supabase
         .from("product_colors")
         .update({
           gelato_sync_status: "inactive",
         })
         .in("id", staleColorIds);
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw annotateSupabaseError(error, {
+          operation: "update",
+          table: "product_colors",
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+          status: getSupabaseErrorStatus(error),
+          elapsedMs: Date.now() - staleColorUpdateStartedAt,
+        });
+      }
     }
 
     if (staleVariantIds.length > 0 && !input.preserveFamilyState) {
+      const staleVariantUpdateStartedAt = Date.now();
       const { error } = await supabase
         .from("product_variants")
         .update({
           gelato_sync_status: "inactive",
         })
         .in("id", staleVariantIds);
-      if (error) throw new Error(error.message);
+      if (error) {
+        throw annotateSupabaseError(error, {
+          operation: "update",
+          table: "product_variants",
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+          status: getSupabaseErrorStatus(error),
+          elapsedMs: Date.now() - staleVariantUpdateStartedAt,
+        });
+      }
     }
 
     const result: SyncCatalogResult = {
@@ -3912,7 +4131,18 @@ export async function syncGelatoCatalogPage(
 
       if (existingColor) {
         const { error } = await supabase.from("product_colors").update(colorPayload).eq("id", existingColor.id);
-        if (error) throw new Error(error.message);
+        if (error) {
+          throw annotateSupabaseError(error, {
+            operation: "update",
+            table: "product_colors",
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+            status: getSupabaseErrorStatus(error),
+            elapsedMs: Date.now(),
+          });
+        }
         colorId = existingColor.id;
         colorsUpdated += 1;
       } else {
@@ -3999,7 +4229,18 @@ export async function syncGelatoCatalogPage(
 
         if (existingVariant) {
           const { error } = await supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
-          if (error) throw new Error(error.message);
+          if (error) {
+            throw annotateSupabaseError(error, {
+              operation: "update",
+              table: "product_variants",
+              code: error.code ?? null,
+              message: error.message ?? null,
+              details: error.details ?? null,
+              hint: error.hint ?? null,
+              status: getSupabaseErrorStatus(error),
+              elapsedMs: Date.now(),
+            });
+          }
           touchedVariantIds.add(existingVariant.id);
           await saveGelatoVariantMarkets({
             productUid: entry.product.productUid,
@@ -4063,7 +4304,18 @@ export async function syncGelatoCatalogPage(
           .from("product_colors")
           .update({ gelato_sync_status: "inactive" })
           .in("id", staleColorIds);
-        if (error) throw new Error(error.message);
+        if (error) {
+          throw annotateSupabaseError(error, {
+            operation: "update",
+            table: "product_colors",
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+            status: getSupabaseErrorStatus(error),
+            elapsedMs: Date.now(),
+          });
+        }
       }
 
       if (staleVariantIds.length > 0) {
@@ -4071,7 +4323,18 @@ export async function syncGelatoCatalogPage(
           .from("product_variants")
           .update({ gelato_sync_status: "inactive" })
           .in("id", staleVariantIds);
-        if (error) throw new Error(error.message);
+        if (error) {
+          throw annotateSupabaseError(error, {
+            operation: "update",
+            table: "product_variants",
+            code: error.code ?? null,
+            message: error.message ?? null,
+            details: error.details ?? null,
+            hint: error.hint ?? null,
+            status: getSupabaseErrorStatus(error),
+            elapsedMs: Date.now(),
+          });
+        }
       }
     }
 
