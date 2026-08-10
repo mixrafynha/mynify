@@ -3,9 +3,10 @@ import { requireAdmin } from "@/lib/requireAdmin";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import {
   createFamilySyncPerfContext,
+  prepareGelatoFamilySyncContext,
   logFamilySyncPerf,
   refreshProductVariantSellingPrices,
-  syncGelatoProductFamily,
+  syncSingleGelatoFamilyVariant,
   type FamilySyncPerfContext,
 } from "@/lib/gelato/catalog-sync";
 
@@ -292,6 +293,13 @@ export async function POST(request: Request) {
     perf.metrics.supabaseWrites += 1;
     perf.metrics.countersMs += Date.now() - processingUpdateStartedAt;
 
+    const familyContext = await prepareGelatoFamilySyncContext({
+      productId: String(job.product_id),
+      catalogUid: String(job.catalog_uid),
+      referenceProductUid: String(job.reference_product_uid),
+      perf,
+    });
+
     let successful = 0;
     let failed = 0;
     let processed = 0;
@@ -299,14 +307,9 @@ export async function POST(request: Request) {
     for (const item of claimed) {
       processed += 1;
       try {
-        await syncGelatoProductFamily({
-          productId: String(job.product_id),
-          catalogUid: String(job.catalog_uid),
-          referenceProductUid: String(job.reference_product_uid),
-          productUids: [item.gelato_product_uid],
-          preserveFamilyState: true,
-          skipSellingPriceRefresh: true,
-          perf,
+        await syncSingleGelatoFamilyVariant({
+          context: familyContext,
+          gelatoProductUid: item.gelato_product_uid,
         });
 
         successful += 1;

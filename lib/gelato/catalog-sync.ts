@@ -130,6 +130,9 @@ type FamilySyncPerfMetrics = {
   variantWriteMs: number;
   printPricingMs: number;
   refreshSellingPricesMs: number;
+  familyDiscoveryMs: number;
+  familyDiscoveryCount: number;
+  singleVariantSyncMs: number;
   countersMs: number;
   totalMs: number;
 };
@@ -165,6 +168,9 @@ export function createFamilySyncPerfContext(input?: Partial<Pick<FamilySyncPerfM
       variantWriteMs: 0,
       printPricingMs: 0,
       refreshSellingPricesMs: 0,
+      familyDiscoveryMs: 0,
+      familyDiscoveryCount: 0,
+      singleVariantSyncMs: 0,
       countersMs: 0,
       totalMs: 0,
     },
@@ -224,6 +230,26 @@ type GelatoFamilySyncResult = SyncCatalogResult & {
   familyVariantsMissing: number;
   familyConflicts: number;
   familySyncCompleted: boolean;
+};
+
+type GelatoFamilySyncContext = {
+  productId: string;
+  catalogUid: string;
+  referenceProductUid: string;
+  productRecord: ProductRow;
+  productCurrency: string;
+  markupPercentage: number;
+  syncStartedAt: string;
+  referenceProduct: GelatoCatalogSearchProduct;
+  familyAttributes: GelatoFamilyAttributes;
+  familyProducts: GelatoCatalogSearchProduct[];
+  attributeMap: ReturnType<typeof buildAttributeTitleMap>;
+  existingColors: ExistingColorRow[];
+  existingColorsByFamilyKey: Map<string, ExistingColorRow>;
+  existingColorsByColorKey: Map<string, ExistingColorRow>;
+  existingVariantsByFamily: Map<string, ExistingVariantRow>;
+  supabase: ReturnType<typeof createSupabaseAdmin>;
+  perf?: FamilySyncPerfContext | null;
 };
 
 type GelatoCatalogListResponse =
@@ -2879,6 +2905,288 @@ function getProductFamilyProgressPayload(
     familyKey,
     step,
   });
+}
+
+export async function prepareGelatoFamilySyncContext(input: {
+  productId: string;
+  catalogUid: string;
+  referenceProductUid: string;
+  perf?: FamilySyncPerfContext | null;
+}): Promise<GelatoFamilySyncContext> {
+  const productId = cleanString(input.productId);
+  const catalogUid = cleanString(input.catalogUid);
+  const referenceProductUid = cleanString(input.referenceProductUid);
+
+  if (!productId) throw new Error("Missing productId.");
+  if (!catalogUid) throw new Error("Missing catalogUid.");
+  if (!referenceProductUid) throw new Error("Missing referenceProductUid.");
+
+  validateCatalogUid(catalogUid);
+  validateProductUid(referenceProductUid);
+
+  const productRecord = await getProductOrThrow(productId);
+  if (input.perf) input.perf.metrics.supabaseReads += 1;
+  const productCurrency = resolvePricingCurrency(productRecord.currency);
+  const markupPercentage = normalizeProfitMarkupPercentage(productRecord.profit_markup_percentage);
+  const syncStartedAt = nowIso();
+
+  const discoveryStartedAt = Date.now();
+  const { referenceProduct, familyAttributes, familyProducts } = await searchGelatoProductFamily(
+    catalogUid,
+    referenceProductUid,
+    input.perf,
+  );
+  if (input.perf) {
+    input.perf.metrics.familyDiscoveryCount += 1;
+    input.perf.metrics.familyDiscoveryMs += Date.now() - discoveryStartedAt;
+  }
+
+  const supabase = createSupabaseAdmin();
+  const colorSelect = "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position, gelato_color_key, gelato_sync_status";
+  const { data: colorRows, error: colorsError } = await supabase
+    .from("product_colors")
+    .select(colorSelect)
+    .eq("product_id", productId);
+  if (input.perf) input.perf.metrics.supabaseReads += 1;
+  if (colorsError) throw new Error(colorsError.message);
+  const existingColors = (colorRows ?? []) as unknown as ExistingColorRow[];
+
+  const existingColorIds = existingColors.map((color) => color.id);
+  let existingVariants: ExistingVariantRow[] = [];
+  if (existingColorIds.length > 0) {
+    const variantSelect = "id, product_color_id, size, sku, stock, price, name, gelato_product_uid, gelato_variant_uid, gelato_variant_key, gelato_sync_status, gelato_attributes";
+    const { data: variantRows, error: variantsError } = await supabase
+      .from("product_variants")
+      .select(variantSelect)
+      .in("product_color_id", existingColorIds);
+    if (input.perf) input.perf.metrics.supabaseReads += 1;
+    if (variantsError) throw new Error(variantsError.message);
+    existingVariants = (variantRows ?? []) as unknown as ExistingVariantRow[];
+  }
+
+  const existingColorsByFamilyKey = new Map<string, ExistingColorRow>();
+  const existingColorsByColorKey = new Map<string, ExistingColorRow>();
+  for (const color of existingColors) {
+    const familyKey = cleanString((color as Record<string, unknown>).gelato_family_key) ?? "";
+    const colorKey = cleanString(color.gelato_color_key) ?? normalizeKey(color.color ?? "");
+    const key = `${familyKey}::${colorKey}`;
+    if (familyKey && colorKey && !existingColorsByFamilyKey.has(key)) existingColorsByFamilyKey.set(key, color);
+    if (colorKey && !existingColorsByColorKey.has(colorKey)) existingColorsByColorKey.set(colorKey, color);
+  }
+
+  const existingVariantsByFamily = new Map<string, ExistingVariantRow>();
+  for (const variant of existingVariants) {
+    const familyKey = cleanString((variant as Record<string, unknown>).gelato_family_key) ?? "";
+    const key = `${familyKey}::${variant.product_color_id}::${
+      variant.gelato_variant_key ?? normalizeKey(`${variant.product_color_id}__${variant.size ?? variant.id}`)
+    }`;
+    if (familyKey && !existingVariantsByFamily.has(key)) existingVariantsByFamily.set(key, variant);
+  }
+
+  const catalogStartedAt = Date.now();
+  const attributeMap = buildAttributeTitleMap(await getGelatoCatalog(catalogUid, input.perf));
+  if (input.perf) input.perf.metrics.detailsMs += Date.now() - catalogStartedAt;
+
+  return {
+    productId,
+    catalogUid,
+    referenceProductUid,
+    productRecord,
+    productCurrency,
+    markupPercentage,
+    syncStartedAt,
+    referenceProduct,
+    familyAttributes,
+    familyProducts,
+    attributeMap,
+    existingColors,
+    existingColorsByFamilyKey,
+    existingColorsByColorKey,
+    existingVariantsByFamily,
+    supabase,
+    perf: input.perf ?? null,
+  };
+}
+
+export async function syncSingleGelatoFamilyVariant(input: {
+  context: GelatoFamilySyncContext;
+  gelatoProductUid: string;
+}): Promise<{
+  colorId: string | null;
+  productVariantId: string;
+  created: boolean;
+  updated: boolean;
+}> {
+  const { context } = input;
+  const startedAt = Date.now();
+  const productUid = cleanString(input.gelatoProductUid);
+  if (!productUid) throw new Error("Missing gelatoProductUid.");
+
+  if (context.perf) context.perf.metrics.singleVariantSyncMs += 0;
+
+  const detailsStartedAt = Date.now();
+  const entryDetails = (await getGelatoProduct(productUid, context.perf)) as GelatoProductDetails;
+  if (context.perf) context.perf.metrics.detailsMs += Date.now() - detailsStartedAt;
+
+  const attributeMap = context.attributeMap;
+  const variantMeta = variantKeyFromProduct(entryDetails, attributeMap);
+  const colorKey = variantMeta.colorKey;
+  const existingColor =
+    context.existingColorsByFamilyKey.get(`${context.familyAttributes.familyKey}::${colorKey}`) ??
+    context.existingColorsByColorKey.get(colorKey) ??
+    null;
+
+  const gelatoColorImages = extractGelatoColorImages([entryDetails]);
+  let colorId = existingColor?.id ?? null;
+  const colorPayload = {
+    product_id: context.productId,
+    color: variantMeta.colorName,
+    color_hex: resolveGelatoColorHex({
+      colorKey,
+      colorName: variantMeta.colorName,
+      gelatoHex: existingColor?.color_hex ?? variantMeta.colorHex,
+    }),
+    mockup_front: existingColor?.mockup_front ?? gelatoColorImages.mockup_front,
+    mockup_back: existingColor?.mockup_back ?? gelatoColorImages.mockup_back,
+    thumbnail: existingColor?.thumbnail ?? gelatoColorImages.thumbnail,
+    position: existingColor?.position ?? context.existingColors.length,
+    gelato_color_key: colorKey,
+    gelato_attributes: {
+      attributeUid: variantMeta.colorAttributeUid,
+      attributeValueUid: variantMeta.colorValueUid,
+      colorHex: variantMeta.colorHex,
+    },
+    gelato_sync_status: "active",
+    gelato_last_seen_at: context.syncStartedAt,
+  };
+
+  if (existingColor) {
+    const { error } = await context.supabase.from("product_colors").update(colorPayload).eq("id", existingColor.id);
+    if (error) throw new Error(error.message);
+    colorId = existingColor.id;
+  } else {
+    const { data, error } = await context.supabase.from("product_colors").insert(colorPayload).select("id").single();
+    if (error || !data?.id) throw new Error(error?.message || "Failed to create product color.");
+    colorId = data.id as string;
+  }
+
+  const variantLookupKey = `${context.familyAttributes.familyKey}::${colorId}::${variantMeta.variantKey}`;
+  const existingVariant = context.existingVariantsByFamily.get(variantLookupKey) ?? null;
+  const pricesStartedAt = Date.now();
+  const entryPriceResult = await fetchGelatoPricesForAllCountries(productUid, context.productCurrency, context.perf);
+  if (context.perf) context.perf.metrics.pricesMs += Date.now() - pricesStartedAt;
+  const entryPriceRows = entryPriceResult.prices;
+  const gelatoVariantUid = extractVariantUidFromAttributes(entryDetails.attributes) ?? productUid;
+  const variantName = `${variantMeta.colorName} / ${variantMeta.sizeName}`;
+  const familyPriceRows = buildGelatoVariantPriceRows({
+    productVariantId: existingVariant?.id ?? "pending",
+    prices: entryPriceRows,
+    syncedAt: context.syncStartedAt,
+  });
+
+  const referenceMarket = pickVariantReferenceMarket(familyPriceRows, context.productCurrency);
+  const referenceProduction = extractReferenceVariantProductionCost(familyPriceRows, context.productCurrency);
+  const sellingPrice = calculateVariantSellingPrice({
+    productionCost: referenceProduction.productionCost,
+    markupPercentage: context.markupPercentage,
+    category: context.productRecord.category,
+    title: context.productRecord.title,
+    slug: context.productRecord.slug,
+    gelatoProductUid: productUid,
+    variantName,
+    targetCurrency: context.productCurrency,
+    sourceCurrency: referenceProduction.currency,
+  });
+
+  const skuEntry = {
+    ...variantMeta,
+    product: {
+      productUid,
+      attributes: entryDetails.attributes as Record<string, string>,
+    } as GelatoCatalogSearchProduct,
+  };
+
+  const variantPayload = {
+    product_color_id: colorId,
+    size: variantMeta.sizeName,
+    name: variantName,
+    sku: buildGelatoVariantSku(skuEntry),
+    ...(!existingVariant ? { stock: 999 } : {}),
+    ...buildVariantPriceMetadataPayload(referenceMarket),
+    price: sellingPrice ?? existingVariant?.price ?? null,
+    gelato_product_uid: productUid,
+    gelato_product_name: getGelatoProductName(entryDetails),
+    gelato_catalog_uid: context.catalogUid,
+    gelato_variant_uid: gelatoVariantUid,
+    gelato_variant_key: variantMeta.variantKey,
+    gelato_attributes: {
+      ...withoutRegionalAvailabilityAttributes(existingVariant?.gelato_attributes),
+      ...withoutRegionalAvailabilityAttributes(entryDetails.attributes),
+      colorHex: variantMeta.colorHex,
+    },
+    gelato_sync_status: "active",
+    gelato_last_synced_at: context.syncStartedAt,
+    gelato_last_seen_at: context.syncStartedAt,
+  };
+
+  if (existingVariant) {
+    const variantWriteStartedAt = Date.now();
+    const { error } = await context.supabase.from("product_variants").update(variantPayload).eq("id", existingVariant.id);
+    if (error) throw new Error(error.message);
+    if (context.perf) {
+      context.perf.metrics.variantWriteMs += Date.now() - variantWriteStartedAt;
+      context.perf.metrics.supabaseWrites += 1;
+    }
+    await saveGelatoVariantPrices({
+      productVariantId: existingVariant.id,
+      prices: entryPriceRows,
+      syncedAt: context.syncStartedAt,
+      perf: context.perf,
+    });
+    await enrichSyncedVariantPrintPricing({
+      productVariantId: existingVariant.id,
+      catalogUid: context.catalogUid,
+      frontUid: productUid,
+      referenceProduct: entryDetails,
+      frontPrices: entryPriceRows,
+      pricingCurrency: context.productCurrency,
+      perf: context.perf,
+    });
+    if (context.perf) {
+      context.perf.metrics.variantsProcessed += 1;
+      context.perf.metrics.singleVariantSyncMs += Date.now() - startedAt;
+    }
+    return { colorId, productVariantId: existingVariant.id, created: false, updated: true };
+  }
+
+  const variantInsertStartedAt = Date.now();
+  const { data, error } = await context.supabase.from("product_variants").insert(variantPayload).select("id").single();
+  if (error || !data?.id) throw new Error(error?.message || "Failed to create product variant.");
+  if (context.perf) {
+    context.perf.metrics.variantWriteMs += Date.now() - variantInsertStartedAt;
+    context.perf.metrics.supabaseWrites += 1;
+  }
+  const productVariantId = data.id as string;
+  await saveGelatoVariantPrices({
+    productVariantId,
+    prices: entryPriceRows,
+    syncedAt: context.syncStartedAt,
+    perf: context.perf,
+  });
+  await enrichSyncedVariantPrintPricing({
+    productVariantId,
+    catalogUid: context.catalogUid,
+    frontUid: productUid,
+    referenceProduct: entryDetails,
+    frontPrices: entryPriceRows,
+    pricingCurrency: context.productCurrency,
+    perf: context.perf,
+  });
+  if (context.perf) {
+    context.perf.metrics.variantsProcessed += 1;
+    context.perf.metrics.singleVariantSyncMs += Date.now() - startedAt;
+  }
+  return { colorId, productVariantId, created: true, updated: false };
 }
 
 export async function syncGelatoProductFamily(
