@@ -2,6 +2,7 @@ import { clamp, finiteNumber, measureTextBox } from "../canvasMath";
 import { type Rect } from "./bounds";
 
 const MIN_TEXT_WIDTH = 42;
+const MIN_TEXT_HEIGHT = 18;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 420;
 const MAX_TEXT_WIDTH = 4000;
@@ -71,9 +72,9 @@ function getScaleFromDirection(direction: string, start: Rect, boxWidth: number,
       : 1;
 
   if (horizontal && vertical) {
-    // Canva/Gelato behaviour: diagonal handles scale text. Dragging only one axis still grows/shrinks font.
-    const dominant = Math.abs(widthScale - 1) >= Math.abs(heightScale - 1) ? widthScale : heightScale;
-    return Math.max(MIN_SCALE, dominant);
+    // Keep diagonal scaling continuous from the original gesture and avoid direction flips
+    // when only one axis crosses the anchor during the drag.
+    return Math.max(MIN_SCALE, (widthScale + heightScale) / 2);
   }
 
   if (vertical) return Math.max(MIN_SCALE, heightScale);
@@ -97,6 +98,7 @@ export function resizeTextRect(args: {
   let x = horizontal.x;
   let y = start.y;
   let boxWidth = horizontal.width;
+  let boxHeight = start.height;
 
   const scale = getScaleFromDirection(direction, start, boxWidth, dx, dy);
   const fontSize = clamp(startFontSize * scale, MIN_FONT_SIZE, MAX_FONT_SIZE);
@@ -107,10 +109,14 @@ export function resizeTextRect(args: {
     if (direction.includes("l")) x = start.x + start.width - boxWidth;
   }
 
+  if (direction.includes("t") || direction.includes("b")) {
+    boxHeight = Math.max(MIN_TEXT_HEIGHT, Math.round(start.height * scale));
+  }
+
   const next = {
     ...el,
     width: boxWidth,
-    height: undefined,
+    height: boxHeight,
     meta: {
       ...(el.meta || {}),
       fontSize,

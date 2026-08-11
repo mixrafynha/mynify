@@ -19,6 +19,7 @@ import { useElementSelection } from "./element/hooks/useElementSelection";
 import { useElementDrag } from "./element/hooks/useElementDrag";
 import { useElementResize } from "./element/hooks/useElementResize";
 import { useElementRotate } from "./element/hooks/useElementRotate";
+import { useMobileDetection } from "./canvas/hooks/useMobileDetection";
 
 function stopPointer(e: React.PointerEvent) {
   e.preventDefault();
@@ -67,6 +68,7 @@ function DraggableElement({
   previewMode = false,
 }: any) {
   const [editing, setEditing] = useState(false);
+  const isMobile = useMobileDetection();
 
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
   const elementRef = useRef<HTMLDivElement>(null);
@@ -418,6 +420,7 @@ function DraggableElement({
         isSelected={isSelected}
         editing={editing}
         locked={isLocked}
+        isMobile={isMobile}
         outside={outside}
         severity={severity}
         dpiBadge={null}
