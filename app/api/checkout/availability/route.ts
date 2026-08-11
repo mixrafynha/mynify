@@ -657,6 +657,7 @@ export async function POST(req: Request) {
       requestedCurrency: safeText(body?.currency) || "EUR",
       shippingMethods: shippingMethods.map((method) => ({
         id: method.id ?? null,
+        promiseUid: method.promiseUid ?? null,
         shipmentMethodUid: method.shipmentMethodUid ?? null,
         carrierUid: method.carrierUid ?? null,
         serviceType: method.serviceType ?? null,

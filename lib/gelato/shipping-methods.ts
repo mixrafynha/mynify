@@ -1,6 +1,7 @@
 export type NormalizedShippingMethod = {
   id: string;
   code: string | null;
+  promiseUid?: string | null;
   shipmentMethodUid?: string | null;
   carrierUid?: string | null;
   serviceType?: string | null;
@@ -27,12 +28,17 @@ function normalizeId(method: Record<string, any>) {
   const price = toNumber(method.price) ?? 0;
   const minDays = toNumber(method.minDays ?? method.estimatedDaysMin ?? method.estimatedDaysMinimum);
   const maxDays = toNumber(method.maxDays ?? method.estimatedDaysMax ?? method.estimatedDaysMaximum);
+  const carrierUid = cleanString(method.carrierUid) ?? cleanString(method.uid);
+  const serviceType = cleanString(method.serviceType)?.toLowerCase();
+  const fulfillmentCountry = cleanString(method.fulfillmentCountry);
+  const stableIdentity = [carrierUid, serviceType, fulfillmentCountry].filter(Boolean).join(":");
   return (
-    cleanString(method.shipmentMethodUid) ??
-    cleanString(method.uid) ??
-    cleanString(method.id) ??
-    cleanString(method.code) ??
-    cleanString(method.type) ??
+    stableIdentity ||
+    cleanString(method.shipmentMethodUid) ||
+    cleanString(method.uid) ||
+    cleanString(method.id) ||
+    cleanString(method.code) ||
+    cleanString(method.type) ||
     `${name}:${price}:${minDays ?? "x"}:${maxDays ?? "x"}`
   );
 }
@@ -57,7 +63,8 @@ export function normalizeShippingMethods(response: unknown, fallbackCurrency?: s
       return {
         id: normalizeId(record),
         code: cleanString(record.code) ?? cleanString(record.serviceType) ?? null,
-        shipmentMethodUid: cleanString(record.shipmentMethodUid) ?? cleanString(record.uid) ?? cleanString(record.id) ?? null,
+        promiseUid: cleanString(record.promiseUid) ?? null,
+        shipmentMethodUid: cleanString(record.carrierUid) ?? cleanString(record.uid) ?? cleanString(record.shipmentMethodUid) ?? cleanString(record.id) ?? null,
         carrierUid: cleanString(record.carrierUid) ?? cleanString(record.uid) ?? null,
         serviceType: cleanString(record.serviceType)?.toLowerCase() ?? null,
         fulfillmentCountry: cleanString(record.fulfillmentCountry) ?? null,

@@ -225,12 +225,15 @@ function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
   const responseKeys = Object.keys(record);
   const requestCurrency = normalizeCurrency(record.currencyIsoCode ?? record.currency ?? null);
   const productionCurrency = normalizeCurrency(production?.currency ?? null);
-  const currency = requestCurrency ?? productionCurrency ?? "USD";
+  const currency = requestCurrency ?? productionCurrency ?? null;
+  if (currency !== "EUR") {
+    throw new Error("Invalid checkout quote currency");
+  }
 
   const shippingOptions = shipments
     .map((shipment) => {
       const price = normalizeNumber(shipment.price);
-      const shipmentCurrency = normalizeCurrency(shipment.currency ?? null) ?? currency;
+      const shipmentCurrency = currency;
       const fulfillmentCountry = normalizeCountryCode(shipment.fulfillmentCountry ?? production?.productionCountry ?? null);
       const id = cleanString(shipment.promiseUid) ?? cleanString(shipment.uid) ?? cleanString(shipment.name) ?? "";
       const name = cleanString(shipment.name) ?? cleanString(shipment.uid) ?? id;
