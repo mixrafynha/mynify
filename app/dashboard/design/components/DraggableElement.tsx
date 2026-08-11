@@ -480,6 +480,8 @@ function DraggableElement({
         locked={isLocked}
         isMobile={isMobile}
         zoom={zoom}
+        boxWidth={rect.width}
+        boxHeight={rect.height}
         outside={outside}
         severity={severity}
         dpiBadge={null}

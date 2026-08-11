@@ -9,6 +9,8 @@ export type SelectionFrameProps = {
   locked?: boolean;
   isMobile?: boolean;
   zoom?: number;
+  boxWidth?: number;
+  boxHeight?: number;
 
   showDPI?: boolean;
   dpiBadge?: React.ReactNode;
@@ -36,6 +38,8 @@ const SelectionFrame = memo(function SelectionFrame({
   severity = "ok",
   isMobile = false,
   zoom = 1,
+  boxWidth = 0,
+  boxHeight = 0,
   resizeElement,
 }: SelectionFrameProps) {
   if (!isSelected || editing) return null;
@@ -56,6 +60,8 @@ const SelectionFrame = memo(function SelectionFrame({
           size="medium"
           isMobile={isMobile}
           zoom={zoom}
+          boxWidth={boxWidth}
+          boxHeight={boxHeight}
         />
       )}
     </>

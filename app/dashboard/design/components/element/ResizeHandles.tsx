@@ -10,6 +10,8 @@ type Props = {
   size?: "small" | "medium" | "large";
   isMobile?: boolean;
   zoom?: number;
+  boxWidth?: number;
+  boxHeight?: number;
 };
 
 const SIZE_MAP = {
@@ -61,6 +63,8 @@ const ResizeHandles = memo(function ResizeHandles({
   size = "medium",
   isMobile = false,
   zoom = 1,
+  boxWidth = 0,
+  boxHeight = 0,
 }: Props) {
   const s = SIZE_MAP[size] || SIZE_MAP.medium;
   const safeZoom = Number.isFinite(Number(zoom)) && Number(zoom) > 0 ? Number(zoom) : 1;
@@ -85,6 +89,10 @@ const ResizeHandles = memo(function ResizeHandles({
   const sideVSize = isMobile ? "" : s.sideV;
   const cornerHit = isMobile ? "" : s.cornerOffset;
   const sideHit = isMobile ? "" : s.sideOffset;
+  const screenBoxWidth = Number(boxWidth) * safeZoom;
+  const screenBoxHeight = Number(boxHeight) * safeZoom;
+  const showHorizontalSideHandles = !isMobile || screenBoxWidth >= MOBILE_HANDLE_STYLE.hit * 2.5;
+  const showVerticalSideHandles = !isMobile || screenBoxHeight >= MOBILE_HANDLE_STYLE.hit * 2.5;
 
   const startResize = useCallback(
     (direction: Direction) => (e: React.PointerEvent) => {
@@ -112,18 +120,27 @@ const ResizeHandles = memo(function ResizeHandles({
         <span style={mobileVisualStyle} className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`} />
       </span>
 
-      <span data-resize-handle="t" onPointerDown={startResize("t")} style={mobileHitStyle} className={`absolute left-1/2 top-0 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
-        <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
-      </span>
-      <span data-resize-handle="b" onPointerDown={startResize("b")} style={mobileHitStyle} className={`absolute bottom-0 left-1/2 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
-        <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
-      </span>
-      <span data-resize-handle="l" onPointerDown={startResize("l")} style={mobileHitStyle} className={`absolute left-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
-        <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
-      </span>
-      <span data-resize-handle="r" onPointerDown={startResize("r")} style={mobileHitStyle} className={`absolute right-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
-        <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
-      </span>
+      {showHorizontalSideHandles && (
+        <>
+          <span data-resize-handle="t" onPointerDown={startResize("t")} style={mobileHitStyle} className={`absolute left-1/2 top-0 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+            <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
+          </span>
+          <span data-resize-handle="b" onPointerDown={startResize("b")} style={mobileHitStyle} className={`absolute bottom-0 left-1/2 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+            <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
+          </span>
+        </>
+      )}
+
+      {showVerticalSideHandles && (
+        <>
+          <span data-resize-handle="l" onPointerDown={startResize("l")} style={mobileHitStyle} className={`absolute left-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+            <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
+          </span>
+          <span data-resize-handle="r" onPointerDown={startResize("r")} style={mobileHitStyle} className={`absolute right-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+            <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
+          </span>
+        </>
+      )}
     </>
   );
 });
