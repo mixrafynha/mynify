@@ -1164,9 +1164,6 @@ export async function captureVisualMockupPreviewBlob(
   const restoreImages: Array<() => void> = [];
 
   try {
-    // Let React finish the hidden preview render. This must not depend on
-    // DevTools, resize events or the speed of the machine.
-    await delay(900);
     await document.fonts.ready.catch(() => undefined);
 
     const expectedIds = debugElements
@@ -1287,9 +1284,6 @@ export async function captureVisualMockupPreviewBlob(
       }
     }
 
-    await document.fonts.ready.catch(() => undefined);
-    await nextFrame();
-    await nextFrame();
     await nextFrame();
 
     const crop = getCaptureCrop(node);

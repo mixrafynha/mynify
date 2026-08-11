@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, type RefObject } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
 import Canvas from "@/app/dashboard/design/components/Canvas";
@@ -41,6 +41,7 @@ export type ElementType = {
 };
 
 type Side = "front" | "back";
+type CapturePreviewSides = Partial<Record<Side, boolean>>;
 
 type HistoryState = {
   frontElements: ElementType[];
@@ -165,6 +166,53 @@ function nextFrame() {
   return new Promise<void>((resolve) => {
     requestAnimationFrame(() => resolve());
   });
+}
+
+async function waitForPreviewCanvasReady(args: {
+  side: Side;
+  stageRef: RefObject<HTMLDivElement | null>;
+  expectedElements: ElementType[];
+  timeoutMs?: number;
+}) {
+  const { side, stageRef, expectedElements, timeoutMs = 8_000 } = args;
+  const startedAt = performance.now();
+  const expectedIds = expectedElements
+    .filter((element) => !element?.meta?.hidden)
+    .map((element) => String(element?.id ?? ""))
+    .filter(Boolean);
+
+  while (performance.now() - startedAt < timeoutMs) {
+    const stageRoot = stageRef.current;
+    const exportNode =
+      stageRoot?.querySelector<HTMLElement>(`[data-mockup-capture-root="${side}"]`) ??
+      stageRoot ??
+      null;
+
+    if (stageRoot?.isConnected && exportNode?.isConnected) {
+      const rect = exportNode.getBoundingClientRect();
+      const renderedIds = Array.from(
+        exportNode.querySelectorAll<HTMLElement>("[data-design-element-id]"),
+      ).map((item) => String(item.dataset.designElementId || ""));
+      const missingIds = expectedIds.filter((id) => !renderedIds.includes(id));
+      const images = Array.from(exportNode.querySelectorAll<HTMLImageElement>("img"));
+      const imagesReady = images.every((image) => {
+        const src = String(image.currentSrc || image.getAttribute("src") || "").trim();
+        if (!src) return true;
+        return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+      });
+
+      if (rect.width > 0 && rect.height > 0 && missingIds.length === 0 && imagesReady) {
+        await document.fonts?.ready?.catch(() => undefined);
+        await Promise.all(images.map((image) => image.decode?.().catch(() => undefined)));
+        await nextFrame();
+        return exportNode;
+      }
+    }
+
+    await nextFrame();
+  }
+
+  throw new Error(`${side} hidden preview canvas was not ready within ${timeoutMs}ms`);
 }
 
 async function imageBlobToWebPBlob(
@@ -690,6 +738,7 @@ export default function EditorPage() {
 
   const [frontElements, setFrontElements] = useState<ElementType[]>([]);
   const [backElements, setBackElements] = useState<ElementType[]>([]);
+  const [capturePreviewSides, setCapturePreviewSides] = useState<CapturePreviewSides>({});
 
   useEffect(() => {
     if (selectedVariant?.colorHex && !draftHydrated) {
@@ -1109,6 +1158,43 @@ export default function EditorPage() {
     saving,
   ]);
 
+  const prepareHiddenPreviewCanvases = useCallback(
+    async (targetSides: Side[]) => {
+      const uniqueSides = Array.from(new Set(targetSides));
+      const startedAt = performance.now();
+      const nextSides = uniqueSides.reduce<CapturePreviewSides>((acc, item) => {
+        acc[item] = true;
+        return acc;
+      }, {});
+
+      console.info("[preview-flow] hidden preview mounted", {
+        sides: uniqueSides,
+      });
+      setCapturePreviewSides(nextSides);
+
+      await Promise.all(
+        uniqueSides.map(async (targetSide) => {
+          const readyStartedAt = performance.now();
+          await waitForPreviewCanvasReady({
+            side: targetSide,
+            stageRef: targetSide === "front" ? frontStageRef : backStageRef,
+            expectedElements: targetSide === "front" ? frontElements : backElements,
+          });
+          console.info("[preview-flow] hidden preview ready", {
+            side: targetSide,
+            ms: Math.round(performance.now() - readyStartedAt),
+          });
+        }),
+      );
+
+      console.info("[preview-flow] hidden preview ready all", {
+        sides: uniqueSides,
+        ms: Math.round(performance.now() - startedAt),
+      });
+    },
+    [backElements, frontElements],
+  );
+
   const exportEditorPreview = useCallback(
     async (targetSide: Side): Promise<Blob> => {
       const stageRef = targetSide === "front" ? frontStageRef : backStageRef;
@@ -1394,6 +1480,7 @@ export default function EditorPage() {
       backPreviewBlob: Blob | null;
       usedSides: Side[];
     }) => {
+      const totalStartedAt = performance.now();
       let frontBlob = args.frontPreviewBlob;
       let backBlob = args.backPreviewBlob;
 
@@ -1403,43 +1490,75 @@ export default function EditorPage() {
         hasBackDesign: args.usedSides.includes("back"),
       });
 
-      if (!frontBlob && args.usedSides.includes("front")) {
-        frontBlob = await withTimeout(
-          exportEditorPreview("front"),
-          30_000,
-          "Front preview export retry",
-        );
-      }
-
-      if (!backBlob && args.usedSides.includes("back")) {
-        backBlob = await withTimeout(
-          exportEditorPreview("back"),
-          30_000,
-          "Back preview export retry",
-        );
-      }
-
-      console.info("[canvas-preview] captured", {
-        userProductId: args.userProductId,
-        hasFront: Boolean(frontBlob),
-        hasBack: Boolean(backBlob),
-        frontSize: frontBlob?.size ?? null,
-        backSize: backBlob?.size ?? null,
+      const sidesToMount = args.usedSides.filter((targetSide) => {
+        if (targetSide === "front") return !frontBlob;
+        return !backBlob;
       });
 
-      if (args.usedSides.includes("front") && !frontBlob) {
-        throw new Error("Front canvas preview capture returned no blob");
-      }
-      if (args.usedSides.includes("back") && !backBlob) {
-        throw new Error("Back canvas preview capture returned no blob");
-      }
+      try {
+        if (sidesToMount.length) {
+          await prepareHiddenPreviewCanvases(sidesToMount);
+        }
 
-      return {
-        front: frontBlob,
-        back: backBlob,
-      };
+        if (!frontBlob && args.usedSides.includes("front")) {
+          const sideStartedAt = performance.now();
+          console.info("[preview-flow] capture started", { side: "front" });
+          frontBlob = await withTimeout(
+            exportEditorPreview("front"),
+            30_000,
+            "Front preview export retry",
+          );
+          console.info("[preview-flow] capture finished", {
+            side: "front",
+            blobSize: frontBlob?.size ?? null,
+            ms: Math.round(performance.now() - sideStartedAt),
+          });
+        }
+
+        if (!backBlob && args.usedSides.includes("back")) {
+          const sideStartedAt = performance.now();
+          console.info("[preview-flow] capture started", { side: "back" });
+          backBlob = await withTimeout(
+            exportEditorPreview("back"),
+            30_000,
+            "Back preview export retry",
+          );
+          console.info("[preview-flow] capture finished", {
+            side: "back",
+            blobSize: backBlob?.size ?? null,
+            ms: Math.round(performance.now() - sideStartedAt),
+          });
+        }
+
+        console.info("[canvas-preview] captured", {
+          userProductId: args.userProductId,
+          hasFront: Boolean(frontBlob),
+          hasBack: Boolean(backBlob),
+          frontSize: frontBlob?.size ?? null,
+          backSize: backBlob?.size ?? null,
+          totalMs: Math.round(performance.now() - totalStartedAt),
+        });
+
+        if (args.usedSides.includes("front") && !frontBlob) {
+          throw new Error("Front canvas preview capture returned no blob");
+        }
+        if (args.usedSides.includes("back") && !backBlob) {
+          throw new Error("Back canvas preview capture returned no blob");
+        }
+
+        return {
+          front: frontBlob,
+          back: backBlob,
+        };
+      } finally {
+        setCapturePreviewSides({});
+        console.info("[preview-flow] hidden preview unmounted", {
+          sides: sidesToMount,
+          totalMs: Math.round(performance.now() - totalStartedAt),
+        });
+      }
     },
-    [exportEditorPreview],
+    [exportEditorPreview, prepareHiddenPreviewCanvases],
   );
 
   const handleSaveDesign = useCallback(async () => {
@@ -2097,50 +2216,56 @@ export default function EditorPage() {
         productConfig={productConfig}
       />
 
-      <div
-        aria-hidden="true"
-        style={{
-          position: "fixed",
-          left: "-20000px",
-          top: 0,
-          width: 1024,
-          height: 2048,
-          overflow: "hidden",
-          pointerEvents: "none",
-          opacity: 0,
-        }}
-      >
-        <Canvas
-          side="front"
-          elements={frontElements}
-          setElements={() => undefined}
-          zoom={1}
-          selectedId={null}
-          setSelectedId={() => undefined}
-          setSelectedElement={() => undefined}
-          mockupColor={mockupColor}
-          setMockupColor={() => undefined}
-          selectedVariant={selectedVariant}
-          canvasRef={frontStageRef}
-          productConfig={productConfig}
-          mode="preview"
-        />
-        <Canvas
-          side="back"
-          elements={backElements}
-          setElements={() => undefined}
-          zoom={1}
-          selectedId={null}
-          setSelectedId={() => undefined}
-          setSelectedElement={() => undefined}
-          mockupColor={mockupColor}
-          setMockupColor={() => undefined}
-          selectedVariant={selectedVariant}
-          canvasRef={backStageRef}
-          productConfig={productConfig}
-          mode="preview"
-        />
-      </div>
+      {(capturePreviewSides.front || capturePreviewSides.back) && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: "-20000px",
+            top: 0,
+            width: 1024,
+            height: 2048,
+            overflow: "hidden",
+            pointerEvents: "none",
+            opacity: 0,
+          }}
+        >
+          {capturePreviewSides.front && (
+            <Canvas
+              side="front"
+              elements={frontElements}
+              setElements={() => undefined}
+              zoom={1}
+              selectedId={null}
+              setSelectedId={() => undefined}
+              setSelectedElement={() => undefined}
+              mockupColor={mockupColor}
+              setMockupColor={() => undefined}
+              selectedVariant={selectedVariant}
+              canvasRef={frontStageRef}
+              productConfig={productConfig}
+              mode="preview"
+            />
+          )}
+          {capturePreviewSides.back && (
+            <Canvas
+              side="back"
+              elements={backElements}
+              setElements={() => undefined}
+              zoom={1}
+              selectedId={null}
+              setSelectedId={() => undefined}
+              setSelectedElement={() => undefined}
+              mockupColor={mockupColor}
+              setMockupColor={() => undefined}
+              selectedVariant={selectedVariant}
+              canvasRef={backStageRef}
+              productConfig={productConfig}
+              mode="preview"
+            />
+          )}
+        </div>
+      )}
 
       <input
         ref={fileRef}
