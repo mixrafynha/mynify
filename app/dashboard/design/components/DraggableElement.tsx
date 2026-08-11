@@ -211,6 +211,64 @@ function DraggableElement({
     [el, localSafeArea, updateElement]
   );
 
+  useEffect(() => {
+    if (!isText || isHidden || previewMode) return;
+
+    let cancelled = false;
+
+    async function syncTextBoundsAfterFontsReady() {
+      try {
+        await (document.fonts?.ready ?? Promise.resolve());
+      } catch {
+        return;
+      }
+
+      if (cancelled) return;
+
+      const normalized = normalizeTextElement(
+        {
+          ...el,
+          height: undefined,
+        },
+        localSafeArea,
+      );
+
+      if (
+        normalized.width !== el.width ||
+        normalized.height !== el.height ||
+        normalized.meta?.fontSize !== el.meta?.fontSize
+      ) {
+        updateElement?.({
+          width: normalized.width,
+          height: normalized.height,
+          meta: normalized.meta,
+        });
+      }
+    }
+
+    void syncTextBoundsAfterFontsReady();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    el,
+    el.content,
+    el.fontFamily,
+    el.fontSize,
+    el.fontStyle,
+    el.fontWeight,
+    el.height,
+    el.meta,
+    el.text,
+    el.width,
+    isHidden,
+    isText,
+    localSafeArea,
+    previewMode,
+    updateElement,
+  ]);
+
   const fitToBounds = useCallback(
     (e: React.PointerEvent) => {
       stopPointer(e);
@@ -421,6 +479,7 @@ function DraggableElement({
         editing={editing}
         locked={isLocked}
         isMobile={isMobile}
+        zoom={zoom}
         outside={outside}
         severity={severity}
         dpiBadge={null}

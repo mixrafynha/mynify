@@ -16,6 +16,9 @@ export type CanvasElementLike = {
   text?: string;
   content?: string;
   fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: number | string;
+  fontStyle?: string;
   meta?: Record<string, any>;
   [key: string]: any;
 };
@@ -29,6 +32,7 @@ const MIN_ELEMENT_SIZE = 10;
 const MIN_TEXT_WIDTH = 42;
 const TEXT_AVERAGE_CHAR_RATIO = 0.58;
 const TEXT_CAP_HEIGHT_RATIO = 0.08;
+const TEXT_VISUAL_PADDING = 4;
 let textMeasureContext: CanvasRenderingContext2D | null = null;
 
 export function finiteNumber(value: unknown, fallback = 0): number {
@@ -90,31 +94,73 @@ function getTextMeasureContext() {
   return textMeasureContext;
 }
 
-function measureLineWidth(line: string, meta: Record<string, any>, fontSize: number, letterSpacing: number) {
+function quoteFontFamily(value: unknown) {
+  const family = String(value || "Arial").trim();
+  if (!family) return "Arial";
+  if (family.startsWith("var(") || family.includes(",")) return family;
+  return `"${family.replace(/"/g, '\\"')}"`;
+}
+
+function getCanvasFont(el: CanvasElementLike, meta: Record<string, any>, fontSize: number) {
+  const fontStyle = meta.fontStyle || el.fontStyle || "normal";
+  const fontWeight = meta.fontWeight || el.fontWeight || 700;
+  const fontFamily = quoteFontFamily(meta.fontFamily || el.fontFamily || "Arial");
+  return `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}, Arial, sans-serif`;
+}
+
+function measureLineVisualBox(
+  line: string,
+  el: CanvasElementLike,
+  meta: Record<string, any>,
+  fontSize: number,
+  letterSpacing: number,
+) {
   const content = line || " ";
   const fallbackWidth =
     content.length * fontSize * TEXT_AVERAGE_CHAR_RATIO +
     Math.max(0, content.length - 1) * letterSpacing;
+  const fallbackHeight = fontSize;
   const context = getTextMeasureContext();
 
-  if (!context) return Math.ceil(fallbackWidth);
+  if (!context) {
+    return {
+      width: Math.ceil(fallbackWidth),
+      height: Math.ceil(fallbackHeight),
+    };
+  }
 
-  const fontStyle = meta.fontStyle || "normal";
-  const fontWeight = meta.fontWeight || 700;
-  const fontFamily = meta.fontFamily || "Arial";
-  context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}, Arial, sans-serif`;
+  context.font = getCanvasFont(el, meta, fontSize);
 
   const metrics = context.measureText(content);
+  const visualLeft = Math.abs(finiteNumber(metrics.actualBoundingBoxLeft, 0));
+  const visualRight = Math.abs(finiteNumber(metrics.actualBoundingBoxRight, 0));
+  const visualAscent = Math.abs(finiteNumber(metrics.actualBoundingBoxAscent, 0));
+  const visualDescent = Math.abs(finiteNumber(metrics.actualBoundingBoxDescent, 0));
   const visualWidth = Math.max(
     metrics.width,
-    Math.abs(metrics.actualBoundingBoxLeft || 0) +
-      Math.abs(metrics.actualBoundingBoxRight || 0),
+    visualLeft + visualRight,
   );
-  return Math.ceil(visualWidth + Math.max(0, content.length - 1) * letterSpacing);
+  const visualHeight = Math.max(fallbackHeight, visualAscent + visualDescent);
+
+  return {
+    width: Math.ceil(visualWidth + Math.max(0, content.length - 1) * letterSpacing),
+    height: Math.ceil(visualHeight),
+  };
+}
+
+function measureLineWidth(
+  line: string,
+  el: CanvasElementLike,
+  meta: Record<string, any>,
+  fontSize: number,
+  letterSpacing: number,
+) {
+  return measureLineVisualBox(line, el, meta, fontSize, letterSpacing).width;
 }
 
 function measureWrappedLineCount(
   line: string,
+  el: CanvasElementLike,
   meta: Record<string, any>,
   fontSize: number,
   letterSpacing: number,
@@ -122,14 +168,14 @@ function measureWrappedLineCount(
 ) {
   const content = line || " ";
   if (!content.length) return 1;
-  if (measureLineWidth(content, meta, fontSize, letterSpacing) <= usableWidth) return 1;
+  if (measureLineWidth(content, el, meta, fontSize, letterSpacing) <= usableWidth) return 1;
 
   let rows = 1;
   let current = "";
 
   for (const char of Array.from(content)) {
     const next = current + char;
-    if (current && measureLineWidth(next, meta, fontSize, letterSpacing) > usableWidth) {
+    if (current && measureLineWidth(next, el, meta, fontSize, letterSpacing) > usableWidth) {
       rows += 1;
       current = char;
       continue;
@@ -148,24 +194,27 @@ export function measureTextBox(el: CanvasElementLike) {
   const letterSpacing = finiteNumber(meta.letterSpacing, 0);
   const padding = getTextPadding(fontSize, meta);
 
-  const explicitWidth = finiteNumber(el.width, 0);
   const rawLines = splitTextLines(text);
   const naturalLineWidth = Math.max(
     1,
-    ...rawLines.map((line) => measureLineWidth(line, meta, fontSize, letterSpacing)),
+    ...rawLines.map((line) => measureLineWidth(line, el, meta, fontSize, letterSpacing)),
+  );
+  const naturalLineHeight = Math.max(
+    fontSize,
+    ...rawLines.map((line) => measureLineVisualBox(line, el, meta, fontSize, letterSpacing).height),
   );
 
   const width = Math.max(
     MIN_TEXT_WIDTH,
-    Math.round(explicitWidth || naturalLineWidth + padding.x * 2)
+    Math.round(naturalLineWidth + padding.x * 2 + TEXT_VISUAL_PADDING * 2)
   );
 
   const usableWidth = Math.max(1, width - padding.x * 2);
   const visualLines = rawLines.reduce((count, line) => {
-    return count + measureWrappedLineCount(line, meta, fontSize, letterSpacing, usableWidth);
+    return count + measureWrappedLineCount(line, el, meta, fontSize, letterSpacing, usableWidth);
   }, 0);
 
-  const textHeight = Math.ceil(visualLines * fontSize * lineHeight);
+  const textHeight = Math.ceil(visualLines * Math.max(naturalLineHeight, fontSize * lineHeight));
   const strokeWidth = Math.max(0, finiteNumber(meta.strokeWidth, 0));
   const effectHeight = meta.shadow || meta.glow ? Math.ceil(fontSize * 0.05) : 0;
   const extraFontSafety = Math.max(
@@ -174,7 +223,7 @@ export function measureTextBox(el: CanvasElementLike) {
   );
   const height = Math.max(
     MIN_ELEMENT_SIZE,
-    Math.round(textHeight + padding.y * 2 + extraFontSafety)
+    Math.round(textHeight + padding.y * 2 + extraFontSafety + TEXT_VISUAL_PADDING * 2)
   );
 
   return {

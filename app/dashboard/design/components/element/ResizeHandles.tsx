@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback } from "react";
+import { memo, useCallback, type CSSProperties } from "react";
 
 export type Direction = "tl" | "tr" | "bl" | "br" | "t" | "r" | "b" | "l";
 
@@ -9,6 +9,7 @@ type Props = {
   isSelected?: boolean;
   size?: "small" | "medium" | "large";
   isMobile?: boolean;
+  zoom?: number;
 };
 
 const SIZE_MAP = {
@@ -36,11 +37,8 @@ const SIZE_MAP = {
 } as const;
 
 const MOBILE_HANDLE_STYLE = {
-  corner: "h-[18px] w-[18px]",
-  sideH: "h-[18px] w-[18px]",
-  sideV: "h-[18px] w-[18px]",
-  cornerHit: "h-[44px] w-[44px] -m-[22px]",
-  sideHit: "h-[44px] w-[44px] -m-[22px]",
+  visual: 20,
+  hit: 44,
 } as const;
 
 const cornerBase = `
@@ -62,13 +60,31 @@ const ResizeHandles = memo(function ResizeHandles({
   isSelected = true,
   size = "medium",
   isMobile = false,
+  zoom = 1,
 }: Props) {
   const s = SIZE_MAP[size] || SIZE_MAP.medium;
-  const cornerSize = isMobile ? MOBILE_HANDLE_STYLE.corner : s.corner;
-  const sideHSize = isMobile ? MOBILE_HANDLE_STYLE.sideH : s.sideH;
-  const sideVSize = isMobile ? MOBILE_HANDLE_STYLE.sideV : s.sideV;
-  const cornerHit = isMobile ? MOBILE_HANDLE_STYLE.cornerHit : s.cornerOffset;
-  const sideHit = isMobile ? MOBILE_HANDLE_STYLE.sideHit : s.sideOffset;
+  const safeZoom = Number.isFinite(Number(zoom)) && Number(zoom) > 0 ? Number(zoom) : 1;
+  const mobileHitSize = MOBILE_HANDLE_STYLE.hit / safeZoom;
+  const mobileVisualSize = MOBILE_HANDLE_STYLE.visual / safeZoom;
+  const mobileHitStyle: CSSProperties | undefined = isMobile
+    ? {
+        width: mobileHitSize,
+        height: mobileHitSize,
+        margin: -mobileHitSize / 2,
+        touchAction: "none",
+      }
+    : undefined;
+  const mobileVisualStyle: CSSProperties | undefined = isMobile
+    ? {
+        width: mobileVisualSize,
+        height: mobileVisualSize,
+      }
+    : undefined;
+  const cornerSize = isMobile ? "" : s.corner;
+  const sideHSize = isMobile ? "" : s.sideH;
+  const sideVSize = isMobile ? "" : s.sideV;
+  const cornerHit = isMobile ? "" : s.cornerOffset;
+  const sideHit = isMobile ? "" : s.sideOffset;
 
   const startResize = useCallback(
     (direction: Direction) => (e: React.PointerEvent) => {
@@ -83,30 +99,30 @@ const ResizeHandles = memo(function ResizeHandles({
 
   return (
     <>
-      <span data-resize-handle="tl" onPointerDown={startResize("tl")} className={`absolute left-0 top-0 z-50 ${isMobile ? `${cornerHit} touch-none` : cornerHit}`}>
-        <span className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`} />
+      <span data-resize-handle="tl" onPointerDown={startResize("tl")} style={mobileHitStyle} className={`absolute left-0 top-0 z-50 ${isMobile ? "touch-none" : cornerHit}`}>
+        <span style={mobileVisualStyle} className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`} />
       </span>
-      <span data-resize-handle="tr" onPointerDown={startResize("tr")} className={`absolute right-0 top-0 z-50 ${isMobile ? `${cornerHit} touch-none` : cornerHit}`}>
-        <span className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`} />
+      <span data-resize-handle="tr" onPointerDown={startResize("tr")} style={mobileHitStyle} className={`absolute right-0 top-0 z-50 ${isMobile ? "touch-none" : cornerHit}`}>
+        <span style={mobileVisualStyle} className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`} />
       </span>
-      <span data-resize-handle="bl" onPointerDown={startResize("bl")} className={`absolute bottom-0 left-0 z-50 ${isMobile ? `${cornerHit} touch-none` : cornerHit}`}>
-        <span className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`} />
+      <span data-resize-handle="bl" onPointerDown={startResize("bl")} style={mobileHitStyle} className={`absolute bottom-0 left-0 z-50 ${isMobile ? "touch-none" : cornerHit}`}>
+        <span style={mobileVisualStyle} className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nesw-resize`} />
       </span>
-      <span data-resize-handle="br" onPointerDown={startResize("br")} className={`absolute bottom-0 right-0 z-50 ${isMobile ? `${cornerHit} touch-none` : cornerHit}`}>
-        <span className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`} />
+      <span data-resize-handle="br" onPointerDown={startResize("br")} style={mobileHitStyle} className={`absolute bottom-0 right-0 z-50 ${isMobile ? "touch-none" : cornerHit}`}>
+        <span style={mobileVisualStyle} className={`${cornerBase} ${cornerSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize`} />
       </span>
 
-      <span data-resize-handle="t" onPointerDown={startResize("t")} className={`absolute left-1/2 top-0 z-50 -translate-x-1/2 ${isMobile ? `${sideHit} touch-none` : sideHit}`}>
-        <span className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
+      <span data-resize-handle="t" onPointerDown={startResize("t")} style={mobileHitStyle} className={`absolute left-1/2 top-0 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+        <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
       </span>
-      <span data-resize-handle="b" onPointerDown={startResize("b")} className={`absolute bottom-0 left-1/2 z-50 -translate-x-1/2 ${isMobile ? `${sideHit} touch-none` : sideHit}`}>
-        <span className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
+      <span data-resize-handle="b" onPointerDown={startResize("b")} style={mobileHitStyle} className={`absolute bottom-0 left-1/2 z-50 -translate-x-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+        <span style={mobileVisualStyle} className={`${sideBase} ${sideHSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ns-resize`} />
       </span>
-      <span data-resize-handle="l" onPointerDown={startResize("l")} className={`absolute left-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? `${sideHit} touch-none` : sideHit}`}>
-        <span className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
+      <span data-resize-handle="l" onPointerDown={startResize("l")} style={mobileHitStyle} className={`absolute left-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+        <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
       </span>
-      <span data-resize-handle="r" onPointerDown={startResize("r")} className={`absolute right-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? `${sideHit} touch-none` : sideHit}`}>
-        <span className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
+      <span data-resize-handle="r" onPointerDown={startResize("r")} style={mobileHitStyle} className={`absolute right-0 top-1/2 z-50 -translate-y-1/2 ${isMobile ? "touch-none" : sideHit}`}>
+        <span style={mobileVisualStyle} className={`${sideBase} ${sideVSize} left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize`} />
       </span>
     </>
   );
