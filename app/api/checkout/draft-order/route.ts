@@ -359,6 +359,40 @@ function log(event: string, data?: Record<string, unknown>) {
   console.info(event, data ?? {});
 }
 
+function safeJson(value: unknown) {
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
+function describeUnknownError(error: unknown) {
+  const record = error && typeof error === "object" ? (error as Record<string, unknown>) : null;
+  return {
+    type: typeof error,
+    isError: error instanceof Error,
+    name: error instanceof Error ? error.name : typeof record?.name === "string" ? record.name : null,
+    message: error instanceof Error ? error.message : typeof record?.message === "string" ? record.message : String(error),
+    code: typeof record?.code === "string" ? record.code : null,
+    details: record?.details ?? null,
+    hint: record?.hint ?? null,
+    status: record?.status ?? null,
+    statusCode: record?.statusCode ?? null,
+    keys: record ? Object.keys(record) : [],
+    json: safeJson(error),
+    stack: error instanceof Error ? error.stack : null,
+  };
+}
+
+function logOperationError(operation: string, startedAt: number, error: unknown) {
+  console.error("[checkout:draft:operation-error]", {
+    operation,
+    durationMs: Date.now() - startedAt,
+    error: describeUnknownError(error),
+  });
+}
+
 function isStaleClaim(updatedAt: string | null | undefined, ttlMs = PROCESSING_CLAIM_TTL_MS) {
   if (!updatedAt) return false;
   const parsed = Date.parse(updatedAt);
@@ -371,6 +405,11 @@ async function loadCheckoutDraftRow(
   idempotencyKey: string,
   userId: string,
 ) {
+  const startedAt = Date.now();
+  console.info("[checkout:draft:lookup-existing-start]", {
+    idempotencyKeyPresent: Boolean(idempotencyKey),
+    userIdPresent: Boolean(userId),
+  });
   const { data, error } = await supabase
     .from("checkout_drafts")
     .select("id, status, gelato_draft_order_id, subtotal, shipping_amount, total, currency, updated_at")
@@ -378,7 +417,25 @@ async function loadCheckoutDraftRow(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (error) throw error;
+  console.info("[checkout:draft:lookup-existing-result]", {
+    durationMs: Date.now() - startedAt,
+    found: Boolean(data),
+    status: data?.status ?? null,
+    gelatoDraftOrderIdPresent: Boolean(data?.gelato_draft_order_id),
+    error: error
+      ? {
+          code: error.code ?? null,
+          message: error.message ?? null,
+          details: error.details ?? null,
+          hint: error.hint ?? null,
+        }
+      : null,
+  });
+
+  if (error) {
+    logOperationError("checkout_drafts.lookup_existing", startedAt, error);
+    throw error;
+  }
   return data ?? null;
 }
 
@@ -428,11 +485,30 @@ async function claimCheckoutDraftRow(input: {
     updated_at: new Date().toISOString(),
   };
 
+  const insertStartedAt = Date.now();
+  console.info("[checkout:draft:claim-insert-start]", {
+    idempotencyKeyPresent: Boolean(input.idempotencyKey),
+    userIdPresent: Boolean(input.userId),
+    cartItemCount: input.cartItemIds.length,
+  });
   const { data: inserted, error: insertError } = await input.supabase
     .from("checkout_drafts")
     .insert(row)
     .select("id, status, gelato_draft_order_id")
     .single();
+  console.info("[checkout:draft:claim-insert-result]", {
+    durationMs: Date.now() - insertStartedAt,
+    inserted: Boolean(inserted?.id),
+    status: inserted?.status ?? null,
+    error: insertError
+      ? {
+          code: insertError.code ?? null,
+          message: insertError.message ?? null,
+          details: insertError.details ?? null,
+          hint: insertError.hint ?? null,
+        }
+      : null,
+  });
 
   if (inserted?.id) {
     console.info("[checkout-draft] claim acquired", {
@@ -443,6 +519,7 @@ async function claimCheckoutDraftRow(input: {
   }
 
   if (insertError && insertError.code !== "23505") {
+    logOperationError("checkout_drafts.claim_insert", insertStartedAt, insertError);
     throw insertError;
   }
 
@@ -463,6 +540,13 @@ async function claimCheckoutDraftRow(input: {
   const canReclaimError = existing.status === "error";
 
   if (canReclaimStaleProcessing || canReclaimError) {
+    const reclaimStartedAt = Date.now();
+    console.info("[checkout:draft:claim-reclaim-start]", {
+      draftId: existing.id,
+      previousStatus: existing.status,
+      staleProcessing: canReclaimStaleProcessing,
+      errorStatus: canReclaimError,
+    });
     const { data: reclaimed, error: reclaimError } = await input.supabase
       .from("checkout_drafts")
       .update({
@@ -482,8 +566,24 @@ async function claimCheckoutDraftRow(input: {
       .is("gelato_draft_order_id", null)
       .select("id, status, gelato_draft_order_id")
       .maybeSingle();
+    console.info("[checkout:draft:claim-reclaim-result]", {
+      durationMs: Date.now() - reclaimStartedAt,
+      reclaimed: Boolean(reclaimed?.id),
+      status: reclaimed?.status ?? null,
+      error: reclaimError
+        ? {
+            code: reclaimError.code ?? null,
+            message: reclaimError.message ?? null,
+            details: reclaimError.details ?? null,
+            hint: reclaimError.hint ?? null,
+          }
+        : null,
+    });
 
-    if (reclaimError) throw reclaimError;
+    if (reclaimError) {
+      logOperationError("checkout_drafts.claim_reclaim", reclaimStartedAt, reclaimError);
+      throw reclaimError;
+    }
     if (reclaimed?.id) {
       console.info("[checkout-draft] claim acquired", {
         draftId: reclaimed.id,
@@ -1098,7 +1198,7 @@ export async function POST(req: Request) {
         },
       ],
     });
-    console.info("[checkout-draft] shipping method mismatch", {
+    console.info("[checkout-draft] selected shipping method reused", {
       requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
       requestedCarrierUid,
       requestedServiceType,
@@ -1317,16 +1417,39 @@ export async function POST(req: Request) {
     const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
     if (!gelatoApiKey) return NextResponse.json({ success: false, code: "GELATO_DRAFT_FAILED" }, { status: 500 });
 
-    const gelatoResponse = await fetch(new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com"), {
+    const gelatoDraftUrl = new URL("/v4/orders", process.env.GELATO_API_BASE_URL?.trim() || "https://order.gelatoapis.com");
+    const gelatoDraftStartedAt = Date.now();
+    console.info("[checkout:draft:14-gelato-request-start]", {
+      endpoint: `${gelatoDraftUrl.origin}${gelatoDraftUrl.pathname}`,
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
-      body: JSON.stringify(gelatoPayload),
-      cache: "no-store",
+      itemCount: gelatoPayload.items.length,
+      shipmentMethodUidPresent: Boolean(gelatoPayload.shipmentMethodUid),
     });
+    let gelatoResponse: Response;
+    try {
+      gelatoResponse = await fetch(gelatoDraftUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-KEY": gelatoApiKey },
+        body: JSON.stringify(gelatoPayload),
+        cache: "no-store",
+      });
+    } catch (error) {
+      logOperationError("gelato.draft_order_fetch", gelatoDraftStartedAt, error);
+      throw error;
+    }
 
     const gelatoStatus = gelatoResponse.status;
     const gelatoContentType = gelatoResponse.headers.get("content-type");
     const gelatoRawText = await gelatoResponse.text();
+    console.info("[checkout:draft:14-gelato-response]", {
+      endpoint: `${gelatoDraftUrl.origin}${gelatoDraftUrl.pathname}`,
+      durationMs: Date.now() - gelatoDraftStartedAt,
+      httpStatus: gelatoStatus,
+      ok: gelatoResponse.ok,
+      contentType: gelatoContentType,
+      bodyLength: gelatoRawText.length,
+      bodyPreview: process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 500) : undefined,
+    });
     console.info("[checkout:draft:15-body-read-start]");
     console.info("[checkout:draft:15-body-read-finished]", {
       bodyLength: gelatoRawText.length,
@@ -1569,11 +1692,7 @@ export async function POST(req: Request) {
       currency: matched.currency,
     });
   } catch (error) {
-    console.error("[checkout:draft:99-unhandled]", {
-      name: error instanceof Error ? error.name : null,
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : null,
-    });
+    console.error("[checkout:draft:99-unhandled]", describeUnknownError(error));
     return NextResponse.json(
       {
         success: false,
