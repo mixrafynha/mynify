@@ -197,7 +197,7 @@ function logLine(prefix: string, payload: unknown) {
   console.log(`${prefix} ${serialized ?? "\"[unserializable]\""}`);
 }
 
-function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
+function normalizeQuoteResponse(raw: unknown, quoteCurrency: string): ResolvedGelatoCheckoutQuote {
   if (!raw || typeof raw !== "object") {
     return {
       available: false,
@@ -223,9 +223,7 @@ function normalizeQuoteResponse(raw: unknown): ResolvedGelatoCheckoutQuote {
   const production = record.production && typeof record.production === "object" ? (record.production as Record<string, unknown>) : null;
   const shipments = Array.isArray(production?.shipments) ? (production.shipments as Record<string, unknown>[]) : [];
   const responseKeys = Object.keys(record);
-  const requestCurrency = normalizeCurrency(record.currencyIsoCode ?? record.currency ?? null);
-  const productionCurrency = normalizeCurrency(production?.currency ?? null);
-  const currency = requestCurrency ?? productionCurrency ?? null;
+  const currency = normalizeCurrency(quoteCurrency);
   if (currency !== "EUR") {
     throw new Error("Invalid checkout quote currency");
   }
@@ -429,6 +427,10 @@ export async function resolveCheckoutQuote(
   }
 
   const payload = buildGelatoCheckoutQuotePayload(input);
+  const requestedCurrency = normalizeCurrency(payload.order.currencyIsoCode);
+  if (requestedCurrency !== "EUR") {
+    throw new Error("Invalid checkout quote currency");
+  }
 
   const url = new URL(getQuoteUrl());
   const startedAt = Date.now();
@@ -515,7 +517,7 @@ export async function resolveCheckoutQuote(
       };
     }
 
-    const normalized = normalizeQuoteResponse(rawJson);
+    const normalized = normalizeQuoteResponse(rawJson, requestedCurrency);
 
     logLine("[GELATO_QUOTE_CALL_END]", {
       httpStatus: response.status,
@@ -531,8 +533,7 @@ export async function resolveCheckoutQuote(
     const isTimeout =
       error instanceof Error &&
       (error.name === "AbortError" || error.message.includes("GELATO_QUOTE_TIMEOUT"));
-
-    logLine("[GELATO_QUOTE_CALL_ERROR]", {
+    const errorDetails = {
       durationMs: Date.now() - startedAt,
       name: error instanceof Error ? error.name : "UnknownError",
       message: error instanceof Error ? error.message : String(error),
@@ -540,8 +541,14 @@ export async function resolveCheckoutQuote(
         error instanceof Error && "cause" in error && error.cause
           ? String(error.cause)
           : null,
+      stack: error instanceof Error ? error.stack?.split("\n").slice(0, 4).join("\n") ?? null : null,
+      signalAborted: controller.signal.aborted,
+      abortReason: controller.signal.reason instanceof Error ? controller.signal.reason.message : controller.signal.reason ?? null,
       timeout: isTimeout,
-    });
+    };
+
+    console.error("[GELATO_QUOTE_CALL_ERROR]", errorDetails);
+    logLine("[GELATO_QUOTE_CALL_ERROR]", errorDetails);
 
     return {
       available: false,
