@@ -1086,6 +1086,41 @@ export async function POST(req: Request) {
       currency: "EUR",
     }));
     const requestedShipmentMethodUid = shippingMethodInput.shipmentMethodUid?.trim();
+
+    console.info("[checkout-draft] server shipping comparison", {
+      requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
+      methodsCount: serverShippingMethods.length,
+      methods: serverShippingMethods.map((method) => ({
+        shipmentMethodUid: method.shipmentMethodUid ?? null,
+        id: method.id ?? null,
+        code: method.code ?? null,
+        name: method.name ?? null,
+        price: method.price ?? null,
+        currency: method.currency ?? null,
+      })),
+    });
+    console.info("[checkout-draft] gelato quote shipping structure", {
+      available: shippingQuote.available,
+      retryable: shippingQuote.retryable,
+      reason: shippingQuote.reason ?? null,
+      responseKeys: shippingQuote.responseKeys ?? [],
+      quoteReason: shippingQuote.quoteReason ?? null,
+      shippingOptions: Array.isArray(shippingQuote.shippingOptions)
+        ? shippingQuote.shippingOptions.map((option) => ({
+            id: option.id ?? null,
+            name: option.name ?? null,
+            price: option.price ?? null,
+            currency: option.currency ?? null,
+            fulfillmentCountry: option.fulfillmentCountry ?? null,
+            estimatedDaysMin: option.estimatedDaysMin ?? null,
+            estimatedDaysMax: option.estimatedDaysMax ?? null,
+            promiseUid: option.promiseUid ?? null,
+            carrierUid: option.carrierUid ?? null,
+            serviceType: option.serviceType ?? null,
+          }))
+        : [],
+    });
+
     const matched = requestedShipmentMethodUid
       ? serverShippingMethods.find((method) => method.shipmentMethodUid === requestedShipmentMethodUid || method.id === requestedShipmentMethodUid)
       : null;
@@ -1102,6 +1137,10 @@ export async function POST(req: Request) {
     }
 
     if (!matched) {
+      console.warn("[checkout-draft] shipping method mismatch", {
+        requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
+        availableUids: serverShippingMethods.map((method) => method.shipmentMethodUid ?? method.id ?? null),
+      });
       return NextResponse.json(
         {
           success: false,
