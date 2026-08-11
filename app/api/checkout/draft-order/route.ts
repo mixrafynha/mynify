@@ -30,6 +30,9 @@ email?: string;
     id: string;
     code?: string | null;
     shipmentMethodUid: string;
+    carrierUid?: string | null;
+    serviceType?: string | null;
+    fulfillmentCountry?: string | null;
     name: string;
     price: number;
     currency: string;
@@ -388,6 +391,9 @@ async function claimCheckoutDraftRow(input: {
     id: string;
     code: string | null;
     shipmentMethodUid: string;
+    carrierUid: string | null;
+    serviceType: string | null;
+    fulfillmentCountry: string | null;
     name: string;
     price: number;
     currency: string;
@@ -403,13 +409,16 @@ async function claimCheckoutDraftRow(input: {
     idempotency_key: input.idempotencyKey,
     status: "processing",
     gelato_draft_order_id: null,
-    selected_shipping_method: {
-      id: input.shippingMethod.id,
-      code: input.shippingMethod.code,
-      shipmentMethodUid: input.shippingMethod.shipmentMethodUid,
-      name: input.shippingMethod.name,
-      price: input.shippingAmount,
-      currency: input.shippingMethod.currency,
+      selected_shipping_method: {
+        id: input.shippingMethod.id,
+        code: input.shippingMethod.code,
+        shipmentMethodUid: input.shippingMethod.shipmentMethodUid,
+        carrierUid: input.shippingMethod.carrierUid,
+        serviceType: input.shippingMethod.serviceType,
+        fulfillmentCountry: input.shippingMethod.fulfillmentCountry,
+        name: input.shippingMethod.name,
+        price: input.shippingAmount,
+        currency: input.shippingMethod.currency,
     },
     shipping_address: input.address,
     subtotal: input.subtotal,
@@ -1081,19 +1090,25 @@ export async function POST(req: Request) {
       currencyIsoCode: quoteCurrency,
     });
 
-    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions).map((method) => ({
-      ...method,
-      currency: "EUR",
-    }));
+    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions);
     const requestedShipmentMethodUid = shippingMethodInput.shipmentMethodUid?.trim();
+    const requestedCarrierUid = shippingMethodInput.carrierUid?.trim() ?? null;
+    const requestedServiceType = shippingMethodInput.serviceType?.trim().toLowerCase() ?? null;
+    const requestedFulfillmentCountry = shippingMethodInput.fulfillmentCountry?.trim().toUpperCase() ?? null;
 
     console.info("[checkout-draft] server shipping comparison", {
       requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
+      requestedCarrierUid,
+      requestedServiceType,
+      requestedFulfillmentCountry,
       methodsCount: serverShippingMethods.length,
       methods: serverShippingMethods.map((method) => ({
         shipmentMethodUid: method.shipmentMethodUid ?? null,
         id: method.id ?? null,
         code: method.code ?? null,
+        carrierUid: method.carrierUid ?? null,
+        serviceType: method.serviceType ?? null,
+        fulfillmentCountry: method.fulfillmentCountry ?? null,
         name: method.name ?? null,
         price: method.price ?? null,
         currency: method.currency ?? null,
@@ -1121,9 +1136,20 @@ export async function POST(req: Request) {
         : [],
     });
 
-    const matched = requestedShipmentMethodUid
+    let matched = requestedShipmentMethodUid
       ? serverShippingMethods.find((method) => method.shipmentMethodUid === requestedShipmentMethodUid || method.id === requestedShipmentMethodUid)
       : null;
+    let resolutionSource: "exact_uid" | "stable_service_identity" | null = matched ? "exact_uid" : null;
+
+    if (!matched && requestedCarrierUid && requestedServiceType) {
+      matched = serverShippingMethods.find((method) => {
+        if ((method.carrierUid ?? null) !== requestedCarrierUid) return false;
+        if ((method.serviceType ?? null) !== requestedServiceType) return false;
+        if (requestedFulfillmentCountry && method.fulfillmentCountry && method.fulfillmentCountry.toUpperCase() !== requestedFulfillmentCountry) return false;
+        return true;
+      }) ?? null;
+      if (matched) resolutionSource = "stable_service_identity";
+    }
 
     if (!shippingQuote.available || shippingQuote.retryable) {
       return NextResponse.json(
@@ -1139,7 +1165,15 @@ export async function POST(req: Request) {
     if (!matched) {
       console.warn("[checkout-draft] shipping method mismatch", {
         requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
+        requestedCarrierUid,
+        requestedServiceType,
+        requestedFulfillmentCountry,
         availableUids: serverShippingMethods.map((method) => method.shipmentMethodUid ?? method.id ?? null),
+        availableCarrierService: serverShippingMethods.map((method) => ({
+          carrierUid: method.carrierUid ?? null,
+          serviceType: method.serviceType ?? null,
+          fulfillmentCountry: method.fulfillmentCountry ?? null,
+        })),
       });
       return NextResponse.json(
         {
@@ -1218,9 +1252,14 @@ export async function POST(req: Request) {
       cart: idempotencySnapshot,
     });
 
-    console.info("[checkout-draft] shipping resolved server-side", {
-      shipmentMethodUid: resolvedShipmentMethodUid,
-      serverShippingAmount: shippingAmount,
+    console.info("[checkout-draft] shipping selection resolved", {
+      requestedPromiseUid: requestedShipmentMethodUid ?? null,
+      resolvedPromiseUid: resolvedShipmentMethodUid,
+      carrierUid: matched.carrierUid ?? null,
+      serviceType: matched.serviceType ?? null,
+      serverPrice: shippingAmount,
+      serverCurrency: matched.currency,
+      resolutionSource,
     });
     console.info("[checkout-draft] idempotency snapshot", {
       hash: idempotencyKey,
@@ -1258,6 +1297,9 @@ export async function POST(req: Request) {
         id: matched.id,
         code: matched.code ?? null,
         shipmentMethodUid: resolvedShipmentMethodUid,
+        carrierUid: matched.carrierUid ?? null,
+        serviceType: matched.serviceType ?? null,
+        fulfillmentCountry: matched.fulfillmentCountry ?? null,
         name: matched.name,
         price: shippingAmount,
         currency: matched.currency,

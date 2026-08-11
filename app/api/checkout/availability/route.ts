@@ -637,11 +637,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const shippingMethods = normalizeShippingMethods(quote.shippingOptions).map((method) => ({
-      ...method,
-      // Ryfio is EUR-only. Keep the validated numeric shipping price and expose it as EUR.
-      currency: "EUR",
-    }));
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
     console.info("[checkout:availability:11-quote-shape]", {
       responseKeys: quote.rawQuote && typeof quote.rawQuote === "object" ? Object.keys(quote.rawQuote as Record<string, unknown>) : [],
       dataKeys:
@@ -655,6 +651,9 @@ export async function POST(req: Request) {
         id: method.id,
         code: method.code ?? null,
         shipmentMethodUid: method.shipmentMethodUid ?? null,
+        carrierUid: method.carrierUid ?? null,
+        serviceType: method.serviceType ?? null,
+        fulfillmentCountry: method.fulfillmentCountry ?? null,
         name: method.name,
         price: method.price,
         currency: method.currency,

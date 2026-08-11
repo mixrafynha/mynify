@@ -78,6 +78,7 @@ type CheckoutShippingMethod = {
   estimatedDays?: string | null;
   fulfillmentCountry?: string | null;
   promiseUid?: string | null;
+  carrierUid?: string | null;
   serviceType?: string | null;
   description?: string | null;
 };
@@ -524,7 +525,6 @@ export default function CheckoutPage() {
     // normalize the UI value so every shipping method is submitted as EUR.
     return normalizeShippingMethods(validatedShippingMethods).map((method) => ({
       ...method,
-      currency: "EUR",
     }));
   }, [validatedShippingMethods]);
   const findShippingMethod = useMemo(
@@ -596,12 +596,12 @@ export default function CheckoutPage() {
               ? previous
               : { ...previous, shippingMethod: matched.id },
           );
-          return { ...matched, currency: "EUR" };
+          return matched;
         }
       }
 
       const matchedByForm = findShippingMethod(form.shippingMethod);
-      return matchedByForm ? { ...matchedByForm, currency: "EUR" } : null;
+      return matchedByForm;
     });
     if (selectedShippingMethodId && !findShippingMethod(selectedShippingMethodId)) {
       setSelectedShippingMethodId("");
@@ -638,9 +638,7 @@ export default function CheckoutPage() {
     shippingMethodsForDisplay?.find((method) => method.id === shippingMethodSelection?.id) ??
     findShippingMethod(form.shippingMethod) ??
     null;
-  const selectedShippingMethod = selectedShippingMethodRaw
-    ? { ...selectedShippingMethodRaw, currency: "EUR" }
-    : null;
+  const selectedShippingMethod = selectedShippingMethodRaw;
   const shipping =
     subtotal > 0 && step !== "shipping" && printFilesReady
       ? typeof selectedShippingMethod?.price === "number"

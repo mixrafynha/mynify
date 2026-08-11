@@ -2,6 +2,9 @@ export type NormalizedShippingMethod = {
   id: string;
   code: string | null;
   shipmentMethodUid?: string | null;
+  carrierUid?: string | null;
+  serviceType?: string | null;
+  fulfillmentCountry?: string | null;
   name: string;
   price: number;
   currency: string;
@@ -55,6 +58,9 @@ export function normalizeShippingMethods(response: unknown): NormalizedShippingM
         id: normalizeId(record),
         code: cleanString(record.code) ?? cleanString(record.serviceType) ?? null,
         shipmentMethodUid: cleanString(record.shipmentMethodUid) ?? cleanString(record.uid) ?? cleanString(record.id) ?? null,
+        carrierUid: cleanString(record.carrierUid) ?? cleanString(record.uid) ?? null,
+        serviceType: cleanString(record.serviceType)?.toLowerCase() ?? null,
+        fulfillmentCountry: cleanString(record.fulfillmentCountry) ?? null,
         name,
         price,
         currency,
