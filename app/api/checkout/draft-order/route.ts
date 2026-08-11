@@ -97,6 +97,13 @@ type ResolvedCheckoutItem = {
   adjustProductUidByFileTypes?: boolean;
 };
 
+type CheckoutDraftClaimResult = {
+  draftId: string;
+  claimed: boolean;
+  status: string;
+  gelatoDraftOrderId: string | null;
+};
+
 
 const conflict = (
   code: string,
@@ -343,6 +350,158 @@ function determineRequiredSides(userProduct: UserProductRow | null) {
 
 function log(event: string, data?: Record<string, unknown>) {
   console.info(event, data ?? {});
+}
+
+async function loadCheckoutDraftRow(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  idempotencyKey: string,
+  userId: string,
+) {
+  const { data, error } = await supabase
+    .from("checkout_drafts")
+    .select("id, status, gelato_draft_order_id, subtotal, shipping_amount, total, currency")
+    .eq("idempotency_key", idempotencyKey)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ?? null;
+}
+
+async function claimCheckoutDraftRow(input: {
+  supabase: ReturnType<typeof createSupabaseServer>;
+  idempotencyKey: string;
+  userId: string;
+  cartItemIds: string[];
+  shippingMethod: {
+    id: string;
+    code: string | null;
+    shipmentMethodUid: string;
+    name: string;
+    price: number;
+    currency: string;
+  };
+  address: ReturnType<typeof normalizeAddress>;
+  subtotal: number;
+  shippingAmount: number;
+  total: number;
+}) {
+  const row = {
+    user_id: input.userId,
+    cart_item_ids: input.cartItemIds,
+    idempotency_key: input.idempotencyKey,
+    status: "processing",
+    gelato_draft_order_id: null,
+    selected_shipping_method: {
+      id: input.shippingMethod.id,
+      code: input.shippingMethod.code,
+      shipmentMethodUid: input.shippingMethod.shipmentMethodUid,
+      name: input.shippingMethod.name,
+      price: input.shippingAmount,
+      currency: input.shippingMethod.currency,
+    },
+    shipping_address: input.address,
+    subtotal: input.subtotal,
+    shipping_amount: input.shippingAmount,
+    total: input.total,
+    currency: input.shippingMethod.currency,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: inserted, error: insertError } = await input.supabase
+    .from("checkout_drafts")
+    .insert(row)
+    .select("id, status, gelato_draft_order_id")
+    .single();
+
+  if (inserted?.id) {
+    console.info("[checkout-draft] claim acquired", {
+      draftId: inserted.id,
+      status: inserted.status,
+    });
+    return { draftId: inserted.id, claimed: true, status: inserted.status, gelatoDraftOrderId: inserted.gelato_draft_order_id ?? null } satisfies CheckoutDraftClaimResult;
+  }
+
+  if (insertError && insertError.code !== "23505") {
+    throw insertError;
+  }
+
+  const existing = await loadCheckoutDraftRow(input.supabase, input.idempotencyKey, input.userId);
+  if (!existing) {
+    throw new Error("Failed to load existing checkout draft after claim conflict.");
+  }
+
+  if (existing.gelato_draft_order_id) {
+    console.info("[checkout-draft] existing draft ready", {
+      draftId: existing.id,
+      status: existing.status,
+    });
+    return { draftId: existing.id, claimed: false, status: existing.status, gelatoDraftOrderId: existing.gelato_draft_order_id } satisfies CheckoutDraftClaimResult;
+  }
+
+  if (existing.status === "error") {
+    const { data: reclaimed, error: reclaimError } = await input.supabase
+      .from("checkout_drafts")
+      .update({
+        status: "processing",
+        cart_item_ids: input.cartItemIds,
+        selected_shipping_method: row.selected_shipping_method,
+        shipping_address: input.address,
+        subtotal: input.subtotal,
+        shipping_amount: input.shippingAmount,
+        total: input.total,
+        currency: input.shippingMethod.currency,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
+      .eq("user_id", input.userId)
+      .eq("status", "error")
+      .is("gelato_draft_order_id", null)
+      .select("id, status, gelato_draft_order_id")
+      .maybeSingle();
+
+    if (reclaimError) throw reclaimError;
+    if (reclaimed?.id) {
+      console.info("[checkout-draft] claim acquired", {
+        draftId: reclaimed.id,
+        status: reclaimed.status,
+      });
+      return { draftId: reclaimed.id, claimed: true, status: reclaimed.status, gelatoDraftOrderId: reclaimed.gelato_draft_order_id ?? null } satisfies CheckoutDraftClaimResult;
+    }
+  }
+
+  console.info("[checkout-draft] claim already owned", {
+    draftId: existing.id,
+    status: existing.status,
+  });
+  return { draftId: existing.id, claimed: false, status: existing.status, gelatoDraftOrderId: existing.gelato_draft_order_id ?? null } satisfies CheckoutDraftClaimResult;
+}
+
+async function waitForCheckoutDraft(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  idempotencyKey: string,
+  userId: string,
+  timeoutMs = 3500,
+) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const draft = await loadCheckoutDraftRow(supabase, idempotencyKey, userId);
+    if (draft?.gelato_draft_order_id) {
+      console.info("[checkout-draft] existing draft ready", {
+        draftId: draft.id,
+        status: draft.status,
+      });
+      return draft;
+    }
+    if (draft?.status === "error") {
+      return draft;
+    }
+    console.info("[checkout-draft] waiting for existing draft", {
+      idempotencyKey,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return null;
 }
 
 function gelatoRequestPayload(input: {
@@ -1015,11 +1174,7 @@ export async function POST(req: Request) {
       itemCount: idempotencySnapshot.length,
     });
 
-    const { data: existingDraft } = await supabase
-      .from("checkout_drafts")
-      .select("id, gelato_draft_order_id, shipping_method, subtotal, shipping_amount, total, currency")
-      .eq("idempotency_key", idempotencyKey)
-      .maybeSingle();
+    const existingDraft = await loadCheckoutDraftRow(supabase, idempotencyKey, authData.user.id);
 
     if (existingDraft?.gelato_draft_order_id) {
       return NextResponse.json({
@@ -1039,6 +1194,58 @@ export async function POST(req: Request) {
         total: existingDraft.total ?? shippingAmount,
         currency: existingDraft.currency ?? matched.currency,
       });
+    }
+
+    const claim = await claimCheckoutDraftRow({
+      supabase,
+      idempotencyKey,
+      userId: authData.user.id,
+      cartItemIds,
+      shippingMethod: {
+        id: matched.id,
+        code: matched.code ?? null,
+        shipmentMethodUid: resolvedShipmentMethodUid,
+        name: matched.name,
+        price: shippingAmount,
+        currency: matched.currency,
+      },
+      address,
+      subtotal,
+      shippingAmount,
+      total: subtotal + shippingAmount,
+    });
+
+    if (!claim.claimed) {
+      const waitedDraft = await waitForCheckoutDraft(supabase, idempotencyKey, authData.user.id);
+      if (waitedDraft?.gelato_draft_order_id) {
+        return NextResponse.json({
+          success: true,
+          draftOrderId: waitedDraft.id,
+          gelatoDraftOrderId: waitedDraft.gelato_draft_order_id,
+          shippingMethod: {
+            id: matched.id,
+            code: matched.code,
+            shipmentMethodUid: resolvedShipmentMethodUid,
+            name: matched.name,
+            price: matched.price,
+            currency: matched.currency,
+          },
+          subtotal: waitedDraft.subtotal ?? subtotal,
+          shipping: waitedDraft.shipping_amount ?? shippingAmount,
+          total: waitedDraft.total ?? subtotal + shippingAmount,
+          currency: waitedDraft.currency ?? matched.currency,
+        });
+      }
+
+      return NextResponse.json(
+        {
+          success: false,
+          code: "CHECKOUT_DRAFT_IN_PROGRESS",
+          message: "The prepared order is still being processed. Please retry shortly.",
+          retryable: true,
+        },
+        { status: 409 },
+      );
     }
 
     const gelatoPayload = gelatoRequestPayload({
@@ -1191,6 +1398,14 @@ export async function POST(req: Request) {
       gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
     });
     if (!gelatoDraftOrderId) {
+      await supabase
+        .from("checkout_drafts")
+        .update({
+          status: "error",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", claim.draftId)
+        .eq("user_id", authData.user.id);
       console.error("[checkout:draft:17-id-missing]", gelatoBody);
       return NextResponse.json(
         {
@@ -1245,7 +1460,9 @@ export async function POST(req: Request) {
     console.info("[checkout:draft:19-insert-start]");
     const { data: savedDraft, error: saveError } = await supabase
       .from("checkout_drafts")
-      .upsert(draftRow, { onConflict: "idempotency_key" })
+      .update(draftRow)
+      .eq("id", claim.draftId)
+      .eq("user_id", authData.user.id)
       .select("id, gelato_draft_order_id, status")
       .single();
 
