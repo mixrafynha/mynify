@@ -1090,7 +1090,7 @@ export async function POST(req: Request) {
       currencyIsoCode: quoteCurrency,
     });
 
-    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions);
+    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions, shippingQuote.productCurrency);
     const requestedShipmentMethodUid = shippingMethodInput.shipmentMethodUid?.trim();
     const requestedCarrierUid = shippingMethodInput.carrierUid?.trim() ?? null;
     const requestedServiceType = shippingMethodInput.serviceType?.trim().toLowerCase() ?? null;

@@ -37,7 +37,7 @@ function normalizeId(method: Record<string, any>) {
   );
 }
 
-export function normalizeShippingMethods(response: unknown): NormalizedShippingMethod[] {
+export function normalizeShippingMethods(response: unknown, fallbackCurrency?: string | null): NormalizedShippingMethod[] {
   const methods = Array.isArray(response)
     ? response
     : response && typeof response === "object"
@@ -50,7 +50,7 @@ export function normalizeShippingMethods(response: unknown): NormalizedShippingM
       const record = method as Record<string, any>;
       const name = cleanString(record.name) ?? cleanString(record.title) ?? "Shipping";
       const price = toNumber(record.price) ?? Number.POSITIVE_INFINITY;
-      const currency = (cleanString(record.currency) ?? "EUR").toUpperCase();
+      const currency = cleanString(record.currency)?.toUpperCase() ?? cleanString(fallbackCurrency)?.toUpperCase() ?? "EUR";
       const minDays = toNumber(record.minDays ?? record.estimatedDaysMin ?? record.estimatedDaysMinimum);
       const maxDays = toNumber(record.maxDays ?? record.estimatedDaysMax ?? record.estimatedDaysMaximum);
 

@@ -637,7 +637,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const shippingMethods = normalizeShippingMethods(quote.shippingOptions);
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
     console.info("[checkout:availability:11-quote-shape]", {
       responseKeys: quote.rawQuote && typeof quote.rawQuote === "object" ? Object.keys(quote.rawQuote as Record<string, unknown>) : [],
       dataKeys:
