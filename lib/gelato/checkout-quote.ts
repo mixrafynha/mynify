@@ -63,7 +63,7 @@ export type NormalizedGelatoQuote = {
   shippingOptions: Array<{
     id: string;
     name: string;
-    price: number;
+    price: number | null;
     currency: string;
     fulfillmentCountry: string | null;
     estimatedDaysMin: number | null;
@@ -238,7 +238,7 @@ function normalizeQuoteResponse(raw: unknown, quoteCurrency: string): ResolvedGe
       return {
         id,
         name,
-        price: price ?? 0,
+        price,
         currency: shipmentCurrency,
         fulfillmentCountry,
         estimatedDaysMin: Number.isFinite(Number(shipment.minDeliveryDays)) ? Number(shipment.minDeliveryDays) : null,
@@ -250,18 +250,18 @@ function normalizeQuoteResponse(raw: unknown, quoteCurrency: string): ResolvedGe
         serviceType: cleanString(shipment.serviceType)?.toLowerCase() ?? null,
       };
     })
-    .filter((option) => Boolean(option.id) && Number.isFinite(option.price) && option.price >= 0 && Boolean(option.currency));
+    .filter((option) => Boolean(option.id) && Boolean(option.currency));
 
   return {
-    available: shippingOptions.length > 0,
+    available: shippingOptions.some((option) => option.price !== null && Number.isFinite(option.price) && option.price >= 0),
     retryable: false,
     productCost: null,
     productCurrency: currency,
     shippingOptions,
-    reason: shippingOptions.length > 0 ? null : "invalid_quote_response",
+    reason: shippingOptions.some((option) => option.price !== null && Number.isFinite(option.price) && option.price >= 0) ? null : "invalid_quote_response",
     rawQuote: raw,
     responseKeys,
-    quoteReason: shippingOptions.length > 0 ? null : "invalid_quote_response",
+    quoteReason: shippingOptions.some((option) => option.price !== null && Number.isFinite(option.price) && option.price >= 0) ? null : "invalid_quote_response",
     httpStatus: null,
     contentType: null,
     bodyLength: null,

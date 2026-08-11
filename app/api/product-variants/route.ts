@@ -34,9 +34,19 @@ type VariantRow = {
   gelato_attributes: Record<string, unknown> | null;
 };
 
+type VariantMarketRow = {
+  product_variant_id: string;
+  country_code: string;
+  is_available: boolean;
+  availability_source: string | null;
+  unavailable_reason: string | null;
+};
+
 export async function GET(req: Request) {
   try {
-    const productId = new URL(req.url).searchParams.get("productId")?.trim();
+    const searchParams = new URL(req.url).searchParams;
+    const productId = searchParams.get("productId")?.trim();
+    const countryCode = searchParams.get("countryCode")?.trim().toUpperCase() || null;
 
     if (!productId || !isSafeId(productId)) {
       return NextResponse.json(
@@ -96,10 +106,29 @@ export async function GET(req: Request) {
       );
     }
 
+    let marketMap = new Map<string, VariantMarketRow>();
+    const variantIds = ((variantRows ?? []) as VariantRow[]).map((variant) => variant.id).filter(Boolean);
+    if (countryCode && /^[A-Z]{2}$/.test(countryCode) && variantIds.length > 0) {
+      const { data: marketRows, error: marketsError } = await supabase
+        .from("gelato_variant_markets")
+        .select("product_variant_id, country_code, is_available, availability_source, unavailable_reason")
+        .eq("country_code", countryCode)
+        .in("product_variant_id", variantIds);
+
+      if (marketsError) {
+        console.warn("PRODUCT_VARIANTS_MARKETS_ERROR", { code: marketsError.code });
+      } else {
+        marketMap = new Map(
+          ((marketRows ?? []) as VariantMarketRow[]).map((market) => [market.product_variant_id, market]),
+        );
+      }
+    }
+
     const colorMap = new Map(colors.map((color) => [color.id, color]));
     const variants = ((variantRows ?? []) as VariantRow[]).map((variant) => {
       const color = colorMap.get(variant.product_color_id) ?? null;
       const image = color?.image ?? null;
+      const marketAvailability = marketMap.get(variant.id) ?? null;
       return {
         id: variant.id,
         variant_id: variant.id,
@@ -111,6 +140,15 @@ export async function GET(req: Request) {
         price: variant.price,
         gelato_product_uid: variant.gelato_product_uid,
         gelato_attributes: variant.gelato_attributes,
+        market_availability: marketAvailability
+          ? {
+              country_code: marketAvailability.country_code,
+              is_available: marketAvailability.is_available,
+              availability_source: marketAvailability.availability_source,
+              unavailable_reason: marketAvailability.unavailable_reason,
+            }
+          : null,
+        country_available: marketAvailability ? marketAvailability.is_available : null,
         color: color?.color ?? null,
         color_name: color?.color ?? null,
         color_hex: color?.color_hex ?? "#d1d5db",

@@ -5,6 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
+import { isInvalidGelatoShippingMethodUid } from "@/lib/gelato/shipping-methods";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -815,6 +816,16 @@ export async function POST(req: Request) {
           {
             success: false,
             code: "MISSING_SHIPMENT_METHOD_UID",
+            message: "The prepared order has no valid shipping method.",
+          },
+          { status: 409 },
+        );
+      }
+      if (isInvalidGelatoShippingMethodUid(shipmentMethodUid)) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "CHECKOUT_SHIPPING_UNAVAILABLE",
             message: "The prepared order has no valid shipping method.",
           },
           { status: 409 },

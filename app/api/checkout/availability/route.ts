@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
-import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
+import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
@@ -113,6 +113,89 @@ function extractPrintableFiles(source: unknown): Array<{ type: string; url: stri
   }
 
   return files;
+}
+
+function shippingUnavailableMessage(item?: {
+  color?: string | null;
+  size?: string | null;
+}) {
+  const label = [item?.color, item?.size].map(safeText).filter(Boolean).join(" / ");
+  return label
+    ? `${label} is not available for delivery to this address. Choose another size or color.`
+    : "One or more items are not available for delivery to this address. Choose another size or color.";
+}
+
+function quoteHasInvalidInternalShipping(quote: Awaited<ReturnType<typeof resolveCheckoutQuote>>) {
+  return quote.shippingOptions.some((option) =>
+    isInvalidGelatoShippingMethodUid(option.carrierUid) ||
+    isInvalidGelatoShippingMethodUid(option.id) ||
+    isInvalidGelatoShippingMethodUid(option.promiseUid),
+  );
+}
+
+async function identifyShippingIncompatibleItems(input: {
+  quoteItems: Array<{
+    itemReferenceId: string;
+    productUid: string;
+    quantity: number;
+    printFiles: Array<{ type: string; url: string }>;
+  }>;
+  sourceItems: AvailabilityItem[];
+  shippingAddress: {
+    firstName?: string;
+    lastName?: string;
+    addressLine1: string;
+    addressLine2?: string;
+    city: string;
+    state?: string;
+    postalCode: string;
+    countryCode: string;
+    email?: string;
+    phone?: string;
+  };
+  currency: string;
+}) {
+  const sourceByReference = new Map(
+    input.sourceItems.map((item) => [
+      safeText(item.itemId) || safeText(item.cartItemId) || "availability",
+      item,
+    ]),
+  );
+  const incompatible: Array<{
+    cartItemId: string | null;
+    variantId: string | null;
+    productUid: string;
+    color: string | null;
+    size: string | null;
+    reason: string;
+  }> = [];
+
+  await Promise.all(
+    input.quoteItems.map(async (quoteItem) => {
+      const quote = await resolveCheckoutQuote({
+        productUid: quoteItem.productUid,
+        quantity: quoteItem.quantity,
+        shippingAddress: input.shippingAddress,
+        printFiles: quoteItem.printFiles,
+        items: [quoteItem],
+        currencyIsoCode: input.currency,
+      });
+      const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
+      if (quote.available && shippingMethods.length > 0 && !quoteHasInvalidInternalShipping(quote)) return;
+
+      const source = sourceByReference.get(quoteItem.itemReferenceId) ?? null;
+      incompatible.push({
+        cartItemId: safeText(source?.cartItemId) || safeText(source?.itemId) || null,
+        variantId: safeText(source?.variantId) || null,
+        productUid: quoteItem.productUid,
+        color: source?.color ?? null,
+        size: source?.size ?? null,
+        reason: quoteHasInvalidInternalShipping(quote) ? "invalid_internal_shipping_method" : "no_valid_shipping_method",
+      });
+    }),
+  );
+
+  return incompatible;
 }
 
 async function resolveCartItemSources(
@@ -624,16 +707,40 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!quote.available) {
+    const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
+    const hasInvalidInternalShipping = quoteHasInvalidInternalShipping(quote);
+
+    if (!quote.available || !shippingMethods.length || hasInvalidInternalShipping) {
+      const incompatibleItems = await identifyShippingIncompatibleItems({
+        quoteItems,
+        sourceItems: items,
+        shippingAddress,
+        currency: safeText(body?.currency) || "EUR",
+      });
+      const firstIncompatible = incompatibleItems[0];
       return NextResponse.json(
         {
-          ok: false,
-          code: "INVALID_QUOTE_RESPONSE",
-          message: "The Gelato response did not contain recognized shipping methods.",
+          ok: true,
+          available: false,
+          configured: true,
+          code: "CHECKOUT_SHIPPING_UNAVAILABLE",
+          message: shippingUnavailableMessage(firstIncompatible),
+          unavailableItems: incompatibleItems.map((item) => ({
+            itemId: item.cartItemId ?? item.variantId ?? item.productUid,
+            cartItemId: item.cartItemId,
+            variantId: item.variantId,
+            productUid: item.productUid,
+            color: item.color,
+            size: item.size,
+            available: false,
+            reason: item.reason,
+          })),
+          shippingMethods: [],
           responseKeys: quote.responseKeys,
           quoteReason: quote.quoteReason ?? null,
+          invalidShippingMethod: hasInvalidInternalShipping,
         },
-        { status: 422 },
+        { status: 200 },
       );
     }
 
@@ -652,7 +759,6 @@ export async function POST(req: Request) {
         : [],
     });
 
-    const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
     console.info("[shipping-origin] normalized", {
       requestedCurrency: safeText(body?.currency) || "EUR",
       shippingMethods: shippingMethods.map((method) => ({

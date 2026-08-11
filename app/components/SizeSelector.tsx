@@ -21,6 +21,8 @@ export default function SizeSelector({
   };
 
   const safeVariants = Array.isArray(variants) ? variants : [];
+  const isVariantSelectable = (variant: any) =>
+    Number(variant?.stock ?? 0) > 0 && variant?.country_available !== false;
 
   const filteredByColor = selectedColor
     ? safeVariants.filter(
@@ -52,7 +54,7 @@ export default function SizeSelector({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {sizes.map((v: any, i: number) => {
-          const disabled = Number(v.stock ?? 0) <= 0;
+          const disabled = !isVariantSelectable(v);
           const isActive =
             normalize(selectedVariant?.size) === normalize(v.size);
 

@@ -20,6 +20,8 @@ export default function ColorSelector({
       .replace(/\s+/g, " ");
 
   const safeVariants = variants ?? [];
+  const isVariantSelectable = (variant: any) =>
+    Number(variant?.stock ?? 0) > 0 && variant?.country_available !== false;
   const colorMap = new Map();
 
   safeVariants.forEach((v: any) => {
@@ -77,7 +79,7 @@ export default function ColorSelector({
               normalize(v.color) === normalizedColor &&
               (!selectedSize || normalize(v.size) === normalize(selectedSize))
           );
-          const hasStock = available.some((v: any) => Number(v.stock ?? 0) > 0);
+          const hasStock = available.some(isVariantSelectable);
           const isActive = normalize(selectedColor || "") === normalizedColor;
           const colorHex =
             available.find((v: any) => v.color_hex)?.color_hex ||
@@ -94,11 +96,12 @@ export default function ColorSelector({
                 const next =
                   available.find(
                     (v: any) =>
+                      isVariantSelectable(v) &&
                       selectedVariant?.size &&
                       normalize(v.size) === normalize(selectedVariant.size)
-                  ) || available[0] || null;
+                  ) || available.find(isVariantSelectable) || available[0] || null;
 
-                if (!next) return;
+                if (!next || !isVariantSelectable(next)) return;
                 onChange(c.label, next);
               }}
               className="flex items-center justify-center disabled:cursor-not-allowed"

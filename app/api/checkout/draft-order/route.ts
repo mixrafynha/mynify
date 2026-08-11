@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
-import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
+import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
@@ -1272,6 +1272,16 @@ export async function POST(req: Request) {
           message: "The selected shipping method is missing a valid shipment UID.",
         },
         { status: 422 },
+      );
+    }
+    if (isInvalidGelatoShippingMethodUid(resolvedShipmentMethodUid)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "CHECKOUT_SHIPPING_UNAVAILABLE",
+          message: "Gelato could not calculate a valid shipping method for the full order.",
+        },
+        { status: 409 },
       );
     }
 

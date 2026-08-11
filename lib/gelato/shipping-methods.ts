@@ -7,7 +7,7 @@ export type NormalizedShippingMethod = {
   serviceType?: string | null;
   fulfillmentCountry?: string | null;
   name: string;
-  price: number;
+  price: number | null;
   currency: string;
   minDays: number | null;
   maxDays: number | null;
@@ -19,8 +19,14 @@ function cleanString(value: unknown): string | null {
 }
 
 function toNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function isInvalidGelatoShippingMethodUid(value: unknown): boolean {
+  const normalized = cleanString(value)?.toLowerCase() ?? "";
+  return normalized === "api_out_of_stock_for_part_order";
 }
 
 function normalizeId(method: Record<string, any>) {
@@ -55,7 +61,7 @@ export function normalizeShippingMethods(response: unknown, fallbackCurrency?: s
     .map((method) => {
       const record = method as Record<string, any>;
       const name = cleanString(record.name) ?? cleanString(record.title) ?? "Shipping";
-      const price = toNumber(record.price) ?? Number.POSITIVE_INFINITY;
+      const price = toNumber(record.price);
       const currency = cleanString(record.currency)?.toUpperCase() ?? cleanString(fallbackCurrency)?.toUpperCase() ?? "EUR";
       const minDays = toNumber(record.minDays ?? record.estimatedDaysMin ?? record.estimatedDaysMinimum);
       const maxDays = toNumber(record.maxDays ?? record.estimatedDaysMax ?? record.estimatedDaysMaximum);
@@ -75,6 +81,10 @@ export function normalizeShippingMethods(response: unknown, fallbackCurrency?: s
         maxDays,
         raw: method,
       };
+    })
+    .filter((method) => {
+      const priceValid = method.price !== null && Number.isFinite(method.price) && method.price >= 0;
+      return priceValid && !isInvalidGelatoShippingMethodUid(method.shipmentMethodUid);
     });
 
   const deduped = new Map<string, NormalizedShippingMethod>();
@@ -83,8 +93,8 @@ export function normalizeShippingMethods(response: unknown, fallbackCurrency?: s
   }
 
   return Array.from(deduped.values()).sort((a, b) => {
-    const priceA = Number.isFinite(a.price) ? a.price : Number.POSITIVE_INFINITY;
-    const priceB = Number.isFinite(b.price) ? b.price : Number.POSITIVE_INFINITY;
+    const priceA = a.price !== null && Number.isFinite(a.price) ? a.price : Number.POSITIVE_INFINITY;
+    const priceB = b.price !== null && Number.isFinite(b.price) ? b.price : Number.POSITIVE_INFINITY;
     if (priceA !== priceB) return priceA - priceB;
     const maxA = a.maxDays ?? Number.POSITIVE_INFINITY;
     const maxB = b.maxDays ?? Number.POSITIVE_INFINITY;
