@@ -104,6 +104,10 @@ type CheckoutDraftClaimResult = {
   gelatoDraftOrderId: string | null;
 };
 
+const PROCESSING_CLAIM_TTL_MS = 60_000;
+const WAIT_FOR_DRAFT_TIMEOUT_MS = 3_500;
+const WAIT_FOR_DRAFT_POLL_MS = 200;
+
 
 const conflict = (
   code: string,
@@ -352,6 +356,13 @@ function log(event: string, data?: Record<string, unknown>) {
   console.info(event, data ?? {});
 }
 
+function isStaleClaim(updatedAt: string | null | undefined, ttlMs = PROCESSING_CLAIM_TTL_MS) {
+  if (!updatedAt) return false;
+  const parsed = Date.parse(updatedAt);
+  if (!Number.isFinite(parsed)) return false;
+  return Date.now() - parsed > ttlMs;
+}
+
 async function loadCheckoutDraftRow(
   supabase: ReturnType<typeof createSupabaseServer>,
   idempotencyKey: string,
@@ -359,7 +370,7 @@ async function loadCheckoutDraftRow(
 ) {
   const { data, error } = await supabase
     .from("checkout_drafts")
-    .select("id, status, gelato_draft_order_id, subtotal, shipping_amount, total, currency")
+    .select("id, status, gelato_draft_order_id, subtotal, shipping_amount, total, currency, updated_at")
     .eq("idempotency_key", idempotencyKey)
     .eq("user_id", userId)
     .maybeSingle();
@@ -439,7 +450,10 @@ async function claimCheckoutDraftRow(input: {
     return { draftId: existing.id, claimed: false, status: existing.status, gelatoDraftOrderId: existing.gelato_draft_order_id } satisfies CheckoutDraftClaimResult;
   }
 
-  if (existing.status === "error") {
+  const canReclaimStaleProcessing = existing.status === "processing" && isStaleClaim(existing.updated_at);
+  const canReclaimError = existing.status === "error";
+
+  if (canReclaimStaleProcessing || canReclaimError) {
     const { data: reclaimed, error: reclaimError } = await input.supabase
       .from("checkout_drafts")
       .update({
@@ -455,7 +469,7 @@ async function claimCheckoutDraftRow(input: {
       })
       .eq("id", existing.id)
       .eq("user_id", input.userId)
-      .eq("status", "error")
+      .eq("status", existing.status)
       .is("gelato_draft_order_id", null)
       .select("id, status, gelato_draft_order_id")
       .maybeSingle();
@@ -481,7 +495,7 @@ async function waitForCheckoutDraft(
   supabase: ReturnType<typeof createSupabaseServer>,
   idempotencyKey: string,
   userId: string,
-  timeoutMs = 3500,
+  timeoutMs = WAIT_FOR_DRAFT_TIMEOUT_MS,
 ) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
@@ -499,7 +513,7 @@ async function waitForCheckoutDraft(
     console.info("[checkout-draft] waiting for existing draft", {
       idempotencyKey,
     });
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, WAIT_FOR_DRAFT_POLL_MS));
   }
   return null;
 }
