@@ -831,6 +831,16 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
+      if (draftShippingMethod?.price === null || draftShippingMethod?.price === undefined) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "CHECKOUT_SHIPPING_UNAVAILABLE",
+            message: "The prepared order has no valid shipping amount.",
+          },
+          { status: 409 },
+        );
+      }
 
       const draftShippingPriceRaw =
         draftCheckout?.shipping_amount ?? draftShippingMethod?.price ?? null;

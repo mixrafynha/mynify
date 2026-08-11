@@ -397,6 +397,93 @@ function logOperationError(operation: string, startedAt: number, error: unknown)
   });
 }
 
+function shippingUnavailable(details?: Record<string, unknown>) {
+  return NextResponse.json(
+    {
+      success: false,
+      code: "CHECKOUT_SHIPPING_UNAVAILABLE",
+      message: "Gelato could not calculate a valid shipping method for the full order.",
+      ...(details ? { details } : {}),
+    },
+    { status: 409 },
+  );
+}
+
+function shippingMethodMatches(input: {
+  requestedId: string | null;
+  requestedShipmentMethodUid: string | null;
+  requestedCarrierUid: string | null;
+  requestedServiceType: string | null;
+  requestedFulfillmentCountry: string | null;
+  method: ReturnType<typeof normalizeShippingMethods>[number];
+}) {
+  const methodShipmentUid = cleanText(input.method.shipmentMethodUid);
+  const methodCarrierUid = cleanText(input.method.carrierUid);
+  const methodServiceType = cleanText(input.method.serviceType).toLowerCase();
+  const methodFulfillmentCountry = cleanText(input.method.fulfillmentCountry).toUpperCase();
+
+  if (input.requestedId && input.method.id === input.requestedId) return true;
+  if (input.requestedShipmentMethodUid && methodShipmentUid === input.requestedShipmentMethodUid) return true;
+
+  return Boolean(
+    input.requestedCarrierUid &&
+      input.requestedServiceType &&
+      methodCarrierUid === input.requestedCarrierUid &&
+      methodServiceType === input.requestedServiceType &&
+      (!input.requestedFulfillmentCountry || methodFulfillmentCountry === input.requestedFulfillmentCountry),
+  );
+}
+
+async function identifyDraftShippingIncompatibleItems(input: {
+  resolvedItems: ResolvedCheckoutItem[];
+  address: ReturnType<typeof normalizeAddress>;
+  currency: string;
+}) {
+  const unavailableItems: Array<{
+    cartItemId: string;
+    variantId: string | null;
+    productUid: string;
+    color: string | null;
+    size: string | null;
+    reason: string;
+  }> = [];
+
+  await Promise.all(
+    input.resolvedItems.map(async (item) => {
+      const quote = await resolveCheckoutQuote({
+        productUid: item.productUid,
+        quantity: item.quantity,
+        shippingAddress: {
+          ...input.address,
+          countryCode: input.address.countryCode,
+        },
+        printFiles: item.files,
+        items: [
+          {
+            productUid: item.productUid,
+            quantity: item.quantity,
+            printFiles: item.files,
+          },
+        ],
+        currencyIsoCode: input.currency,
+      });
+      const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
+      if (quote.available && shippingMethods.length > 0) return;
+
+      unavailableItems.push({
+        cartItemId: item.cartItemId,
+        variantId: item.variantId,
+        productUid: item.productUid,
+        color: item.color,
+        size: item.size,
+        reason: "no_valid_shipping_method",
+      });
+    }),
+  );
+
+  return unavailableItems;
+}
+
 function isStaleClaim(updatedAt: string | null | undefined, ttlMs = PROCESSING_CLAIM_TTL_MS) {
   if (!updatedAt) return false;
   const parsed = Date.parse(updatedAt);
@@ -1275,14 +1362,7 @@ export async function POST(req: Request) {
       );
     }
     if (isInvalidGelatoShippingMethodUid(resolvedShipmentMethodUid)) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "CHECKOUT_SHIPPING_UNAVAILABLE",
-          message: "Gelato could not calculate a valid shipping method for the full order.",
-        },
-        { status: 409 },
-      );
+      return shippingUnavailable();
     }
 
     const shippingAmount = Number(matched.price);
@@ -1297,11 +1377,57 @@ export async function POST(req: Request) {
       );
     }
 
+    const quoteValidationStartedAt = Date.now();
+    const quote = await resolveCheckoutQuote({
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress: {
+        ...address,
+        countryCode: address.countryCode,
+      },
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: quoteCurrency,
+    });
+    timings.quotePreparationMs += elapsedSince(quoteValidationStartedAt);
+    const validShippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
+    const validatedShippingMethod = validShippingMethods.find((method) =>
+      shippingMethodMatches({
+        requestedId: shippingMethodInput.id ?? null,
+        requestedShipmentMethodUid: resolvedShipmentMethodUid,
+        requestedCarrierUid,
+        requestedServiceType,
+        requestedFulfillmentCountry,
+        method,
+      }),
+    ) ?? null;
+
+    console.info("[checkout:draft:shipping-validation-quote]", {
+      available: quote.available,
+      retryable: quote.retryable,
+      reason: quote.reason,
+      shippingMethodsCount: validShippingMethods.length,
+      requestedShipmentMethodUid: resolvedShipmentMethodUid,
+      matched: Boolean(validatedShippingMethod),
+    });
+
+    if (!quote.available || validShippingMethods.length === 0 || !validatedShippingMethod) {
+      const unavailableItems = await identifyDraftShippingIncompatibleItems({
+        resolvedItems,
+        address,
+        currency: quoteCurrency,
+      });
+      return shippingUnavailable({
+        unavailableItems,
+        quoteReason: quote.reason ?? quote.quoteReason ?? null,
+      });
+    }
+
     log("[checkout:draft-quote]", {
       available: true,
       retryable: false,
-      reason: "reused_selected_shipping_method",
-      shippingMethodsCount: 1,
+      reason: "validated_selected_shipping_method",
+      shippingMethodsCount: validShippingMethods.length,
     });
 
     console.info("[checkout:draft:09-gelato-http]", {
