@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { buildGelatoCheckoutQuotePayload } from "@/lib/gelato/checkout-quote";
+import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
@@ -78,6 +79,24 @@ type UserProductRow = {
 
 type GelatoFile = { type: string; url: string };
 
+type ResolvedCheckoutItem = {
+  cartItemId: string;
+  productId: string;
+  variantId: string | null;
+  gelatoProductUid: string;
+  productUid: string;
+  userProductId: string | null;
+  quantity: number;
+  size: string | null;
+  color: string | null;
+  gelatoColorKey: string | null;
+  officialUnitPrice: number;
+  hasFrontPrint: boolean;
+  hasBackPrint: boolean;
+  files: GelatoFile[];
+  adjustProductUidByFileTypes?: boolean;
+};
+
 
 const conflict = (
   code: string,
@@ -143,6 +162,25 @@ function hashIdempotencyKey(input: Record<string, unknown>) {
   return createHash("sha256").update(JSON.stringify(input)).digest("hex");
 }
 
+function buildIdempotencySnapshot(items: ResolvedCheckoutItem[]) {
+  return items
+    .map((item) => ({
+      cartItemId: item.cartItemId,
+      productId: item.productId,
+      variantId: item.variantId,
+      gelatoProductUid: item.gelatoProductUid,
+      userProductId: item.userProductId,
+      quantity: item.quantity,
+      size: item.size,
+      color: item.color,
+      gelatoColorKey: item.gelatoColorKey,
+      officialUnitPrice: item.officialUnitPrice,
+      hasFrontPrint: item.hasFrontPrint,
+      hasBackPrint: item.hasBackPrint,
+    }))
+    .sort((left, right) => left.cartItemId.localeCompare(right.cartItemId));
+}
+
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -179,6 +217,15 @@ function resolveVariantId(row: CartRow, userProduct: UserProductRow | null) {
 
 function getCartSelectedVariant(row: CartRow) {
   return row.selected_variant && typeof row.selected_variant === "object" ? row.selected_variant : null;
+}
+
+function getCartColor(row: CartRow) {
+  const selectedVariant = getCartSelectedVariant(row);
+  return firstString(
+    selectedVariant?.color,
+    selectedVariant?.colorName,
+    selectedVariant?.colorHex,
+  );
 }
 
 function getSavedSelectedVariant(userProduct: UserProductRow | null) {
@@ -508,7 +555,7 @@ export async function POST(req: Request) {
     const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
     const variantMap = new Map(allVariantRows.map((row) => [row.id, row]));
 
-    const resolvedItems: Array<{ cartItemId: string; userProductId: string | null; productUid: string; quantity: number; files: GelatoFile[]; unitPrice: number; adjustProductUidByFileTypes?: boolean }> = [];
+    const resolvedItems: ResolvedCheckoutItem[] = [];
     let subtotal = 0;
     const quoteCurrency = "EUR";
 
@@ -758,13 +805,29 @@ export async function POST(req: Request) {
         policy: "current_variant_plus_fixed_second_print_fee_eur",
       });
 
-      resolvedItems.push({ cartItemId: cartRow.id, userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null, productUid, quantity, files: printFilesFinal, unitPrice, adjustProductUidByFileTypes });
+      resolvedItems.push({
+        cartItemId: cartRow.id,
+        productId: cartRow.product_id,
+        variantId: variant?.id ?? cartRow.variant_id ?? null,
+        gelatoProductUid: productUid,
+        productUid,
+        userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+        quantity,
+        size: variant?.size ?? null,
+        color: getCartColor(cartRow),
+        gelatoColorKey: variant?.product_color_id ?? null,
+        officialUnitPrice: unitPrice,
+        hasFrontPrint: Boolean(frontPrintFile),
+        hasBackPrint: Boolean(backPrintFile),
+        files: printFilesFinal,
+        adjustProductUidByFileTypes,
+      });
       subtotal += unitPrice * quantity;
     }
 
     const quoteItems = resolvedItems.map((item) => ({
       itemReferenceId: item.cartItemId,
-      productUid: item.productUid,
+      productUid: item.gelatoProductUid,
       quantity: item.quantity,
       printFiles: item.files,
     }));
@@ -833,20 +896,78 @@ export async function POST(req: Request) {
     // values are quote-scoped and can change between otherwise identical quotes.
     // The UID selected from /api/checkout/availability must be forwarded unchanged
     // to the Draft Order request.
-    const matched = {
-      id: shippingMethodInput.id,
-      code: shippingMethodInput.code ?? null,
-      shipmentMethodUid: shippingMethodInput.shipmentMethodUid,
-      name: shippingMethodInput.name,
-      price: Number(shippingMethodInput.price),
+    const shippingQuote = await resolveCheckoutQuote({
+      productUid: quoteItems[0].productUid,
+      quantity: quoteItems[0].quantity,
+      shippingAddress: {
+        ...address,
+        countryCode: address.countryCode,
+      },
+      printFiles: quoteItems[0].printFiles,
+      items: quoteItems,
+      currencyIsoCode: quoteCurrency,
+    });
+
+    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions).map((method) => ({
+      ...method,
       currency: "EUR",
-    };
+    }));
+    const requestedShipmentMethodUid = shippingMethodInput.shipmentMethodUid?.trim();
+    const matched = requestedShipmentMethodUid
+      ? serverShippingMethods.find((method) => method.shipmentMethodUid === requestedShipmentMethodUid || method.id === requestedShipmentMethodUid)
+      : null;
+
+    if (!shippingQuote.available || shippingQuote.retryable) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "GELATO_QUOTE_FAILED",
+          message: "We couldn't calculate shipping. Check the address and try again.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (!matched) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_SHIPPING_METHOD",
+          message: "The selected shipping method is invalid for this address.",
+        },
+        { status: 422 },
+      );
+    }
+
+    const resolvedShipmentMethodUid = matched.shipmentMethodUid?.trim();
+    if (!resolvedShipmentMethodUid) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_SHIPPING_METHOD",
+          message: "The selected shipping method is missing a valid shipment UID.",
+        },
+        { status: 422 },
+      );
+    }
+
+    const shippingAmount = Number(matched.price);
+    if (!Number.isFinite(shippingAmount) || shippingAmount < 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_SHIPPING_AMOUNT",
+          message: "Unable to resolve a valid shipping amount.",
+        },
+        { status: 422 },
+      );
+    }
 
     log("[checkout:draft-quote]", {
-      available: true,
+      available: shippingQuote.available,
       retryable: false,
       reason: "reused_selected_shipping_method",
-      shippingMethodsCount: 1,
+      shippingMethodsCount: serverShippingMethods.length,
     });
 
     console.info("[checkout:draft:09-gelato-http]", {
@@ -869,19 +990,29 @@ export async function POST(req: Request) {
       selectedId: shippingMethodInput.id ?? null,
       selectedCode: shippingMethodInput.code ?? null,
       selectedShipmentMethodUid: shippingMethodInput.shipmentMethodUid ?? null,
-      availableCount: 1,
+      availableCount: serverShippingMethods.length,
       matched: true,
       matchedId: matched.id,
       matchedCode: matched.code ?? null,
-      matchedShipmentMethodUid: matched.shipmentMethodUid,
+      matchedShipmentMethodUid: resolvedShipmentMethodUid,
     });
 
+    const idempotencySnapshot = buildIdempotencySnapshot(resolvedItems);
     const idempotencyKey = hashIdempotencyKey({
       userId: authData.user.id,
-      cartItemIds: [...cartItemIds].sort(),
-      postalCode: address.postalCode,
       countryCode: address.countryCode,
-      shippingMethodId: shippingMethodInput.shipmentMethodUid,
+      postalCode: address.postalCode,
+      shippingMethodUid: resolvedShipmentMethodUid,
+      cart: idempotencySnapshot,
+    });
+
+    console.info("[checkout-draft] shipping resolved server-side", {
+      shipmentMethodUid: resolvedShipmentMethodUid,
+      serverShippingAmount: shippingAmount,
+    });
+    console.info("[checkout-draft] idempotency snapshot", {
+      hash: idempotencyKey,
+      itemCount: idempotencySnapshot.length,
     });
 
     const { data: existingDraft } = await supabase
@@ -895,10 +1026,17 @@ export async function POST(req: Request) {
         success: true,
         draftOrderId: existingDraft.id,
         gelatoDraftOrderId: existingDraft.gelato_draft_order_id,
-        shippingMethod: shippingMethodInput,
+        shippingMethod: {
+          id: matched.id,
+          code: matched.code,
+          shipmentMethodUid: resolvedShipmentMethodUid,
+          name: matched.name,
+          price: matched.price,
+          currency: matched.currency,
+        },
         subtotal: existingDraft.subtotal ?? 0,
-        shipping: existingDraft.shipping_amount ?? matched.price,
-        total: existingDraft.total ?? matched.price,
+        shipping: existingDraft.shipping_amount ?? shippingAmount,
+        total: existingDraft.total ?? shippingAmount,
         currency: existingDraft.currency ?? matched.currency,
       });
     }
@@ -906,7 +1044,14 @@ export async function POST(req: Request) {
     const gelatoPayload = gelatoRequestPayload({
       idempotencyKey,
       currency: "EUR",
-      shippingMethod: matched,
+      shippingMethod: {
+        id: matched.id,
+        code: matched.code,
+        shipmentMethodUid: resolvedShipmentMethodUid,
+        name: matched.name,
+        price: shippingAmount,
+        currency: "EUR",
+      },
       address,
       items: resolvedItems,
       email: authData.user.email ?? authData.user.id,
