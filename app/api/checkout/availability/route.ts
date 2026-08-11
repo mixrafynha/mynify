@@ -637,7 +637,34 @@ export async function POST(req: Request) {
       );
     }
 
+    console.info("[shipping-origin] gelato raw", {
+      requestedCurrency: safeText(body?.currency) || "EUR",
+      shippingOptions: Array.isArray(quote.shippingOptions)
+        ? quote.shippingOptions.map((option) => ({
+            id: option.id ?? null,
+            promiseUid: option.promiseUid ?? null,
+            carrierUid: option.carrierUid ?? null,
+            serviceType: option.serviceType ?? null,
+            price: option.price ?? null,
+            currency: option.currency ?? null,
+            fulfillmentCountry: option.fulfillmentCountry ?? null,
+          }))
+        : [],
+    });
+
     const shippingMethods = normalizeShippingMethods(quote.shippingOptions, quote.productCurrency);
+    console.info("[shipping-origin] normalized", {
+      requestedCurrency: safeText(body?.currency) || "EUR",
+      shippingMethods: shippingMethods.map((method) => ({
+        id: method.id ?? null,
+        shipmentMethodUid: method.shipmentMethodUid ?? null,
+        carrierUid: method.carrierUid ?? null,
+        serviceType: method.serviceType ?? null,
+        price: method.price ?? null,
+        currency: method.currency ?? null,
+        fulfillmentCountry: method.fulfillmentCountry ?? null,
+      })),
+    });
     console.info("[checkout:availability:11-quote-shape]", {
       responseKeys: quote.rawQuote && typeof quote.rawQuote === "object" ? Object.keys(quote.rawQuote as Record<string, unknown>) : [],
       dataKeys:
