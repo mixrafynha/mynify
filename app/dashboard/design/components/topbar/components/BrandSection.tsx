@@ -2,8 +2,11 @@
 
 import { memo } from "react";
 import { LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 function BrandSection() {
+  const router = useRouter();
+
   function leaveEditor() {
     const ok = window.confirm("Leave editor? Unsaved changes may be lost.");
     if (!ok) return;
@@ -13,7 +16,7 @@ function BrandSection() {
       return;
     }
 
-    window.location.href = "/dashboard";
+    router.push("/dashboard");
   }
 
   return (

@@ -3,8 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import NotificationBell from "@/app/components/NotificationBell";
-import SmartCreateButton from "@/app/components/SmartCreateButton";
 import Section from "@/app/components/ui/Section";
 
 import { useDashboard } from "@/hooks/useDashboard";
@@ -25,6 +23,26 @@ import {
 const CartDrawer = dynamic(() => import("@/app/components/ui/CartDrawer"), {
   ssr: false,
 });
+
+const NotificationBell = dynamic(
+  () => import("@/app/components/NotificationBell"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 md:h-11 md:w-11" />
+    ),
+  }
+);
+
+const SmartCreateButton = dynamic(
+  () => import("@/app/components/SmartCreateButton"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-11 w-11 rounded-full border border-purple-400/20 bg-[#070711] shadow-[0_0_24px_rgba(168,85,247,0.18)] sm:w-auto sm:px-4" />
+    ),
+  }
+);
 
 const ProductGrid = dynamic(
   () => import("@/app/components/products/ProductGrid"),
