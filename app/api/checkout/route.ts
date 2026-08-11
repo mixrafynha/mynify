@@ -243,8 +243,25 @@ function getBearerToken(req: Request): string | null {
   return token || null;
 }
 
+function elapsedSince(startedAt: number) {
+  return Date.now() - startedAt;
+}
+
 export async function POST(req: Request) {
   let createdOrderId: string | null = null;
+  const totalStartedAt = Date.now();
+  const timings = {
+    authMs: 0,
+    cartLoadMs: 0,
+    userProductsMs: 0,
+    variantsMs: 0,
+    availabilityMs: 0,
+    quotePreparationMs: 0,
+    idempotencyMs: 0,
+    gelatoMs: 0,
+    persistMs: 0,
+    totalMs: 0,
+  };
   const stripe = getStripeClient();
 
   try {
@@ -258,9 +275,12 @@ export async function POST(req: Request) {
 
     // The checkout UI authenticates with the Supabase session cookie.
     // Keep Bearer-token support for older clients, but do not require it.
+    const authStartedAt = Date.now();
+    const cookieSupabase = token ? null : createSupabaseServer();
     const authResult = token
       ? await supabase.auth.getUser(token)
-      : await createSupabaseServer().auth.getUser();
+      : await cookieSupabase!.auth.getUser();
+    timings.authMs += elapsedSince(authStartedAt);
 
     const user = authResult.data.user;
     const userError = authResult.error;
@@ -361,6 +381,7 @@ export async function POST(req: Request) {
      * Nunca utilizamos cart_items.price para cobrar.
      */
     if (effectiveCartItemIds.length > 0) {
+      const cartStartedAt = Date.now();
       const { data: cartRows, error: cartError } = await supabase
         .from("cart_items")
         .select(`
@@ -379,6 +400,7 @@ export async function POST(req: Request) {
         `)
         .eq("user_id", user.id)
         .in("id", effectiveCartItemIds);
+      timings.cartLoadMs += elapsedSince(cartStartedAt);
 
       if (cartError) {
         console.error("CHECKOUT_CART_ERROR", {
@@ -415,11 +437,56 @@ export async function POST(req: Request) {
         ),
       ];
 
-      const { data: productRows, error: productsError } =
-        await supabase
-          .from("products")
-          .select("id, title, price, currency, image, images")
-          .in("id", productIds);
+      const productsStartedAt = Date.now();
+      const productsPromise = supabase
+        .from("products")
+        .select("id, title, price, currency, image, images")
+        .in("id", productIds);
+
+      const variantsStartedAt = Date.now();
+      const variantsPromise = variantIds.length > 0
+        ? supabase
+            .from("product_variants")
+            .select(`
+              id,
+              price,
+              stock,
+              size,
+              sku,
+              product_color_id,
+              gelato_product_uid,
+              gelato_attributes
+            `)
+            .in("id", variantIds)
+        : Promise.resolve({ data: [] as VariantRow[], error: null });
+
+      const userProductIds = [
+        ...new Set(
+          cartItems
+            .map((item) => item.user_product_id ?? item.design_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const userProductsStartedAt = Date.now();
+      const userProductsPromise = userProductIds.length
+        ? supabase
+            .from("user_products")
+            .select("id, price, markup, final_price, currency, image, mockups, design_data")
+            .in("id", userProductIds)
+        : Promise.resolve({ data: [] as UserProductRow[], error: null });
+
+      const [
+        { data: productRows, error: productsError },
+        { data: variantRows, error: variantsError },
+        { data: userProductRows, error: userProductsError },
+      ] = await Promise.all([productsPromise, variantsPromise, userProductsPromise]);
+      const parallelLoadMs = Math.max(
+        elapsedSince(productsStartedAt),
+        elapsedSince(variantsStartedAt),
+        elapsedSince(userProductsStartedAt),
+      );
+      timings.variantsMs += parallelLoadMs;
+      timings.userProductsMs += parallelLoadMs;
 
       if (productsError) {
         console.error("CHECKOUT_PRODUCTS_ERROR", {
@@ -432,51 +499,18 @@ export async function POST(req: Request) {
         );
       }
 
-      let variants: VariantRow[] = [];
+      if (variantsError) {
+        console.error("CHECKOUT_VARIANTS_ERROR", {
+          code: variantsError.code,
+        });
 
-      if (variantIds.length > 0) {
-        const { data: variantRows, error: variantsError } =
-          await supabase
-            .from("product_variants")
-            .select(`
-              id,
-              price,
-              stock,
-              size,
-              sku,
-              product_color_id,
-              gelato_product_uid,
-              gelato_attributes
-            `)
-            .in("id", variantIds);
-
-        if (variantsError) {
-          console.error("CHECKOUT_VARIANTS_ERROR", {
-            code: variantsError.code,
-          });
-
-          return NextResponse.json(
-            { error: "Failed to load product variants" },
-            { status: 500 },
-          );
-        }
-
-        variants = (variantRows ?? []) as VariantRow[];
+        return NextResponse.json(
+          { error: "Failed to load product variants" },
+          { status: 500 },
+        );
       }
 
-      const userProductIds = [
-        ...new Set(
-          cartItems
-            .map((item) => item.user_product_id ?? item.design_id)
-            .filter((id): id is string => Boolean(id)),
-        ),
-      ];
-      const { data: userProductRows, error: userProductsError } = userProductIds.length
-        ? await supabase
-            .from("user_products")
-            .select("id, price, markup, final_price, currency, image, mockups, design_data")
-            .in("id", userProductIds)
-        : { data: [], error: null };
+      const variants = (variantRows ?? []) as VariantRow[];
 
       if (userProductsError) {
         return NextResponse.json(
@@ -530,6 +564,20 @@ export async function POST(req: Request) {
       // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
       // official numeric prices are charged directly as EUR.
       const checkoutCurrency = "EUR";
+      const availabilityStartedAt = Date.now();
+      const availabilityResults = new Map<string, Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>();
+      await Promise.all(
+        variants.map(async (variant) => {
+          const result = await checkGelatoRegionalAvailability({
+            variantId: variant.id,
+            countryCode: shippingCountryCode ?? "",
+            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+            resolveVariant: async () => variant,
+          });
+          availabilityResults.set(variant.id, result);
+        }),
+      );
+      timings.availabilityMs += elapsedSince(availabilityStartedAt);
 
       for (const cartItem of cartItems) {
         const product = productMap.get(cartItem.product_id);
@@ -568,12 +616,10 @@ export async function POST(req: Request) {
         }
 
         if (variant) {
-          const regionalAvailability = await checkGelatoRegionalAvailability({
-            variantId: variant.id,
-            countryCode: shippingCountryCode ?? "",
-            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
-            resolveVariant: async () => variant,
-          });
+          const regionalAvailability = availabilityResults.get(variant.id) ?? {
+            status: "unknown" as const,
+            gelatoStatus: null,
+          };
 
           console.info("[checkout:availability:item]", {
             cartItemId: cartItem.id,
@@ -890,12 +936,14 @@ export async function POST(req: Request) {
       let reusedPendingOrder = false;
 
       if (body.draftOrderId) {
+        const persistStartedAt = Date.now();
         const { data: existingOrder, error: existingOrderError } = await supabase
           .from("orders")
           .select("id, stripe_session_id, payment_status, status")
           .eq("checkout_draft_id", body.draftOrderId)
           .eq("user_id", user.id)
           .maybeSingle();
+        timings.persistMs += elapsedSince(persistStartedAt);
 
         if (existingOrderError) {
           console.error("CHECKOUT_EXISTING_ORDER_LOOKUP_ERROR", {
@@ -955,14 +1003,16 @@ export async function POST(req: Request) {
             }
           }
 
+          const persistUpdateStartedAt = Date.now();
           const { data: updatedOrder, error: updateExistingOrderError } =
             await supabase
-              .from("orders")
-              .update(orderSnapshot)
-              .eq("id", existingOrder.id)
-              .eq("user_id", user.id)
-              .select("id, stripe_session_id")
-              .single();
+            .from("orders")
+            .update(orderSnapshot)
+            .eq("id", existingOrder.id)
+            .eq("user_id", user.id)
+            .select("id, stripe_session_id")
+            .single();
+          timings.persistMs += elapsedSince(persistUpdateStartedAt);
 
           if (updateExistingOrderError || !updatedOrder) {
             console.error("CHECKOUT_ORDER_REUSE_UPDATE_ERROR", {
@@ -978,11 +1028,13 @@ export async function POST(req: Request) {
           order = updatedOrder;
           reusedPendingOrder = true;
 
+          const persistDeleteStartedAt = Date.now();
           const { error: deleteOldItemsError } = await supabase
             .from("order_items")
             .delete()
             .eq("order_id", order.id)
             .eq("user_id", user.id);
+          timings.persistMs += elapsedSince(persistDeleteStartedAt);
 
           if (deleteOldItemsError) {
             console.error("CHECKOUT_ORDER_ITEMS_RESET_ERROR", {
@@ -998,6 +1050,7 @@ export async function POST(req: Request) {
       }
 
       if (!order) {
+        const persistInsertStartedAt = Date.now();
         const { data: insertedOrder, error: orderError } = await supabase
           .from("orders")
           .insert({
@@ -1006,6 +1059,7 @@ export async function POST(req: Request) {
           })
           .select("id, stripe_session_id")
           .single();
+        timings.persistMs += elapsedSince(persistInsertStartedAt);
 
         if (orderError || !insertedOrder) {
           console.error("CHECKOUT_ORDER_CREATE_ERROR", {
@@ -1047,9 +1101,11 @@ export async function POST(req: Request) {
         gelato_product_uid: item.gelato_product_uid,
       }));
 
+      const persistItemsStartedAt = Date.now();
       const { error: orderItemsError } = await supabase
         .from("order_items")
         .insert(orderItemRows);
+      timings.persistMs += elapsedSince(persistItemsStartedAt);
 
       if (orderItemsError) {
         console.error("CHECKOUT_ORDER_ITEMS_CREATE_ERROR", {
@@ -1125,6 +1181,7 @@ export async function POST(req: Request) {
         throw new Error("Stripe did not return a checkout URL");
       }
 
+      const persistSessionStartedAt = Date.now();
       const { error: updateError } = await supabase
         .from("orders")
         .update({
@@ -1132,6 +1189,7 @@ export async function POST(req: Request) {
         })
         .eq("id", order.id)
         .eq("user_id", user.id);
+      timings.persistMs += elapsedSince(persistSessionStartedAt);
 
       if (updateError) {
         console.error("CHECKOUT_ORDER_UPDATE_ERROR", {
@@ -1140,6 +1198,9 @@ export async function POST(req: Request) {
 
         throw new Error("Failed to associate Stripe session");
       }
+
+      timings.totalMs = elapsedSince(totalStartedAt);
+      console.info("[checkout:final:timings]", timings);
 
       return NextResponse.json({
         url: session.url,

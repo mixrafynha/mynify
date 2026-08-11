@@ -359,6 +359,10 @@ function log(event: string, data?: Record<string, unknown>) {
   console.info(event, data ?? {});
 }
 
+function elapsedSince(startedAt: number) {
+  return Date.now() - startedAt;
+}
+
 function safeJson(value: unknown) {
   try {
     return JSON.stringify(value);
@@ -680,6 +684,19 @@ function gelatoRequestPayload(input: {
 }
 
 export async function POST(req: Request) {
+  const totalStartedAt = Date.now();
+  const timings = {
+    authMs: 0,
+    cartLoadMs: 0,
+    userProductsMs: 0,
+    variantsMs: 0,
+    availabilityMs: 0,
+    quotePreparationMs: 0,
+    idempotencyMs: 0,
+    gelatoMs: 0,
+    persistMs: 0,
+    totalMs: 0,
+  };
   try {
     const supabase = createSupabaseServer();
     const body = (await req.json().catch(() => null)) as DraftBody | null;
@@ -703,7 +720,9 @@ export async function POST(req: Request) {
         : null,
     });
 
+    const authStartedAt = Date.now();
     const { data: authData, error: authError } = await supabase.auth.getUser();
+    timings.authMs += elapsedSince(authStartedAt);
     if (authError) {
       console.error("[checkout:draft:02-auth-failed]", { message: authError.message ?? "Unknown auth error" });
     }
@@ -725,11 +744,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ code: "ADDRESS_INVALID", success: false }, { status: 400 });
     }
 
+    const cartStartedAt = Date.now();
     const { data: cartRows, error: cartError } = await supabase
       .from("cart_items")
       .select("id, user_id, product_id, variant_id, user_product_id, design_id, quantity, selected_variant, title")
       .eq("user_id", authData.user.id)
       .in("id", cartItemIds);
+    timings.cartLoadMs += elapsedSince(cartStartedAt);
     if (cartError) return NextResponse.json({ error: cartError.message }, { status: 500 });
     if ((cartRows ?? []).length !== cartItemIds.length) return NextResponse.json({ error: "CART_OWNERSHIP_INVALID" }, { status: 403 });
 
@@ -769,11 +790,15 @@ export async function POST(req: Request) {
           .in("id", userProductIds)
       : Promise.resolve({ data: [] as UserProductRow[], error: null });
 
+    const batchStartedAt = Date.now();
     const [{ data: productRows }, { data: variantRows }, userProductResult] = await Promise.all([
       productRowsPromise,
       variantRowsPromise,
       userProductRowsPromise,
     ]);
+    const batchLoadMs = elapsedSince(batchStartedAt);
+    timings.userProductsMs += batchLoadMs;
+    timings.variantsMs += batchLoadMs;
     const userProductRows = "data" in userProductResult ? userProductResult.data : [];
     const userProductRowsError = "error" in userProductResult ? userProductResult.error : null;
 
@@ -818,10 +843,12 @@ export async function POST(req: Request) {
     );
 
     if (fallbackVariantIds.length) {
+      const fallbackVariantsStartedAt = Date.now();
       const { data: fallbackVariantRows, error: fallbackVariantRowsError } = await supabase
         .from("product_variants")
         .select("id, sku, size, product_color_id, gelato_product_uid, price, name, gelato_attributes")
         .in("id", fallbackVariantIds);
+      timings.variantsMs += elapsedSince(fallbackVariantsStartedAt);
       if (fallbackVariantRowsError) {
         console.error("[checkout:draft:fallback-variants-query-failed]", {
           message: fallbackVariantRowsError.message,
@@ -839,6 +866,7 @@ export async function POST(req: Request) {
     const resolvedItems: ResolvedCheckoutItem[] = [];
     let subtotal = 0;
     const quoteCurrency = "EUR";
+    const availabilityByVariantId = new Map<string, Promise<Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>>();
 
     for (const cartRow of cartRows ?? []) {
       const userProductId = cartRow.user_product_id;
@@ -898,12 +926,20 @@ export async function POST(req: Request) {
         return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
       }
 
-      const regionalAvailability = await checkGelatoRegionalAvailability({
-        variantId: variant.id,
-        countryCode: address.countryCode,
-        gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
-        resolveVariant: async () => variant,
-      });
+      const availabilityKey = `${variant.id}:${address.countryCode}`;
+      const availabilityStartedAt = Date.now();
+      let regionalAvailabilityPromise = availabilityByVariantId.get(availabilityKey);
+      if (!regionalAvailabilityPromise) {
+        regionalAvailabilityPromise = checkGelatoRegionalAvailability({
+          variantId: variant.id,
+          countryCode: address.countryCode,
+          gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+          resolveVariant: async () => variant,
+        });
+        availabilityByVariantId.set(availabilityKey, regionalAvailabilityPromise);
+      }
+      const regionalAvailability = await regionalAvailabilityPromise;
+      timings.availabilityMs += elapsedSince(availabilityStartedAt);
       console.info("[checkout:availability:item]", {
         cartItemId: cartRow.id,
         variantId: variant.id,
@@ -1139,6 +1175,7 @@ export async function POST(req: Request) {
       phonePresent: Boolean(address.phone),
     });
 
+    const quotePreparationStartedAt = Date.now();
     const quotePayload = buildGelatoCheckoutQuotePayload({
       productUid: quoteItems[0].productUid,
       quantity: quoteItems[0].quantity,
@@ -1150,6 +1187,7 @@ export async function POST(req: Request) {
       items: quoteItems,
       currencyIsoCode: quoteCurrency,
     });
+    timings.quotePreparationMs += elapsedSince(quotePreparationStartedAt);
 
     const safeQuotePayload = {
       ...quotePayload,
@@ -1306,7 +1344,9 @@ export async function POST(req: Request) {
       itemCount: idempotencySnapshot.length,
     });
 
+    const idempotencyLookupStartedAt = Date.now();
     const existingDraft = await loadCheckoutDraftRow(supabase, idempotencyKey, authData.user.id);
+    timings.idempotencyMs += elapsedSince(idempotencyLookupStartedAt);
 
     if (existingDraft?.gelato_draft_order_id) {
       return NextResponse.json({
@@ -1328,6 +1368,7 @@ export async function POST(req: Request) {
       });
     }
 
+    const idempotencyClaimStartedAt = Date.now();
     const claim = await claimCheckoutDraftRow({
       supabase,
       idempotencyKey,
@@ -1349,6 +1390,7 @@ export async function POST(req: Request) {
       shippingAmount,
       total: subtotal + shippingAmount,
     });
+    timings.idempotencyMs += elapsedSince(idempotencyClaimStartedAt);
 
     if (!claim.claimed) {
       const waitedDraft = await waitForCheckoutDraft(supabase, idempotencyKey, authData.user.id);
@@ -1450,6 +1492,7 @@ export async function POST(req: Request) {
       bodyLength: gelatoRawText.length,
       bodyPreview: process.env.NODE_ENV !== "production" ? gelatoRawText.slice(0, 500) : undefined,
     });
+    timings.gelatoMs += elapsedSince(gelatoDraftStartedAt);
     console.info("[checkout:draft:15-body-read-start]");
     console.info("[checkout:draft:15-body-read-finished]", {
       bodyLength: gelatoRawText.length,
@@ -1556,6 +1599,7 @@ export async function POST(req: Request) {
       gelatoDraftOrderIdPresent: Boolean(gelatoDraftOrderId),
     });
     if (!gelatoDraftOrderId) {
+      const persistErrorStartedAt = Date.now();
       await supabase
         .from("checkout_drafts")
         .update({
@@ -1564,6 +1608,7 @@ export async function POST(req: Request) {
         })
         .eq("id", claim.draftId)
         .eq("user_id", authData.user.id);
+      timings.persistMs += elapsedSince(persistErrorStartedAt);
       console.error("[checkout:draft:17-id-missing]", gelatoBody);
       return NextResponse.json(
         {
@@ -1616,6 +1661,7 @@ export async function POST(req: Request) {
     });
 
     console.info("[checkout:draft:19-insert-start]");
+    const persistStartedAt = Date.now();
     const { data: savedDraft, error: saveError } = await supabase
       .from("checkout_drafts")
       .update(draftRow)
@@ -1623,6 +1669,7 @@ export async function POST(req: Request) {
       .eq("user_id", authData.user.id)
       .select("id, gelato_draft_order_id, status")
       .single();
+    timings.persistMs += elapsedSince(persistStartedAt);
 
     console.info("[checkout:draft:19-persist-result]", {
       hasData: Boolean(savedDraft),
@@ -1674,6 +1721,9 @@ export async function POST(req: Request) {
       checkoutDraftId: savedDraft?.id ?? null,
       gelatoDraftOrderId,
     });
+
+    timings.totalMs = elapsedSince(totalStartedAt);
+    console.info("[checkout:draft:timings]", timings);
 
     return NextResponse.json({
       success: true,
