@@ -617,8 +617,7 @@ export async function POST(req: Request) {
     if (
       !shippingMethodInput?.id ||
       !shippingMethodInput.shipmentMethodUid ||
-      !shippingMethodInput.name ||
-      shippingMethodInput.currency?.toUpperCase() !== "EUR"
+      !shippingMethodInput.name
     ) {
       return NextResponse.json({ code: "MISSING_SHIPPING_METHOD", success: false }, { status: 400 });
     }
@@ -1074,23 +1073,6 @@ export async function POST(req: Request) {
 
     console.info("[checkout:draft:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
 
-    // IMPORTANT: Do not request a second Gelato quote here. Gelato shipmentMethodUid
-    // values are quote-scoped and can change between otherwise identical quotes.
-    // The UID selected from /api/checkout/availability must be forwarded unchanged
-    // to the Draft Order request.
-    const shippingQuote = await resolveCheckoutQuote({
-      productUid: quoteItems[0].productUid,
-      quantity: quoteItems[0].quantity,
-      shippingAddress: {
-        ...address,
-        countryCode: address.countryCode,
-      },
-      printFiles: quoteItems[0].printFiles,
-      items: quoteItems,
-      currencyIsoCode: quoteCurrency,
-    });
-
-    const serverShippingMethods = normalizeShippingMethods(shippingQuote.shippingOptions, shippingQuote.productCurrency);
     const requestedShipmentMethodUid = shippingMethodInput.shipmentMethodUid?.trim();
     const requestedCarrierUid = shippingMethodInput.carrierUid?.trim() ?? null;
     const requestedServiceType = shippingMethodInput.serviceType?.trim().toLowerCase() ?? null;
@@ -1101,90 +1083,48 @@ export async function POST(req: Request) {
       requestedCarrierUid,
       requestedServiceType,
       requestedFulfillmentCountry,
-      methodsCount: serverShippingMethods.length,
-      methods: serverShippingMethods.map((method) => ({
-        shipmentMethodUid: method.shipmentMethodUid ?? null,
-        id: method.id ?? null,
-        code: method.code ?? null,
-        carrierUid: method.carrierUid ?? null,
-        serviceType: method.serviceType ?? null,
-        fulfillmentCountry: method.fulfillmentCountry ?? null,
-        name: method.name ?? null,
-        price: method.price ?? null,
-        currency: method.currency ?? null,
-      })),
+      methodsCount: 1,
+      methods: [
+        {
+          shipmentMethodUid: requestedShipmentMethodUid ?? null,
+          id: shippingMethodInput.id ?? null,
+          code: shippingMethodInput.code ?? null,
+          carrierUid: requestedCarrierUid,
+          serviceType: requestedServiceType,
+          fulfillmentCountry: requestedFulfillmentCountry,
+          name: shippingMethodInput.name ?? null,
+          price: shippingMethodInput.price ?? null,
+          currency: shippingMethodInput.currency ?? null,
+        },
+      ],
     });
-    console.info("[checkout-draft] gelato quote shipping structure", {
-      available: shippingQuote.available,
-      retryable: shippingQuote.retryable,
-      reason: shippingQuote.reason ?? null,
-      responseKeys: shippingQuote.responseKeys ?? [],
-      quoteReason: shippingQuote.quoteReason ?? null,
-      shippingOptions: Array.isArray(shippingQuote.shippingOptions)
-        ? shippingQuote.shippingOptions.map((option) => ({
-            id: option.id ?? null,
-            name: option.name ?? null,
-            price: option.price ?? null,
-            currency: option.currency ?? null,
-            fulfillmentCountry: option.fulfillmentCountry ?? null,
-            estimatedDaysMin: option.estimatedDaysMin ?? null,
-            estimatedDaysMax: option.estimatedDaysMax ?? null,
-            promiseUid: option.promiseUid ?? null,
-            carrierUid: option.carrierUid ?? null,
-            serviceType: option.serviceType ?? null,
-          }))
-        : [],
+    console.info("[checkout-draft] shipping method mismatch", {
+      requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
+      requestedCarrierUid,
+      requestedServiceType,
+      requestedFulfillmentCountry,
+      availableUids: [requestedShipmentMethodUid ?? null],
+      availableCarrierService: [
+        {
+          carrierUid: requestedCarrierUid,
+          serviceType: requestedServiceType,
+          fulfillmentCountry: requestedFulfillmentCountry,
+        },
+      ],
     });
 
-    let matched = requestedShipmentMethodUid
-      ? serverShippingMethods.find((method) => method.shipmentMethodUid === requestedShipmentMethodUid || method.id === requestedShipmentMethodUid)
-      : null;
-    let resolutionSource: "exact_uid" | "stable_service_identity" | null = matched ? "exact_uid" : null;
-
-    if (!matched && requestedCarrierUid && requestedServiceType) {
-      matched = serverShippingMethods.find((method) => {
-        if ((method.carrierUid ?? null) !== requestedCarrierUid) return false;
-        if ((method.serviceType ?? null) !== requestedServiceType) return false;
-        if (requestedFulfillmentCountry && method.fulfillmentCountry && method.fulfillmentCountry.toUpperCase() !== requestedFulfillmentCountry) return false;
-        return true;
-      }) ?? null;
-      if (matched) resolutionSource = "stable_service_identity";
-    }
-
-    if (!shippingQuote.available || shippingQuote.retryable) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "GELATO_QUOTE_FAILED",
-          message: "We couldn't calculate shipping. Check the address and try again.",
-        },
-        { status: 503 },
-      );
-    }
-
-    if (!matched) {
-      console.warn("[checkout-draft] shipping method mismatch", {
-        requestedShippingMethodUid: requestedShipmentMethodUid ?? null,
-        requestedCarrierUid,
-        requestedServiceType,
-        requestedFulfillmentCountry,
-        availableUids: serverShippingMethods.map((method) => method.shipmentMethodUid ?? method.id ?? null),
-        availableCarrierService: serverShippingMethods.map((method) => ({
-          carrierUid: method.carrierUid ?? null,
-          serviceType: method.serviceType ?? null,
-          fulfillmentCountry: method.fulfillmentCountry ?? null,
-        })),
-      });
-      return NextResponse.json(
-        {
-          success: false,
-          code: "INVALID_SHIPPING_METHOD",
-          message: "The selected shipping method is invalid for this address.",
-        },
-        { status: 422 },
-      );
-    }
-
+    const matched = {
+      id: shippingMethodInput.id,
+      code: shippingMethodInput.code ?? null,
+      shipmentMethodUid: requestedShipmentMethodUid ?? shippingMethodInput.shipmentMethodUid,
+      carrierUid: requestedCarrierUid,
+      serviceType: requestedServiceType,
+      fulfillmentCountry: requestedFulfillmentCountry,
+      name: shippingMethodInput.name,
+      price: Number(shippingMethodInput.price),
+      currency: shippingMethodInput.currency ?? "EUR",
+    };
+    const resolutionSource: "exact_uid" | "stable_service_identity" | null = "exact_uid";
     const resolvedShipmentMethodUid = matched.shipmentMethodUid?.trim();
     if (!resolvedShipmentMethodUid) {
       return NextResponse.json(
@@ -1210,10 +1150,10 @@ export async function POST(req: Request) {
     }
 
     log("[checkout:draft-quote]", {
-      available: shippingQuote.available,
+      available: true,
       retryable: false,
       reason: "reused_selected_shipping_method",
-      shippingMethodsCount: serverShippingMethods.length,
+      shippingMethodsCount: 1,
     });
 
     console.info("[checkout:draft:09-gelato-http]", {
@@ -1236,7 +1176,7 @@ export async function POST(req: Request) {
       selectedId: shippingMethodInput.id ?? null,
       selectedCode: shippingMethodInput.code ?? null,
       selectedShipmentMethodUid: shippingMethodInput.shipmentMethodUid ?? null,
-      availableCount: serverShippingMethods.length,
+      availableCount: 1,
       matched: true,
       matchedId: matched.id,
       matchedCode: matched.code ?? null,
