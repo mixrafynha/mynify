@@ -248,6 +248,17 @@ function elapsedSince(startedAt: number) {
   return Date.now() - startedAt;
 }
 
+function isInvalidSelectedShippingMethod(input: {
+  shipmentMethodUid: string | null;
+  serviceType?: string | null;
+  code?: string | null;
+}) {
+  const uid = normalizeAddressField(input.shipmentMethodUid)?.toLowerCase() ?? "";
+  const serviceType = normalizeAddressField(input.serviceType);
+  const code = normalizeAddressField(input.code);
+  return isInvalidGelatoShippingMethodUid(uid) || (uid.startsWith("api_") && !serviceType && !code);
+}
+
 export async function POST(req: Request) {
   let createdOrderId: string | null = null;
   const totalStartedAt = Date.now();
@@ -821,7 +832,13 @@ export async function POST(req: Request) {
           { status: 409 },
         );
       }
-      if (isInvalidGelatoShippingMethodUid(shipmentMethodUid)) {
+      if (
+        isInvalidSelectedShippingMethod({
+          shipmentMethodUid,
+          serviceType: normalizeAddressField((draftShippingMethod as { serviceType?: unknown } | null)?.serviceType),
+          code: draftShippingMethod?.code ?? null,
+        })
+      ) {
         return NextResponse.json(
           {
             success: false,

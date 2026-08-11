@@ -26,7 +26,17 @@ function toNumber(value: unknown): number | null {
 
 export function isInvalidGelatoShippingMethodUid(value: unknown): boolean {
   const normalized = cleanString(value)?.toLowerCase() ?? "";
-  return normalized === "api_out_of_stock_for_part_order";
+  return normalized === "api_out_of_stock_for_part_order" || normalized === "api_co";
+}
+
+function isInternalGelatoShippingMethod(method: {
+  shipmentMethodUid?: string | null;
+  carrierUid?: string | null;
+  serviceType?: string | null;
+}) {
+  const uid = cleanString(method.shipmentMethodUid) ?? cleanString(method.carrierUid) ?? "";
+  const serviceType = cleanString(method.serviceType);
+  return uid.toLowerCase().startsWith("api_") && !serviceType;
 }
 
 function normalizeId(method: Record<string, any>) {
@@ -84,7 +94,7 @@ export function normalizeShippingMethods(response: unknown, fallbackCurrency?: s
     })
     .filter((method) => {
       const priceValid = method.price !== null && Number.isFinite(method.price) && method.price >= 0;
-      return priceValid && !isInvalidGelatoShippingMethodUid(method.shipmentMethodUid);
+      return priceValid && !isInvalidGelatoShippingMethodUid(method.shipmentMethodUid) && !isInternalGelatoShippingMethod(method);
     });
 
   const deduped = new Map<string, NormalizedShippingMethod>();

@@ -117,6 +117,7 @@ function normalizeCurrency(value: unknown): string | null {
 }
 
 function normalizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
   const number = typeof value === "number" ? value : Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -231,6 +232,14 @@ function normalizeQuoteResponse(raw: unknown, quoteCurrency: string): ResolvedGe
   const shippingOptions = shipments
     .map((shipment) => {
       const price = normalizeNumber(shipment.price);
+      console.info("[gelato:quote:shipment-price-original]", {
+        uid: cleanString(shipment.uid) ?? null,
+        promiseUidPresent: Boolean(cleanString(shipment.promiseUid)),
+        name: cleanString(shipment.name) ?? null,
+        originalPrice: shipment.price ?? null,
+        originalPriceType: shipment.price === null ? "null" : typeof shipment.price,
+        normalizedPrice: price,
+      });
       const shipmentCurrency = currency;
       const fulfillmentCountry = normalizeCountryCode(shipment.fulfillmentCountry ?? production?.productionCountry ?? null);
       const id = cleanString(shipment.promiseUid) ?? cleanString(shipment.uid) ?? cleanString(shipment.name) ?? "";

@@ -434,6 +434,15 @@ function shippingMethodMatches(input: {
   );
 }
 
+function isInvalidSelectedShippingMethod(input: {
+  shipmentMethodUid: string | null;
+  serviceType: string | null;
+}) {
+  const uid = cleanText(input.shipmentMethodUid).toLowerCase();
+  const serviceType = cleanText(input.serviceType);
+  return isInvalidGelatoShippingMethodUid(uid) || (uid.startsWith("api_") && !serviceType);
+}
+
 async function identifyDraftShippingIncompatibleItems(input: {
   resolvedItems: ResolvedCheckoutItem[];
   address: ReturnType<typeof normalizeAddress>;
@@ -1361,7 +1370,7 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
-    if (isInvalidGelatoShippingMethodUid(resolvedShipmentMethodUid)) {
+    if (isInvalidSelectedShippingMethod({ shipmentMethodUid: resolvedShipmentMethodUid, serviceType: requestedServiceType })) {
       return shippingUnavailable();
     }
 
