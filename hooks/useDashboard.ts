@@ -32,7 +32,7 @@ type Notification = {
 
 type Profile = {
   role: string;
-  plan: string;
+  account_type: string | null;
 };
 
 function extractProducts(payload: unknown): unknown[] {
@@ -96,7 +96,7 @@ export function useDashboard() {
 
         const { data: profileData } = await supabase
           .from("profiles")
-          .select("role, plan")
+          .select("role, account_type")
           .eq("id", authData.user.id)
           .single();
 
@@ -125,7 +125,7 @@ export function useDashboard() {
   }, []);
 
   const role = profile?.role ?? "user";
-  const plan = profile?.plan ?? "free";
+  const plan = profile?.account_type ?? "free";
 
   const isAdmin = role === "admin";
   const canSell = plan !== "free";
