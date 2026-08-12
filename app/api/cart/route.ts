@@ -201,17 +201,28 @@ async function resolveUserProductAssets(
 
 export async function GET() {
   try {
-    const supabase = createSupabaseServer();
+    const requestStartedAt = Date.now();
+    console.info("[cart-perf] request_started");
 
+    const clientStartedAt = Date.now();
+    const supabase = createSupabaseServer();
+    console.info("[cart-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
+
+    console.info("[cart-perf] auth_start");
+    const authStartedAt = Date.now();
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
+    console.info("[cart-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
 
     if (authError || !user) {
+      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
       return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
     }
 
+    console.info("[cart-perf] cart_query_start");
+    const cartQueryStartedAt = Date.now();
     const { data, error } = (await supabase
       .from("cart_items")
       .select(`
@@ -241,22 +252,56 @@ export async function GET() {
       `)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
+    console.info(
+      "[cart-perf] cart_query_done durationMs=" +
+        (Date.now() - cartQueryStartedAt) +
+        " rows=" +
+        ((data ?? []).length ?? 0)
+    );
 
     if (error) {
+      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
       return Response.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
+    console.info("[cart-perf] item_resolution_start count=" + (data ?? []).length);
+    const itemResolutionStartedAt = Date.now();
     const items = await Promise.all(
       (data ?? []).map(async (item) => {
+        const itemStartedAt = Date.now();
+        console.info("[cart-perf] cart_item_start itemId=" + item.id);
+        const availableVariantsStart = Date.now();
         const availableVariants = await getAvailableVariants(supabase, item.product_id);
+        console.info(
+          "[cart-perf] cart_item_available_variants_done itemId=" +
+            item.id +
+            " durationMs=" +
+            (Date.now() - availableVariantsStart) +
+            " rows=" +
+            availableVariants.length
+        );
         const selectedVariant = availableVariants.find((variant) => variant.id === item.variant_id) ?? null;
         const variantRelation = firstRelation(item.product_variants);
 
+        const userProductStartedAt = Date.now();
         const userProductAssets = await resolveUserProductAssets(supabase, item.user_product_id);
+        console.info(
+          "[cart-perf] cart_item_user_product_done itemId=" +
+            item.id +
+            " durationMs=" +
+            (Date.now() - userProductStartedAt)
+        );
 
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
+        const previewStartedAt = Date.now();
         const previewFront = frontMockupUrl(userProductAssets.mockups);
         const previewBack = backMockupUrl(userProductAssets.mockups);
+        console.info(
+          "[cart-perf] cart_item_preview_resolution_done itemId=" +
+            item.id +
+            " durationMs=" +
+            (Date.now() - previewStartedAt)
+        );
 
         console.info("[checkout-preview:cart-api] resolved item", {
           userProductId: item.user_product_id,
@@ -287,7 +332,14 @@ export async function GET() {
         };
       }),
     );
+    console.info(
+      "[cart-perf] item_resolution_done durationMs=" +
+        (Date.now() - itemResolutionStartedAt) +
+        " rows=" +
+        items.length
+    );
 
+    console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
     return Response.json({ items }, { headers: { "Cache-Control": "no-store" } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";

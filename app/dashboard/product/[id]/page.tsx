@@ -57,7 +57,9 @@ async function getProduct(id: string) {
     if (!id) return null;
 
     const productStageStartedAt = Date.now();
+    const clientStartedAt = Date.now();
     const supabase = await createSupabaseServer();
+    console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
 
     console.info("[product-perf] product_start");
     const { data: product, error: productError } = await supabase
@@ -177,8 +179,13 @@ async function getProduct(id: string) {
 }
 
 async function getUser() {
+  const clientStartedAt = Date.now();
   const supabase = await createSupabaseServer();
+  console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
+  console.info("[product-perf] auth_getUser_start");
+  const authStartedAt = Date.now();
   const { data } = await supabase.auth.getUser();
+  console.info("[product-perf] auth_getUser_done durationMs=" + (Date.now() - authStartedAt));
   return data.user;
 }
 
