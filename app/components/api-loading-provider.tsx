@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import Loading from "@/app/loading";
+import Loading, { getLoadingSubtitle, getLoadingText } from "@/app/loading";
 
 const LOADING_API_ROUTES = [
   "/api/products",
@@ -117,6 +117,9 @@ export default function ApiLoadingProvider({
   const [loadingCopy, setLoadingCopy] = useState({ label: "Loading", subtitle: "Please wait" });
   const activeRequestsRef = useRef(0);
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const routeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousPathnameRef = useRef(pathname);
+  const routeLoadingActiveRef = useRef(false);
 
   useEffect(() => {
     const bootTimer = window.setTimeout(() => {
@@ -132,12 +135,19 @@ export default function ApiLoadingProvider({
       }
     };
 
+    const clearRouteTimer = () => {
+      if (routeTimerRef.current) {
+        clearTimeout(routeTimerRef.current);
+        routeTimerRef.current = null;
+      }
+    };
+
     const scheduleLoading = () => {
-      if (loadingTimerRef.current || activeRequestsRef.current > 0) return;
+      if (loadingTimerRef.current || activeRequestsRef.current > 0 || routeLoadingActiveRef.current) return;
 
       loadingTimerRef.current = setTimeout(() => {
         loadingTimerRef.current = null;
-        if (activeRequestsRef.current > 0) {
+        if (activeRequestsRef.current > 0 || routeLoadingActiveRef.current) {
           setShowLoading(true);
         }
       }, 60);
@@ -178,9 +188,40 @@ export default function ApiLoadingProvider({
     return () => {
       window.clearTimeout(bootTimer);
       clearLoadingTimer();
+      clearRouteTimer();
       window.fetch = originalFetch;
     };
   }, []);
+
+  useEffect(() => {
+    if (previousPathnameRef.current === pathname) return;
+
+    previousPathnameRef.current = pathname;
+    routeLoadingActiveRef.current = true;
+    setLoadingCopy({ label: getLoadingText(pathname), subtitle: getLoadingSubtitle(pathname) });
+    setShowLoading(true);
+
+    if (routeTimerRef.current) {
+      clearTimeout(routeTimerRef.current);
+    }
+
+    routeTimerRef.current = setTimeout(() => {
+      routeTimerRef.current = null;
+      routeLoadingActiveRef.current = false;
+
+      if (activeRequestsRef.current === 0) {
+        setShowLoading(false);
+        setLoadingCopy({ label: "Loading", subtitle: "Please wait" });
+      }
+    }, 420);
+
+    return () => {
+      if (routeTimerRef.current) {
+        clearTimeout(routeTimerRef.current);
+        routeTimerRef.current = null;
+      }
+    };
+  }, [pathname]);
 
   return (
     <>

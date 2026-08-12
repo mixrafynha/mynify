@@ -13,7 +13,7 @@ const routeLabels: Record<string, string> = {
   "/admin": "Loading admin",
 };
 
-function getLoadingText(pathname: string) {
+export function getLoadingText(pathname: string) {
   const match = Object.entries(routeLabels)
     .sort(([a], [b]) => b.length - a.length)
     .find(([route]) => pathname.startsWith(route));
@@ -31,7 +31,7 @@ function getLoadingText(pathname: string) {
   return `Loading ${label}`;
 }
 
-function getLoadingSubtitle(pathname: string) {
+export function getLoadingSubtitle(pathname: string) {
   const normalized = pathname.toLowerCase();
 
   if (normalized.startsWith("/dashboard/design")) return "Opening the editor";
