@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Loading from "@/app/loading";
 
 const LOADING_API_ROUTES = [
@@ -29,79 +29,13 @@ function getPathname(url: string) {
 function shouldShowLoading(url: string) {
   const pathname = getPathname(url);
 
-  const isExcluded = EXCLUDED_LOADING_ROUTES.some((route) => pathname.startsWith(route));
+  const isExcluded = EXCLUDED_LOADING_ROUTES.some((route) =>
+    pathname.startsWith(route)
+  );
+
   if (isExcluded) return false;
 
   return LOADING_API_ROUTES.some((route) => pathname.startsWith(route));
-}
-
-function getLoadingCopy(input: RequestInfo | URL, init?: RequestInit) {
-  const method = String(init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
-  const url =
-    typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url;
-  const pathname = getPathname(url);
-
-  if (pathname.startsWith("/api/user-products/save-design")) {
-    return { label: "Saving design", subtitle: "Syncing your artwork" };
-  }
-
-  if (pathname.startsWith("/api/designs/save")) {
-    return { label: "Saving design", subtitle: "Keeping your work safe" };
-  }
-
-  if (pathname.startsWith("/api/checkout/draft-order")) {
-    return { label: "Preparing checkout", subtitle: "Checking your order" };
-  }
-
-  if (pathname.startsWith("/api/checkout")) {
-    return { label: "Processing checkout", subtitle: "Finalizing your order" };
-  }
-
-  if (pathname.startsWith("/api/cart") && method === "POST") {
-    return { label: "Updating cart", subtitle: "Saving your cart changes" };
-  }
-
-  if (pathname.startsWith("/api/cart")) {
-    return { label: "Loading cart", subtitle: "Fetching your items" };
-  }
-
-  if (pathname.startsWith("/api/products")) {
-    return { label: "Loading products", subtitle: "Fetching catalog data" };
-  }
-
-  if (pathname.startsWith("/api/profiles")) {
-    return { label: "Loading profile", subtitle: "Syncing account data" };
-  }
-
-  if (pathname.startsWith("/api/settings")) {
-    return { label: "Saving settings", subtitle: "Updating preferences" };
-  }
-
-  if (pathname.startsWith("/api/orders")) {
-    return { label: "Loading orders", subtitle: "Fetching your history" };
-  }
-
-  if (pathname.startsWith("/api/admin/gelato-sync/family/process")) {
-    return { label: "Processing sync", subtitle: "Running family sync" };
-  }
-
-  if (pathname.startsWith("/api/admin/gelato-sync/family/start")) {
-    return { label: "Starting sync", subtitle: "Queueing gelato work" };
-  }
-
-  if (pathname.startsWith("/api/admin/")) {
-    return { label: "Loading admin", subtitle: "Fetching workspace data" };
-  }
-
-  if (pathname.startsWith("/api/Contact")) {
-    return { label: "Loading contact", subtitle: "Fetching contact content" };
-  }
-
-  return { label: "Loading", subtitle: "Please wait" };
 }
 
 export default function ApiLoadingProvider({
@@ -109,41 +43,15 @@ export default function ApiLoadingProvider({
 }: {
   children: React.ReactNode;
 }) {
+  const [activeRequests, setActiveRequests] = useState(0);
   const [booted, setBooted] = useState(false);
-  const [showLoading, setShowLoading] = useState(false);
-  const [loadingCopy, setLoadingCopy] = useState<{ label: string; subtitle?: string }>({
-    label: "Loading",
-    subtitle: "Please wait",
-  });
-  const activeRequestsRef = useRef(0);
-  const showLoadingRef = useRef(false);
-  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const bootTimer = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       setBooted(true);
     }, 900);
 
     const originalFetch = window.fetch;
-
-    const clearLoadingTimer = () => {
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current);
-        loadingTimerRef.current = null;
-      }
-    };
-
-    const scheduleLoading = () => {
-      if (loadingTimerRef.current || activeRequestsRef.current > 0 || showLoadingRef.current) return;
-
-      loadingTimerRef.current = setTimeout(() => {
-        loadingTimerRef.current = null;
-        if (activeRequestsRef.current > 0) {
-          showLoadingRef.current = true;
-          setShowLoading(true);
-        }
-      }, 180);
-    };
 
     window.fetch = async (input, init) => {
       const url =
@@ -157,30 +65,17 @@ export default function ApiLoadingProvider({
         return originalFetch(input, init);
       }
 
-      if (activeRequestsRef.current === 0) {
-        setLoadingCopy(getLoadingCopy(input, init));
-      }
-
-      activeRequestsRef.current += 1;
-      if (activeRequestsRef.current === 1) scheduleLoading();
+      setActiveRequests((count) => count + 1);
 
       try {
         return await originalFetch(input, init);
       } finally {
-        activeRequestsRef.current = Math.max(activeRequestsRef.current - 1, 0);
-
-        if (activeRequestsRef.current === 0) {
-          clearLoadingTimer();
-          showLoadingRef.current = false;
-          setShowLoading(false);
-          setLoadingCopy({ label: "Loading", subtitle: "Please wait" });
-        }
+        setActiveRequests((count) => Math.max(count - 1, 0));
       }
     };
 
     return () => {
-      window.clearTimeout(bootTimer);
-      clearLoadingTimer();
+      window.clearTimeout(timer);
       window.fetch = originalFetch;
     };
   }, []);
@@ -188,7 +83,7 @@ export default function ApiLoadingProvider({
   return (
     <>
       {children}
-      {booted && showLoading && <Loading label={loadingCopy.label} subtitle={loadingCopy.subtitle} />}
+      {booted && activeRequests > 0 && <Loading />}
     </>
   );
 }
