@@ -2,10 +2,13 @@ import Link from "next/link";
 
 export default function CancelPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.96),rgba(246,247,249,1))] px-4 py-10 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-md items-center justify-center">
-        <section className="w-full rounded-3xl border border-black/5 bg-white/90 p-6 text-center shadow-[0_20px_60px_rgba(15,23,42,0.08)] backdrop-blur-sm sm:p-8">
-          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+    <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
+      <section className="relative flex min-h-screen items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_72%_28%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_24%_18%,rgba(239,68,68,0.16),transparent_24%),radial-gradient(circle_at_center,rgba(217,70,239,0.06),transparent_42%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,3,10,0.35)_0%,#03030a_100%)]" />
+
+        <section className="relative w-full max-w-[520px] rounded-[32px] border border-white/10 bg-white/[0.04] p-6 text-center shadow-[0_0_60px_rgba(239,68,68,0.10)] backdrop-blur-2xl sm:p-8">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-400/25 bg-rose-400/10 text-rose-300 shadow-[0_0_24px_rgba(251,113,133,0.14)]">
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="h-7 w-7">
               <path
                 d="M12 8v5"
@@ -14,7 +17,7 @@ export default function CancelPage() {
                 strokeLinecap="round"
               />
               <path
-                d="M12 16.5h.01"
+                d="M12 16.6h.01"
                 stroke="currentColor"
                 strokeWidth="3"
                 strokeLinecap="round"
@@ -28,29 +31,37 @@ export default function CancelPage() {
             </svg>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950 sm:text-3xl">
-            Payment unsuccessful
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-rose-400/20 bg-rose-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-rose-200">
+            Payment not completed
+          </div>
+
+          <h1 className="text-3xl font-black uppercase leading-[0.92] tracking-tight sm:text-4xl">
+            <span className="block text-white">Payment</span>
+            <span className="block bg-gradient-to-r from-rose-300 via-fuchsia-400 to-orange-300 bg-clip-text text-transparent">
+              unsuccessful
+            </span>
           </h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600 sm:text-[15px]">
+
+          <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-white/62 sm:text-[15px]">
             Your payment wasn't completed. You haven't been charged.
           </p>
 
-          <div className="mt-7 grid gap-3">
+          <div className="mt-7 flex flex-col gap-3">
             <Link
               href="/checkout"
-              className="inline-flex items-center justify-center rounded-full bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-500 via-fuchsia-500 to-purple-600 px-5 py-3.5 text-sm font-black text-white shadow-[0_0_35px_rgba(244,63,94,0.25)] transition hover:scale-[1.01]"
             >
               Try again
             </Link>
             <Link
               href="/checkout"
-              className="inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold text-slate-600 transition hover:text-slate-950"
+              className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3.5 text-sm font-black text-white/72 transition hover:border-rose-400/30 hover:bg-white/[0.05] hover:text-white"
             >
               Return to cart
             </Link>
           </div>
         </section>
-      </div>
+      </section>
     </main>
   );
 }
