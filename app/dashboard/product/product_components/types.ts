@@ -5,6 +5,9 @@ export type Product = {
   images?: string[];
   price?: number | string;
   discount_price?: number | string | null;
+  variants?: Array<{
+    price?: number | string | null;
+  }>;
   category?: string;
   color?: string;
   size?: string;

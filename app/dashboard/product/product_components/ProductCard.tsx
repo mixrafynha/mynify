@@ -50,19 +50,32 @@ export default function ProductCard({
 
   const isLiked = Boolean(likes?.[product.id]);
 
+  const variantPrices = Array.isArray(product.variants)
+    ? product.variants
+        .map((variant) => Number(variant?.price))
+        .filter((value) => Number.isFinite(value) && value >= 0)
+    : [];
+
+  const variantPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : null;
   const regularPrice = Number(product.price ?? 0);
   const discountPrice =
     product.discount_price === null || product.discount_price === undefined
       ? null
       : Number(product.discount_price);
 
-  const hasDiscount =
-    discountPrice !== null &&
-    Number.isFinite(discountPrice) &&
-    discountPrice > 0 &&
-    discountPrice < regularPrice;
+  const price = Number.isFinite(variantPrice ?? NaN)
+    ? Number(variantPrice)
+    : Number.isFinite(discountPrice ?? NaN) &&
+        discountPrice !== null &&
+        discountPrice > 0 &&
+        discountPrice < regularPrice
+      ? discountPrice
+      : regularPrice;
 
-  const price = hasDiscount ? discountPrice : regularPrice;
+  const hasDiscount =
+    Number.isFinite(variantPrice ?? NaN) &&
+    regularPrice > 0 &&
+    Number(variantPrice) < regularPrice;
 
   return (
     <Link
