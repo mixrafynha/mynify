@@ -42,7 +42,7 @@ export async function GET() {
   // 📦 PROFILE COMPLETO
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("*") // 🔥 TUDO DA TABELA
+    .select("role, name, username, avatar_url, bio, created_at, updated_at")
     .eq("id", user.id)
     .maybeSingle();
 
