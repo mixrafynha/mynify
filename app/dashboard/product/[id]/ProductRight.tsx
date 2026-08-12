@@ -10,7 +10,6 @@ import {
   AlertTriangle,
   Palette,
   Plus,
-  ShoppingCart,
   Sparkles,
   Star,
   Truck,
@@ -94,9 +93,25 @@ export function ProductRight({
   const stock = selectedVariant?.stock ?? null;
   const isOutOfStock = typeof stock === "number" && stock <= 0;
 
-  const price = Number(
-    selectedVariant?.price ?? product?.discount_price ?? product?.price ?? 0
-  );
+  const variantPrices = useMemo(() => {
+    const variants = Array.isArray(product?.variants) ? product.variants : [];
+
+    return variants
+      .map((variant: any) => Number(variant?.price))
+      .filter((value: number) => Number.isFinite(value) && value >= 0);
+  }, [product?.variants]);
+
+  const price = useMemo(() => {
+    const cheapestVariantPrice =
+      variantPrices.length > 0 ? Math.min(...variantPrices) : null;
+    const fallbackPrice = Number(product?.discount_price ?? product?.price ?? 0);
+
+    if (typeof cheapestVariantPrice === "number") {
+      return cheapestVariantPrice;
+    }
+
+    return Number.isFinite(fallbackPrice) ? fallbackPrice : 0;
+  }, [product?.discount_price, product?.price, variantPrices]);
 
   const selectedVariantLabel = selectedVariant
     ? [selectedVariant.color, selectedVariant.size].filter(Boolean).join(" / ") ||
@@ -400,46 +415,6 @@ export function ProductRight({
     }
 
     return "hoodie";
-  };
-
-  const handleAddToCart = async () => {
-    if (!selectedVariant || isOutOfStock || loading || availabilityStatus === "unavailable") return;
-
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/cart/add", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          productId: product?.id,
-          variantId: selectedVariant?.id,
-          color: selectedVariant?.color,
-          size: selectedVariant?.size,
-          sku: selectedVariant?.sku,
-          title: product?.title,
-          image: product?.image ?? product?.images?.[0] ?? null,
-          price,
-          quantity,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Failed to add to cart");
-      }
-
-      setQuantity(1);
-      showToast("success", "Product added to cart!");
-    } catch (error) {
-      console.error("Error adding to cart:", error);
-      showToast("error", "Error adding to cart.");
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleStartDesigning = async () => {
@@ -789,25 +764,7 @@ export function ProductRight({
           </div>
         )}
 
-        <div className="grid gap-2 sm:grid-cols-2">
-          <button
-            type="button"
-            disabled={!selectedVariant || isOutOfStock || loading || availabilityStatus === "unavailable"}
-            onClick={handleAddToCart}
-            className="group relative flex h-[58px] items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/22 bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-400 px-4 text-[12px] font-black uppercase tracking-[0.12em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
-          >
-            <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/30 to-white/0 opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/18 ring-1 ring-white/10">
-              {loading ? (
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-              ) : (
-                <ShoppingCart size={15} />
-              )}
-            </span>
-            <span className="relative">{loading ? "Adding..." : "Add to cart"}</span>
-            {!loading && <Zap className="relative text-yellow-200" size={14} />}
-          </button>
-
+        <div className="grid gap-2">
           <button
             type="button"
             disabled={loading || availabilityStatus === "unavailable"}
@@ -818,7 +775,7 @@ export function ProductRight({
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
               <Palette size={16} />
             </span>
-            <span className="relative">Start Designing</span>
+            <span className="relative">{loading ? "Opening..." : "Create Your Idea"}</span>
           </button>
         </div>
 
