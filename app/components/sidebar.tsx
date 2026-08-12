@@ -96,6 +96,12 @@ export default function Sidebar() {
 
   const handleNav = useCallback(
     (path: string) => {
+      window.dispatchEvent(
+        new CustomEvent("ryfio-loading-start", {
+          detail: { pathname: path },
+        }),
+      );
+
       if (pathname !== path) router.push(path);
       if (isMobile) setMobileOpen(false);
     },

@@ -127,6 +127,23 @@ export default function ApiLoadingProvider({
     }, 120);
 
     const originalFetch = window.fetch;
+    const handleRouteStart = (event: Event) => {
+      const customEvent = event as CustomEvent<{ pathname?: string }>;
+      const nextPathname = String(customEvent.detail?.pathname || "").trim();
+      if (!nextPathname) return;
+
+      if (routeTimerRef.current) {
+        clearTimeout(routeTimerRef.current);
+        routeTimerRef.current = null;
+      }
+
+      routeLoadingActiveRef.current = true;
+      setLoadingCopy({
+        label: getLoadingText(nextPathname),
+        subtitle: getLoadingSubtitle(nextPathname),
+      });
+      setShowLoading(true);
+    };
 
     const clearLoadingTimer = () => {
       if (loadingTimerRef.current) {
@@ -185,11 +202,14 @@ export default function ApiLoadingProvider({
       }
     };
 
+    window.addEventListener("ryfio-loading-start", handleRouteStart as EventListener);
+
     return () => {
       window.clearTimeout(bootTimer);
       clearLoadingTimer();
       clearRouteTimer();
       window.fetch = originalFetch;
+      window.removeEventListener("ryfio-loading-start", handleRouteStart as EventListener);
     };
   }, []);
 
