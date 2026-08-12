@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 import Loading from "@/app/loading";
 
 const LOADING_API_ROUTES = [
+  "/api/cart",
   "/api/products",
+  "/api/products/",
+  "/api/product-colors",
+  "/api/product-variants",
+  "/api/product-availability",
+  "/api/checkout/availability",
   "/api/profiles",
   "/api/settings",
   "/api/orders",
