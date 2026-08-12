@@ -1,27 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.matchMedia("(max-width: 767px)").matches;
-  });
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === "undefined") return () => {};
 
-  useEffect(() => {
-    const media = window.matchMedia("(max-width: 767px)");
-    const check = () => setIsMobile(media.matches);
+      const media = window.matchMedia("(max-width: 767px)");
+      const handler = () => onStoreChange();
 
-    check();
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", handler);
+        return () => media.removeEventListener("change", handler);
+      }
 
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", check);
-      return () => media.removeEventListener("change", check);
-    }
-
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  return isMobile;
+      media.addListener(handler);
+      return () => media.removeListener(handler);
+    },
+    () => window.matchMedia("(max-width: 767px)").matches,
+    () => false
+  );
 }
