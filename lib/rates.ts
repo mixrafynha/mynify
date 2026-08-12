@@ -1,13 +1,13 @@
 export const rates = {
-  USD: 1,
-  GBP: 0.79,
-  EUR: 0.92,
-}
+  EUR: 1,
+  USD: 1.09,
+  GBP: 0.85,
+};
 
 export const symbols = {
   GBP: "£",
   USD: "$",
   EUR: "€",
-}
+};
 
-export type Currency = keyof typeof rates
+export type Currency = keyof typeof rates;
