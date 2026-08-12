@@ -121,7 +121,7 @@ export default function ApiLoadingProvider({
   useEffect(() => {
     const bootTimer = window.setTimeout(() => {
       setBooted(true);
-    }, 450);
+    }, 120);
 
     const originalFetch = window.fetch;
 
@@ -140,7 +140,7 @@ export default function ApiLoadingProvider({
         if (activeRequestsRef.current > 0) {
           setShowLoading(true);
         }
-      }, 180);
+      }, 60);
     };
 
     window.fetch = async (input, init) => {
