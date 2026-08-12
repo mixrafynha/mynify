@@ -70,7 +70,7 @@ async function getProduct(id: string) {
     console.info("[product-perf] product_done durationMs=" + (Date.now() - productStageStartedAt));
 
     if (productError || !product) {
-      console.error("PRODUCT ERROR:", productError);
+      console.error("PRODUCT ERROR:", productError?.message ?? "Product not found");
       return null;
     }
     const productRow = product as Record<string, any>;
@@ -90,7 +90,7 @@ async function getProduct(id: string) {
     );
 
     if (colorsError) {
-      console.error("COLORS ERROR:", colorsError);
+      console.error("COLORS ERROR:", colorsError.message);
       return null;
     }
 
@@ -124,7 +124,7 @@ async function getProduct(id: string) {
       );
 
       if (variantsError) {
-        console.error("VARIANTS ERROR:", variantsError);
+        console.error("VARIANTS ERROR:", variantsError.message);
         return null;
       }
 
@@ -173,7 +173,7 @@ async function getProduct(id: string) {
       defaultVariant,
     };
   } catch (err) {
-    console.error("GET PRODUCT ERROR:", err);
+    console.error("GET PRODUCT ERROR:", err instanceof Error ? err.message : "Unknown error");
     return null;
   }
 }
