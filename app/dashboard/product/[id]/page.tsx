@@ -74,6 +74,7 @@ async function getProduct(id: string) {
     const productStageStartedAt = Date.now();
     const supabase = await createSupabaseServer();
 
+    console.info("[product-perf] product_start");
     const { data: product, error: productError } = await supabase
       .from("products")
       .select(PRODUCT_SELECT_FIELDS)
@@ -88,6 +89,7 @@ async function getProduct(id: string) {
     const productRow = product as Record<string, any>;
 
     const colorsStageStartedAt = Date.now();
+    console.info("[product-perf] colors_start");
     const { data: colorsData, error: colorsError } = await supabase
       .from("product_colors")
       .select(COLOR_SELECT_FIELDS)
@@ -122,6 +124,7 @@ async function getProduct(id: string) {
 
     if (colorIds.length > 0) {
       const variantsStageStartedAt = Date.now();
+      console.info("[product-perf] variants_start rows=" + colorIds.length);
       const { data: variantsData, error: variantsError } = await supabase
         .from("product_variants")
         .select(VARIANT_SELECT_FIELDS)
@@ -226,6 +229,7 @@ export default async function ProductPage({
 
   const productData = product as Record<string, any>;
   const isAdmin = user?.user_metadata?.role === "admin";
+  console.info("[product-perf] payload_start");
   const payloadEstimateBytes = Buffer.byteLength(
     JSON.stringify({
       ...productData,
@@ -236,8 +240,8 @@ export default async function ProductPage({
     }),
     "utf8"
   );
+  console.info("[product-perf] payload_done bytes=" + payloadEstimateBytes);
 
-  console.info("[product-perf] payload_estimate bytes=" + payloadEstimateBytes);
   console.info("[product-perf] server_ready durationMs=" + (Date.now() - requestStartedAt));
 
   return (
