@@ -8,28 +8,97 @@ const normalize = (v: any) =>
     .trim()
     .toLowerCase();
 
+const PRODUCT_SELECT_FIELDS = [
+  "id",
+  "title",
+  "price",
+  "discount_price",
+  "images",
+  "image",
+  "mockup",
+  "type",
+  "category",
+  "material",
+  "fit",
+  "print_type",
+  "feel",
+  "measurements",
+  "size_guide",
+  "size_tip",
+  "care_wash",
+  "care_inside_out",
+  "care_dry",
+  "care_iron",
+  "production_type",
+  "processing_time",
+  "provider",
+  "sustainability",
+  "shipping",
+  "delivery_time",
+  "tracking",
+  "packaging",
+  "sku",
+  "reviews",
+  "shipping_country",
+  "country",
+  "origin_country",
+].join(", ");
+
+const COLOR_SELECT_FIELDS = [
+  "id",
+  "product_id",
+  "color",
+  "color_hex",
+  "mockup_front",
+  "mockup_back",
+  "thumbnail",
+  "position",
+].join(", ");
+
+const VARIANT_SELECT_FIELDS = [
+  "id",
+  "product_color_id",
+  "name",
+  "size",
+  "stock",
+  "price",
+  "sku",
+  "color",
+  "color_hex",
+].join(", ");
+
 async function getProduct(id: string) {
   try {
     if (!id) return null;
 
+    const productStageStartedAt = Date.now();
     const supabase = await createSupabaseServer();
 
     const { data: product, error: productError } = await supabase
       .from("products")
-      .select("*")
+      .select(PRODUCT_SELECT_FIELDS)
       .eq("id", id)
       .maybeSingle();
+    console.info("[product-perf] product_done durationMs=" + (Date.now() - productStageStartedAt));
 
     if (productError || !product) {
       console.error("PRODUCT ERROR:", productError);
       return null;
     }
+    const productRow = product as Record<string, any>;
 
+    const colorsStageStartedAt = Date.now();
     const { data: colorsData, error: colorsError } = await supabase
       .from("product_colors")
-      .select("*")
-      .eq("product_id", product.id)
+      .select(COLOR_SELECT_FIELDS)
+      .eq("product_id", productRow.id)
       .order("position", { ascending: true });
+    console.info(
+      "[product-perf] colors_done durationMs=" +
+        (Date.now() - colorsStageStartedAt) +
+        " rows=" +
+        (colorsData?.length ?? 0)
+    );
 
     if (colorsError) {
       console.error("COLORS ERROR:", colorsError);
@@ -52,10 +121,17 @@ async function getProduct(id: string) {
     let variants: any[] = [];
 
     if (colorIds.length > 0) {
+      const variantsStageStartedAt = Date.now();
       const { data: variantsData, error: variantsError } = await supabase
         .from("product_variants")
-        .select("*")
+        .select(VARIANT_SELECT_FIELDS)
         .in("product_color_id", colorIds);
+      console.info(
+        "[product-perf] variants_done durationMs=" +
+          (Date.now() - variantsStageStartedAt) +
+          " rows=" +
+          (variantsData?.length ?? 0)
+      );
 
       if (variantsError) {
         console.error("VARIANTS ERROR:", variantsError);
@@ -69,7 +145,7 @@ async function getProduct(id: string) {
 
         return {
           id: variant.id,
-          product_id: product.id,
+          product_id: productRow.id,
           product_color_id: variant.product_color_id,
           name: variant.name ?? null,
           size: normalize(variant.size),
@@ -82,10 +158,10 @@ async function getProduct(id: string) {
       });
     }
 
-    const images = Array.isArray(product.images)
-      ? product.images.filter(Boolean)
-      : product.image
-      ? [product.image]
+    const images = Array.isArray(productRow.images)
+      ? productRow.images.filter(Boolean)
+      : productRow.image
+      ? [productRow.image]
       : [];
 
     const variantPrices = variants
@@ -93,13 +169,13 @@ async function getProduct(id: string) {
       .filter((price): price is number => typeof price === "number");
 
     const price =
-      variantPrices.length > 0 ? Math.min(...variantPrices) : product.price;
+      variantPrices.length > 0 ? Math.min(...variantPrices) : productRow.price;
 
     const defaultVariant =
       variants.find((variant) => variant.stock > 0) || variants[0] || null;
 
     return {
-      ...product,
+      ...productRow,
       images,
       colors,
       variants,
@@ -123,6 +199,9 @@ export default async function ProductPage({
 }: {
   params: { id: string };
 }) {
+  const requestStartedAt = Date.now();
+  console.info("[product-perf] request_started");
+
   const id = params?.id;
 
   if (!id) {
@@ -133,7 +212,9 @@ export default async function ProductPage({
     );
   }
 
+  const authStartedAt = Date.now();
   const [product, user] = await Promise.all([getProduct(id), getUser()]);
+  console.info("[product-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
 
   if (!product) {
     return (
@@ -143,7 +224,21 @@ export default async function ProductPage({
     );
   }
 
+  const productData = product as Record<string, any>;
   const isAdmin = user?.user_metadata?.role === "admin";
+  const payloadEstimateBytes = Buffer.byteLength(
+    JSON.stringify({
+      ...productData,
+      images: productData.images,
+      colors: productData.colors,
+      variants: productData.variants,
+      defaultVariant: productData.defaultVariant,
+    }),
+    "utf8"
+  );
+
+  console.info("[product-perf] payload_estimate bytes=" + payloadEstimateBytes);
+  console.info("[product-perf] server_ready durationMs=" + (Date.now() - requestStartedAt));
 
   return (
     <main
@@ -199,7 +294,7 @@ export default async function ProductPage({
               </p>
 
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                <Link href={`/admin/products/${product.id}`}>
+                <Link href={`/admin/products/${productData.id}`}>
                   <button className="w-full rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 font-black text-white transition active:scale-[0.98] sm:w-auto md:hover:border-fuchsia-300/30">
                     Edit product
                   </button>
@@ -210,7 +305,7 @@ export default async function ProductPage({
                     "use server";
 
                     await fetch(
-                      `${process.env.NEXT_PUBLIC_SITE_URL}/api/products/${product.id}`,
+                      `${process.env.NEXT_PUBLIC_SITE_URL}/api/products/${productData.id}`,
                       {
                         method: "DELETE",
                       }
