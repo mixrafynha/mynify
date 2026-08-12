@@ -66,19 +66,6 @@ function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
 
-function shortUrl(field: string, value: unknown) {
-  const url = publicString(value);
-  if (!url) return { field, value: null };
-  return {
-    field,
-    value: {
-      start: url.slice(0, 80),
-      end: url.slice(-30),
-      length: url.length,
-    },
-  };
-}
-
 function realCanvasFrontMockup(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
 
@@ -123,16 +110,6 @@ function frontMockupUrl(mockups: Record<string, unknown> | null): string | null 
     publicString(mockups.checkout_thumbnail_front_url) ??
     publicString(mockups.image) ??
     publicString(mockups.mockup_front);
-  console.info("[checkout-preview:cart-api] front candidates", {
-    candidates: [
-      shortUrl("front", mockups.front),
-      shortUrl("checkout_thumbnail_url", mockups.checkout_thumbnail_url),
-      shortUrl("checkout_thumbnail_front_url", mockups.checkout_thumbnail_front_url),
-      shortUrl("image", mockups.image),
-      shortUrl("mockup_front", mockups.mockup_front),
-    ],
-    selected: shortUrl("selected", selected),
-  });
   return selected;
 }
 
@@ -143,14 +120,6 @@ function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
     publicString(mockups.checkout_thumbnail_back_url) ??
     publicString(mockups.checkout_thumbnail_back) ??
     null;
-  console.info("[checkout-preview:cart-api] back candidates", {
-    candidates: [
-      shortUrl("back", mockups.back),
-      shortUrl("checkout_thumbnail_back_url", mockups.checkout_thumbnail_back_url),
-      shortUrl("checkout_thumbnail_back", mockups.checkout_thumbnail_back),
-    ],
-    selected: shortUrl("selected", selected),
-  });
   return selected;
 }
 
@@ -268,14 +237,11 @@ export async function GET() {
     const itemResolutionStartedAt = Date.now();
     const items = await Promise.all(
       (data ?? []).map(async (item) => {
-        const itemStartedAt = Date.now();
-        console.info("[cart-perf] cart_item_start itemId=" + item.id);
+        console.info("[cart-perf] cart_item_start");
         const availableVariantsStart = Date.now();
         const availableVariants = await getAvailableVariants(supabase, item.product_id);
         console.info(
-          "[cart-perf] cart_item_available_variants_done itemId=" +
-            item.id +
-            " durationMs=" +
+          "[cart-perf] cart_item_available_variants_done durationMs=" +
             (Date.now() - availableVariantsStart) +
             " rows=" +
             availableVariants.length
@@ -286,10 +252,7 @@ export async function GET() {
         const userProductStartedAt = Date.now();
         const userProductAssets = await resolveUserProductAssets(supabase, item.user_product_id);
         console.info(
-          "[cart-perf] cart_item_user_product_done itemId=" +
-            item.id +
-            " durationMs=" +
-            (Date.now() - userProductStartedAt)
+          "[cart-perf] cart_item_user_product_done durationMs=" + (Date.now() - userProductStartedAt)
         );
 
         const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
@@ -297,19 +260,9 @@ export async function GET() {
         const previewFront = frontMockupUrl(userProductAssets.mockups);
         const previewBack = backMockupUrl(userProductAssets.mockups);
         console.info(
-          "[cart-perf] cart_item_preview_resolution_done itemId=" +
-            item.id +
-            " durationMs=" +
+          "[cart-perf] cart_item_preview_resolution_done durationMs=" +
             (Date.now() - previewStartedAt)
         );
-
-        console.info("[checkout-preview:cart-api] resolved item", {
-          userProductId: item.user_product_id,
-          cartItemId: item.id,
-          previewFront: shortUrl("previewFront", previewFront),
-          previewBack: shortUrl("previewBack", previewBack),
-          image: shortUrl("image", previewFront ?? item.image),
-        });
 
         return {
           ...item,
