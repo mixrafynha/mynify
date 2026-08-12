@@ -16,9 +16,7 @@ const LOADING_API_ROUTES = [
   "/api/admin/",
 ];
 
-const EXCLUDED_LOADING_ROUTES = [
-  "/api/ai-image",
-];
+const EXCLUDED_LOADING_ROUTES = ["/api/ai-image"];
 
 function getPathname(url: string) {
   try {
@@ -37,9 +35,7 @@ function shouldShowLoading(url: string) {
 
   if (isExcluded) return false;
 
-  return LOADING_API_ROUTES.some((route) =>
-    pathname.startsWith(route)
-  );
+  return LOADING_API_ROUTES.some((route) => pathname.startsWith(route));
 }
 
 export default function ApiLoadingProvider({
@@ -48,8 +44,13 @@ export default function ApiLoadingProvider({
   children: React.ReactNode;
 }) {
   const [activeRequests, setActiveRequests] = useState(0);
+  const [booted, setBooted] = useState(false);
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setBooted(true);
+    }, 900);
+
     const originalFetch = window.fetch;
 
     window.fetch = async (input, init) => {
@@ -74,6 +75,7 @@ export default function ApiLoadingProvider({
     };
 
     return () => {
+      window.clearTimeout(timer);
       window.fetch = originalFetch;
     };
   }, []);
@@ -81,7 +83,7 @@ export default function ApiLoadingProvider({
   return (
     <>
       {children}
-      {activeRequests > 0 && <Loading />}
+      {booted && activeRequests > 0 && <Loading />}
     </>
   );
 }
