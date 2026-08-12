@@ -11,37 +11,24 @@ const normalize = (v: any) =>
 const PRODUCT_SELECT_FIELDS = [
   "id",
   "title",
+  "description",
   "price",
+  "currency",
   "discount_price",
-  "images",
   "image",
-  "mockup",
-  "type",
+  "images",
   "category",
-  "material",
-  "fit",
-  "print_type",
-  "feel",
-  "measurements",
-  "size_guide",
-  "size_tip",
-  "care_wash",
-  "care_inside_out",
-  "care_dry",
-  "care_iron",
-  "production_type",
-  "processing_time",
-  "provider",
-  "sustainability",
-  "shipping",
-  "delivery_time",
-  "tracking",
-  "packaging",
-  "sku",
-  "reviews",
-  "shipping_country",
-  "country",
-  "origin_country",
+  "slug",
+  "position",
+  "collection",
+  "is_new",
+  "is_hot",
+  "is_featured",
+  "status",
+  "rating",
+  "sales_count",
+  "audience",
+  "created_at",
 ].join(", ");
 
 const COLOR_SELECT_FIELDS = [
@@ -63,8 +50,6 @@ const VARIANT_SELECT_FIELDS = [
   "stock",
   "price",
   "sku",
-  "color",
-  "color_hex",
 ].join(", ");
 
 async function getProduct(id: string) {
@@ -215,6 +200,7 @@ export default async function ProductPage({
     );
   }
 
+  console.info("[product-perf] auth_start");
   const authStartedAt = Date.now();
   const [product, user] = await Promise.all([getProduct(id), getUser()]);
   console.info("[product-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
