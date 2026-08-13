@@ -191,12 +191,16 @@ export async function GET(
       .map((variant) => Number(variant.price))
       .filter((price) => Number.isFinite(price) && price >= 0);
     const basePrice = Number(product.price ?? 0);
-    const price = variantPrices.length > 0 ? Math.min(...variantPrices) : basePrice;
+    const minPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : basePrice;
     const defaultVariant = variants.find((variant) => variant.stock > 0) ?? variants[0] ?? null;
 
     const responseProduct = {
       ...product,
-      price,
+      // Legacy field used by existing catalog consumers as a "From" price.
+      price: minPrice,
+      basePrice,
+      minPrice,
+      fromPrice: minPrice,
       images,
       colors,
       variants,

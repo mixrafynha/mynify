@@ -300,7 +300,7 @@ export async function POST(req: Request) {
       title: baseProduct.title,
       description: baseProduct.description || null,
       price: basePrice,
-      currency: baseProduct.currency || "USD",
+      currency: baseProduct.currency || "EUR",
       image: baseProduct.image || null,
       images: baseProduct.images || null,
       category: baseProduct.category || input.category || null,

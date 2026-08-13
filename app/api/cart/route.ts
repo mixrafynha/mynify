@@ -1,5 +1,6 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { getAvailableVariants } from "./_variant";
+import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -100,6 +101,38 @@ function parseMockups(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function resolveDisplayPrice(args: {
+  itemPrice: number | string | null;
+  variantPrice: number | string | null | undefined;
+  userProductAssets: UserProductAssets;
+}) {
+  const currentVariantPrice =
+    args.variantPrice === null || args.variantPrice === undefined
+      ? null
+      : Number(args.variantPrice);
+
+  if (!Number.isFinite(currentVariantPrice) || currentVariantPrice === null || currentVariantPrice <= 0) {
+    return args.itemPrice;
+  }
+
+  const designData = asRecord(args.userProductAssets.design_data);
+  const sides = asRecord(designData?.sides);
+  const front = asRecord(sides?.front);
+  const back = asRecord(sides?.back);
+  const secondPrintCharge = resolveSecondPrintCharge({
+    hasFrontDesign: hasVisiblePrintElements(front?.elements),
+    hasBackDesign: hasVisiblePrintElements(back?.elements),
+  });
+
+  return currentVariantPrice + secondPrintCharge;
 }
 
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
@@ -259,6 +292,11 @@ export async function GET() {
         const previewStartedAt = Date.now();
         const previewFront = frontMockupUrl(userProductAssets.mockups);
         const previewBack = backMockupUrl(userProductAssets.mockups);
+        const displayPrice = resolveDisplayPrice({
+          itemPrice: item.price,
+          variantPrice: variantRelation?.price ?? selectedVariant?.price ?? null,
+          userProductAssets,
+        });
         console.info(
           "[cart-perf] cart_item_preview_resolution_done durationMs=" +
             (Date.now() - previewStartedAt)
@@ -267,6 +305,9 @@ export async function GET() {
         return {
           ...item,
           ...userProductAssets,
+          price: displayPrice,
+          cached_price: item.price,
+          price_source: displayPrice === item.price ? "cart_items" : "product_variants",
           image: previewFront ?? item.image,
           previewFront,
           previewBack,
