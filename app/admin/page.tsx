@@ -1,23 +1,23 @@
 "use client";
 
-import { useMemo } from "react";
 import Link from "next/link";
 import {
-  Crown,
-  ShieldCheck,
-  LayoutDashboard,
-  Users,
-  BarChart3,
-  Settings,
-  Megaphone,
-  Sparkles,
   ArrowRight,
+  BarChart3,
+  Crown,
+  LayoutDashboard,
   LockKeyhole,
+  Megaphone,
   MonitorCog,
+  Package,
+  Settings,
+  ShieldCheck,
+  Users,
 } from "lucide-react";
 
 import AdminHeader from "@/app/components/admin/AdminHeader";
 import AdminGuard from "@/app/components/admin/AdminGuard";
+import AdminStats from "@/app/components/admin/AdminStats";
 import { useAdminDashboard } from "@/hooks/useAdminDashboard";
 
 const QUICK_ACTIONS = [
@@ -28,16 +28,16 @@ const QUICK_ACTIONS = [
     path: "/admin/users",
   },
   {
+    name: "Products",
+    desc: "Review product catalog and updates.",
+    icon: Package,
+    path: "/admin/products",
+  },
+  {
     name: "Analytics",
     desc: "Track platform growth and performance.",
     icon: BarChart3,
     path: "/admin/analytics",
-  },
-  {
-    name: "Page control",
-    desc: "Edit public sections, banners and visibility.",
-    icon: LayoutDashboard,
-    path: "/admin/pages",
   },
   {
     name: "Settings",
@@ -45,53 +45,50 @@ const QUICK_ACTIONS = [
     icon: Settings,
     path: "/admin/settings",
   },
-];
+] as const;
 
 const CONTROL_CARDS = [
   {
     title: "Advertising Control",
-    desc: "Manage public campaigns, promo banners and homepage announcements.",
+    desc: "Manage campaigns, promo banners and public announcements.",
     icon: Megaphone,
     label: "Marketing",
     path: "/admin/advertising",
   },
   {
     title: "Mynify Pro",
-    desc: "Create premium features, subscriptions and exclusive admin controls.",
+    desc: "Prepare premium features, subscriptions and exclusive tools.",
     icon: Crown,
     label: "Premium",
     path: "/admin/pro",
   },
   {
     title: "Security Center",
-    desc: "Protect admin access, user data and sensitive platform actions.",
+    desc: "Protect admin access, user data and sensitive actions.",
     icon: ShieldCheck,
     label: "Secure",
     path: "/admin/security",
   },
   {
-    title: "Platform Control",
-    desc: "Monitor pages, visibility, roles and important system settings.",
-    icon: MonitorCog,
+    title: "Page Control",
+    desc: "Edit public sections, visibility and system modules.",
+    icon: LayoutDashboard,
     label: "Control",
     path: "/admin/pages",
   },
-];
+] as const;
 
 export default function AdminDashboard() {
-  const { user, loadingUser, isLoading } = useAdminDashboard();
+  const { user, loadingUser, isLoading, products, users, revenue } =
+    useAdminDashboard();
   const role = user?.profile?.role ?? null;
-  const notifications = useMemo(() => [], []);
+  const notifications: any[] = [];
 
   if (loadingUser || isLoading) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#f7f7fb] text-[#111]">
-        <div className="absolute inset-0 hidden bg-[radial-gradient(circle_at_50%_30%,rgba(168,85,247,0.14),transparent_34%),radial-gradient(circle_at_70%_65%,rgba(14,165,233,0.10),transparent_30%)] md:block" />
-
-        <div className="relative rounded-[28px] border border-black/5 bg-white px-7 py-5 shadow-sm md:bg-white/80 md:shadow-[0_30px_100px_rgba(15,23,42,0.10)] md:backdrop-blur-xl">
-          <p className="animate-pulse text-sm font-black tracking-wide text-black/45">
-            Loading admin workspace...
-          </p>
+      <div className="flex min-h-screen items-center justify-center bg-[#0b0f17] text-white">
+        <div className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-semibold text-white/70 shadow-[0_20px_80px_rgba(0,0,0,0.2)]">
+          Loading admin dashboard...
         </div>
       </div>
     );
@@ -99,54 +96,74 @@ export default function AdminDashboard() {
 
   return (
     <AdminGuard user={user} role={role}>
-      <div className="relative min-h-screen overflow-hidden bg-[#f7f7fb] text-[#111]">
-        <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_10%_0%,rgba(168,85,247,0.13),transparent_30%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.10),transparent_28%),linear-gradient(180deg,#ffffff_0%,#f7f7fb_45%,#f4f2fb_100%)] md:block" />
+      <div className="relative min-h-screen overflow-hidden bg-[#0b0f17] text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.14),transparent_28%),radial-gradient(circle_at_88%_8%,rgba(14,165,233,0.10),transparent_26%),linear-gradient(180deg,#0b0f17_0%,#0f1522_55%,#0b0f17_100%)]" />
 
         <div className="relative z-10 flex min-h-screen min-w-0 flex-1 flex-col">
-          <AdminHeader notifications={notifications} />
+          <AdminHeader notifications={notifications} title="Admin" />
 
           <main className="flex-1 overflow-x-hidden px-3 py-4 sm:px-5 sm:py-5 lg:px-8">
             <div className="mx-auto w-full max-w-[1500px] space-y-5 sm:space-y-6">
-              <section className="relative overflow-hidden rounded-[28px] border border-black/5 bg-white p-5 shadow-sm md:bg-white/75 md:shadow-[0_30px_120px_rgba(15,23,42,0.10)] md:backdrop-blur-xl sm:rounded-[36px] sm:p-8 lg:p-10">
-                <div className="pointer-events-none absolute inset-0 hidden bg-[radial-gradient(circle_at_22%_0%,rgba(168,85,247,0.16),transparent_32%),radial-gradient(circle_at_85%_15%,rgba(14,165,233,0.12),transparent_28%)] md:block" />
+              <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+                <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-8">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.16),transparent_32%),radial-gradient(circle_at_85%_18%,rgba(14,165,233,0.12),transparent_28%)]" />
 
-                <div className="relative flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-                  <div className="max-w-3xl">
-                    <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/15 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-purple-700 sm:text-xs">
-                      <Sparkles size={14} />
-                      Admin Only
+                  <div className="relative flex flex-col gap-6">
+                    <div className="max-w-3xl">
+                      <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white/70">
+                        <LockKeyhole size={13} />
+                        Admin only
+                      </div>
+
+                      <h1 className="text-3xl font-black tracking-[-0.065em] sm:text-5xl lg:text-6xl">
+                        Welcome back,
+                        <span className="block bg-gradient-to-r from-purple-300 via-fuchsia-300 to-cyan-300 bg-clip-text text-transparent">
+                          {user?.email?.split("@")[0] ?? "Admin"}
+                        </span>
+                      </h1>
+
+                      <p className="mt-4 max-w-2xl text-sm font-semibold leading-7 text-white/60 sm:text-base">
+                        Fast access to users, products, analytics, security and
+                        admin tools. Everything stays lightweight and focused.
+                      </p>
                     </div>
 
-                    <h1 className="text-4xl font-black tracking-[-0.065em] text-black sm:text-5xl lg:text-6xl">
-                      Welcome back,
-                      <span className="block bg-gradient-to-r from-purple-700 via-fuchsia-600 to-cyan-600 bg-clip-text text-transparent">
-                        {user?.email?.split("@")[0] ?? "Admin"}
-                      </span>
-                    </h1>
-
-                    <p className="mt-5 max-w-2xl text-sm font-semibold leading-7 text-black/50 sm:text-base">
-                      Your premium control center for managing Mynify pages,
-                      advertising, users, security and Pro features.
-                    </p>
+                    <AdminStats users={users} products={products} revenue={revenue} />
                   </div>
+                </div>
 
-                  <div className="grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-3">
-                    {["Admin", "Pro", "Safe"].map((item) => (
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.18)] sm:p-6">
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-white/45">
+                    Admin status
+                  </p>
+
+                  <div className="mt-4 grid gap-3">
+                    {[
+                      { label: "Role", value: role ?? "unknown" },
+                      { label: "Products", value: String(products?.length ?? 0) },
+                      { label: "Users", value: String(users?.length ?? 0) },
+                    ].map((item) => (
                       <div
-                        key={item}
-                        className="rounded-[26px] border border-black/5 bg-white p-5 shadow-sm md:bg-white/70"
+                        key={item.label}
+                        className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3"
                       >
-                        <p className="text-2xl font-black text-black">{item}</p>
-                        <p className="mt-1 text-[11px] font-black uppercase tracking-widest text-black/35">
-                          {item === "Admin"
-                            ? "Access"
-                            : item === "Pro"
-                              ? "Ready"
-                              : "Protected"}
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/40">
+                          {item.label}
+                        </p>
+                        <p className="mt-1 text-lg font-black text-white">
+                          {item.value}
                         </p>
                       </div>
                     ))}
                   </div>
+
+                  <Link
+                    href="/admin/security"
+                    className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-black text-[#0b0f17] transition active:scale-95"
+                  >
+                    Open security center
+                    <ArrowRight size={16} />
+                  </Link>
                 </div>
               </section>
 
@@ -155,23 +172,23 @@ export default function AdminDashboard() {
                   <Link
                     key={item.title}
                     href={item.path}
-                    className="group rounded-[28px] border border-black/5 bg-white p-5 shadow-sm transition active:scale-[0.99] md:rounded-[30px] md:bg-white/75 md:shadow-[0_20px_70px_rgba(15,23,42,0.07)] md:backdrop-blur-xl md:hover:-translate-y-1 md:hover:border-purple-500/20 md:hover:shadow-[0_30px_90px_rgba(168,85,247,0.14)]"
+                    className="group rounded-[24px] border border-white/10 bg-white/[0.04] p-5 shadow-[0_16px_50px_rgba(0,0,0,0.12)] transition active:scale-[0.99] hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06]"
                   >
                     <div className="mb-5 flex items-center justify-between">
-                      <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/10 text-purple-700 ring-1 ring-purple-500/10">
-                        <item.icon size={22} />
+                      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-white/8 text-white">
+                        <item.icon size={21} />
                       </div>
 
-                      <span className="rounded-full border border-black/5 bg-black/[0.03] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-black/35">
+                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white/45">
                         {item.label}
                       </span>
                     </div>
 
-                    <h3 className="text-lg font-black tracking-[-0.035em] text-black">
+                    <h3 className="text-lg font-black tracking-[-0.035em] text-white">
                       {item.title}
                     </h3>
 
-                    <p className="mt-2 text-sm font-semibold leading-6 text-black/45">
+                    <p className="mt-2 text-sm font-semibold leading-6 text-white/55">
                       {item.desc}
                     </p>
                   </Link>
@@ -179,15 +196,16 @@ export default function AdminDashboard() {
               </section>
 
               <section className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm md:rounded-[32px] md:bg-white/75 md:shadow-[0_25px_90px_rgba(15,23,42,0.08)] md:backdrop-blur-xl sm:p-6">
-                  <div className="mb-6">
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">
-                      Quick Actions
-                    </p>
-
-                    <h2 className="mt-2 text-2xl font-black tracking-[-0.045em] text-black">
-                      Admin shortcuts
-                    </h2>
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.14)] sm:p-6">
+                  <div className="mb-5 flex items-end justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.25em] text-white/45">
+                        Quick actions
+                      </p>
+                      <h2 className="mt-2 text-2xl font-black tracking-[-0.045em] text-white">
+                        Admin shortcuts
+                      </h2>
+                    </div>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -195,18 +213,18 @@ export default function AdminDashboard() {
                       <Link
                         key={action.name}
                         href={action.path}
-                        className="group flex items-center justify-between rounded-3xl border border-black/5 bg-black/[0.025] px-4 py-4 text-left transition active:scale-[0.99] md:hover:border-purple-500/20 md:hover:bg-purple-500/10"
+                        className="group flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-left transition active:scale-[0.99] hover:border-white/20 hover:bg-white/[0.06]"
                       >
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white text-black/65 shadow-sm">
+                          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white/8 text-white">
                             <action.icon size={18} />
                           </div>
 
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-black text-black/80">
+                            <p className="truncate text-sm font-black text-white">
                               {action.name}
                             </p>
-                            <p className="line-clamp-2 text-xs font-semibold text-black/38">
+                            <p className="line-clamp-2 text-xs font-semibold text-white/45">
                               {action.desc}
                             </p>
                           </div>
@@ -214,40 +232,51 @@ export default function AdminDashboard() {
 
                         <ArrowRight
                           size={16}
-                          className="shrink-0 text-black/25 transition md:group-hover:translate-x-1 md:group-hover:text-purple-700"
+                          className="shrink-0 text-white/25 transition group-hover:translate-x-1 group-hover:text-white"
                         />
                       </Link>
                     ))}
                   </div>
                 </div>
 
-                <div className="relative overflow-hidden rounded-[28px] border border-purple-500/10 bg-white p-5 shadow-sm md:rounded-[32px] md:bg-white/75 md:shadow-[0_25px_100px_rgba(168,85,247,0.13)] md:backdrop-blur-xl sm:p-6">
-                  <div className="absolute -right-16 -top-16 hidden h-44 w-44 rounded-full bg-purple-500/15 blur-3xl md:block" />
-
-                  <div className="relative">
-                    <div className="mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-purple-600 to-cyan-500 text-white shadow-sm md:shadow-[0_20px_50px_rgba(168,85,247,0.28)]">
-                      <LockKeyhole size={25} />
-                    </div>
-
-                    <p className="text-xs font-black uppercase tracking-[0.25em] text-purple-700">
-                      Premium Admin
+                <div className="rounded-[28px] border border-white/10 bg-white/[0.045] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.14)] sm:p-6">
+                  <div className="mb-5">
+                    <p className="text-xs font-black uppercase tracking-[0.25em] text-white/45">
+                      Control panel
                     </p>
-
-                    <h2 className="mt-2 text-3xl font-black tracking-[-0.055em] text-black">
-                      Build the Pro layer.
+                    <h2 className="mt-2 text-2xl font-black tracking-[-0.045em] text-white">
+                      Manage the platform
                     </h2>
+                  </div>
 
-                    <p className="mt-4 text-sm font-semibold leading-7 text-black/50">
-                      Prepare advanced controls, premium visibility, paid
-                      features, page modules and exclusive tools for future Pro
-                      users.
-                    </p>
-
+                  <div className="space-y-3">
                     <Link
-                      href="/admin/pro"
-                      className="mt-6 inline-flex rounded-2xl bg-black px-5 py-3 text-sm font-black text-white shadow-sm transition active:scale-95 md:shadow-[0_18px_50px_rgba(0,0,0,0.18)] md:hover:scale-[1.03]"
+                      href="/admin/users"
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.06]"
                     >
-                      Configure Pro
+                      Users
+                      <ArrowRight size={16} />
+                    </Link>
+                    <Link
+                      href="/admin/products"
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      Products
+                      <ArrowRight size={16} />
+                    </Link>
+                    <Link
+                      href="/admin/analytics"
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      Analytics
+                      <ArrowRight size={16} />
+                    </Link>
+                    <Link
+                      href="/admin/settings"
+                      className="flex items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm font-semibold text-white/80 transition hover:border-white/20 hover:bg-white/[0.06]"
+                    >
+                      Settings
+                      <ArrowRight size={16} />
                     </Link>
                   </div>
                 </div>
