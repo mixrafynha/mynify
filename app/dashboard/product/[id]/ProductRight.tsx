@@ -70,8 +70,6 @@ export function ProductRight({
 }: any) {
   const router = useRouter();
   const title = String(product?.title ?? "Untitled product").trim();
-  const [titleFirstWord, ...titleRemainingWords] = title.split(/\s+/);
-  const titleRemaining = titleRemainingWords.join(" ");
 
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -554,15 +552,10 @@ export function ProductRight({
       <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
         <div className="space-y-2 text-left">
           <h1
-            className="max-w-[11ch] text-[1.73rem] uppercase leading-[0.98] tracking-[-0.03em] text-white sm:text-[2.13rem] lg:text-[2.66rem]"
-            style={{ fontFamily: "var(--font-logo)" }}
+            className="max-w-full overflow-hidden text-[1.73rem] uppercase leading-[0.92] tracking-[-0.04em] text-white sm:text-[2.13rem] lg:text-[2.66rem]"
+            style={{ fontFamily: "var(--font-logo)", textWrap: "balance" }}
           >
-            <span className="block">{titleFirstWord}</span>
-            {titleRemaining ? (
-              <span className="block whitespace-nowrap text-white/92">
-                {titleRemaining}
-              </span>
-            ) : null}
+            <span className="whitespace-nowrap">{title}</span>
           </h1>
 
           <p className="max-w-[30rem] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/42 sm:text-[12px]">
@@ -570,7 +563,7 @@ export function ProductRight({
           </p>
         </div>
 
-        <div className="border border-white/[0.07] bg-[#1b1424] p-4 sm:p-5">
+        <div className="border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] p-4 sm:p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
               <div className="text-[1.8rem] font-black tracking-tight text-white sm:text-[2.2rem]">

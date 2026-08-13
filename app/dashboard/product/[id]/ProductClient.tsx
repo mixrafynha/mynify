@@ -264,19 +264,19 @@ export default function ProductClient({
         <DeliveryPill
           icon={CheckCircle}
           title="Production"
-          value="2-4 business days"
+          value="Fast"
           tone="text-fuchsia-300"
         />
         <DeliveryPill
           icon={Truck}
           title="Shipping"
-          value="3-7 business days"
+          value="Quick"
           tone="text-fuchsia-300"
         />
         <DeliveryPill
           icon={ShieldCheck}
           title="Delivery"
-          value="5-11 business days"
+          value="Ready"
           tone="text-white"
         />
       </section>
