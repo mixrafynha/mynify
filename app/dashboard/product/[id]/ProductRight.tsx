@@ -594,7 +594,6 @@ export function ProductRight({
 
           <div className="mt-5 flex items-center justify-between gap-4">
             <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.14em] text-white/52">
-              <span>Stock</span>
               <span
                 className={`inline-flex h-3 w-3 rounded-full ${
                   typeof stock === "number" && stock > 0
@@ -602,13 +601,6 @@ export function ProductRight({
                     : "bg-[#ef4444]"
                 }`}
               />
-              <span className="normal-case tracking-normal text-white/72">
-                {typeof stock === "number"
-                  ? stock > 0
-                    ? `In stock (${stock})`
-                    : "Out of stock"
-                  : "Select variant"}
-              </span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -760,18 +752,18 @@ export function ProductRight({
             <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
               <Palette size={16} />
             </span>
-            <span className="relative">{loading ? "Opening..." : "Create Your Idea"}</span>
+            <span className="relative">{loading ? "Opening..." : "BUY FOR YOUR SELF"}</span>
           </button>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
-            <Sparkles size={12} className="text-fuchsia-300" />
-            Secure checkout
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
             <Globe2 size={12} className="text-emerald-300" />
             CO2 0%
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+            <Sparkles size={12} className="text-fuchsia-300" />
+            Secure checkout
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
             <Check size={12} className="text-cyan-300" />
