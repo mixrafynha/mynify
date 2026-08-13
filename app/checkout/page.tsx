@@ -217,6 +217,56 @@ function resolvePreviewImageSources(item: CartItem) {
   return { front, back };
 }
 
+function cleanUuid(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(trimmed)
+    ? trimmed
+    : null;
+}
+
+function readVariantIdFromRecord(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return cleanUuid(record.id) ?? cleanUuid(record.variant_id) ?? cleanUuid(record.variantId);
+}
+
+function resolveCheckoutAvailabilityVariantId(item: CartItem) {
+  const directVariantId = cleanUuid(item.variant_id);
+  if (directVariantId) return directVariantId;
+
+  const selectedVariant =
+    item.selectedVariant ??
+    (item as unknown as { selected_variant?: unknown }).selected_variant ??
+    null;
+  const selectedVariantId = readVariantIdFromRecord(selectedVariant);
+  if (selectedVariantId) return selectedVariantId;
+
+  const designData = item.design_data ?? item.designData;
+  const designRecord =
+    designData && typeof designData === "object" && !Array.isArray(designData)
+      ? (designData as Record<string, unknown>)
+      : null;
+  const designVariantId =
+    readVariantIdFromRecord(designRecord?.selectedVariant) ??
+    readVariantIdFromRecord(designRecord?.selected_variant);
+  if (designVariantId) return designVariantId;
+
+  const variants = [
+    ...safeArray<CartVariant>(item.availableVariants),
+    ...safeArray<CartVariant>(item.available_variants),
+    ...safeArray<CartVariant>(item.variants),
+  ];
+  const matchedVariant = variants.find((variant) => {
+    const sameSku = item.sku && variantSku(variant) === item.sku;
+    const sameColorAndSize =
+      variantColor(variant) === item.color && variantSize(variant) === item.size;
+    return sameSku || sameColorAndSize;
+  });
+
+  return matchedVariant ? readVariantIdFromRecord(matchedVariant) : null;
+}
+
 function previewSourceRank(item: CartItem, side: "front" | "back") {
   const designData = item.design_data ?? item.designData ?? {};
   const directMockups =
@@ -478,7 +528,7 @@ export default function CheckoutPage() {
     const normalizedItems = items.map((item) => ({
       id: item.id,
       productId: getCartProductId(item),
-      variantId: item.variant_id ?? null,
+      variantId: resolveCheckoutAvailabilityVariantId(item),
       designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
       userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
       quantity: Math.max(1, Number(item.quantity) || 1),
@@ -892,7 +942,7 @@ export default function CheckoutPage() {
               title: item.title,
               productId: getCartProductId(item),
               productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
-              variantId: item.variant_id ?? null,
+              variantId: resolveCheckoutAvailabilityVariantId(item),
               designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
               userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
               color: item.color ?? null,
