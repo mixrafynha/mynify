@@ -20,7 +20,7 @@ const safeText = (val: unknown) => {
 };
 
 const createHref = (category: string) =>
-  safeHref(`/dashboard/create?category=${encodeURIComponent(category)}`);
+  safeHref(`/products?category=${encodeURIComponent(category)}`);
 
 type Product = {
   name: string;
