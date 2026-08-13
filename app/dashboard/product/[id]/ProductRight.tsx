@@ -93,25 +93,17 @@ export function ProductRight({
   const stock = selectedVariant?.stock ?? null;
   const isOutOfStock = typeof stock === "number" && stock <= 0;
 
-  const variantPrices = useMemo(() => {
-    const variants = Array.isArray(product?.variants) ? product.variants : [];
-
-    return variants
-      .map((variant: any) => Number(variant?.price))
-      .filter((value: number) => Number.isFinite(value) && value >= 0);
-  }, [product?.variants]);
-
   const price = useMemo(() => {
-    const cheapestVariantPrice =
-      variantPrices.length > 0 ? Math.min(...variantPrices) : null;
+    const selectedVariantPrice =
+      selectedVariant?.price != null ? Number(selectedVariant.price) : null;
     const fallbackPrice = Number(product?.discount_price ?? product?.price ?? 0);
 
-    if (typeof cheapestVariantPrice === "number") {
-      return cheapestVariantPrice;
+    if (typeof selectedVariantPrice === "number" && Number.isFinite(selectedVariantPrice)) {
+      return selectedVariantPrice;
     }
 
     return Number.isFinite(fallbackPrice) ? fallbackPrice : 0;
-  }, [product?.discount_price, product?.price, variantPrices]);
+  }, [product?.discount_price, product?.price, selectedVariant?.price]);
 
   const selectedVariantLabel = selectedVariant
     ? [selectedVariant.color, selectedVariant.size].filter(Boolean).join(" / ") ||
