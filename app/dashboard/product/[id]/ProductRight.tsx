@@ -764,14 +764,14 @@ export function ProductRight({
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
             <Sparkles size={12} className="text-fuchsia-300" />
             Secure checkout
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
             <Globe2 size={12} className="text-emerald-300" />
-            Worldwide shipping
+            CO2 0%
           </span>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
             <Check size={12} className="text-cyan-300" />

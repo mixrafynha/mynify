@@ -1,7 +1,7 @@
 import Link from "next/link";
 import ProductClient from "./ProductClient";
-import { ArrowLeft } from "lucide-react";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import BackButton from "./BackButton";
 
 const normalize = (v: any) =>
   String(v ?? "")
@@ -267,17 +267,7 @@ export default async function ProductPage({
               </div>
             </Link>
 
-            <Link
-              href="/dashboard/product"
-              className="group absolute right-3 grid h-11 w-11 place-items-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white transition active:scale-[0.98] hover:border-fuchsia-300/30 sm:right-5 md:static"
-              aria-label="Back to products"
-            >
-              <ArrowLeft
-                size={18}
-                className="transition-transform duration-200 md:group-hover:-translate-x-0.5"
-                aria-hidden="true"
-              />
-            </Link>
+            <BackButton />
           </div>
         </header>
 
