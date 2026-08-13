@@ -188,8 +188,8 @@ export async function GET(
         : [];
 
     const variantPrices = variants
-      .map((variant) => variant.price)
-      .filter((price): price is number => typeof price === "number" && Number.isFinite(price));
+      .map((variant) => Number(variant.price))
+      .filter((price) => Number.isFinite(price) && price >= 0);
     const basePrice = Number(product.price ?? 0);
     const price = variantPrices.length > 0 ? Math.min(...variantPrices) : basePrice;
     const defaultVariant = variants.find((variant) => variant.stock > 0) ?? variants[0] ?? null;

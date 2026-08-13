@@ -95,11 +95,8 @@ export async function getProducts({
     const productVariants = variantsByProduct.get(product.id) ?? [];
 
     const variantPrices = productVariants
-      .map((variant) => variant.price)
-      .filter(
-        (price): price is number =>
-          typeof price === "number" && Number.isFinite(price)
-      );
+      .map((variant) => Number(variant.price))
+      .filter((price) => Number.isFinite(price) && price >= 0);
 
     const price =
       variantPrices.length > 0 ? Math.min(...variantPrices) : product.price;
@@ -133,7 +130,7 @@ export async function getProducts({
         color: variant.color,
         size: variant.size,
         stock: variant.stock,
-        price: variant.price,
+        price: variant.price != null ? Number(variant.price) : null,
         color_hex: variant.color_hex,
         sku: variant.sku,
         name: variant.name,
