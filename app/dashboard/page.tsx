@@ -1,24 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Section from "@/app/components/ui/Section";
-
-import { useDashboard } from "@/hooks/useDashboard";
 import {
   ArrowRight,
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Megaphone,
-  PackageCheck,
-  Rocket,
+  Bell,
+  Plus,
+  Package,
   ShoppingCart,
   Sparkles,
+  Truck,
   Store,
+  Settings,
+  Megaphone,
 } from "lucide-react";
 
+import Section from "@/app/components/ui/Section";
+import { useDashboard } from "@/hooks/useDashboard";
 
 const CartDrawer = dynamic(() => import("@/app/components/ui/CartDrawer"), {
   ssr: false,
@@ -39,7 +38,7 @@ const SmartCreateButton = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="h-11 w-11 rounded-full border border-purple-400/20 bg-[#070711] shadow-[0_0_24px_rgba(168,85,247,0.18)] sm:w-auto sm:px-4" />
+      <div className="h-11 w-11 rounded-full border border-slate-300 bg-white sm:w-auto sm:px-4" />
     ),
   }
 );
@@ -48,48 +47,49 @@ const ProductGrid = dynamic(
   () => import("@/app/components/products/ProductGrid"),
   {
     loading: () => (
-      <div className="h-[320px] animate-pulse rounded-3xl bg-white/[0.035]" />
+      <div className="h-[320px] animate-pulse rounded-[24px] bg-white/60" />
     ),
   }
 );
 
-const safeArray = <T,>(v: unknown): T[] => (Array.isArray(v) ? v : []);
+const safeArray = <T,>(value: unknown): T[] => (Array.isArray(value) ? value : []);
 
 let lastClick = 0;
 
 type CartItem = { quantity: number };
 type Ad = { title?: string; desc?: string; cta?: string; href?: string };
 
-const STORAGE_KEY = "mynify-dashboard-steps-minimized";
-
 const DEFAULT_AD: Required<Ad> = {
-  title: "Boost your brand with AI",
-  desc: "Create products, generate content and launch faster than ever.",
-  cta: "Explore AI tools",
+  title: "Launch faster with a cleaner workflow",
+  desc: "Create products, check orders, and keep the store moving without extra noise.",
+  cta: "Explore tools",
   href: "/dashboard/advertise",
 };
 
-const STEPS = [
+const QUICK_ACTIONS = [
   {
-    title: "Create your first product",
-    desc: "Pick a product, add your design, and publish it with Mynify.",
-    button: "Create product",
-    icon: Store,
+    title: "Create product",
+    desc: "Start a new design or launch a fresh product in a few clicks.",
     href: "/dashboard/create",
+    icon: Plus,
   },
   {
-    title: "Connect your store",
-    desc: "Connect your favorite platform and start selling your designs.",
-    button: "Connect my store",
-    icon: PackageCheck,
-    href: "/dashboard/connect",
+    title: "View products",
+    desc: "Open the catalog, review items, and jump into product edits.",
+    href: "/dashboard/product",
+    icon: Store,
   },
   {
-    title: "Join Seller's Club",
-    desc: "Get exclusive benefits and grow your business faster.",
-    button: "Join now",
-    icon: Rocket,
-    href: "/dashboard/advertise",
+    title: "Check orders",
+    desc: "Track incoming orders and follow the fulfillment flow.",
+    href: "/dashboard/orders",
+    icon: Truck,
+  },
+  {
+    title: "Store settings",
+    desc: "Tune your profile, account and operational basics.",
+    href: "/dashboard/settings",
+    icon: Settings,
   },
 ] as const;
 
@@ -104,18 +104,14 @@ export default function Dashboard() {
     products,
     isLoading,
     notifications,
+    canSell,
   } = useDashboard();
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [ad, setAd] = useState<Required<Ad>>(DEFAULT_AD);
-  const [activeStep, setActiveStep] = useState(0);
-  const [minimized, setMinimized] = useState(false);
 
   const safeProducts = useMemo(() => safeArray<any>(products), [products]);
-  const safeNotifications = useMemo(
-    () => safeArray<any>(notifications),
-    [notifications]
-  );
+  const safeNotifications = useMemo(() => safeArray<any>(notifications), [notifications]);
 
   const totalCartItems = useMemo(
     () => cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
@@ -126,22 +122,12 @@ export default function Dashboard() {
     router.push(href);
   }, [router]);
 
-  const toggleMinimized = useCallback(() => {
-    setMinimized((prev) => {
-      const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
-      return next;
-    });
-  }, []);
-
   const loadCartCount = useCallback(async () => {
     if (cartRequestRef.current) return cartRequestRef.current;
 
     const request = (async () => {
       try {
-        const res = await fetch("/api/cart", {
-          cache: "no-store",
-        });
+        const res = await fetch("/api/cart", { cache: "no-store" });
         if (!res.ok) return;
 
         const data = await res.json();
@@ -176,10 +162,8 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    setMinimized(localStorage.getItem(STORAGE_KEY) === "true");
     loadCartCount();
-
-    const deferredAd = window.setTimeout(loadAd, 500);
+    const deferredAd = window.setTimeout(loadAd, 350);
     return () => window.clearTimeout(deferredAd);
   }, [loadCartCount, loadAd]);
 
@@ -195,252 +179,223 @@ export default function Dashboard() {
   }, [openCart]);
 
   return (
-    <div className="min-h-screen overflow-hidden bg-[#03030a] text-white">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-[680px] bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.15),transparent_34%),linear-gradient(180deg,#03030a_0%,#070711_58%,transparent_100%)] md:fixed md:inset-0 md:h-auto md:bg-[radial-gradient(circle_at_12%_0%,rgba(168,85,247,0.18),transparent_30%),radial-gradient(circle_at_88%_4%,rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#03030a_0%,#070711_52%,#03030a_100%)]" />
+    <div className="min-h-screen bg-[#f6f7fb] text-slate-900">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.11),transparent_34%),radial-gradient(circle_at_85%_0%,rgba(16,185,129,0.09),transparent_26%),linear-gradient(180deg,#f8fafc_0%,#f6f7fb_35%,#eef2ff_100%)]" />
 
       <div className="relative z-10">
-        <header className="sticky top-0 z-30 border-b border-white/10 bg-[#03030a]/95 px-3 py-3 sm:px-5 md:bg-[#03030a]/80 md:px-8 md:backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3">
-            <div className="md:hidden pl-[40px]">
-              <p className="truncate text-[11px] font-extrabold uppercase tracking-[0.28em] text-purple-300 drop-shadow-sm">
+        <header className="sticky top-0 z-30 border-b border-slate-200/80 bg-white/80 px-4 py-3 backdrop-blur-xl sm:px-6">
+          <div className="mx-auto flex max-w-[1440px] items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-500">
                 Dashboard
               </p>
-            
-              <h1 className="truncate text-xl font-black tracking-[-0.05em] text-white leading-tight">
-                Brand workspace
-              </h1>
-            </div>
-            
-            <div className="hidden md:block">
-              <p className="truncate text-[10px] font-black uppercase tracking-[0.22em] text-purple-300 sm:text-xs">
-                Dashboard
-              </p>
-            
-              <h1 className="truncate text-lg font-black tracking-[-0.045em] text-white sm:text-2xl">
-                Brand workspace
+              <h1 className="truncate text-xl font-black tracking-[-0.04em] text-slate-950 sm:text-2xl">
+                Admin landing
               </h1>
             </div>
 
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <NotificationBell notifications={safeNotifications} />
-
               <button
                 type="button"
                 onClick={safeOpenCart}
-                className="relative grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-white shadow-sm transition hover:border-purple-400/40 hover:text-purple-200 active:scale-95 md:h-11 md:w-11"
+                className="relative grid h-10 w-10 place-items-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:border-slate-300 hover:text-slate-950 active:scale-95 md:h-11 md:w-11"
+                aria-label="Open cart"
               >
                 <ShoppingCart size={18} />
-
                 {totalCartItems > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-r from-purple-600 to-fuchsia-500 px-1.5 text-[11px] font-black text-white">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-slate-950 px-1.5 text-[11px] font-black text-white">
                     {totalCartItems}
                   </span>
                 )}
               </button>
 
+              <NotificationBell notifications={safeNotifications} />
               <SmartCreateButton />
             </div>
           </div>
         </header>
 
-        <main className="px-3 py-5 sm:px-5 md:px-8 md:py-7">
-          <div className="mx-auto max-w-[1500px] space-y-10">
-            <section>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <Store size={25} className="shrink-0 text-purple-300" />
-
-                  <h2 className="truncate text-xl font-black tracking-[-0.045em] text-white sm:text-2xl md:text-3xl">
-                    Set up{" "}
-                    <span className="text-white/35">My new store</span>
-                  </h2>
-
-                  <Info size={16} className="hidden shrink-0 text-white/50 sm:block" />
+        <main className="px-4 py-5 sm:px-6 sm:py-6">
+          <div className="mx-auto flex max-w-[1440px] flex-col gap-6">
+            <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-8">
+                <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
+                  <Sparkles size={13} />
+                  Ready to move
                 </div>
+
+                <div className="mt-5 max-w-2xl">
+                  <h2 className="text-3xl font-black tracking-[-0.055em] text-slate-950 sm:text-5xl">
+                    Keep the admin flow simple and fast.
+                  </h2>
+                  <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600 sm:text-base">
+                    A lightweight workspace for the daily tasks: create products,
+                    inspect orders, check notifications, and jump into the store
+                    when something needs attention.
+                  </p>
+                </div>
+
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => goTo("/dashboard/create")}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800 active:scale-95"
+                  >
+                    Create product
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goTo("/dashboard/product")}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 transition hover:border-slate-300 hover:text-slate-950 active:scale-95"
+                  >
+                    Browse catalog
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_18px_60px_rgba(15,23,42,0.16)] sm:p-8">
+                <div className="flex items-start gap-4">
+                  <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/10">
+                    <Megaphone size={22} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/55">
+                      Featured action
+                    </p>
+                    <h3 className="mt-2 text-2xl font-black tracking-[-0.05em] sm:text-3xl">
+                      {ad.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <p className="mt-5 max-w-md text-sm leading-6 text-white/72">
+                  {ad.desc}
+                </p>
 
                 <button
                   type="button"
-                  onClick={toggleMinimized}
-                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-black text-white/80 transition hover:border-purple-400/40 hover:bg-white/10 sm:gap-2 sm:px-4 sm:text-sm"
+                  onClick={() => goTo(ad.href)}
+                  className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-slate-950 transition hover:scale-[1.01] active:scale-95"
                 >
-                  <span className="hidden sm:inline">
-                    {minimized ? "Expand steps" : "Minimize steps"}
-                  </span>
-                  <span className="sm:hidden">
-                    {minimized ? "Expand" : "Hide"}
-                  </span>
-                  {minimized ? <ChevronDown size={15} /> : <ChevronUp size={15} />}
+                  {ad.cta}
+                  <ArrowRight size={16} />
                 </button>
-              </div>
 
-              <div
-                className={`flex w-full overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.035] shadow-[0_0_60px_rgba(168,85,247,0.10)] ${
-                  minimized ? "h-[72px] sm:h-[86px]" : "h-[360px] sm:h-[430px] md:h-[500px]"
-                }`}
-              >
-                {STEPS.map((step, index) => {
-                  const Icon = step.icon;
-                  const selected = activeStep === index;
-
-                  return (
-                    <button
-                      key={step.title}
-                      type="button"
-                      onClick={() => setActiveStep(index)}
-                      className={`relative flex min-w-0 flex-col border-r border-white/10 text-left transition-all duration-300 last:border-r-0 ${
-                        selected
-                          ? "w-[50%] bg-[#070711] text-white sm:w-[44%]"
-                          : "w-[25%] bg-white/[0.02] text-white/80 hover:bg-white/[0.055] sm:w-[28%]"
-                      } ${
-                        minimized
-                          ? "px-3 py-4 sm:px-6 sm:py-6"
-                          : "px-3 py-5 sm:px-6 sm:py-8 md:px-8 md:py-9"
-                      }`}
-                    >
-                      <div className="pointer-events-none absolute inset-0 opacity-70">
-                        {selected && (
-                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(168,85,247,0.28),transparent_35%),radial-gradient(circle_at_90%_0%,rgba(14,165,233,0.16),transparent_28%)]" />
-                        )}
-                      </div>
-
-                      {minimized ? (
-                        <p
-                          className={`relative z-10 line-clamp-2 text-[11px] font-black leading-tight sm:text-sm md:text-base ${
-                            selected ? "text-white" : "text-white/55"
-                          }`}
-                        >
-                          Step {index + 1}: {step.title}
-                        </p>
-                      ) : (
-                        <>
-                          <p
-                            className={`relative z-10 text-[11px] font-black sm:text-sm md:text-base ${
-                              selected ? "text-purple-200/80" : "text-white/40"
-                            }`}
-                          >
-                            Step {index + 1}
-                          </p>
-
-                          <div className="relative z-10 mt-8 flex justify-center sm:mt-11 md:mt-14">
-                            <div
-                              className={`grid h-16 w-16 place-items-center rounded-3xl sm:h-24 sm:w-24 md:h-28 md:w-28 ${
-                                selected
-                                  ? "bg-purple-500/10 text-purple-300"
-                                  : "bg-white/[0.04] text-purple-300/75"
-                              }`}
-                            >
-                              <Icon
-                                size={42}
-                                strokeWidth={1.55}
-                                className="sm:size-[64px] md:size-[82px]"
-                              />
-                            </div>
-                          </div>
-
-                          <h3 className="relative z-10 mt-8 line-clamp-3 max-w-[340px] text-base font-black leading-[1.05] tracking-[-0.045em] text-white sm:mt-10 sm:text-2xl md:mt-12 md:text-3xl">
-                            {step.title}
-                          </h3>
-
-                          <p
-                            className={`relative z-10 mt-3 line-clamp-4 max-w-[420px] text-[11px] font-semibold leading-5 sm:text-sm md:mt-4 md:text-base md:leading-7 ${
-                              selected ? "text-white/72" : "text-white/45"
-                            }`}
-                          >
-                            {step.desc}
-                          </p>
-
-                          <span
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              goTo(step.href);
-                            }}
-                            className={`relative z-10 mt-auto inline-flex w-fit items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-black transition sm:px-5 sm:py-3 sm:text-sm ${
-                              selected
-                                ? "bg-gradient-to-r from-purple-600 to-fuchsia-500 text-white shadow-[0_0_25px_rgba(168,85,247,0.38)]"
-                                : "border border-white/10 bg-white/[0.04] text-white/75"
-                            }`}
-                          >
-                            <span className="hidden sm:inline">{step.button}</span>
-                            <span className="sm:hidden">Go</span>
-                            <ArrowRight size={14} />
-                          </span>
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
+                <div className="mt-8 grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">
+                      Cart
+                    </p>
+                    <p className="mt-2 text-2xl font-black">{totalCartItems}</p>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">
+                      Status
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {canSell ? "Selling" : "Free"}
+                    </p>
+                  </div>
+                </div>
               </div>
             </section>
 
-            <section className="grid gap-4 md:grid-cols-[0.92fr_1.08fr]">
-              <div className="relative min-h-[230px] overflow-hidden rounded-[30px] bg-gradient-to-br from-purple-600 via-fuchsia-600 to-cyan-500 p-6 text-white shadow-[0_30px_100px_rgba(168,85,247,0.22)] md:p-8">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_82%_20%,rgba(255,255,255,0.26),transparent_28%)]" />
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {QUICK_ACTIONS.map((action) => {
+                const Icon = action.icon;
 
-                <div className="relative max-w-xl">
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em]">
-                    <Sparkles size={13} />
-                    New campaign
+                return (
+                  <button
+                    key={action.title}
+                    type="button"
+                    onClick={() => goTo(action.href)}
+                    className="group rounded-[24px] border border-slate-200 bg-white p-5 text-left shadow-[0_14px_40px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_16px_50px_rgba(15,23,42,0.08)]"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-950 text-white transition group-hover:scale-[1.03]">
+                        <Icon size={18} />
+                      </div>
+                      <ArrowRight size={16} className="mt-1 text-slate-400 transition group-hover:text-slate-950" />
+                    </div>
+                    <h3 className="mt-5 text-lg font-black tracking-[-0.04em] text-slate-950">
+                      {action.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                      {action.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </section>
+
+            <section className="grid gap-4 lg:grid-cols-[0.88fr_1.12fr]">
+              <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-8">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-11 w-11 place-items-center rounded-2xl bg-slate-100 text-slate-700">
+                    <Bell size={18} />
                   </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                      Operations
+                    </p>
+                    <h3 className="text-xl font-black tracking-[-0.04em] text-slate-950">
+                      Useful next steps
+                    </h3>
+                  </div>
+                </div>
 
-                  <h3 className="text-3xl font-black leading-tight tracking-[-0.055em] md:text-5xl">
-                    {ad.title}
-                  </h3>
-
-                  <p className="mt-4 max-w-md text-sm font-semibold leading-6 text-white/82">
-                    {ad.desc}
-                  </p>
-
+                <div className="mt-5 space-y-3">
                   <button
                     type="button"
-                    onClick={() => goTo(ad.href)}
-                    className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-black text-black transition hover:scale-[1.02] active:scale-95"
+                    onClick={safeOpenCart}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
                   >
-                    {ad.cta}
+                    Open cart drawer
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goTo("/dashboard/orders")}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  >
+                    Review current orders
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goTo("/dashboard/settings")}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-white"
+                  >
+                    Update account settings
                     <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
 
-              <div className="relative min-h-[230px] overflow-hidden rounded-[30px] bg-[#070711] p-6 text-white shadow-[0_30px_100px_rgba(0,0,0,0.24)] md:p-8">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.34),transparent_34%),radial-gradient(circle_at_90%_20%,rgba(14,165,233,0.20),transparent_32%)]" />
-
-                <div className="relative flex items-start gap-4">
-                  <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/10">
-                    <Megaphone size={25} />
-                  </div>
-
+              <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-8">
+                <div className="mb-4 flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.28em] text-purple-200/80">
-                      Featured campaign
+                    <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+                      Products
                     </p>
-
-                    <h3 className="mt-2 text-3xl font-black tracking-[-0.055em] md:text-5xl">
-                      Promote your store
+                    <h3 className="text-xl font-black tracking-[-0.04em] text-slate-950">
+                      Recent catalog overview
                     </h3>
-
-                    <p className="mt-4 max-w-lg text-sm font-medium leading-6 text-white/65">
-                      Ready for admin configuration through your API route.
-                    </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => goTo("/dashboard/product")}
+                    className="text-sm font-bold text-slate-600 transition hover:text-slate-950"
+                  >
+                    View all
+                  </button>
                 </div>
-              </div>
-            </section>
 
-            <section className="[content-visibility:auto] [contain-intrinsic-size:700px]">
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-purple-300">
-                    Products
-                  </p>
-                  <h2 className="text-2xl font-black tracking-[-0.045em] text-white md:text-3xl">
-                    Hot new products
-                  </h2>
-                </div>
+                <Section title="">
+                  <ProductGrid products={safeProducts} isLoading={isLoading} />
+                </Section>
               </div>
-
-              <Section title="">
-                <ProductGrid products={safeProducts} isLoading={isLoading} />
-              </Section>
             </section>
           </div>
         </main>
