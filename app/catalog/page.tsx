@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowRight, CheckCircle2, Loader2, Sparkles, Zap } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 
 type ApiProduct = {
   id: string;
@@ -16,6 +16,21 @@ type ApiProduct = {
   category: string | null;
   is_active?: boolean | null;
   status?: string | null;
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  tshirt: "T-Shirts",
+  t_shirt: "T-Shirts",
+  tee: "T-Shirts",
+  tees: "T-Shirts",
+  hoodie: "Hoodies",
+  hoodies: "Hoodies",
+  sweatshirt: "Sweatshirts",
+  sweatshirts: "Sweatshirts",
+  bag: "Bags",
+  bags: "Bags",
+  tote: "Bags",
+  totes: "Bags",
 };
 
 const safeText = (val: unknown) => (typeof val === "string" ? val.replace(/<script.*?>.*?<\/script>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
@@ -86,39 +101,28 @@ export default function CatalogPage() {
   const grouped = useMemo(() => {
     const map: Record<string, ApiProduct[]> = {};
     for (const product of products) {
-      const key = (product.category || "Other").trim() || "Other";
+      const rawKey = (product.category || "Other").trim() || "Other";
+      const key = rawKey.toLowerCase();
       (map[key] ||= []).push(product);
     }
     return map;
   }, [products]);
 
-  const categories = Object.keys(grouped).sort((a, b) => a.localeCompare(b));
+  const categories = Object.keys(grouped)
+    .map((key) => ({
+      key,
+      label: CATEGORY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
       <section className="relative overflow-hidden px-4 py-12 md:px-8 lg:px-12 lg:py-16">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.26),transparent_32%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
         <div className="relative mx-auto max-w-5xl text-center">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-purple-500/35 bg-purple-500/10 px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-white/80">
-            <Sparkles size={14} className="text-purple-400" />
-            Public products
-          </div>
           <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.9] tracking-[-0.04em] text-white sm:text-6xl md:text-7xl">
-            Choose a real product from the API
+            Choose a product
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/60 sm:text-lg md:text-xl">
-            The catalogue below is loaded from `/api/products`, not hardcoded arrays.
-          </p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <Link href="/products" className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-8 font-bold text-white shadow-[0_0_28px_rgba(168,85,247,0.35)] transition hover:scale-[1.02]">
-              Browse products
-              <Zap size={18} />
-            </Link>
-            <Link href="/products?category=tshirt" className="inline-flex h-14 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-8 font-bold text-white/85 transition hover:border-purple-500/40 hover:bg-white/[0.08]">
-              T-Shirts
-              <ArrowRight size={18} />
-            </Link>
-          </div>
         </div>
       </section>
 
@@ -140,13 +144,13 @@ export default function CatalogPage() {
           </div>
         ) : (
           <div className="space-y-10">
-            {categories.map((categoryKey) => (
-              <section key={categoryKey}>
+            {categories.map(({ key, label }) => (
+              <section key={key}>
                 <div className="mb-5 flex items-center justify-between gap-4">
-                  <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">{safeText(categoryKey)}</h2>
+                  <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">{safeText(label)}</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                  {grouped[categoryKey].map((product) => (
+                  {grouped[key].map((product) => (
                     <Link key={product.id} href={`/products/${product.id}`} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40">
                       <div className="relative mb-4 aspect-square overflow-hidden rounded-xl bg-black/40">
                         <Image src={imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw" className="object-contain transition duration-500 group-hover:scale-105" />

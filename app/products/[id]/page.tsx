@@ -125,7 +125,7 @@ export default function ProductDetailPage() {
             <span className="h-1 w-1 rounded-full bg-white/20" />
             <span>{product.currency || "EUR"}</span>
           </div>
-          <Link href={`/dashboard/design/${product.id}`} className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-6 py-4 font-black text-white shadow-[0_0_34px_rgba(168,85,247,0.34)] transition hover:scale-[1.02]">
+          <Link href={`/dashboard/product/${product.id}`} className="mt-8 inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-6 py-4 font-black text-white shadow-[0_0_34px_rgba(168,85,247,0.34)] transition hover:scale-[1.02]">
             Design now
             <ArrowRight size={17} />
           </Link>
