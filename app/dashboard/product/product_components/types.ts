@@ -7,6 +7,8 @@ export type Product = {
   discount_price?: number | string | null;
   variants?: Array<{
     price?: number | string | null;
+    color?: string | null;
+    color_hex?: string | null;
   }>;
   category?: string;
   color?: string;

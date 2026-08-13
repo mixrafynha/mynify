@@ -2,10 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Heart } from "lucide-react";
 
-import { convertPrice, symbols } from "@/lib/currency";
 import type { Currency, Product } from "./types";
 
 type ProductCardProps = {
@@ -50,32 +49,48 @@ export default function ProductCard({
 
   const isLiked = Boolean(likes?.[product.id]);
 
-  const variantPrices = Array.isArray(product.variants)
-    ? product.variants
-        .map((variant) => Number(variant?.price))
-        .filter((value) => Number.isFinite(value) && value >= 0)
-    : [];
+  const swatches = useMemo(() => {
+    const colors: Array<{ name?: string | null; hex: string }> = [];
 
-  const variantPrice = variantPrices.length > 0 ? Math.min(...variantPrices) : null;
-  const regularPrice = Number(product.price ?? 0);
-  const discountPrice =
-    product.discount_price === null || product.discount_price === undefined
-      ? null
-      : Number(product.discount_price);
+    if (Array.isArray(product.variants)) {
+      for (const variant of product.variants as Array<{
+        color?: string | null;
+        color_hex?: string | null;
+      }>) {
+        const hex = String(variant?.color_hex ?? "").trim();
+        const name = String(variant?.color ?? "").trim();
 
-  const price = Number.isFinite(variantPrice ?? NaN)
-    ? Number(variantPrice)
-    : Number.isFinite(discountPrice ?? NaN) &&
-        discountPrice !== null &&
-        discountPrice > 0 &&
-        discountPrice < regularPrice
-      ? discountPrice
-      : regularPrice;
+        if (!hex) continue;
 
-  const hasDiscount =
-    Number.isFinite(variantPrice ?? NaN) &&
-    regularPrice > 0 &&
-    Number(variantPrice) < regularPrice;
+        if (colors.some((color) => color.hex.toLowerCase() === hex.toLowerCase())) {
+          continue;
+        }
+
+        colors.push({ name: name || null, hex });
+
+        if (colors.length >= 5) break;
+      }
+    }
+
+    if (!colors.length && typeof product.color === "string" && product.color.trim()) {
+      colors.push({
+        name: product.color.trim(),
+        hex: "#d1d5db",
+      });
+    }
+
+    return colors;
+  }, [product.color, product.variants]);
+
+  const audienceLabel =
+    product.audience === "unisex"
+      ? "Unisex"
+      : product.audience
+        ? String(product.audience).toUpperCase()
+        : "Unisex";
+
+  const discountLabel =
+    Number(product.discount_price ?? 0) > 0 ? "Discount" : audienceLabel;
 
   return (
     <Link
@@ -105,9 +120,31 @@ export default function ProductCard({
 
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
-          {hasDiscount && (
-            <div className="absolute left-2.5 top-2.5 rounded-full bg-gradient-to-r from-fuchsia-500 to-cyan-400 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white shadow-lg">
-              Sale
+          <div className="absolute left-2.5 top-2.5 rounded-full border border-white/10 bg-black/50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-xl">
+            {discountLabel}
+          </div>
+
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 rounded-full border border-white/10 bg-black/40 px-2 py-1 backdrop-blur-xl">
+            {swatches.length > 0 ? (
+              swatches.map((swatch) => (
+                <span
+                  key={`${swatch.hex}-${swatch.name || "color"}`}
+                  className="h-2.5 w-2.5 rounded-full border border-white/30 shadow-[0_0_0_1px_rgba(0,0,0,0.18)]"
+                  style={{ backgroundColor: swatch.hex }}
+                  aria-label={swatch.name || "Color"}
+                  title={swatch.name || swatch.hex}
+                />
+              ))
+            ) : (
+              <span className="text-[9px] font-black uppercase tracking-[0.12em] text-white/55">
+                Unisex
+              </span>
+            )}
+          </div>
+
+          {product.is_new && (
+            <div className="absolute right-14 top-2.5 rounded-full border border-white/10 bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-xl">
+              New
             </div>
           )}
 
@@ -142,19 +179,10 @@ export default function ProductCard({
             {product.title?.slice(0, 80) || "Untitled product"}
           </h3>
 
-          <div className="mt-3 flex items-end justify-between gap-2">
-            <div>
-              <p className="text-sm font-extrabold text-white sm:text-base">
-                {symbols[currency]} {convertPrice(price, currency)}
-              </p>
-
-              {hasDiscount && (
-                <p className="text-[10px] font-bold text-[#8d90b3] line-through">
-                  {symbols[currency]} {convertPrice(regularPrice, currency)}
-                </p>
-              )}
-            </div>
-
+          <div className="mt-3 flex items-center justify-between gap-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
+              {discountLabel}
+            </p>
             <span className="rounded-full border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] backdrop-blur-xl transition group-hover:bg-white/[0.14]">
               View
             </span>
