@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import PrintCanvas from "../../shared/rendering/PrintCanvas";
 import { googleFontsLinks } from "../../shared/rendering/font";
 import { getServiceSupabase } from "./supabase";
+import { fetchSafeRemoteImageDataUrl } from "./safe-remote-image";
 
 export type DesignSide = "front" | "back";
 
@@ -212,10 +213,6 @@ function isInlineImageSrc(src: string) {
   return src.startsWith("data:");
 }
 
-function isFetchableImageSrc(src: string) {
-  return /^https?:\/\//i.test(src);
-}
-
 function resolveElementImageSrc(el: RenderElement) {
   return String(
     el.src ||
@@ -248,34 +245,11 @@ async function imageUrlToDataUrl(src: string) {
   const cleanSrc = String(src || "").trim();
   if (!cleanSrc || isInlineImageSrc(cleanSrc)) return cleanSrc;
 
-  if (!isFetchableImageSrc(cleanSrc)) {
+  if (!/^https?:\/\//i.test(cleanSrc)) {
     throw new Error(`Unsupported image source for server render: ${cleanSrc.slice(0, 180)}`);
   }
 
-  const response = await fetch(cleanSrc, {
-    headers: {
-      accept: "image/avif,image/webp,image/png,image/jpeg,image/svg+xml,image/*,*/*;q=0.8",
-      "user-agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
-    },
-    signal: AbortSignal.timeout(15_000),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch image for server render: ${response.status} ${response.statusText} | ${cleanSrc}`);
-  }
-
-  const contentType = response.headers.get("content-type")?.split(";")[0]?.trim() || "image/png";
-  if (!contentType.startsWith("image/")) {
-    throw new Error(`Invalid image content-type for server render: ${contentType} | ${cleanSrc}`);
-  }
-
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) {
-    throw new Error(`Empty image response for server render: ${cleanSrc}`);
-  }
-
-  return `data:${contentType};base64,${buffer.toString("base64")}`;
+  return fetchSafeRemoteImageDataUrl(cleanSrc);
 }
 
 async function inlineRenderImages(elements: RenderElement[]) {

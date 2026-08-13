@@ -109,6 +109,11 @@ type UserProductRow = {
   design_data: Record<string, unknown> | null;
 };
 
+type PersistedCheckoutOrder = {
+  id: string;
+  stripe_session_id: string | null;
+};
+
 function asPublicImageUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const url = value.trim();
@@ -1031,11 +1036,13 @@ export async function POST(req: Request) {
         total: computedTotal,
         shipping_address: draftShippingAddress ?? shippingAddress,
         shipping_method: draftShippingMethod ?? selectedQuoteOption,
+        idempotency_key: body.draftOrderId
+          ? `ryfio-checkout:${user.id}:${body.draftOrderId}`
+          : null,
         updated_at: new Date().toISOString(),
       };
 
-      let order: { id: string; stripe_session_id?: string | null } | null = null;
-      let reusedPendingOrder = false;
+      let order: PersistedCheckoutOrder | null = null;
 
       if (body.draftOrderId) {
         const persistStartedAt = Date.now();
@@ -1105,88 +1112,10 @@ export async function POST(req: Request) {
             }
           }
 
-          const persistUpdateStartedAt = Date.now();
-          const { data: updatedOrder, error: updateExistingOrderError } =
-            await supabase
-            .from("orders")
-            .update(orderSnapshot)
-            .eq("id", existingOrder.id)
-            .eq("user_id", user.id)
-            .select("id, stripe_session_id")
-            .single();
-          timings.persistMs += elapsedSince(persistUpdateStartedAt);
-
-          if (updateExistingOrderError || !updatedOrder) {
-            console.error("CHECKOUT_ORDER_REUSE_UPDATE_ERROR", {
-              code: updateExistingOrderError?.code,
-            });
-
-            return NextResponse.json(
-              { error: "Failed to refresh pending order" },
-              { status: 500 },
-            );
-          }
-
-          order = updatedOrder;
-          reusedPendingOrder = true;
-
-          const persistDeleteStartedAt = Date.now();
-          const { error: deleteOldItemsError } = await supabase
-            .from("order_items")
-            .delete()
-            .eq("order_id", order.id)
-            .eq("user_id", user.id);
-          timings.persistMs += elapsedSince(persistDeleteStartedAt);
-
-          if (deleteOldItemsError) {
-            console.error("CHECKOUT_ORDER_ITEMS_RESET_ERROR", {
-              code: deleteOldItemsError.code,
-            });
-
-            return NextResponse.json(
-              { error: "Failed to refresh order items" },
-              { status: 500 },
-            );
-          }
         }
       }
-
-      if (!order) {
-        const persistInsertStartedAt = Date.now();
-        const { data: insertedOrder, error: orderError } = await supabase
-          .from("orders")
-          .insert({
-            ...orderSnapshot,
-            created_at: new Date().toISOString(),
-          })
-          .select("id, stripe_session_id")
-          .single();
-        timings.persistMs += elapsedSince(persistInsertStartedAt);
-
-        if (orderError || !insertedOrder) {
-          console.error("CHECKOUT_ORDER_CREATE_ERROR", {
-            code: orderError?.code,
-          });
-
-          return NextResponse.json(
-            { error: "Failed to create order" },
-            { status: 500 },
-          );
-        }
-
-        order = insertedOrder;
-      }
-
-      createdOrderId = order.id;
-
-      console.info("[checkout:final:order-resolution]", {
-        orderId: order.id,
-        draftOrderId: body.draftOrderId ?? null,
-        reusedPendingOrder,
-      });
 
       const orderItemRows = orderItems.map((item) => ({
-        order_id: order.id,
         user_id: user.id,
         cart_item_id: item.cart_item_id,
         user_product_id: item.user_product_id,
@@ -1203,28 +1132,71 @@ export async function POST(req: Request) {
         gelato_product_uid: item.gelato_product_uid,
       }));
 
-      const persistItemsStartedAt = Date.now();
-      const { error: orderItemsError } = await supabase
-        .from("order_items")
-        .insert(orderItemRows);
-      timings.persistMs += elapsedSince(persistItemsStartedAt);
+      const persistCheckoutStartedAt = Date.now();
+      const { data: persistedOrderRows, error: persistCheckoutError } = await supabase.rpc(
+        "persist_checkout_order_with_items",
+        {
+          p_order: {
+            ...orderSnapshot,
+            created_at: new Date().toISOString(),
+          },
+          p_order_items: orderItemRows,
+        },
+      );
+      timings.persistMs += elapsedSince(persistCheckoutStartedAt);
 
-      if (orderItemsError) {
-        console.error("CHECKOUT_ORDER_ITEMS_CREATE_ERROR", {
-          code: orderItemsError.code,
+      if (persistCheckoutError || !Array.isArray(persistedOrderRows) || !persistedOrderRows[0]?.id) {
+        console.error("CHECKOUT_ORDER_PERSIST_ERROR", {
+          code: persistCheckoutError?.code,
         });
 
-        // Do not delete an existing pending order on retry; leave it available
-        // for another safe checkout attempt.
-        if (!reusedPendingOrder) {
-          await supabase.from("orders").delete().eq("id", order.id);
-        }
-
         return NextResponse.json(
-          { error: "Failed to create order items" },
+          { error: "Failed to persist checkout order" },
           { status: 500 },
         );
       }
+
+      order = persistedOrderRows[0] as PersistedCheckoutOrder;
+      createdOrderId = order.id;
+
+      console.info("[checkout:final:order-resolution]", {
+        orderId: order.id,
+        draftOrderId: body.draftOrderId ?? null,
+        persistedAtomically: true,
+      });
+
+      if (order.stripe_session_id) {
+        try {
+          const existingSession = await stripe.checkout.sessions.retrieve(order.stripe_session_id);
+
+          if (existingSession.status === "open" && existingSession.url) {
+            console.info("[checkout:final:reuse-stripe-session-after-persist]", {
+              orderId: order.id,
+              stripeSessionId: existingSession.id,
+              draftOrderId: body.draftOrderId,
+            });
+
+            return NextResponse.json({
+              url: existingSession.url,
+              reused: true,
+              orderId: order.id,
+            });
+          }
+        } catch (sessionLookupError) {
+          console.warn("[checkout:final:post-persist-session-lookup-failed]", {
+            orderId: order.id,
+            stripeSessionId: order.stripe_session_id,
+            message:
+              sessionLookupError instanceof Error
+                ? sessionLookupError.message
+                : "Unknown Stripe session lookup error",
+          });
+        }
+      }
+
+      const stripeIdempotencyKey = body.draftOrderId
+        ? `ryfio-checkout:${user.id}:${body.draftOrderId}`
+        : undefined;
 
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
@@ -1277,7 +1249,7 @@ export async function POST(req: Request) {
 
         success_url: `${baseUrl}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/cancel?order_id=${order.id}`,
-      });
+      }, stripeIdempotencyKey ? { idempotencyKey: stripeIdempotencyKey } : undefined);
 
       if (!session.url) {
         throw new Error("Stripe did not return a checkout URL");
@@ -1288,6 +1260,7 @@ export async function POST(req: Request) {
         .from("orders")
         .update({
           stripe_session_id: session.id,
+          status: "stripe_session_created",
         })
         .eq("id", order.id)
         .eq("user_id", user.id);
