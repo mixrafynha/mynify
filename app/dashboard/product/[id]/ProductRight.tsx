@@ -133,31 +133,11 @@ export function ProductRight({
   const shippingPrice = shippingMethods[0]?.price ?? null;
   const shippingEta = shippingMethods[0]?.estimatedDays ?? null;
   const shippingMethodLabel = shippingMethods[0]?.title ?? "Shipping";
-  const shippingProductUid =
-    selectedVariant?.gelato_product_uid ||
-    selectedVariant?.gelatoProductUid ||
-    product?.gelato_product_uid ||
-    product?.gelatoProductUid ||
-    null;
   const availabilityVariantId = selectedVariant?.id ? String(selectedVariant.id) : null;
   const availabilityCountryCode = selectedShippingCountry?.iso ?? null;
   const availabilityCacheKey = availabilityVariantId && availabilityCountryCode
     ? `${availabilityVariantId}:${availabilityCountryCode}`
     : null;
-  const shippingPrintFiles = useMemo(() => {
-    const files = product?.print_files ?? product?.printFiles ?? null;
-
-    if (Array.isArray(files)) {
-      return files
-        .map((file: any) => ({
-          type: String(file?.type ?? "default"),
-          url: String(file?.url ?? "").trim(),
-        }))
-        .filter((file: { url: string }) => Boolean(file.url));
-    }
-
-    return [];
-  }, [product?.printFiles, product?.print_files]);
 
   const showToast = (type: "success" | "error", message: string) => {
     setToast({ type, message });
@@ -193,116 +173,11 @@ export function ProductRight({
   }, [product?.shipping_country, product?.country, product?.origin_country]);
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    async function loadShipping() {
-      if (!selectedVariant?.id) {
-        setShippingMethods([]);
-        setShippingAvailable(true);
-        setShippingError(null);
-        return;
-      }
-
-      if (!shippingProductUid || shippingPrintFiles.length === 0) {
-        setShippingMethods([]);
-        setShippingAvailable(true);
-        setShippingError(null);
-        setShippingLoading(false);
-        return;
-      }
-
-      setShippingLoading(true);
-      setShippingError(null);
-
-      try {
-        const response = await fetch("/api/checkout/availability", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            country: selectedShippingCountry?.country ?? "Portugal",
-            countryIso: selectedShippingCountry?.iso ?? "PT",
-            items: [
-              {
-                itemId: String(selectedVariant.id),
-                title: String(product?.title ?? "Product"),
-                productId: String(product?.id ?? ""),
-                variantId: String(selectedVariant.id),
-                productUid: shippingProductUid,
-                color: selectedVariant.color ?? null,
-                size: selectedVariant.size ?? null,
-                quantity: 1,
-                printFiles: shippingPrintFiles,
-              },
-            ],
-          }),
-        });
-
-        const data = await response.json().catch(() => null);
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Shipping unavailable");
-        }
-
-        const normalizedMethods = Array.isArray(data?.shippingMethods)
-          ? data.shippingMethods
-              .map((method: any) => ({
-                id: String(method.id ?? method.code ?? method.title ?? "shipping"),
-                title: String(method.title ?? method.name ?? "Shipping"),
-                price:
-                  typeof method.price === "number"
-                    ? method.price
-                    : typeof method.amount === "number"
-                      ? method.amount
-                      : null,
-                estimatedDays:
-                  typeof method.estimatedDays === "string"
-                    ? method.estimatedDays
-                    : typeof method.eta === "string"
-                      ? method.eta
-                      : typeof method.deliveryTime === "string"
-                        ? method.deliveryTime
-                        : null,
-              }))
-              .filter((method: ShippingMethod) => method.id)
-          : [];
-
-        setShippingMethods(normalizedMethods);
-        setShippingAvailable(Boolean(data?.available !== false));
-        setShippingError(
-          typeof data?.message === "string" && data.message.trim()
-            ? data.message
-            : null
-        );
-      } catch (error) {
-        if ((error as Error)?.name !== "AbortError") {
-          setShippingMethods([]);
-          setShippingAvailable(false);
-          setShippingError("Shipping could not be calculated right now.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
-          setShippingLoading(false);
-        }
-      }
-    }
-
-    loadShipping();
-
-    return () => controller.abort();
-  }, [
-    product?.id,
-    product?.title,
-    shippingProductUid,
-    shippingPrintFiles,
-    selectedShippingCountry?.country,
-    selectedShippingCountry?.iso,
-    selectedVariant?.id,
-    selectedVariant?.color,
-    selectedVariant?.size,
-  ]);
+    setShippingMethods([]);
+    setShippingAvailable(true);
+    setShippingError(null);
+    setShippingLoading(false);
+  }, [selectedShippingCountry?.iso, selectedVariant?.id]);
 
   useEffect(() => {
     let active = true;
