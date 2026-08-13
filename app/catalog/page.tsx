@@ -21,8 +21,8 @@ type ApiProduct = {
 const CATEGORY_LABELS: Record<string, string> = {
   tshirt: "T-Shirts",
   tshirts: "T-Shirts",
-  t-shirt: "T-Shirts",
-  t-shirts: "T-Shirts",
+  "t-shirt": "T-Shirts",
+  "t-shirts": "T-Shirts",
   t_shirt: "T-Shirts",
   tee: "T-Shirts",
   tees: "T-Shirts",
