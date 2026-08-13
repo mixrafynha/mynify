@@ -20,6 +20,9 @@ type ApiProduct = {
 
 const CATEGORY_LABELS: Record<string, string> = {
   tshirt: "T-Shirts",
+  tshirts: "T-Shirts",
+  t-shirt: "T-Shirts",
+  t-shirts: "T-Shirts",
   t_shirt: "T-Shirts",
   tee: "T-Shirts",
   tees: "T-Shirts",
@@ -27,10 +30,30 @@ const CATEGORY_LABELS: Record<string, string> = {
   hoodies: "Hoodies",
   sweatshirt: "Sweatshirts",
   sweatshirts: "Sweatshirts",
+  sweat: "Sweatshirts",
   bag: "Bags",
   bags: "Bags",
   tote: "Bags",
   totes: "Bags",
+};
+
+const CATEGORY_ALIASES: Record<string, string> = {
+  tshirt: "tshirt",
+  tshirts: "tshirt",
+  "t-shirt": "tshirt",
+  "t-shirts": "tshirt",
+  t_shirt: "tshirt",
+  tee: "tshirt",
+  tees: "tshirt",
+  hoodie: "hoodie",
+  hoodies: "hoodie",
+  sweatshirt: "sweatshirt",
+  sweatshirts: "sweatshirt",
+  sweat: "sweatshirt",
+  bag: "bag",
+  bags: "bag",
+  tote: "bag",
+  totes: "bag",
 };
 
 const safeText = (val: unknown) => (typeof val === "string" ? val.replace(/<script.*?>.*?<\/script>/gi, "").replace(/</g, "&lt;").replace(/>/g, "&gt;") : "");
@@ -102,7 +125,8 @@ export default function CatalogPage() {
     const map: Record<string, ApiProduct[]> = {};
     for (const product of products) {
       const rawKey = (product.category || "Other").trim() || "Other";
-      const key = rawKey.toLowerCase();
+      const normalized = rawKey.toLowerCase();
+      const key = CATEGORY_ALIASES[normalized] || normalized;
       (map[key] ||= []).push(product);
     }
     return map;
@@ -118,11 +142,23 @@ export default function CatalogPage() {
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
       <section className="relative overflow-hidden px-4 py-12 md:px-8 lg:px-12 lg:py-16">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.26),transparent_32%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.30),transparent_30%),radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14),transparent_22%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
         <div className="relative mx-auto max-w-5xl text-center">
-          <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.9] tracking-[-0.04em] text-white sm:text-6xl md:text-7xl">
-            Choose a product
+          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-purple-200 shadow-[0_0_28px_rgba(168,85,247,0.12)]">
+            <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-400 to-cyan-400" />
+            Public catalogue
+          </div>
+
+          <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.88] tracking-[-0.06em] sm:text-6xl md:text-7xl">
+            <span className="block text-white">Choose</span>
+            <span className="block bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
+              your product
+            </span>
           </h1>
+
+          <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/55 sm:text-lg md:text-xl">
+            Browse the real catalogue, open any product and start from the right base.
+          </p>
         </div>
       </section>
 
@@ -151,7 +187,7 @@ export default function CatalogPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
                   {grouped[key].map((product) => (
-                    <Link key={product.id} href={`/products/${product.id}`} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40">
+                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40">
                       <div className="relative mb-4 aspect-square overflow-hidden rounded-xl bg-black/40">
                         <Image src={imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw" className="object-contain transition duration-500 group-hover:scale-105" />
                       </div>
