@@ -5,6 +5,19 @@ import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/li
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 
+const MAX_BODY_BYTES = 32 * 1024;
+const MAX_ITEMS = 10;
+const MAX_QUANTITY = 10;
+const MAX_PRINT_FILES_PER_ITEM = 2;
+const MAX_TEXT_LENGTH = 160;
+const MAX_URL_LENGTH = 2_000;
+const RATE_LIMITS = {
+  burst: { windowMs: 10_000, max: 5 },
+  minute: { windowMs: 60_000, max: 30 },
+};
+
+const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+
 type AvailabilityItem = {
   itemId?: string;
   title?: string;
@@ -21,8 +34,76 @@ type AvailabilityItem = {
   files?: Array<{ type?: string; url?: string }>;
 };
 
+type ResolvedVariantSource = {
+  productUid: string;
+  productId: string;
+};
+
 function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function boundedText(value: unknown, max = MAX_TEXT_LENGTH) {
+  const text = safeText(value);
+  return text.length > max ? "" : text;
+}
+
+function isUuid(value: unknown) {
+  return (
+    typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value.trim())
+  );
+}
+
+function getClientIp(req: Request) {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    "unknown"
+  );
+}
+
+function checkWindowLimit(key: string, windowMs: number, max: number) {
+  const now = Date.now();
+  const bucketKey = `${key}:${windowMs}`;
+  const current = rateLimitBuckets.get(bucketKey);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitBuckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (current.count >= max) return false;
+  current.count += 1;
+  return true;
+}
+
+function checkRateLimit(key: string) {
+  return (
+    checkWindowLimit(`checkout-availability:burst:${key}`, RATE_LIMITS.burst.windowMs, RATE_LIMITS.burst.max) &&
+    checkWindowLimit(`checkout-availability:minute:${key}`, RATE_LIMITS.minute.windowMs, RATE_LIMITS.minute.max)
+  );
+}
+
+function rejectRateLimited() {
+  return NextResponse.json(
+    { ok: false, code: "RATE_LIMITED", message: "Too many shipping checks. Try again shortly." },
+    { status: 429 },
+  );
+}
+
+function normalizeStrictQuantity(value: unknown) {
+  const quantity = Number(value ?? 1);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) return null;
+  return quantity;
+}
+
+function badRequest(code: string, message = "Invalid availability request.") {
+  return NextResponse.json({ ok: false, code, message }, { status: 400 });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function splitFullName(fullName: string) {
@@ -55,14 +136,75 @@ function safeProtocol(url: unknown) {
   }
 }
 
-function normalizeQuantity(value: unknown) {
-  const quantity = Math.max(1, Math.floor(Number(value) || 1));
-  return Number.isFinite(quantity) ? quantity : 1;
-}
-
 function isPublicHttpsUrl(value: unknown) {
   if (typeof value !== "string") return false;
-  return value.trim().startsWith("https://");
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > MAX_URL_LENGTH) return false;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:" && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
+}
+
+function validateIncomingItems(value: unknown) {
+  if (!Array.isArray(value) || value.length === 0) return { items: null, code: "MISSING_ITEMS" };
+  if (value.length > MAX_ITEMS) return { items: null, code: "TOO_MANY_ITEMS" };
+
+  const items: AvailabilityItem[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) return { items: null, code: "INVALID_ITEM" };
+
+    const variantId = boundedText(entry.variantId);
+    const quantity = normalizeStrictQuantity(entry.quantity);
+    if (!variantId || !isUuid(variantId)) return { items: null, code: "INVALID_VARIANT" };
+    if (quantity === null) return { items: null, code: "INVALID_QUANTITY" };
+
+    const productId = boundedText(entry.productId) || undefined;
+    if (productId && !isUuid(productId)) return { items: null, code: "INVALID_PRODUCT" };
+
+    const designId = boundedText(entry.designId) || null;
+    const userProductId = boundedText(entry.userProductId) || null;
+    const cartItemId = boundedText(entry.cartItemId) || null;
+    const itemId = boundedText(entry.itemId) || undefined;
+    if (designId && !isUuid(designId)) return { items: null, code: "INVALID_DESIGN" };
+    if (userProductId && !isUuid(userProductId)) return { items: null, code: "INVALID_DESIGN" };
+    if (cartItemId && !isUuid(cartItemId)) return { items: null, code: "INVALID_CART_ITEM" };
+
+    const rawPrintFiles = Array.isArray(entry.printFiles)
+      ? entry.printFiles
+      : Array.isArray(entry.files)
+        ? entry.files
+        : [];
+    if (rawPrintFiles.length > MAX_PRINT_FILES_PER_ITEM) return { items: null, code: "TOO_MANY_PRINT_FILES" };
+
+    for (const file of rawPrintFiles) {
+      if (!isRecord(file)) return { items: null, code: "INVALID_PRINT_FILE" };
+      const url = safeText(file.url);
+      if (url && !isPublicHttpsUrl(url)) return { items: null, code: "INVALID_PRINT_FILE_URL" };
+      if (safeText(file.type).length > MAX_TEXT_LENGTH) return { items: null, code: "INVALID_PRINT_FILE" };
+    }
+
+    const productUid = boundedText(entry.productUid, 240) || null;
+    items.push({
+      itemId,
+      title: boundedText(entry.title) || undefined,
+      productId,
+      variantId,
+      designId,
+      userProductId,
+      cartItemId,
+      color: boundedText(entry.color) || null,
+      size: boundedText(entry.size) || null,
+      quantity,
+      productUid,
+      printFiles: Array.isArray(entry.printFiles) ? (entry.printFiles as AvailabilityItem["printFiles"]) : undefined,
+      files: Array.isArray(entry.files) ? (entry.files as AvailabilityItem["files"]) : undefined,
+    });
+  }
+
+  return { items, code: null };
 }
 
 function extractPrintableFiles(source: unknown): Array<{ type: string; url: string }> {
@@ -207,17 +349,57 @@ async function resolveCartItemSources(
   const cartItemIds = [...new Set(items.map((item) => safeText(item.cartItemId) || safeText(item.itemId)).filter(Boolean))];
   const userProductIds = [...new Set(items.map((item) => safeText(item.userProductId) || safeText(item.designId)).filter(Boolean))];
 
-  const variantMap = new Map<string, string>();
+  const variantMap = new Map<string, ResolvedVariantSource>();
   if (variantIds.length) {
     const { data: variantRows } = await supabase
       .from("product_variants")
-      .select("id, gelato_product_uid")
+      .select("id, gelato_product_uid, product_color_id")
       .in("id", variantIds);
 
+    const colorIds = [
+      ...new Set(
+        (variantRows ?? [])
+          .map((row) => (row as { product_color_id?: string | null }).product_color_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const { data: colorRows } = colorIds.length
+      ? await supabase
+          .from("product_colors")
+          .select("id, product_id")
+          .in("id", colorIds)
+      : { data: [] };
+    const productIds = [
+      ...new Set(
+        (colorRows ?? [])
+          .map((row) => (row as { product_id?: string | null }).product_id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const { data: productRows } = productIds.length
+      ? await supabase
+          .from("products")
+          .select("id, is_active, status")
+          .in("id", productIds)
+          .eq("is_active", true)
+          .eq("status", "active")
+      : { data: [] };
+    const colorProductMap = new Map(
+      (colorRows ?? []).map((row) => {
+        const record = row as { id?: string | null; product_id?: string | null };
+        return [record.id, record.product_id] as const;
+      }),
+    );
+    const activeProductIds = new Set((productRows ?? []).map((row) => String((row as { id: string }).id)));
+
     (variantRows ?? []).forEach((row) => {
-      const record = row as { id?: string | null; gelato_product_uid?: string | null };
-      if (record.id && record.gelato_product_uid) {
-        variantMap.set(record.id, record.gelato_product_uid);
+      const record = row as { id?: string | null; gelato_product_uid?: string | null; product_color_id?: string | null };
+      const productId = record.product_color_id ? colorProductMap.get(record.product_color_id) ?? null : null;
+      if (record.id && record.gelato_product_uid && productId && activeProductIds.has(productId)) {
+        variantMap.set(record.id, {
+          productUid: record.gelato_product_uid,
+          productId,
+        });
       }
     });
   }
@@ -263,20 +445,49 @@ export async function POST(req: Request) {
   try {
     const supabase = createSupabaseServer();
     const { data: authData } = await supabase.auth.getUser();
-    const body = await req.json().catch(() => null);
-    const country = safeText(body?.country);
-    const countryIso = safeText(body?.countryIso).toUpperCase() || null;
-    const items = Array.isArray(body?.items) ? (body.items as AvailabilityItem[]) : [];
+    const rateLimitKey = `${authData?.user?.id ?? "guest"}:${getClientIp(req)}`;
+    if (!checkRateLimit(rateLimitKey)) return rejectRateLimited();
+
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { ok: false, code: "REQUEST_TOO_LARGE", message: "Availability request is too large." },
+        { status: 413 },
+      );
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (new TextEncoder().encode(rawBody).byteLength > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { ok: false, code: "REQUEST_TOO_LARGE", message: "Availability request is too large." },
+        { status: 413 },
+      );
+    }
+
+    let body: Record<string, unknown> | null = null;
+    try {
+      body = JSON.parse(rawBody || "null") as Record<string, unknown> | null;
+    } catch {
+      return badRequest("INVALID_JSON");
+    }
+    if (!isRecord(body)) return badRequest("INVALID_BODY");
+
+    const validation = validateIncomingItems(body.items);
+    if (!validation.items) return badRequest(validation.code ?? "INVALID_ITEMS");
+    const items = validation.items;
+    const shippingAddressInput = isRecord(body.shippingAddress) ? body.shippingAddress : {};
+    const country = boundedText(body.country) || boundedText(shippingAddressInput.countryCode);
+    const countryIso = (boundedText(body.countryIso) || boundedText(shippingAddressInput.countryCode)).toUpperCase() || null;
 
     if (process.env.NODE_ENV !== "production") {
       console.log(
         "[CHECKOUT_AVAILABILITY_RECEIVED]",
         safeLog({
           itemsCount: items.length,
-          countryCode: body?.shippingAddress?.countryCode ?? body?.countryIso ?? body?.country ?? null,
-          postalCodePresent: Boolean(body?.shippingAddress?.postalCode ?? body?.postalCode),
-          cityPresent: Boolean(body?.shippingAddress?.city ?? body?.city),
-          addressLine1Present: Boolean(body?.shippingAddress?.addressLine1 ?? body?.addressLine1 ?? body?.address),
+          countryCode: shippingAddressInput.countryCode ?? body.countryIso ?? body.country ?? null,
+          postalCodePresent: Boolean(shippingAddressInput.postalCode ?? body.postalCode),
+          cityPresent: Boolean(shippingAddressInput.city ?? body.city),
+          addressLine1Present: Boolean(shippingAddressInput.addressLine1 ?? body.addressLine1 ?? body.address),
           items: items.map((item) => ({
             productId: item.productId ?? null,
             variantId: item.variantId ?? null,
@@ -305,20 +516,21 @@ export async function POST(req: Request) {
     }
 
     const resolvedCountryIso = resolveCountryCode(countryIso ?? country);
+    if (!resolvedCountryIso) return badRequest("INVALID_COUNTRY", "Select a valid delivery country.");
     const fullName =
-      safeText(body?.fullName) ||
-      safeText(body?.name) ||
-      safeText(body?.shippingAddress?.fullName) ||
-      safeText(body?.shippingAddress?.name);
+      boundedText(body.fullName) ||
+      boundedText(body.name) ||
+      boundedText(shippingAddressInput.fullName) ||
+      boundedText(shippingAddressInput.name);
     const splitName = splitFullName(fullName);
     const firstName =
-      safeText(body?.firstName) ||
-      safeText(body?.shippingAddress?.firstName) ||
+      boundedText(body.firstName) ||
+      boundedText(shippingAddressInput.firstName) ||
       splitName?.firstName ||
       "";
     const lastName =
-      safeText(body?.lastName) ||
-      safeText(body?.shippingAddress?.lastName) ||
+      boundedText(body.lastName) ||
+      boundedText(shippingAddressInput.lastName) ||
       splitName?.lastName ||
       "";
 
@@ -326,36 +538,36 @@ export async function POST(req: Request) {
       firstName,
       lastName,
       addressLine1:
-        safeText(body?.shippingAddress?.addressLine1) ||
-        safeText(body?.addressLine1) ||
-        safeText(body?.address),
+        boundedText(shippingAddressInput.addressLine1) ||
+        boundedText(body.addressLine1) ||
+        boundedText(body.address),
       addressLine2:
-        safeText(body?.shippingAddress?.addressLine2) ||
-        safeText(body?.addressLine2) ||
+        boundedText(shippingAddressInput.addressLine2) ||
+        boundedText(body.addressLine2) ||
         undefined,
-      city: safeText(body?.shippingAddress?.city) || safeText(body?.city),
+      city: boundedText(shippingAddressInput.city) || boundedText(body.city),
       state:
-        safeText(body?.shippingAddress?.state) ||
-        safeText(body?.shippingAddress?.stateCode) ||
-        safeText(body?.state) ||
-        safeText(body?.stateCode) ||
+        boundedText(shippingAddressInput.state) ||
+        boundedText(shippingAddressInput.stateCode) ||
+        boundedText(body.state) ||
+        boundedText(body.stateCode) ||
         undefined,
       stateCode:
-        safeText(body?.shippingAddress?.stateCode) ||
-        safeText(body?.stateCode) ||
-        safeText(body?.state) ||
+        boundedText(shippingAddressInput.stateCode) ||
+        boundedText(body.stateCode) ||
+        boundedText(body.state) ||
         undefined,
       postalCode:
-        safeText(body?.shippingAddress?.postalCode) ||
-        safeText(body?.postalCode),
-      countryCode: resolvedCountryIso ?? countryIso ?? country,
+        boundedText(shippingAddressInput.postalCode, 32) ||
+        boundedText(body.postalCode, 32),
+      countryCode: resolvedCountryIso,
       email:
-        safeText(body?.shippingAddress?.email) ||
-        safeText(body?.email) ||
+        boundedText(shippingAddressInput.email, 254) ||
+        boundedText(body.email, 254) ||
         undefined,
       phone:
-        safeText(body?.shippingAddress?.phone) ||
-        safeText(body?.phone) ||
+        boundedText(shippingAddressInput.phone, 48) ||
+        boundedText(body.phone, 48) ||
         undefined,
     };
 
@@ -379,6 +591,17 @@ export async function POST(req: Request) {
 
     const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, authData?.user?.id ?? null, items);
 
+    for (const item of items) {
+      const variantId = safeText(item.variantId);
+      const resolvedVariant = variantMap.get(variantId) ?? null;
+      const productId = safeText(item.productId);
+      const productUid = safeText(item.productUid);
+
+      if (!resolvedVariant) return badRequest("VARIANT_NOT_FOUND");
+      if (productId && productId !== resolvedVariant.productId) return badRequest("INVALID_PRODUCT_VARIANT");
+      if (productUid && productUid !== resolvedVariant.productUid) return badRequest("INVALID_PRODUCT_UID");
+    }
+
     const regionalAvailabilityIssues: Array<{
       itemId: string;
       title: string;
@@ -393,7 +616,6 @@ export async function POST(req: Request) {
 
     for (const item of items) {
       const variantId = safeText(item.variantId);
-      if (!variantId) continue;
       const availability = await checkGelatoRegionalAvailability({
         variantId,
         countryCode: shippingAddress.countryCode,
@@ -431,7 +653,7 @@ export async function POST(req: Request) {
           variantId,
           color: item.color ?? null,
           size: item.size ?? null,
-          quantity: Math.max(1, Math.floor(Number(item.quantity) || 1)),
+          quantity: item.quantity ?? 1,
           available: false,
           reason: availability.reason ?? availability.status,
         });
@@ -485,10 +707,10 @@ export async function POST(req: Request) {
       const cartItemRow = cartItemId ? cartItemMap.get(cartItemId) ?? null : null;
       const designId = safeText(item.designId) || safeText(item.userProductId) || (cartItemRow?.design_id ?? cartItemRow?.user_product_id ?? null);
       const productId = safeText(item.productId) || null;
-      const quantity = Number.isFinite(Number(item.quantity)) ? Math.max(1, Math.floor(Number(item.quantity) || 1)) : null;
-      const productUidFromVariant = variantId ? variantMap.get(variantId) ?? null : null;
+      const quantity = normalizeStrictQuantity(item.quantity);
+      const productUidFromVariant = variantId ? variantMap.get(variantId)?.productUid ?? null : null;
       const productUidFromFrontend = safeText(item.productUid) || null;
-      const resolvedProductUid = productUidFromVariant || productUidFromFrontend || null;
+      const resolvedProductUid = productUidFromVariant;
       const designLookupAttempted = Boolean(designId || cartItemId);
       const designFound = Boolean(designId && userProductMap.has(designId));
 
@@ -512,10 +734,12 @@ export async function POST(req: Request) {
       let reason = "";
       if (!variantId) {
         reason = "MISSING_VARIANT";
-      } else if (!productUidFromVariant && !productUidFromFrontend) {
+      } else if (!productUidFromVariant) {
         reason = "VARIANT_NOT_FOUND";
       } else if (!resolvedProductUid) {
         reason = "MISSING_PRODUCT_UID";
+      } else if (productUidFromFrontend && productUidFromFrontend !== resolvedProductUid) {
+        reason = "INVALID_PRODUCT_UID";
       } else if (quantity === null) {
         reason = "INVALID_QUANTITY";
       } else if (frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))) {
@@ -527,7 +751,7 @@ export async function POST(req: Request) {
       console.log(
         `[CHECKOUT_ITEM_RESOLVED] ${JSON.stringify({
           variantId,
-          productUidSource: productUidFromVariant ? "database" : productUidFromFrontend ? "frontend" : "missing",
+          productUidSource: productUidFromVariant ? "database" : "missing",
           productUidPresent: Boolean(resolvedProductUid),
           printFilesSource: serverFiles.length > 0 ? "user_product" : frontendFiles.length > 0 ? "frontend" : "missing",
           printFilesCount: resolvedPrintFiles.length,
@@ -619,9 +843,9 @@ export async function POST(req: Request) {
       shippingAddress,
       printFiles: quoteItems[0].printFiles,
       items: quoteItems,
-      currencyIsoCode: safeText(body?.currency) || "EUR",
-      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
-      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+      currencyIsoCode: boundedText(body.currency, 3) || "EUR",
+      customerReferenceId: boundedText(body.customerReferenceId) || undefined,
+      orderReferenceId: boundedText(body.orderReferenceId) || undefined,
     });
     const safeQuotePayload = {
       ...quotePayload,
@@ -650,7 +874,7 @@ export async function POST(req: Request) {
         safeLog({
           quoteItemsCount: quoteItems.length,
           countryCode: countryIso ?? country,
-          postalCodePresent: Boolean(body?.postalCode || body?.shippingAddress?.postalCode),
+          postalCodePresent: Boolean(body.postalCode || shippingAddressInput.postalCode),
         }),
       );
     }
@@ -661,9 +885,9 @@ export async function POST(req: Request) {
       shippingAddress,
       printFiles: quoteItems[0].printFiles,
       items: quoteItems,
-      currencyIsoCode: safeText(body?.currency) || "EUR",
-      customerReferenceId: safeText(body?.customerReferenceId) || undefined,
-      orderReferenceId: safeText(body?.orderReferenceId) || undefined,
+      currencyIsoCode: boundedText(body.currency, 3) || "EUR",
+      customerReferenceId: boundedText(body.customerReferenceId) || undefined,
+      orderReferenceId: boundedText(body.orderReferenceId) || undefined,
     });
 
     console.info("[checkout:availability:09-gelato-http]", {
@@ -715,7 +939,7 @@ export async function POST(req: Request) {
         quoteItems,
         sourceItems: items,
         shippingAddress,
-        currency: safeText(body?.currency) || "EUR",
+        currency: boundedText(body.currency, 3) || "EUR",
       });
       const firstIncompatible = incompatibleItems[0];
       return NextResponse.json(
@@ -745,7 +969,7 @@ export async function POST(req: Request) {
     }
 
     console.info("[shipping-origin] gelato raw", {
-      requestedCurrency: safeText(body?.currency) || "EUR",
+      requestedCurrency: boundedText(body.currency, 3) || "EUR",
       shippingOptions: Array.isArray(quote.shippingOptions)
         ? quote.shippingOptions.map((option) => ({
             id: option.id ?? null,
@@ -760,7 +984,7 @@ export async function POST(req: Request) {
     });
 
     console.info("[shipping-origin] normalized", {
-      requestedCurrency: safeText(body?.currency) || "EUR",
+      requestedCurrency: boundedText(body.currency, 3) || "EUR",
       shippingMethods: shippingMethods.map((method) => ({
         id: method.id ?? null,
         promiseUid: method.promiseUid ?? null,
