@@ -16,6 +16,40 @@ type ProductCardProps = {
 
 const PLACEHOLDER_IMAGE = "/placeholder.png";
 
+const COLOR_FALLBACKS: Record<string, string> = {
+  black: "#111827",
+  white: "#f9fafb",
+  gray: "#9ca3af",
+  grey: "#9ca3af",
+  silver: "#cbd5e1",
+  red: "#ef4444",
+  blue: "#3b82f6",
+  navy: "#1e3a8a",
+  green: "#22c55e",
+  yellow: "#eab308",
+  orange: "#f97316",
+  purple: "#8b5cf6",
+  pink: "#ec4899",
+  rose: "#f43f5e",
+  brown: "#92400e",
+  beige: "#d6c7b0",
+  cream: "#f5e9d0",
+  ivory: "#f8f4e8",
+  teal: "#14b8a6",
+  cyan: "#06b6d4",
+};
+
+function normalizeColorHex(input: string): string | null {
+  const value = input.trim();
+  if (!value) return null;
+
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return value;
+  if (/^rgb(a)?\(/i.test(value)) return value;
+
+  const key = value.toLowerCase().replace(/[\s_-]+/g, "");
+  return COLOR_FALLBACKS[key] || null;
+}
+
 function resolveProductImage(product: Product): string | undefined {
   if (typeof product.image === "string" && product.image.trim()) {
     return product.image.trim();
@@ -58,10 +92,9 @@ export default function ProductCard({
         color?: string | null;
         color_hex?: string | null;
       }>) {
-        const hex = String(variant?.color_hex ?? "").trim();
         const name = String(variant?.color ?? "").trim();
-
-        if (!hex) continue;
+        const rawHex = String(variant?.color_hex ?? "").trim();
+        const hex = normalizeColorHex(rawHex) || normalizeColorHex(name) || "#d1d5db";
 
         const key = `${name.toLowerCase()}|${hex.toLowerCase()}`;
 
@@ -81,24 +114,18 @@ export default function ProductCard({
       typeof product.color === "string" &&
       product.color.trim()
     ) {
+      const fallbackHex = normalizeColorHex(product.color) || "#d1d5db";
       colors.push({
         name: product.color.trim(),
-        hex: "#d1d5db",
+        hex: fallbackHex,
       });
     }
 
     return colors;
   }, [product.color, product.variants]);
 
-  const audienceLabel =
-    product.audience === "unisex"
-      ? "Unisex"
-      : product.audience
-        ? String(product.audience).toUpperCase()
-        : "Unisex";
-
-  const discountLabel =
-    Number(product.discount_price ?? 0) > 0 ? "Discount" : audienceLabel;
+  const badgeLabel =
+    Number(product.discount_price ?? 0) > 0 ? "Discount" : product.audience === "unisex" || !product.audience ? "Unisex" : String(product.audience).toUpperCase();
 
   return (
     <Link
@@ -128,16 +155,16 @@ export default function ProductCard({
 
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
-          <div className="absolute left-2.5 top-2.5 border border-white/10 bg-black/50 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-xl">
-            {discountLabel}
+          <div className="absolute left-2.5 top-2.5 border border-white/10 bg-black/65 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_12px_28px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+            {badgeLabel}
           </div>
 
-          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1.5 border border-white/10 bg-black/40 px-2 py-1 backdrop-blur-xl">
+          <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 border border-white/10 bg-black/40 px-2 py-1 backdrop-blur-xl">
             {swatches.length > 0 &&
               swatches.map((swatch) => (
                 <span
                   key={`${swatch.hex}-${swatch.name || "color"}`}
-                  className="h-2 w-2 rounded-full border border-white/30 shadow-[0_0_0_1px_rgba(0,0,0,0.18)]"
+                  className="h-2 w-2 rounded-full border border-white/25 shadow-[0_0_0_1px_rgba(0,0,0,0.18)]"
                   style={{ backgroundColor: swatch.hex }}
                   aria-label={swatch.name || "Color"}
                   title={swatch.name || swatch.hex}
@@ -146,7 +173,7 @@ export default function ProductCard({
           </div>
 
           {product.is_new && (
-            <div className="absolute right-14 top-2.5 border border-white/10 bg-white/10 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-white/90 backdrop-blur-xl">
+            <div className="absolute right-14 top-2.5 border border-cyan-300/30 bg-cyan-400/18 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.16em] text-cyan-50 shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_12px_28px_rgba(6,182,212,0.20)] backdrop-blur-xl">
               New
             </div>
           )}
@@ -183,13 +210,7 @@ export default function ProductCard({
           </h3>
 
           <div className="mt-3 flex items-center justify-between gap-2">
-            <div className="min-h-[14px]">
-              {discountLabel && (
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
-                  {discountLabel}
-                </p>
-              )}
-            </div>
+            <div className="min-h-[14px]" />
             <span className="border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] backdrop-blur-xl transition group-hover:bg-white/[0.14]">
               View
             </span>
