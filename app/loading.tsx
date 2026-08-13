@@ -63,13 +63,13 @@ export default function Loading({ pathname = "", label, subtitle }: LoadingProps
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="pointer-events-none absolute left-1/2 top-1/2 h-[28rem] w-[28rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-400/5 blur-3xl animate-[pulse_6s_ease-in-out_infinite]" />
 
-      <div className="relative flex max-w-[360px] flex-col items-center gap-7 px-6 text-center">
+      <div className="relative flex max-w-[340px] flex-col items-center gap-7 px-6 text-center">
         <div className="relative text-center">
           <div
-            className="select-none text-[38px] font-black uppercase leading-none tracking-[-0.045em] text-white sm:text-[48px]"
+            className="select-none text-[33px] font-black uppercase leading-none tracking-[-0.03em] text-white sm:text-[42px]"
             style={{
               fontFamily: "var(--font-logo)",
-              textShadow: "0 0 26px rgba(102, 67, 136, 0.45), 0 0 40px rgba(34, 211, 238, 0.16)",
+              textShadow: "0 0 18px rgba(102, 67, 136, 0.32)",
             }}
           >
             <span className="inline-block animate-[brand-letter_720ms_ease-out_both,brand-float_3.8s_ease-in-out_infinite_720ms]">R</span>
@@ -85,7 +85,7 @@ export default function Loading({ pathname = "", label, subtitle }: LoadingProps
             </span>
           </div>
 
-          <div className="mx-auto mt-3 h-px w-32 rounded-full bg-gradient-to-r from-transparent via-white/90 to-transparent opacity-95 shadow-[0_0_20px_rgba(255,255,255,0.28)]" />
+          <div className="mx-auto mt-3 h-px w-28 rounded-full bg-gradient-to-r from-transparent via-white/75 to-transparent opacity-80 shadow-[0_0_18px_rgba(255,255,255,0.18)]" />
         </div>
 
         <div className="relative grid h-20 w-20 place-items-center sm:h-24 sm:w-24">
