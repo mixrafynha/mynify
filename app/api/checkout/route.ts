@@ -93,6 +93,11 @@ type VariantRow = {
   gelato_attributes: Record<string, unknown> | null;
 };
 
+type ProductColorOwnershipRow = {
+  id: string;
+  product_id: string | null;
+};
+
 type UserProductRow = {
   id: string;
   price: number | string | null;
@@ -531,6 +536,32 @@ export async function POST(req: Request) {
         );
       }
 
+      const variantColorIds = [
+        ...new Set(
+          variants
+            .map((variant) => variant.product_color_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const { data: productColorRows, error: productColorsError } =
+        variantColorIds.length > 0
+          ? await supabase
+              .from("product_colors")
+              .select("id, product_id")
+              .in("id", variantColorIds)
+          : { data: [] as ProductColorOwnershipRow[], error: null };
+
+      if (productColorsError) {
+        console.error("CHECKOUT_PRODUCT_COLORS_ERROR", {
+          code: productColorsError.code,
+        });
+
+        return NextResponse.json(
+          { error: "Failed to validate product variants" },
+          { status: 500 },
+        );
+      }
+
       const shippingCountryCode = resolveCheckoutCountryCode(body);
 
       const productMap = new Map(
@@ -546,6 +577,39 @@ export async function POST(req: Request) {
      const variantMap = new Map(
       variants.map((variant) => [variant.id, variant]),
     );
+      const productColorProductMap = new Map(
+        ((productColorRows ?? []) as ProductColorOwnershipRow[]).map((color) => [
+          color.id,
+          color.product_id,
+        ]),
+      );
+
+      for (const cartItem of cartItems) {
+        if (!cartItem.variant_id) continue;
+
+        const variant = variantMap.get(cartItem.variant_id) ?? null;
+        const variantProductId = variant?.product_color_id
+          ? productColorProductMap.get(variant.product_color_id) ?? null
+          : null;
+
+        if (!variant || !variantProductId || variantProductId !== cartItem.product_id) {
+          console.warn("[checkout:final:invalid-product-variant]", {
+            cartItemId: cartItem.id,
+            productId: cartItem.product_id,
+            variantId: cartItem.variant_id,
+            productColorId: variant?.product_color_id ?? null,
+          });
+
+          return NextResponse.json(
+            {
+              success: false,
+              code: "INVALID_PRODUCT_VARIANT",
+              message: "One or more cart items are invalid.",
+            },
+            { status: 400 },
+          );
+        }
+      }
 
     type StripeSessionParams = NonNullable<
       Parameters<typeof stripe.checkout.sessions.create>[0]

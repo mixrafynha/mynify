@@ -1,5 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { resolveVariantById } from "../_variant";
+import { resolveVariantById, variantBelongsToProduct } from "../_variant";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 export const dynamic = "force-dynamic";
@@ -115,6 +115,10 @@ export async function PATCH(req: Request) {
         return Response.json({ error: "Variant not found" }, { status: 404 });
       }
 
+      if (!variantBelongsToProduct(selectedVariant, cartItem.product_id)) {
+        return Response.json({ error: "Invalid product variant" }, { status: 400 });
+      }
+
       if (selectedVariant.stock !== null && quantityToValidate > selectedVariant.stock) {
         return Response.json({ error: "Not enough stock", stock: selectedVariant.stock }, { status: 400 });
       }
@@ -143,6 +147,10 @@ export async function PATCH(req: Request) {
 
       if (!selectedVariant) {
         return Response.json({ error: "Variant not found" }, { status: 404 });
+      }
+
+      if (!variantBelongsToProduct(selectedVariant, cartItem.product_id)) {
+        return Response.json({ error: "Invalid product variant" }, { status: 400 });
       }
 
       if (selectedVariant.stock !== null && quantityToValidate > selectedVariant.stock) {

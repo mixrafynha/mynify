@@ -1,5 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getFirstAvailableVariant, resolveVariantById } from "../_variant";
+import { getFirstAvailableVariant, resolveVariantById, variantBelongsToProduct } from "../_variant";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -150,6 +150,13 @@ export async function POST(req: Request) {
     if (!selectedVariant?.id) {
       return Response.json(
         { error: "No available variant found" },
+        { status: 400 },
+      );
+    }
+
+    if (!variantBelongsToProduct(selectedVariant, product.id)) {
+      return Response.json(
+        { error: "Invalid product variant" },
         { status: 400 },
       );
     }

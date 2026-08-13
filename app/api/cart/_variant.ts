@@ -173,3 +173,14 @@ export async function getFirstAvailableVariant(
 
   return variants.find((variant) => variant.stock === null || variant.stock > 0) ?? null;
 }
+
+export function variantBelongsToProduct(
+  variant: Pick<ResolvedVariant, "product_color_id" | "product_id"> | null,
+  productId: string,
+) {
+  return Boolean(
+    variant?.product_color_id &&
+      variant.product_id &&
+      variant.product_id === productId,
+  );
+}
