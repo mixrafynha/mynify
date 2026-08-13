@@ -124,14 +124,6 @@ export default function ProductCard({
     return colors;
   }, [product.color, product.variants]);
 
-  const badgeLabel =
-    Number(product.discount_price ?? 0) > 0
-      ? "Discount"
-      : product.audience === "unisex" || !product.audience
-        ? "Unisex"
-        : String(product.audience).toUpperCase();
-  const showUnisexBadge = badgeLabel === "Unisex";
-
   return (
     <Link
       href={`/dashboard/product/${encodeURIComponent(product.id)}`}
@@ -161,11 +153,9 @@ export default function ProductCard({
           <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
 
           <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 border border-white/10 bg-black/40 px-2 py-1 backdrop-blur-xl">
-            {showUnisexBadge && (
-              <span className="mr-1 border border-white/10 bg-white/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.14em] text-white/80">
-                Unisex
-              </span>
-            )}
+            <span className="mr-1 border border-white/10 bg-white/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.14em] text-white/80">
+              Unisex
+            </span>
             {swatches.length > 0 &&
               swatches.map((swatch) => (
                 <span
@@ -216,17 +206,7 @@ export default function ProductCard({
           </h3>
 
           <div className="mt-3 flex items-center justify-between gap-2">
-            <div className="min-h-[14px]">
-              {showUnisexBadge ? (
-                <span className="inline-flex border border-white/10 bg-white/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.14em] text-white/80">
-                  Unisex
-                </span>
-              ) : (
-                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
-                  {badgeLabel}
-                </p>
-              )}
-            </div>
+            <div className="min-h-[14px]" />
             <span className="border border-white/10 bg-white/[0.08] px-3 py-1 text-[9px] font-black uppercase tracking-[0.12em] text-[#d9dbff] backdrop-blur-xl transition group-hover:bg-white/[0.14]">
               View
             </span>
