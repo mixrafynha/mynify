@@ -19,15 +19,6 @@ function applySeoHeaders(res: NextResponse, pathname: string) {
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  if (
-    pathname === "/dashboard/design" ||
-    pathname.startsWith("/dashboard/design/") ||
-    pathname === "/dashboard/create" ||
-    pathname.startsWith("/dashboard/create/")
-  ) {
-    return applySeoHeaders(NextResponse.next(), pathname);
-  }
-
   let res = NextResponse.next({
     request: req,
   });
@@ -129,6 +120,8 @@ export const config = {
     "/login",
     "/signup",
     "/auth/:path*",
+    "/products",
+    "/products/:path*",
     "/dashboard/:path*",
     "/admin/:path*",
     "/settings/:path*",
