@@ -125,7 +125,11 @@ export default function ProductCard({
   }, [product.color, product.variants]);
 
   const badgeLabel =
-    Number(product.discount_price ?? 0) > 0 ? "Discount" : product.audience === "unisex" || !product.audience ? "Unisex" : String(product.audience).toUpperCase();
+    Number(product.discount_price ?? 0) > 0
+      ? "Discount"
+      : product.audience === "unisex" || !product.audience
+        ? "Unisex"
+        : String(product.audience).toUpperCase();
   const showUnisexBadge = badgeLabel === "Unisex";
 
   return (
@@ -213,7 +217,11 @@ export default function ProductCard({
 
           <div className="mt-3 flex items-center justify-between gap-2">
             <div className="min-h-[14px]">
-              {!showUnisexBadge && (
+              {showUnisexBadge ? (
+                <span className="inline-flex border border-white/10 bg-white/10 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-[0.14em] text-white/80">
+                  Unisex
+                </span>
+              ) : (
                 <p className="text-[10px] font-black uppercase tracking-[0.16em] text-white/45">
                   {badgeLabel}
                 </p>
