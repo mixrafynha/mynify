@@ -225,46 +225,8 @@ function cleanUuid(value: unknown) {
     : null;
 }
 
-function readVariantIdFromRecord(value: unknown) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  return cleanUuid(record.id) ?? cleanUuid(record.variant_id) ?? cleanUuid(record.variantId);
-}
-
 function resolveCheckoutAvailabilityVariantId(item: CartItem) {
-  const directVariantId = cleanUuid(item.variant_id);
-  if (directVariantId) return directVariantId;
-
-  const selectedVariant =
-    item.selectedVariant ??
-    (item as unknown as { selected_variant?: unknown }).selected_variant ??
-    null;
-  const selectedVariantId = readVariantIdFromRecord(selectedVariant);
-  if (selectedVariantId) return selectedVariantId;
-
-  const designData = item.design_data ?? item.designData;
-  const designRecord =
-    designData && typeof designData === "object" && !Array.isArray(designData)
-      ? (designData as Record<string, unknown>)
-      : null;
-  const designVariantId =
-    readVariantIdFromRecord(designRecord?.selectedVariant) ??
-    readVariantIdFromRecord(designRecord?.selected_variant);
-  if (designVariantId) return designVariantId;
-
-  const variants = [
-    ...safeArray<CartVariant>(item.availableVariants),
-    ...safeArray<CartVariant>(item.available_variants),
-    ...safeArray<CartVariant>(item.variants),
-  ];
-  const matchedVariant = variants.find((variant) => {
-    const sameSku = item.sku && variantSku(variant) === item.sku;
-    const sameColorAndSize =
-      variantColor(variant) === item.color && variantSize(variant) === item.size;
-    return sameSku || sameColorAndSize;
-  });
-
-  return matchedVariant ? readVariantIdFromRecord(matchedVariant) : null;
+  return cleanUuid(item.variant_id);
 }
 
 function buildCheckoutAvailabilityItems(items: CartItem[]) {
@@ -961,12 +923,6 @@ export default function CheckoutPage() {
       setProductAvailability((current) => ({ ...current, loading: true, message: null }));
 
       try {
-        console.log("[checkout:availability:payload]", checkoutAvailabilityItems.map((item) => ({
-          cartItemId: item.cartItemId,
-          variantId: item.variantId,
-          productId: item.productId,
-        })));
-
         const res = await fetch("/api/checkout/availability", {
           method: "POST",
           headers: {
