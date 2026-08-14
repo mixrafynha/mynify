@@ -71,7 +71,6 @@ type EditorVariantRow = {
   id: string;
   product_color_id: string | null;
   size: string | null;
-  color?: string | null;
   color_hex?: string | null;
   sku?: string | null;
   price?: number | null;
@@ -526,7 +525,7 @@ function buildVariantSelection(
 function mapSelectedVariantRow(row: EditorVariantRow | null): EditorVariantSelection | null {
   if (!row?.id) return null;
   const productColorId = row.product_color_id ?? row.product_colors?.id ?? null;
-  const colorName = row.color ?? row.product_colors?.color ?? null;
+  const colorName = row.product_colors?.color ?? null;
   const colorHex = normalizeHexColor(row.color_hex ?? row.product_colors?.color_hex ?? null);
   const gelatoAttributes = row.gelato_attributes && typeof row.gelato_attributes === "object"
     ? row.gelato_attributes
@@ -575,7 +574,7 @@ function resolveVariantFromRows(
 
   const candidatesByColor = normalizedRows.filter((row) => {
     const rowColorId = row.product_color_id ?? row.product_colors?.id ?? null;
-    const rowColorName = normalizeColor(row.color ?? row.product_colors?.color);
+    const rowColorName = normalizeColor(row.product_colors?.color);
     const rowColorHex = normalizeHexColor(row.color_hex ?? row.product_colors?.color_hex ?? null)?.toLowerCase() || null;
     return (
       (productColorId && String(rowColorId || "") === productColorId) ||
@@ -677,7 +676,7 @@ export default function EditorPage() {
       );
       const { data: rows } = await supabase
         .from("product_variants")
-        .select("id,product_color_id,size,color,sku,price,stock,gelato_product_uid,gelato_attributes,product_colors:product_color_id(id,color,color_hex)")
+        .select("id,product_color_id,size,sku,price,stock,gelato_product_uid,gelato_attributes,product_colors:product_color_id(id,color,color_hex)")
         .in("product_color_id", Array.from(colorMap.keys()));
 
       if (!cancelled) {
@@ -2076,16 +2075,16 @@ export default function EditorPage() {
       variantRows.find((row) =>
         String(row.id) === String(option.variantId || "") ||
         (
-          normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor &&
+          normalizeColor(row.product_colors?.color) === normalizedColor &&
           normalizeSize(row.size) === normalizedSize
         ) ||
         (
-          normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor &&
+          normalizeColor(row.product_colors?.color) === normalizedColor &&
           (!normalizedSize || normalizeSize(row.size) === normalizeSize(selectedVariant?.size))
         )
       ) ||
       variantRows.find(
-        (row) => normalizeColor(row.color ?? row.product_colors?.color) === normalizedColor,
+        (row) => normalizeColor(row.product_colors?.color) === normalizedColor,
       ) ||
       null;
 
