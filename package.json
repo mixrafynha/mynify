@@ -2,6 +2,9 @@
   "name": "ryfio",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -30,7 +33,7 @@
     "disposable-email-domains": "^1.0.62",
     "dotenv": "^17.4.2",
     "firebase": "^12.12.1",
-    "firebase-admin": "^13.9.0",
+    "firebase-admin": "^14.2.0",
     "framer-motion": "^12.38.0",
     "html-to-image": "^1.11.13",
     "jsonwebtoken": "^9.0.3",
