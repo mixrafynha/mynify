@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
+import { createServerClient } from "@supabase/ssr";
 import { getFirestoreAdmin } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
@@ -11,6 +13,7 @@ const MAX_STRING_LENGTH = 500;
 const MAX_ARRAY_ITEMS = 20;
 const MAX_OBJECT_KEYS = 30;
 const MAX_DEPTH = 4;
+const AUTH_ERROR = { success: false, error: "Unauthorized" };
 
 const SENSITIVE_KEY_PATTERN =
   /(authorization|cookie|token|access[_-]?token|refresh[_-]?token|client[_-]?secret|secret|stripe.*secret|supabase.*jwt|jwt|api[_-]?key|password)/i;
@@ -81,8 +84,41 @@ function getClientIp(req: Request) {
   );
 }
 
+async function getAuthSupabase() {
+  const cookieStore = await cookies();
+
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {}
+        },
+      },
+    },
+  );
+}
+
 export async function POST(req: Request) {
   try {
+    const authSupabase = await getAuthSupabase();
+    const {
+      data: { user },
+      error: authError,
+    } = await authSupabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json(AUTH_ERROR, { status: 401 });
+    }
+
     const contentLength = Number(req.headers.get("content-length") ?? 0);
 
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
