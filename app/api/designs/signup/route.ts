@@ -2,13 +2,19 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import disposable from "disposable-email-domains";
 import { createClient } from "@supabase/supabase-js";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
-const requestLimit = new Map<string, number[]>();
-const dailyLimit = new Map<string, number>();
-
-const RATE_WINDOW = 60 * 1000;
-const RATE_MAX = 5;
-const DAILY_MAX = 3;
+const MAX_BODY_BYTES = 16 * 1024;
+const signupMinuteRateLimiter = getDurableRateLimiter({
+  namespace: "designs-signup-minute",
+  limit: 5,
+  window: "1 m",
+});
+const signupDailyRateLimiter = getDurableRateLimiter({
+  namespace: "designs-signup-daily",
+  limit: 3,
+  window: "1 d",
+});
 
 type SignupLogLevel = "info" | "warn" | "error";
 type SignupCode =
@@ -20,21 +26,7 @@ type SignupCode =
   | "failed";
 
 function getIP(req: Request) {
-  const forwardedFor = req.headers.get("x-forwarded-for");
-  return (forwardedFor?.split(",")[0] || req.headers.get("x-real-ip") || "unknown").slice(0, 45);
-}
-
-function checkRateLimit(ip: string) {
-  const now = Date.now();
-  const logs = requestLimit.get(ip) || [];
-  const recent = logs.filter((time) => now - time < RATE_WINDOW);
-
-  if (recent.length >= RATE_MAX) return false;
-
-  recent.push(now);
-  requestLimit.set(ip, recent);
-
-  return true;
+  return getTrustedRequestIp(req);
 }
 
 function isValidEmail(email: string) {
@@ -145,7 +137,89 @@ export async function POST(req: Request) {
   const startedAt = Date.now();
 
   try {
-    const body = await req.json().catch(() => null);
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      await writeSignupLog(req, {
+        event: "signup_rejected",
+        level: "warn",
+        code: "invalid_request",
+        status: 413,
+        reason: "body_too_large",
+        durationMs: Date.now() - startedAt,
+      });
+      return json("invalid_request", "Request body too large.", 413);
+    }
+
+    const ip = getIP(req);
+
+    try {
+      const minuteLimit = await signupMinuteRateLimiter.limit(ip);
+      if (!minuteLimit.success) {
+        await writeSignupLog(req, {
+          event: "signup_rate_limited",
+          level: "warn",
+          code: "rate_limited",
+          status: 429,
+          reason: "minute_limit",
+          durationMs: Date.now() - startedAt,
+        });
+        return json("rate_limited", "Too many requests. Try again later.", 429);
+      }
+
+      const dailyLimit = await signupDailyRateLimiter.limit(ip);
+      if (!dailyLimit.success) {
+        await writeSignupLog(req, {
+          event: "signup_rate_limited",
+          level: "warn",
+          code: "rate_limited",
+          status: 429,
+          reason: "daily_limit",
+          durationMs: Date.now() - startedAt,
+        });
+        return json("rate_limited", "Too many accounts today. Try again tomorrow.", 429);
+      }
+    } catch (error) {
+      console.error("[designs-signup:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      await writeSignupLog(req, {
+        event: "signup_unavailable",
+        level: "error",
+        code: "unavailable",
+        status: 503,
+        reason: "rate_limit_unavailable",
+        durationMs: Date.now() - startedAt,
+      });
+      return json("unavailable", "Signup is temporarily unavailable.", 503);
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      await writeSignupLog(req, {
+        event: "signup_rejected",
+        level: "warn",
+        code: "invalid_request",
+        status: 413,
+        reason: "body_too_large",
+        durationMs: Date.now() - startedAt,
+      });
+      return json("invalid_request", "Request body too large.", 413);
+    }
+
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody || "null");
+    } catch {
+      await writeSignupLog(req, {
+        event: "signup_rejected",
+        level: "warn",
+        code: "invalid_request",
+        status: 400,
+        reason: "invalid_json",
+        durationMs: Date.now() - startedAt,
+      });
+      return json("invalid_request", "Invalid request.", 400);
+    }
     if (!body || typeof body !== "object") {
       await writeSignupLog(req, {
         event: "signup_rejected",
@@ -164,20 +238,6 @@ export async function POST(req: Request) {
 
     const password = String((body as { password?: unknown }).password ?? "");
     const token = String((body as { token?: unknown }).token ?? "");
-    const ip = getIP(req);
-
-    if (!checkRateLimit(ip)) {
-      await writeSignupLog(req, {
-        event: "signup_rate_limited",
-        level: "warn",
-        code: "rate_limited",
-        email,
-        status: 429,
-        reason: "minute_limit",
-        durationMs: Date.now() - startedAt,
-      });
-      return json("rate_limited", "Too many requests. Try again later.", 429);
-    }
 
     if (!token || !isValidEmail(email) || !isStrongPassword(password)) {
       await writeSignupLog(req, {
@@ -205,23 +265,6 @@ export async function POST(req: Request) {
         durationMs: Date.now() - startedAt,
       });
       return json("invalid_request", "Invalid request.", 400);
-    }
-
-    const day = new Date().toISOString().slice(0, 10);
-    const key = `${ip}-${day}`;
-    const used = dailyLimit.get(key) || 0;
-
-    if (used >= DAILY_MAX) {
-      await writeSignupLog(req, {
-        event: "signup_rate_limited",
-        level: "warn",
-        code: "rate_limited",
-        email,
-        status: 429,
-        reason: "daily_limit",
-        durationMs: Date.now() - startedAt,
-      });
-      return json("rate_limited", "Too many accounts today. Try again tomorrow.", 429);
     }
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -307,8 +350,6 @@ export async function POST(req: Request) {
       });
       return json("account_exists", "This email is already registered. Log in instead.", 409);
     }
-
-    dailyLimit.set(key, used + 1);
 
     await writeSignupLog(req, {
       event: "signup_created",

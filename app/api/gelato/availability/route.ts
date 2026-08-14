@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -10,10 +11,11 @@ const MAX_ITEMS = 10;
 const MAX_QUANTITY = 10;
 const MAX_TEXT_LENGTH = 160;
 const GELATO_TIMEOUT_MS = 15_000;
-const RATE_LIMITS = {
-  burst: { windowMs: 10_000, max: 8 },
-  minute: { windowMs: 60_000, max: 40 },
-};
+const gelatoAvailabilityRateLimiter = getDurableRateLimiter({
+  namespace: "gelato-availability",
+  limit: 60,
+  window: "1 m",
+});
 
 type AvailabilityBody = {
   country?: string;
@@ -33,8 +35,6 @@ const DEFAULT_SHIPPING_METHODS = [
   { id: "standard", title: "Standard", price: 4.99, estimatedDays: "Estimated after Gelato validation" },
   { id: "express", title: "Express", price: 9.99, estimatedDays: "Estimated after Gelato validation" },
 ];
-
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
 function cleanBaseUrl(value: string) {
   return value.replace(/\/$/, "");
@@ -57,36 +57,6 @@ function isUuid(value: unknown) {
   return (
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
-  );
-}
-
-function getClientIp(req: Request) {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
-}
-
-function checkWindowLimit(key: string, windowMs: number, max: number) {
-  const now = Date.now();
-  const bucketKey = `${key}:${windowMs}`;
-  const current = rateLimitBuckets.get(bucketKey);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitBuckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (current.count >= max) return false;
-  current.count += 1;
-  return true;
-}
-
-function checkRateLimit(key: string) {
-  return (
-    checkWindowLimit(`gelato-availability:burst:${key}`, RATE_LIMITS.burst.windowMs, RATE_LIMITS.burst.max) &&
-    checkWindowLimit(`gelato-availability:minute:${key}`, RATE_LIMITS.minute.windowMs, RATE_LIMITS.minute.max)
   );
 }
 
@@ -265,8 +235,15 @@ function normalizeAvailabilityResponse(data: any, body: AvailabilityBody) {
 
 export async function POST(req: Request) {
   try {
-    const rateLimitKey = `${getClientIp(req)}`;
-    if (!checkRateLimit(rateLimitKey)) return rejectRateLimited();
+    const rateLimitKey = getTrustedRequestIp(req);
+    try {
+      const rateLimit = await gelatoAvailabilityRateLimiter.limit(rateLimitKey);
+      if (!rateLimit.success) return rejectRateLimited();
+    } catch (error) {
+      console.error("[gelato-availability:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     const rawBody = await readLimitedJson(req);
     const body = await normalizeRequestBody(rawBody);

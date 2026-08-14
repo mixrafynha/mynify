@@ -1,8 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_BODY_BYTES = 16 * 1024;
+const signupRateLimiter = getDurableRateLimiter({
+  namespace: "signup",
+  limit: 3,
+  window: "1 m",
+});
 
 type SignupBody = {
   email?: string;
@@ -50,7 +58,34 @@ export async function POST(req: Request) {
       );
     }
 
-    const body = (await req.json().catch(() => null)) as SignupBody | null;
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return json("invalid_request", "Request body too large.", 413);
+    }
+
+    try {
+      const rateLimit = await signupRateLimiter.limit(getTrustedRequestIp(req));
+      if (!rateLimit.success) {
+        return json("rate_limited", "Too many signup attempts. Try again later.", 429);
+      }
+    } catch (error) {
+      console.error("[signup:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return json("server_error", "Signup service is temporarily unavailable.", 503);
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      return json("invalid_request", "Request body too large.", 413);
+    }
+
+    let body: SignupBody | null = null;
+    try {
+      body = JSON.parse(rawBody || "null") as SignupBody | null;
+    } catch {
+      return json("invalid_request", "Invalid request body.", 400);
+    }
 
     const email = String(body?.email || "").trim().toLowerCase();
     const password = String(body?.password || "");

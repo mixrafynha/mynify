@@ -12,6 +12,7 @@ import {
   normalizeSavedElements,
   resolveSavedDesignSides,
 } from "./design-sides";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,12 @@ export const dynamic = "force-dynamic";
 const INLINE_IMAGE_RE = /(?:data:image\/|base64,|blob:)/i;
 const INLINE_SVG_RE = /^data:image\/svg\+xml(?:;charset=utf-8)?,/i;
 const MAX_INLINE_SVG_CHARS = 120_000;
+const MAX_BODY_BYTES = 12 * 1024 * 1024;
+const saveDesignRateLimiter = getDurableRateLimiter({
+  namespace: "save-design",
+  limit: 20,
+  window: "1 m",
+});
 
 function shortUrl(field: string, value: unknown) {
   const url = typeof value === "string" && value.trim() ? value.trim() : null;
@@ -109,6 +116,23 @@ export async function POST(req: Request) {
         { error: "User not authenticated" },
         { status: 401 },
       );
+    }
+
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
+
+    try {
+      const rateLimit = await saveDesignRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
+      if (!rateLimit.success) {
+        return NextResponse.json({ error: "Too many save requests" }, { status: 429 });
+      }
+    } catch (error) {
+      console.error("[save-design:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json({ error: "Save design service is temporarily unavailable" }, { status: 503 });
     }
 
     saveContext.step = "payload";

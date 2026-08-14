@@ -2,9 +2,17 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const MAX_BODY_BYTES = 8 * 1024;
+const productAvailabilityRateLimiter = getDurableRateLimiter({
+  namespace: "product-availability",
+  limit: 120,
+  window: "1 m",
+});
 
 type ProductAvailabilityRequest = {
   variantId?: unknown;
@@ -15,11 +23,52 @@ function safeText(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function rejectRateLimited() {
+  return NextResponse.json(
+    { status: "unknown", variantId: null, countryCode: null, reason: "rate_limited" },
+    { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "10" } },
+  );
+}
+
 export async function POST(req: Request) {
   const requestStartedAt = Date.now();
 
   try {
-    const body = (await req.json().catch(() => null)) as ProductAvailabilityRequest | null;
+    const rateLimitKey = getTrustedRequestIp(req);
+    try {
+      const rateLimit = await productAvailabilityRateLimiter.limit(rateLimitKey);
+      if (!rateLimit.success) return rejectRateLimited();
+    } catch (error) {
+      console.error("[product-availability:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { status: "unknown", variantId: null, countryCode: null, reason: "request_too_large" },
+        { status: 413, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      return NextResponse.json(
+        { status: "unknown", variantId: null, countryCode: null, reason: "request_too_large" },
+        { status: 413, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    let body: ProductAvailabilityRequest | null = null;
+    try {
+      body = (JSON.parse(rawBody || "null") as ProductAvailabilityRequest | null) ?? null;
+    } catch {
+      return NextResponse.json(
+        { status: "unknown", variantId: null, countryCode: null, reason: "invalid_body" },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
     const variantId = safeText(body?.variantId);
     const countryCode = resolveCountryCode(body?.countryCode);
 

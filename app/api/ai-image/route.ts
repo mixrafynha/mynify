@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import Replicate from "replicate";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { uploadR2Object } from "../../../trigger/shared/r2";
 
 export const runtime = "nodejs";
@@ -13,6 +14,12 @@ const jsonHeaders = {
   Pragma: "no-cache",
   Expires: "0",
 };
+const MAX_BODY_BYTES = 16 * 1024;
+const aiImageRateLimiter = getDurableRateLimiter({
+  namespace: "ai-image",
+  limit: 5,
+  window: "1 m",
+});
 
 type ProfileCreditRow = {
   credits: number | string | null;
@@ -278,7 +285,34 @@ export async function POST(req: Request) {
     userId = user.id;
     console.log("AI_IMAGE_USER:", user.id);
 
-    const body = await req.json().catch(() => ({}));
+    try {
+      const rateLimit = await aiImageRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
+      if (!rateLimit.success) {
+        return jsonError(429, "Too many AI image requests");
+      }
+    } catch (error) {
+      console.error("[ai-image:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return jsonError(503, "AI image service is temporarily unavailable");
+    }
+
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return jsonError(413, "Request body too large");
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+      return jsonError(413, "Request body too large");
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+      body = JSON.parse(rawBody || "{}") as Record<string, unknown>;
+    } catch {
+      return jsonError(400, "Invalid request body");
+    }
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
 
     if (!prompt) {

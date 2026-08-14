@@ -1,5 +1,6 @@
 import sharp from "sharp";
 import type { OverlayOptions } from "sharp";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { FALLBACK_PRINT_BOX } from "./config";
 import { findMockupFile } from "./assets";
 import { json, normalizeBox, normalizeCategory, normalizeSide } from "./utils";
@@ -13,6 +14,11 @@ const MAX_IMAGE_DIMENSION = 4096;
 const MAX_IMAGE_PIXELS = 16_000_000;
 const MAX_ELEMENTS = 100;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const mockupRateLimiter = getDurableRateLimiter({
+  namespace: "generate-own-mockup",
+  limit: 5,
+  window: "1 m",
+});
 
 type RequestBody = Record<string, any>;
 
@@ -177,6 +183,19 @@ async function parseDesignImage(designImage: unknown) {
 
 export async function POST(req: Request) {
   try {
+    try {
+      const rateLimit = await mockupRateLimiter.limit(getTrustedRequestIp(req));
+      if (!rateLimit.success) {
+        throw new MockupRequestError("Too many mockup requests.", 429);
+      }
+    } catch (error) {
+      if (error instanceof MockupRequestError) throw error;
+      console.error("[generate-own-mockup:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw new MockupRequestError("Mockup rate limiting is temporarily unavailable.", 503);
+    }
+
     const body = await readLimitedJson(req);
 
     const category = normalizeCategory(body.category || body.productType || "tshirt");

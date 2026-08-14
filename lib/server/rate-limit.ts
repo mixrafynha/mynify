@@ -51,17 +51,23 @@ export function getDurableRateLimiter(config: DurableRateLimitConfig) {
 
   if (cached) return cached;
 
-  const limiter = new Ratelimit({
-    redis: getUpstashRedis(),
-    limiter: Ratelimit.slidingWindow(config.limit, config.window),
-    prefix: `ryfio:${config.namespace}`,
-    ephemeralCache: false,
-    timeout: 2_500,
-  });
+  let limiter: Ratelimit | null = null;
+
+  const getLimiter = () => {
+    limiter ??= new Ratelimit({
+      redis: getUpstashRedis(),
+      limiter: Ratelimit.slidingWindow(config.limit, config.window),
+      prefix: `ryfio:${config.namespace}`,
+      ephemeralCache: false,
+      timeout: 2_500,
+    });
+
+    return limiter;
+  };
 
   const wrapped: CachedLimiter = {
     async limit(identifier: string) {
-      const result = await limiter.limit(identifier);
+      const result = await getLimiter().limit(identifier);
       return {
         success: result.success,
         limit: result.limit,
@@ -73,4 +79,12 @@ export function getDurableRateLimiter(config: DurableRateLimitConfig) {
 
   cache.set(cacheKey, wrapped);
   return wrapped;
+}
+
+export function getTrustedRequestIp(req: Request) {
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const realIp = req.headers.get("x-real-ip")?.trim();
+  const cfIp = req.headers.get("cf-connecting-ip")?.trim();
+
+  return (cfIp || forwarded || realIp || "unknown").slice(0, 64);
 }

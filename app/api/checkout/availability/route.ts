@@ -4,6 +4,7 @@ import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gel
 import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_ITEMS = 10;
@@ -11,12 +12,11 @@ const MAX_QUANTITY = 10;
 const MAX_PRINT_FILES_PER_ITEM = 2;
 const MAX_TEXT_LENGTH = 160;
 const MAX_URL_LENGTH = 2_000;
-const RATE_LIMITS = {
-  burst: { windowMs: 10_000, max: 5 },
-  minute: { windowMs: 60_000, max: 30 },
-};
-
-const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const checkoutAvailabilityRateLimiter = getDurableRateLimiter({
+  namespace: "checkout-availability",
+  limit: 60,
+  window: "1 m",
+});
 
 type AvailabilityItem = {
   itemId?: string;
@@ -52,36 +52,6 @@ function isUuid(value: unknown) {
   return (
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
-  );
-}
-
-function getClientIp(req: Request) {
-  return (
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip")?.trim() ||
-    "unknown"
-  );
-}
-
-function checkWindowLimit(key: string, windowMs: number, max: number) {
-  const now = Date.now();
-  const bucketKey = `${key}:${windowMs}`;
-  const current = rateLimitBuckets.get(bucketKey);
-
-  if (!current || current.resetAt <= now) {
-    rateLimitBuckets.set(bucketKey, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (current.count >= max) return false;
-  current.count += 1;
-  return true;
-}
-
-function checkRateLimit(key: string) {
-  return (
-    checkWindowLimit(`checkout-availability:burst:${key}`, RATE_LIMITS.burst.windowMs, RATE_LIMITS.burst.max) &&
-    checkWindowLimit(`checkout-availability:minute:${key}`, RATE_LIMITS.minute.windowMs, RATE_LIMITS.minute.max)
   );
 }
 
@@ -453,8 +423,16 @@ export async function POST(req: Request) {
   try {
     const supabase = createSupabaseServer();
     const { data: authData } = await supabase.auth.getUser();
-    const rateLimitKey = `${authData?.user?.id ?? "guest"}:${getClientIp(req)}`;
-    if (!checkRateLimit(rateLimitKey)) return rejectRateLimited();
+    const rateLimitKey = `${authData?.user?.id ?? "guest"}:${getTrustedRequestIp(req)}`;
+
+    try {
+      const rateLimit = await checkoutAvailabilityRateLimiter.limit(rateLimitKey);
+      if (!rateLimit.success) return rejectRateLimited();
+    } catch (error) {
+      console.error("[checkout-availability:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     const contentLength = Number(req.headers.get("content-length") ?? 0);
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {

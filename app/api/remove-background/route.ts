@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { validateSafeRemoteImageUrl } from "@/lib/server/safe-remote-image";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
@@ -11,6 +12,11 @@ const MAX_OUTPUT_BYTES = 12 * 1024 * 1024;
 const MAX_IMAGE_PIXELS = 16_000_000;
 const REMOVE_BG_TIMEOUT_MS = 30_000;
 const SUPPORTED_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const removeBackgroundRateLimiter = getDurableRateLimiter({
+  namespace: "remove-background",
+  limit: 5,
+  window: "1 m",
+});
 
 function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status });
@@ -66,6 +72,18 @@ export async function POST(req: Request) {
   }
 
   try {
+    try {
+      const rateLimit = await removeBackgroundRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
+      if (!rateLimit.success) {
+        return jsonError("Too many remove background requests", 429);
+      }
+    } catch (error) {
+      console.error("[remove-background:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return jsonError("Remove background service is temporarily unavailable", 503);
+    }
+
     const contentLength = Number(req.headers.get("content-length") ?? 0);
 
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 const LIMITS = {
   name: 50,
@@ -9,29 +10,12 @@ const LIMITS = {
   location: 60,
 };
 
-const RATE_LIMIT_WINDOW = 60 * 1000;
-const RATE_LIMIT_MAX = 10;
-
-const requests = new Map<string, { count: number; resetAt: number }>();
-
-function rateLimit(key: string) {
-  const now = Date.now();
-  const current = requests.get(key);
-
-  if (!current || current.resetAt < now) {
-    requests.set(key, {
-      count: 1,
-      resetAt: now + RATE_LIMIT_WINDOW,
-    });
-
-    return true;
-  }
-
-  if (current.count >= RATE_LIMIT_MAX) return false;
-
-  current.count++;
-  return true;
-}
+const MAX_BODY_BYTES = 8 * 1024;
+const profileRateLimiter = getDurableRateLimiter({
+  namespace: "profiles",
+  limit: 10,
+  window: "1 m",
+});
 
 function cleanText(value: unknown, max: number) {
   if (typeof value !== "string") return null;
@@ -106,21 +90,41 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0] ||
-    req.headers.get("x-real-ip") ||
-    "unknown";
-
-  const rateKey = `${user.id}:${ip}`;
-
-  if (!rateLimit(rateKey)) {
+  const contentLength = Number(req.headers.get("content-length") ?? 0);
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
     return NextResponse.json(
-      { error: "Muitos pedidos. Tenta novamente daqui a pouco." },
-      { status: 429 }
+      { error: "Request body too large" },
+      { status: 413 }
     );
   }
 
-  const body = await req.json();
+  try {
+    const rateLimitResult = await profileRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
+    if (!rateLimitResult.success) {
+      return NextResponse.json(
+        { error: "Muitos pedidos. Tenta novamente daqui a pouco." },
+        { status: 429 }
+      );
+    }
+  } catch (error) {
+    console.error("[profiles:rate-limit-error]", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { error: "Serviço temporariamente indisponível" },
+      { status: 503 }
+    );
+  }
+
+  const rawBody = await req.text();
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Request body too large" },
+      { status: 413 }
+    );
+  }
+
+  const body = JSON.parse(rawBody || "{}");
 
   const { data: currentProfile, error: profileError } = await supabase
     .from("profiles")

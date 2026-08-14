@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 type AddressSuggestion = {
   label: string;
@@ -62,6 +63,12 @@ type NewAddressComponent = {
   shortText?: string;
   types?: string[];
 };
+
+const mapsAutocompleteRateLimiter = getDurableRateLimiter({
+  namespace: "maps-autocomplete",
+  limit: 120,
+  window: "1 m",
+});
 
 function getCountryIso(country: string) {
   const trimmed = country.trim();
@@ -202,6 +209,24 @@ export async function GET(request: Request) {
   const country = searchParams.get("country")?.trim() || "";
   const sessionToken = searchParams.get("sessionToken")?.trim() || "";
   const key = process.env.GOOGLE_MAPS_API_KEY?.trim() || "";
+
+  try {
+    const rateLimit = await mapsAutocompleteRateLimiter.limit(getTrustedRequestIp(request));
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { suggestions: [], address: null, configured: true, status: "RATE_LIMITED" },
+        { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "5" } },
+      );
+    }
+  } catch (error) {
+    console.error("[maps-autocomplete:rate-limit-error]", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return NextResponse.json(
+      { suggestions: [], address: null, configured: Boolean(key), status: "UNAVAILABLE" },
+      { status: 503 },
+    );
+  }
 
   if (!key) {
     return NextResponse.json({ suggestions: [], address: null, configured: false });
