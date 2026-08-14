@@ -267,6 +267,23 @@ function resolveCheckoutAvailabilityVariantId(item: CartItem) {
   return matchedVariant ? readVariantIdFromRecord(matchedVariant) : null;
 }
 
+function buildCheckoutAvailabilityItems(items: CartItem[]) {
+  return items.map((item) => ({
+    itemId: item.id,
+    cartItemId: item.id,
+    title: item.title,
+    productId: getCartProductId(item),
+    productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
+    variantId: resolveCheckoutAvailabilityVariantId(item),
+    designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
+    userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
+    color: item.color ?? null,
+    size: item.size ?? null,
+    quantity: Math.max(1, Number(item.quantity) || 1),
+    printFiles: resolveGelatoPrintFiles(item),
+  }));
+}
+
 function previewSourceRank(item: CartItem, side: "front" | "back") {
   const designData = item.design_data ?? item.designData ?? {};
   const directMockups =
@@ -524,20 +541,9 @@ export default function CheckoutPage() {
   const customDesignItems = useMemo(() => items.filter((item) => isCustomDesignItem(item)), [items]);
   const printFilesReady = useMemo(() => customDesignItems.every((item) => isPrintFileReady(item)), [customDesignItems]);
   const printFilesPending = customDesignItems.length > 0 && !printFilesReady;
+  const checkoutAvailabilityItems = useMemo(() => buildCheckoutAvailabilityItems(items), [items]);
+  const checkoutAvailabilityItemsReady = items.length > 0 && checkoutAvailabilityItems.every((item) => Boolean(item.variantId));
   const availabilityRequestSignature = useMemo(() => {
-    const normalizedItems = items.map((item) => ({
-      id: item.id,
-      productId: getCartProductId(item),
-      variantId: resolveCheckoutAvailabilityVariantId(item),
-      designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
-      userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
-      quantity: Math.max(1, Number(item.quantity) || 1),
-      color: item.color ?? null,
-      size: item.size ?? null,
-      productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
-      printFiles: resolveGelatoPrintFiles(item).map((file) => `${file.type}:${file.url}`),
-    }));
-
     return JSON.stringify({
       fullName: form.fullName.trim(),
       email: form.email.trim(),
@@ -550,9 +556,12 @@ export default function CheckoutPage() {
       state: form.state.trim(),
       stateCode: form.stateCode.trim(),
       hasCompleteShippingAddress,
-      items: normalizedItems,
+      items: checkoutAvailabilityItems.map((item) => ({
+        ...item,
+        printFiles: item.printFiles.map((file) => `${file.type}:${file.url}`),
+      })),
     });
-  }, [hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode, items]);
+  }, [checkoutAvailabilityItems, hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -885,6 +894,28 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (loading) {
+      setProductAvailability((current) => ({
+        ...current,
+        loading: false,
+        checked: false,
+        message: null,
+      }));
+      return;
+    }
+
+    if (!items.length) {
+      setProductAvailability({
+        loading: false,
+        checked: false,
+        configured: false,
+        available: true,
+        unavailableItems: [],
+        message: null,
+      });
+      return;
+    }
+
     if (!hasCompleteShippingAddress) {
       setProductAvailability({
         loading: false,
@@ -893,6 +924,18 @@ export default function CheckoutPage() {
         available: true,
         unavailableItems: [],
         message: "Complete your shipping address in the previous step.",
+      });
+      return;
+    }
+
+    if (!checkoutAvailabilityItemsReady) {
+      setProductAvailability({
+        loading: false,
+        checked: false,
+        configured: false,
+        available: true,
+        unavailableItems: [],
+        message: "Preparing your cart items...",
       });
       return;
     }
@@ -920,7 +963,10 @@ export default function CheckoutPage() {
       try {
         const res = await fetch("/api/checkout/availability", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Ryfio-Availability-Source": "checkout-review",
+          },
           cache: "no-store",
           signal: controller.signal,
           body: JSON.stringify({
@@ -936,20 +982,7 @@ export default function CheckoutPage() {
             state: form.state.trim() || form.stateCode.trim() || null,
             stateCode: form.stateCode.trim() || form.state.trim() || null,
             currency: "EUR",
-            items: items.map((item) => ({
-              itemId: item.id,
-              cartItemId: item.id,
-              title: item.title,
-              productId: getCartProductId(item),
-              productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
-              variantId: resolveCheckoutAvailabilityVariantId(item),
-              designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
-              userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
-              color: item.color ?? null,
-              size: item.size ?? null,
-              quantity: Math.max(1, Number(item.quantity) || 1),
-              printFiles: resolveGelatoPrintFiles(item),
-            })),
+            items: checkoutAvailabilityItems,
           }),
         });
 
@@ -1000,7 +1033,7 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [availabilityRequestSignature, printFilesPending, step]);
+  }, [availabilityRequestSignature, checkoutAvailabilityItems, checkoutAvailabilityItemsReady, items.length, loading, printFilesPending, step]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
