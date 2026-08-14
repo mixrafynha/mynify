@@ -153,12 +153,20 @@ function validateIncomingItems(value: unknown) {
   if (value.length > MAX_ITEMS) return { items: null, code: "TOO_MANY_ITEMS" };
 
   const items: AvailabilityItem[] = [];
-  for (const entry of value) {
+  for (const [itemIndex, entry] of value.entries()) {
     if (!isRecord(entry)) return { items: null, code: "INVALID_ITEM" };
 
     const variantId = boundedText(entry.variantId);
     const quantity = normalizeStrictQuantity(entry.quantity);
-    if (!variantId || !isUuid(variantId)) return { items: null, code: "INVALID_VARIANT" };
+    if (!variantId || !isUuid(variantId)) {
+      console.warn("[availability:INVALID_VARIANT]", {
+        itemIndex,
+        cartItemId: entry.cartItemId ?? null,
+        variantId: entry.variantId ?? null,
+        variantIdType: typeof entry.variantId,
+      });
+      return { items: null, code: "INVALID_VARIANT" };
+    }
     if (quantity === null) return { items: null, code: "INVALID_QUANTITY" };
 
     const productId = boundedText(entry.productId) || undefined;

@@ -961,6 +961,12 @@ export default function CheckoutPage() {
       setProductAvailability((current) => ({ ...current, loading: true, message: null }));
 
       try {
+        console.log("[checkout:availability:payload]", checkoutAvailabilityItems.map((item) => ({
+          cartItemId: item.cartItemId,
+          variantId: item.variantId,
+          productId: item.productId,
+        })));
+
         const res = await fetch("/api/checkout/availability", {
           method: "POST",
           headers: {
