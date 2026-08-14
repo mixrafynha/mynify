@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getDurableRateLimiter } from "@/lib/server/rate-limit";
 
 /* ================= SUPABASE ================= */
 
@@ -30,26 +31,90 @@ const MAX_LEN = {
   message: 2000,
 };
 
+const REQUEST_BODY_LIMIT_BYTES = 8 * 1024;
+function getRequestIp(req: Request) {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip")?.trim() ||
+    req.headers.get("cf-connecting-ip")?.trim() ||
+    "unknown"
+  ).slice(0, 64);
+}
+
+async function readBodyWithinLimit(req: Request) {
+  const contentLength = req.headers.get("content-length");
+  if (contentLength) {
+    const parsed = Number(contentLength);
+    if (Number.isFinite(parsed) && parsed > REQUEST_BODY_LIMIT_BYTES) {
+      return { tooLarge: true as const };
+    }
+  }
+
+  const raw = await req.text();
+  if (Buffer.byteLength(raw, "utf8") > REQUEST_BODY_LIMIT_BYTES) {
+    return { tooLarge: true as const };
+  }
+
+  return { tooLarge: false as const, raw };
+}
+
 /* ================= POST ================= */
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
+    const bodyResult = await readBodyWithinLimit(req);
+    if (bodyResult.tooLarge) {
+      return NextResponse.json(
+        { error: "Request body too large" },
+        { status: 413 }
+      );
+    }
 
-    let { name, email, message } = body;
+    let body: unknown;
+
+    try {
+      body = JSON.parse(bodyResult.raw);
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json(
+        { error: "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    const allowedKeys = new Set(["name", "email", "message"]);
+    const keys = Object.keys(body as Record<string, unknown>);
+    if (keys.some((key) => !allowedKeys.has(key))) {
+      return NextResponse.json(
+        { error: "Invalid input" },
+        { status: 400 }
+      );
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+    const rawName = bodyRecord.name;
+    const rawEmail = bodyRecord.email;
+    const rawMessage = bodyRecord.message;
 
     /* ================= TYPE CHECK ================= */
 
     if (
-      typeof name !== "string" ||
-      typeof email !== "string" ||
-      typeof message !== "string"
+      typeof rawName !== "string" ||
+      typeof rawEmail !== "string" ||
+      typeof rawMessage !== "string"
     ) {
       return NextResponse.json(
         { error: "Invalid input types" },
         { status: 400 }
       );
     }
+
+    let name = rawName;
+    let email = rawEmail;
+    let message = rawMessage;
 
     /* ================= SANITIZE ================= */
 
@@ -81,6 +146,18 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Input too long" },
         { status: 400 }
+      );
+    }
+
+    const rateLimit = await getDurableRateLimiter({
+      namespace: "contact",
+      limit: 3,
+      window: "1 m",
+    }).limit(getRequestIp(req));
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: "Too many requests" },
+        { status: 429 }
       );
     }
 
