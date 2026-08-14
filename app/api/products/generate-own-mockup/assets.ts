@@ -1,5 +1,6 @@
 import path from "path";
 import fs from "fs/promises";
+import { fetchSafeRemoteImageBuffer } from "@/lib/server/safe-remote-image";
 import { cleanBase64Image } from "./utils";
 import type { Side } from "./types";
 
@@ -14,20 +15,13 @@ export async function loadImageBuffer(src: string) {
     return Buffer.from(cleanBase64Image(value), "base64");
   }
 
-  if (value.startsWith("http://") || value.startsWith("https://")) {
-    const response = await fetch(value, {
-      headers: {
-        "User-Agent": "Ryfio/1.0",
-        Accept: "image/avif,image/webp,image/png,image/jpeg,image/*,*/*",
-      },
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch remote image: ${response.status}`);
+  if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value)) {
+    if (!value.startsWith("https://")) {
+      throw new Error("Unsupported remote image URL.");
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    const image = await fetchSafeRemoteImageBuffer(value);
+    return image.buffer;
   }
 
   if (value.startsWith("/")) {
