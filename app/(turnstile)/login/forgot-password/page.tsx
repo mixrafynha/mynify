@@ -6,7 +6,12 @@ import { ArrowLeft, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import Turnstile from "../../shared/Turnstile";
-import { isValidEmail, safeRoute, sanitizeEmail } from "../../shared/AuthValidation";
+import {
+  isValidEmail,
+  safeOrigin,
+  safeRoute,
+  sanitizeEmail,
+} from "../../shared/AuthValidation";
 
 export default function ForgotPassword() {
   const router = useRouter();
@@ -27,6 +32,7 @@ export default function ForgotPassword() {
     if (loading) return;
 
     const normalizedEmail = sanitizeEmail(email);
+    const redirectTo = `${safeOrigin()}/login/update-password`;
 
     setError("");
     setSuccess("");
@@ -44,17 +50,34 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
+      console.info("[password-reset] reset request attempted", {
+        redirectToHost: new URL(redirectTo).host,
+        redirectToPath: new URL(redirectTo).pathname,
+      });
+
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, {
-        redirectTo: `${window.location.origin}/login/update-password`,
+        redirectTo,
         captchaToken: token,
       });
 
-      if (resetError) throw resetError;
+      if (resetError) {
+        console.error("[password-reset] supabase error", {
+          code: resetError.code ?? null,
+          message: resetError.message,
+        });
+        throw resetError;
+      }
 
       setEmail("");
       setSuccess("Reset link sent. Check your email.");
       resetCaptcha();
-    } catch {
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("[password-reset] supabase error", {
+          code: (error as { code?: string }).code ?? null,
+          message: error.message,
+        });
+      }
       setError("Reset failed. Try again.");
       resetCaptcha();
     } finally {

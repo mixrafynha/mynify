@@ -1,41 +1,81 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { ArrowLeft, Lock } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { isStrongPassword, safeRoute } from "../../shared/AuthValidation";
 
 export default function UpdatePassword() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [password, setPassword] = useState("");
   const [checking, setChecking] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [recoveryReady, setRecoveryReady] = useState(false);
+  const handledRef = useRef(false);
 
   useEffect(() => {
     let ignore = false;
+    const code = searchParams.get("code");
 
-    supabase.auth.getSession().then(({ data }) => {
+    if (!code) {
+      router.replace("/login");
+      return () => {
+        ignore = true;
+      };
+    }
+
+    handledRef.current = false;
+
+    const handleRecovery = async () => {
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
       if (ignore) return;
-      if (!data.session) {
+
+      if (exchangeError || !data.session) {
         router.replace("/login");
         return;
       }
+
+      handledRef.current = true;
+      setRecoveryReady(true);
       setChecking(false);
+    };
+
+    handleRecovery();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (ignore) return;
+
+      if (event === "PASSWORD_RECOVERY" && session?.user) {
+        handledRef.current = true;
+        setRecoveryReady(true);
+        setChecking(false);
+      }
     });
 
     return () => {
       ignore = true;
+      subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, searchParams]);
 
   const handleUpdate = useCallback(async () => {
     if (loading) return;
 
     setError("");
+
+    if (!recoveryReady || !handledRef.current) {
+      router.replace("/login");
+      return;
+    }
 
     if (!isStrongPassword(password)) {
       setError("Password must have 10+ characters, uppercase, lowercase, number and symbol.");
@@ -47,13 +87,14 @@ export default function UpdatePassword() {
     try {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) throw updateError;
-      router.replace("/dashboard");
+      await supabase.auth.signOut();
+      router.replace("/login");
     } catch {
       setError("Update failed. Try again.");
     } finally {
       setLoading(false);
     }
-  }, [loading, password, router]);
+  }, [loading, password, recoveryReady, router]);
 
   if (checking) return null;
 
