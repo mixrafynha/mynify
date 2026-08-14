@@ -36,15 +36,6 @@ type SyncJob = {
   current_error?: string | null;
   can_complete?: boolean | null;
   inconsistent?: boolean | null;
-  variant_costs?: Array<{
-    gelato_product_uid?: string | null;
-    name?: string | null;
-    color?: string | null;
-    size?: string | null;
-    cost_fr?: number | string | null;
-    currency?: string | null;
-    last_synced_at?: string | null;
-  }> | null;
 };
 
 const TEMPORARY_STATUS_CODES = [408, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524];
@@ -177,16 +168,13 @@ export default function GelatoSyncPage() {
 
       if (retryable) {
         consecutiveRetries += 1;
-        const status = await readJobStatus(jobId);
-        if ((status?.pending_items ?? 0) > 0 && (status?.processing_items ?? 0) === 0) {
-          if (consecutiveRetries > PROCESS_RETRY_DELAYS_MS.length) {
-            setMessage("Pausado por erro temporario. Clica em Retomar sincronizacao.");
-            throw new RetryableSyncError("Pausado por erro temporario. Retoma a sincronizacao com o mesmo job.");
-          }
-          setMessage("Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.");
-          await sleep(PROCESS_RETRY_DELAYS_MS[consecutiveRetries - 1]);
-          continue;
+        if (consecutiveRetries > PROCESS_RETRY_DELAYS_MS.length) {
+          setMessage("Pausado por erro temporario. Clica em Retomar sincronizacao.");
+          throw new RetryableSyncError("Pausado por erro temporario. Retoma a sincronizacao com o mesmo job.");
         }
+        setMessage("Erro temporario de ligacao ao Supabase. A sincronizacao sera retomada.");
+        await sleep(PROCESS_RETRY_DELAYS_MS[consecutiveRetries - 1]);
+        continue;
       }
 
       if (!res.ok || json?.ok === false) {
@@ -194,12 +182,33 @@ export default function GelatoSyncPage() {
       }
 
       consecutiveRetries = 0;
-      const status = await readJobStatus(jobId);
-      if (status?.status === "completed") break;
-      if (status?.status === "completed_with_errors") break;
-      if (status?.status === "failed") {
-        throw new Error(status.current_error || "Job failed");
-      }
+      setJob((current) => {
+        if (!current) return current;
+        const processed = Number(json?.processed ?? 0);
+        const successful = Number(json?.successful ?? 0);
+        const failed = Number(json?.failed ?? 0);
+        const total = Number(current.total_variants ?? 0);
+        const nextProcessed = Math.min(Number(current.processed_variants ?? 0) + processed, total || Number.MAX_SAFE_INTEGER);
+        const nextSuccessful = Number(current.successful_variants ?? 0) + successful;
+        const nextFailed = Number(current.failed_variants ?? 0) + failed;
+        const nextPending = Math.max(total - nextProcessed, 0);
+
+        return {
+          ...current,
+          processed_variants: nextProcessed,
+          successful_variants: nextSuccessful,
+          failed_variants: nextFailed,
+          completed_variants: nextSuccessful,
+          failed_items: nextFailed,
+          pending_items: nextPending,
+          processing_items: nextPending > 0 ? 1 : 0,
+          current_error: null,
+          status: json?.completed ? (json?.inconsistent ? "completed_with_errors" : "completed") : "processing",
+          can_complete: json?.completed ? !json?.inconsistent : current.can_complete,
+          inconsistent: json?.inconsistent ? true : current.inconsistent,
+        };
+      });
+      if (json?.completed) break;
     }
   }
 
@@ -369,43 +378,11 @@ export default function GelatoSyncPage() {
       </section>
 
       {job && (
-        <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
+      <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
           <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Job status</h2>
           <pre className="overflow-auto rounded-[24px] bg-black/[0.03] p-4 text-xs leading-6 text-black/75">
             {JSON.stringify(job, null, 2)}
           </pre>
-        </section>
-      )}
-
-      {job?.variant_costs && job.variant_costs.length > 0 && (
-        <section className="rounded-[28px] border border-black/5 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-black/35">Variant costs</h2>
-          <div className="overflow-auto rounded-[24px] border border-black/5">
-            <table className="w-full min-w-[760px] text-left text-xs font-semibold text-black/65">
-              <thead className="bg-black/[0.03] text-[11px] uppercase tracking-[0.16em] text-black/35">
-                <tr>
-                  <th className="px-4 py-3">Cor</th>
-                  <th className="px-4 py-3">Tamanho</th>
-                  <th className="px-4 py-3">UID Gelato</th>
-                  <th className="px-4 py-3">Custo FR</th>
-                  <th className="px-4 py-3">Moeda</th>
-                  <th className="px-4 py-3">Ultima sync</th>
-                </tr>
-              </thead>
-              <tbody>
-                {job.variant_costs.slice(0, 80).map((variant) => (
-                  <tr key={variant.gelato_product_uid ?? `${variant.color}-${variant.size}`} className="border-t border-black/5">
-                    <td className="px-4 py-3">{variant.color ?? "-"}</td>
-                    <td className="px-4 py-3">{variant.size ?? "-"}</td>
-                    <td className="max-w-[340px] truncate px-4 py-3">{variant.gelato_product_uid ?? "-"}</td>
-                    <td className="px-4 py-3">{variant.cost_fr ?? "-"}</td>
-                    <td className="px-4 py-3">{variant.currency ?? "-"}</td>
-                    <td className="px-4 py-3">{variant.last_synced_at ?? "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         </section>
       )}
 

@@ -19,77 +19,25 @@ export async function GET(request: Request) {
     const supabase = createSupabaseAdmin();
     const { data: job, error: jobError } = await supabase
       .from("gelato_sync_jobs")
-      .select("*")
+      .select("id, product_id, catalog_uid, reference_product_uid, family_key, status, total_variants, processed_variants, successful_variants, failed_variants, current_item_uid, current_error, started_at, last_processed_at, completed_at, created_at, updated_at")
       .eq("id", jobId)
       .maybeSingle();
     if (jobError) throw new Error(jobError.message);
     if (!job) return NextResponse.json({ ok: false, error: "Job not found." }, { status: 404 });
 
-    const { data: items, error: itemsError } = await supabase
-      .from("gelato_sync_job_items")
-      .select("id, gelato_product_uid, color, size, position, status, attempts, error, started_at, completed_at")
-      .eq("job_id", jobId)
-      .order("position", { ascending: true });
-    if (itemsError) throw new Error(itemsError.message);
-
-    const total = (items ?? []).length || Number(job.total_variants ?? 0);
-    const completed = (items ?? []).filter((item) => item.status === "completed").length;
-    const failed = (items ?? []).filter((item) => item.status === "failed").length;
-    const pending = (items ?? []).filter((item) => item.status === "pending").length;
-    const processing = (items ?? []).filter((item) => item.status === "processing").length;
-    const processed = completed + failed;
+    const total = Number(job.total_variants ?? 0);
+    const processed = Number(job.processed_variants ?? 0);
+    const successful = Number(job.successful_variants ?? 0);
+    const failed = Number(job.failed_variants ?? 0);
+    const pending = Math.max(total - processed, 0);
+    const processing = job.status === "processing" && pending > 0 ? 1 : 0;
     const canComplete =
       total > 0 &&
-      total === Number(job.total_variants ?? 0) &&
       processed === total &&
       pending === 0 &&
-      processing === 0;
-    const inconsistent = Number(job.total_variants ?? 0) > 0 && total === 0;
-    const itemProductUids = Array.from(
-      new Set((items ?? []).map((item) => item.gelato_product_uid).filter(Boolean)),
-    );
-    let variantCosts: Array<Record<string, unknown>> = [];
-
-    if (itemProductUids.length > 0) {
-      const { data: variants } = await supabase
-        .from("product_variants")
-        .select("id, name, size, gelato_product_uid, product_color_id, price")
-        .in("gelato_product_uid", itemProductUids);
-      const variantIds = (variants ?? []).map((variant) => variant.id).filter(Boolean);
-      const { data: colors } = variantIds.length > 0
-        ? await supabase
-            .from("product_colors")
-            .select("id, color")
-            .in("id", (variants ?? []).map((variant) => variant.product_color_id).filter(Boolean))
-        : { data: [] };
-      const { data: markets } = variantIds.length > 0
-        ? await supabase
-            .from("gelato_variant_markets")
-            .select("product_variant_id, country_code, currency, quantity, product_price, price_checked_at")
-            .in("product_variant_id", variantIds)
-            .eq("country_code", "FR")
-            .eq("quantity", 1)
-        : { data: [] };
-      const colorsById = new Map((colors ?? []).map((color) => [color.id, color.color]));
-      const marketsByVariantId = new Map(
-        (markets ?? [])
-          .filter((market) => market.product_price !== null)
-          .map((market) => [market.product_variant_id, market]),
-      );
-
-      variantCosts = (variants ?? []).map((variant) => {
-        const market = marketsByVariantId.get(variant.id);
-        return {
-          gelato_product_uid: variant.gelato_product_uid,
-          name: variant.name,
-          color: colorsById.get(variant.product_color_id) ?? null,
-          size: variant.size,
-          cost_fr: market?.product_price ?? variant.price ?? null,
-          currency: market?.currency ?? null,
-          last_synced_at: market?.price_checked_at ?? null,
-        };
-      });
-    }
+      processing === 0 &&
+      (job.status === "completed" || job.status === "completed_with_errors");
+    const inconsistent = Number(job.total_variants ?? 0) > 0 && processed === 0 && job.status === "failed";
 
     return NextResponse.json({
       ok: true,
@@ -97,17 +45,15 @@ export async function GET(request: Request) {
         ...job,
         total_variants: total,
         processed_variants: processed,
-        successful_variants: completed,
+        successful_variants: successful,
         failed_variants: failed,
-        completed_variants: completed,
+        completed_variants: successful,
         failed_items: failed,
         pending_items: pending,
         processing_items: processing,
         can_complete: canComplete,
         inconsistent,
-        variant_costs: variantCosts,
       },
-      items: items ?? [],
     });
   } catch (error) {
     return NextResponse.json(
