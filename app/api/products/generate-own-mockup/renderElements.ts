@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import type { OverlayOptions } from "sharp";
 import { loadImageBuffer } from "./assets";
 import { saveDebug } from "./debug";
 import { elementNumber, escapeXml } from "./utils";
@@ -107,7 +108,7 @@ export async function renderElementsLayer(args: {
     })
   );
 
-  const composites: sharp.OverlayOptions[] = [];
+  const composites: OverlayOptions[] = [];
 
   for (const el of elements) {
     const position = resolveElementPosition(el, args.safeArea);

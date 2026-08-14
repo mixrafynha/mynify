@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import type { OverlayOptions } from "sharp";
 import { FALLBACK_PRINT_BOX } from "./config";
 import { findMockupFile } from "./assets";
 import { json, normalizeBox, normalizeCategory, normalizeSide } from "./utils";
@@ -254,7 +255,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const compositeInputs: sharp.OverlayOptions[] = [
+    const compositeInputs: OverlayOptions[] = [
       { input: designLayer, left: 0, top: 0, blend: "over" },
     ];
 
