@@ -113,6 +113,46 @@ async function validateRemoteImageUrl(rawUrl: string) {
   return parsed;
 }
 
+export async function validateSafeRemoteImageUrl(rawUrl: string, redirectCount = 0): Promise<string> {
+  if (redirectCount > MAX_REDIRECTS) {
+    throw new Error("Remote image redirect limit exceeded.");
+  }
+
+  const url = await validateRemoteImageUrl(rawUrl);
+  const response = await fetch(url, {
+    method: "HEAD",
+    headers: {
+      accept: "image/webp,image/png,image/jpeg",
+      "user-agent": "Ryfio/1.0",
+    },
+    redirect: "manual",
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  });
+
+  if ([301, 302, 303, 307, 308].includes(response.status)) {
+    const location = response.headers.get("location");
+    if (!location) throw new Error("Remote image redirect missing location.");
+    return validateSafeRemoteImageUrl(new URL(location, url).toString(), redirectCount + 1);
+  }
+
+  if (!response.ok) {
+    throw new Error("Remote image validation failed.");
+  }
+
+  const contentType = normalizeContentType(response);
+  if (contentType && !ALLOWED_IMAGE_TYPES.has(contentType)) {
+    throw new Error("Unsupported remote image content type.");
+  }
+
+  const contentLengthHeader = response.headers.get("content-length");
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : null;
+  if (contentLength !== null && Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
+    throw new Error("Remote image exceeds byte limit.");
+  }
+
+  return url.toString();
+}
+
 function normalizeContentType(response: Response) {
   return response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
 }

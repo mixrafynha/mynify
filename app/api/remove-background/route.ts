@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import sharp from "sharp";
+import { validateSafeRemoteImageUrl } from "@/lib/server/safe-remote-image";
 import { createSupabaseServer } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -40,26 +41,6 @@ async function assertSafeDimensions(buffer: Buffer) {
   if (!metadata.width || !metadata.height || metadata.width * metadata.height > MAX_IMAGE_PIXELS) {
     throw new Error("IMAGE_DIMENSIONS_TOO_LARGE");
   }
-}
-
-function normalizeImageUrl(value: string) {
-  let parsed: URL;
-
-  try {
-    parsed = new URL(value);
-  } catch {
-    return null;
-  }
-
-  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    return null;
-  }
-
-  if (parsed.hostname === "localhost" || parsed.hostname.endsWith(".localhost")) {
-    return null;
-  }
-
-  return parsed.toString();
 }
 
 function normalizeBase64(value: string) {
@@ -154,9 +135,15 @@ export async function POST(req: Request) {
         "image.png",
       );
     } else {
-      const safeUrl = normalizeImageUrl(imageUrl);
+      if (imageUrl.length > 2048) {
+        return jsonError("imageUrl invalida", 400);
+      }
 
-      if (!safeUrl || safeUrl.length > 2048) {
+      let safeUrl: string;
+
+      try {
+        safeUrl = await validateSafeRemoteImageUrl(imageUrl);
+      } catch {
         return jsonError("imageUrl invalida", 400);
       }
 
