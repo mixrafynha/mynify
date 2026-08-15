@@ -3,13 +3,18 @@
 import { usePathname } from "next/navigation";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import { LoadingProvider } from "./context/LoadingContext";
 
 export default function Providers({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AppWrapper>{children}</AppWrapper>;
+  return (
+    <LoadingProvider>
+      <AppWrapper>{children}</AppWrapper>
+    </LoadingProvider>
+  );
 }
 
 function AppWrapper({ children }: { children: React.ReactNode }) {
