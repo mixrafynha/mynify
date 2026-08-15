@@ -451,6 +451,7 @@ export default function CheckoutPage() {
   const availabilityAbortController = useRef<AbortController | null>(null);
   const availabilityRequestId = useRef(0);
   const availabilityRequestSignatureRef = useRef("");
+  const [availabilityRefreshToken, setAvailabilityRefreshToken] = useState(0);
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -995,7 +996,7 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [availabilityRequestSignature, checkoutAvailabilityItems, checkoutAvailabilityItemsReady, items.length, loading, printFilesPending, step]);
+  }, [availabilityRequestSignature, availabilityRefreshToken, checkoutAvailabilityItems, checkoutAvailabilityItemsReady, items.length, loading, printFilesPending, step]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
@@ -1193,6 +1194,7 @@ export default function CheckoutPage() {
       const updatedItem = data?.item ?? data?.data;
       if (updatedItem) {
         setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, ...updatedItem } : entry)));
+        setAvailabilityRefreshToken((current) => current + 1);
       }
     } catch {
       setItems(previousItems);
