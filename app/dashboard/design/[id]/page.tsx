@@ -20,6 +20,8 @@ import type { CanvasColorOption } from "@/app/dashboard/design/components/canvas
 import { useLoading } from "@/app/context/LoadingContext";
 import { supabase } from "@/lib/supabase";
 import SaveConfirmModal from "@/app/dashboard/design/components/topbar/components/SaveConfirmModal";
+import { getConfiguredSafeArea } from "@/app/dashboard/design/components/canvas/productConfig";
+import { getLocalSafeArea } from "@/app/dashboard/design/components/canvas/canvasMath";
 
 import { useElements } from "@/features/elements/useElements";
 import { useUpload } from "@/features/upload/useUpload";
@@ -942,6 +944,18 @@ export default function EditorPage() {
 
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [future, setFuture] = useState<HistoryState[]>([]);
+  const editorSafeArea = useMemo(() => {
+    const resolvedProductId = String(
+      productConfig?.category ||
+      productConfig?.productId ||
+      params?.id ||
+      "tshirt",
+    );
+
+    return getLocalSafeArea(
+      getConfiguredSafeArea(resolvedProductId, side, productConfig),
+    );
+  }, [params?.id, productConfig, side]);
 
   const elements = side === "back" ? backElements : frontElements;
   const setElements = side === "back" ? setBackElements : setFrontElements;
@@ -951,9 +965,10 @@ export default function EditorPage() {
   const { addText, addElement } = useElements({
     setElements,
     selectedId,
+    safeArea: editorSafeArea,
   });
 
-  const uploadImage = useUpload(addElement);
+  const uploadImage = useUpload(addElement, editorSafeArea);
 
   const handleUploadChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2314,6 +2329,7 @@ export default function EditorPage() {
             setSelectedId={setSelectedId}
             zoomIn={zoomIn}
             zoomOut={zoomOut}
+            safeArea={editorSafeArea}
           />
         }
       />

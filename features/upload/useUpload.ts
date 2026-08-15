@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import { getCenterPositionForNewElement } from "@/app/dashboard/design/components/canvas/canvasMath";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -21,7 +22,8 @@ type CanvasElement = {
 };
 
 export function useUpload(
-  addElement?: (el: CanvasElement) => void
+  addElement?: (el: CanvasElement) => void,
+  safeArea?: { width: number; height: number }
 ) {
   return useCallback(
     (file: File) => {
@@ -63,16 +65,17 @@ export function useUpload(
           width = MAX_SIZE * ratio;
         }
 
+        const centered = safeArea
+          ? getCenterPositionForNewElement({ width, height }, safeArea)
+          : { x: 180, y: 180, width, height };
+
         addElement({
           type: "image",
           src: url,
-
-          // centraliza melhor
-          x: 180,
-          y: 180,
-
-          width,
-          height,
+          x: centered.x,
+          y: centered.y,
+          width: centered.width,
+          height: centered.height,
 
           meta: {
             fileName: file.name,
@@ -86,6 +89,6 @@ export function useUpload(
 
       img.src = url;
     },
-    [addElement]
+    [addElement, safeArea]
   );
 }

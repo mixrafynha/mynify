@@ -342,6 +342,22 @@ export function centerElementInSafeArea<T extends CanvasElementLike>(
   );
 }
 
+export function getCenterPositionForNewElement(
+  size: Pick<CanvasElementLike, "width" | "height">,
+  safeArea: LocalBox
+) {
+  const local = getLocalSafeArea(safeArea);
+  const width = Math.max(MIN_ELEMENT_SIZE, Math.round(finiteNumber(size.width, MIN_ELEMENT_SIZE)));
+  const height = Math.max(MIN_ELEMENT_SIZE, Math.round(finiteNumber(size.height, MIN_ELEMENT_SIZE)));
+
+  return {
+    x: Math.round((local.width - width) / 2),
+    y: Math.round((local.height - height) / 2),
+    width,
+    height,
+  };
+}
+
 export function isInsideSafeArea(el: CanvasElementLike, safeArea: LocalBox): boolean {
   const local = getLocalSafeArea(safeArea);
   const size = getElementSize(el);

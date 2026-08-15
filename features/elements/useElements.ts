@@ -1,18 +1,25 @@
 "use client";
 
 import { useCallback } from "react";
+import { getCenterPositionForNewElement } from "@/app/dashboard/design/components/canvas/canvasMath";
 
 type Props = {
   setElements: React.Dispatch<React.SetStateAction<any[]>>;
   selectedId: string | null;
+  safeArea?: { width: number; height: number };
 };
 
 export function useElements({
   setElements,
   selectedId,
+  safeArea,
 }: Props) {
   const addText = useCallback(() => {
     console.log("ADD TEXT");
+
+    const centered = safeArea
+      ? getCenterPositionForNewElement({ width: 220, height: 64 }, safeArea)
+      : { x: 120, y: 120, width: 220, height: 64 };
 
     setElements((prev) => {
       const next = [
@@ -21,8 +28,10 @@ export function useElements({
           id: crypto.randomUUID(),
           type: "text",
           text: "Edit me",
-          x: 120,
-          y: 120,
+          x: centered.x,
+          y: centered.y,
+          width: centered.width,
+          height: centered.height,
           meta: {
             fontSize: 24,
             fontFamily: "Arial",
@@ -38,7 +47,7 @@ export function useElements({
 
       return next;
     });
-  }, [setElements]);
+  }, [safeArea, setElements]);
 
   const addElement = useCallback(
     (el: any) => {

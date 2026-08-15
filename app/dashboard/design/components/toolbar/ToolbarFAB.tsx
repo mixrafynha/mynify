@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import DesktopToolbar from "./DesktopToolbar";
 import MobileToolbar from "./MobileToolbar";
 import MobileSheet from "./MobileSheet";
+import { getCenterPositionForNewElement } from "../canvas/canvasMath";
 
 import type { Panel } from "./type";
 
@@ -36,9 +37,8 @@ type Props = {
   setSelectedId: (id: string | null) => void;
   zoomIn: () => void;
   zoomOut: () => void;
+  safeArea?: { width: number; height: number };
 };
-
-const DEFAULT_CENTER = { x: 330, y: 330 };
 
 function finiteNumber(value: unknown, fallback: number) {
   const number = Number(value);
@@ -52,6 +52,7 @@ export default function ToolbarFAB({
   elements = [],
   selectedId,
   setSelectedId,
+  safeArea,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<Panel>("templates");
@@ -77,12 +78,15 @@ export default function ToolbarFAB({
     const item = data && typeof data === "object" ? (data as Partial<ElementItem>) : {};
     const width = finiteNumber(item.width, item.type === "image" ? 180 : 220);
     const height = finiteNumber(item.height, item.type === "image" ? 180 : 64);
+    const centered = safeArea
+      ? getCenterPositionForNewElement({ width, height }, safeArea)
+      : { x: 0, y: 0, width, height };
 
     const element: ElementItem = {
       id: crypto.randomUUID(),
       type: item.type ?? "text",
-      x: typeof item.x === "number" ? item.x : Math.round(DEFAULT_CENTER.x - width / 2),
-      y: typeof item.y === "number" ? item.y : Math.round(DEFAULT_CENTER.y - height / 2),
+      x: typeof item.x === "number" ? item.x : centered.x,
+      y: typeof item.y === "number" ? item.y : centered.y,
       width,
       height,
       text: item.text ?? item.content ?? "",
@@ -105,7 +109,7 @@ export default function ToolbarFAB({
       return [...prev, { ...element, ...item, zIndex: maxZ + 1, meta: element.meta }];
     });
     setOpen(false);
-  }, [elements, panel, setElements]);
+  }, [safeArea, panel, setElements]);
 
   const updateSelected = useCallback((patch: Partial<ElementItem>) => {
     if (!selectedId) return;
