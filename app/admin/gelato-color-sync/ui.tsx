@@ -43,7 +43,7 @@ type DryRunPlan = {
     };
   };
   raw_color_structure: Record<string, unknown>;
-  action: "unchanged" | "update" | "pending" | "conflict";
+  action: "unchanged" | "update" | "pending" | "conflict" | "invalid_local_color";
   uid_count: number;
   resolution_source?: string | null;
 };
@@ -100,7 +100,7 @@ function formatDate(value?: string | null) {
 }
 
 function normalizeAction(action: string) {
-  if (action === "unchanged" || action === "update" || action === "pending" || action === "conflict") return action;
+  if (action === "unchanged" || action === "update" || action === "pending" || action === "conflict" || action === "invalid_local_color") return action;
   return "pending";
 }
 
@@ -151,6 +151,7 @@ export default function GelatoColorSyncPage() {
       update: plan.filter((item) => item.action === "update").length,
       pending: plan.filter((item) => item.action === "pending").length,
       conflict: plan.filter((item) => item.action === "conflict").length,
+      invalidLocal: plan.filter((item) => item.action === "invalid_local_color").length,
       errors: dryRunJob?.error_items ?? 0,
       multitone: plan.filter((item) => item.normalized_color.type !== "solid").length,
     };
@@ -158,7 +159,7 @@ export default function GelatoColorSyncPage() {
   }, [plan, dryRunJob?.error_items]);
 
   const dryRunValid = Boolean(dryRunJob && dryRunJob.dry_run && dryRunJob.status === "dry_run_completed");
-  const readyToApply = dryRunValid && metrics.pending === 0 && metrics.conflict === 0 && metrics.errors === 0;
+  const readyToApply = dryRunValid && metrics.pending === 0 && metrics.conflict === 0 && metrics.errors === 0 && metrics.invalidLocal === 0;
   const applyCount = metrics.update;
 
   async function runDryRun() {
@@ -303,6 +304,7 @@ export default function GelatoColorSyncPage() {
         <SummaryCard label="Updates" value={metrics.update} />
         <SummaryCard label="Unchanged" value={metrics.unchanged} />
         <SummaryCard label="Multitone" value={metrics.multitone} />
+        <SummaryCard label="Invalid Local" value={metrics.invalidLocal} />
         <SummaryCard label="Pending" value={metrics.pending} />
         <SummaryCard label="Conflicts" value={metrics.conflict} />
         <SummaryCard label="Errors" value={metrics.errors} />
@@ -314,11 +316,11 @@ export default function GelatoColorSyncPage() {
             <div>
               <h2 className="text-sm font-black uppercase tracking-[0.2em] text-black/35">Apply Gate</h2>
               <p className="mt-1 text-sm font-semibold text-black/60">
-                {readyToApply ? "Ready to apply" : "Fix pending/conflict/errors before applying."}
-              </p>
+              {readyToApply ? "Ready to apply" : "Fix pending/conflict/errors/invalid colors before applying."}
+            </p>
             </div>
             <div className="rounded-full bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.16em] text-black/55">
-              {metrics.pending} pending · {metrics.conflict} conflicts · {metrics.errors} errors
+              {metrics.pending} pending · {metrics.conflict} conflicts · {metrics.invalidLocal} invalid · {metrics.errors} errors
             </div>
           </div>
         </section>

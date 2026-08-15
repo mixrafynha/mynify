@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { tasks } from "@trigger.dev/sdk/v3";
 import { requireAdmin } from "@/lib/requireAdmin";
 import { createGelatoColorSyncJob } from "@/lib/gelato/color-sync";
 
@@ -22,6 +23,13 @@ export async function POST(request: Request) {
     if (!referenceProductUid) return NextResponse.json({ ok: false, error: "Missing referenceProductUid." }, { status: 400 });
 
     const result = await createGelatoColorSyncJob({ productId, catalogUid, referenceProductUid, dryRun });
+
+    await tasks.trigger("gelato-color-sync", {
+      productId,
+      jobId: result.jobId,
+      dryRun,
+    });
+
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to start color sync." }, { status: 500 });

@@ -25,6 +25,19 @@ export type ColorSyncJob = {
   last_error: string | null;
 };
 
+export type ColorSyncProgress = {
+  total_items?: number;
+  processed_items?: number;
+  updated_items?: number;
+  pending_items?: number;
+  error_items?: number;
+  status?: string;
+  last_error?: string | null;
+  started_at?: string | null;
+  updated_at?: string | null;
+  completed_at?: string | null;
+};
+
 type ColorSyncJobItem = {
   id: string;
   job_id: string;
@@ -33,6 +46,12 @@ type ColorSyncJobItem = {
   gelato_product_uid: string;
   status: string;
   attempts: number;
+};
+
+type FamilySearchResult = Record<string, unknown> & {
+  productUid?: string | null;
+  attributes?: Record<string, unknown> | null;
+  dimensions?: Record<string, unknown> | null;
 };
 
 function cleanString(value: unknown): string | null {
@@ -133,6 +152,46 @@ function hasOfficialVisualData(colorData: GelatoNormalizedColor): boolean {
   );
 }
 
+function hasSearchDimensions(value: unknown): value is FamilySearchResult {
+  return isRecord(value) && isRecord(value.dimensions) && Object.keys(value.dimensions).length > 0;
+}
+
+async function updateColorSyncJobProgress(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  jobId: string,
+  progress: ColorSyncProgress,
+) {
+  const patch: Record<string, unknown> = {};
+  if (progress.total_items !== undefined) patch.total_items = progress.total_items;
+  if (progress.processed_items !== undefined) patch.processed_items = progress.processed_items;
+  if (progress.updated_items !== undefined) patch.updated_items = progress.updated_items;
+  if (progress.pending_items !== undefined) patch.pending_items = progress.pending_items;
+  if (progress.error_items !== undefined) patch.error_items = progress.error_items;
+  if (progress.last_error !== undefined) patch.last_error = progress.last_error;
+  if (progress.status !== undefined) patch.status = progress.status;
+  if (progress.updated_at !== undefined) patch.updated_at = progress.updated_at;
+  if (progress.started_at !== undefined) patch.started_at = progress.started_at;
+  if (progress.completed_at !== undefined) patch.completed_at = progress.completed_at;
+
+  const { error } = await supabase
+    .from("gelato_color_sync_jobs")
+    .update(patch)
+    .eq("id", jobId);
+  if (error) throw new Error(error.message);
+}
+
+async function updateColorSyncJobItem(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  itemId: string,
+  patch: Record<string, unknown>,
+) {
+  const { error } = await supabase
+    .from("gelato_color_sync_job_items")
+    .update(patch)
+    .eq("id", itemId);
+  if (error) throw new Error(error.message);
+}
+
 export async function planGelatoColorSync(input: {
   productId: string;
   catalogUid: string;
@@ -149,7 +208,6 @@ export async function planGelatoColorSync(input: {
   const familyKey = buildFamilyKey(isRecord(referenceProductRecord.attributes) ? (referenceProductRecord.attributes as Record<string, unknown>) : {});
   const familyFilters = extractFamilyAttributes(referenceProductRecord);
   const familySearchCache = new Map<string, Record<string, unknown>[]>();
-  const familyProductIndex = new Map<string, Record<string, unknown>[]>();
   const familySearchSignature = JSON.stringify(familyFilters);
 
   const { data: colorRows, error: colorError } = await supabase
@@ -158,9 +216,12 @@ export async function planGelatoColorSync(input: {
     .eq("product_id", productId);
   if (colorError) throw new Error(colorError.message);
 
+  const colorIds = (colorRows ?? []).map((row) => (isRecord(row) ? String((row as Record<string, unknown>).id ?? "") : "")).filter(Boolean);
+
   const { data: variantRows, error: variantError } = await supabase
     .from("product_variants")
     .select("id, product_color_id, gelato_product_uid, gelato_attributes")
+    .in("product_color_id", colorIds.length > 0 ? colorIds : ["00000000-0000-0000-0000-000000000000"])
     .not("gelato_product_uid", "is", null);
   if (variantError) throw new Error(variantError.message);
 
@@ -194,6 +255,7 @@ export async function planGelatoColorSync(input: {
     try {
       const collected: Record<string, unknown>[] = [];
       for (let offset = 0; ; offset += 100) {
+        // One paginated family search per family, then reuse results in-memory.
         const searchResponse = await searchGelatoCatalogProducts(
           catalogUid,
           familyFilters as never,
@@ -238,8 +300,13 @@ export async function planGelatoColorSync(input: {
     }) ?? null;
     const representativeUid = cleanString((searchRepresentative as Record<string, unknown> | null)?.productUid) ?? linkedUids[0] ?? null;
     const familyMatch = Boolean(searchRepresentative && representativeUid);
+    const invalidLocalColor = !familyMatch && familySearchCandidates.length === 0 && linkedUids.length === 0;
     const resolutionSource = familyMatch ? "family_search" : null;
-    const details = representativeUid ? await getGelatoProduct(representativeUid) : null;
+    const details = searchRepresentative && hasSearchDimensions(searchRepresentative)
+      ? searchRepresentative
+      : representativeUid
+        ? await getGelatoProduct(representativeUid)
+        : null;
     const colorData = normalizeGelatoColorData(details ?? {});
     const officialColorKey = normalizeKey(colorData.attributeValueUid ?? colorData.label ?? existingColor.gelato_color_key ?? existingColor.color ?? "");
     const allHexes = colorData.hexes;
@@ -248,7 +315,9 @@ export async function planGelatoColorSync(input: {
     const hasMultipleDistinctHexes = new Set(allHexes).size > 1;
     const hasDeterministicPrimary = Boolean(colorData.primaryHex && colorData.primaryHexSourceKey);
     const action =
-      familyMatch && hasAnyOfficialVisual
+      invalidLocalColor
+        ? "invalid_local_color"
+        : familyMatch && hasAnyOfficialVisual
         ? hasMultipleDistinctHexes && !hasDeterministicPrimary
           ? "update"
           : colorData.primaryHex
@@ -280,10 +349,20 @@ export async function planGelatoColorSync(input: {
       resolution_source: resolutionSource,
       candidate_before_fix: linkedUids.length > 0,
       candidate_after_fix: familyMatch && hasAnyOfficialVisual,
+      invalid_local_color: invalidLocalColor,
     });
   }
 
-  return { plans, totalColors: plans.length, productId, catalogUid, referenceProductUid };
+  return {
+    plans,
+    totalColors: plans.length,
+    productId,
+    catalogUid,
+    referenceProductUid,
+    requests: plans.length > 0 ? 1 : 0,
+    deduplicatedRequests: plans.length > 0 ? Math.max(plans.length - 1, 0) : 0,
+    familySearchPages: familySearchProducts?.length ? Math.ceil((familySearchProducts.length ?? 0) / 100) : 0,
+  };
 }
 
 export async function createGelatoColorSyncJob(input: {
@@ -364,6 +443,9 @@ export async function processGelatoColorSyncJob(jobId: string) {
   });
   const updatePlans = plan.plans.filter((item) => item.action === "update");
   const updatePlanByColorId = new Map(updatePlans.map((item) => [item.product_color_id, item]));
+  const invalidLocalByColorId = new Map(
+    plan.plans.filter((item) => item.action === "invalid_local_color").map((item) => [item.product_color_id, item]),
+  );
 
   const { data: items, error: itemsError } = await supabase
     .from("gelato_color_sync_job_items")
@@ -373,14 +455,50 @@ export async function processGelatoColorSyncJob(jobId: string) {
   if (itemsError) throw new Error(itemsError.message);
 
   let updated = 0;
+  let unchanged = 0;
+  let invalidLocal = 0;
   let pending = 0;
   let errorCount = 0;
+  const totalItems = (items ?? []).length;
+  const startedAt = new Date().toISOString();
+  await updateColorSyncJobProgress(supabase, jobId, {
+    status: job.dry_run ? "running_dry_run" : "running",
+    total_items: totalItems || job.total_items || plan.totalColors,
+    processed_items: 0,
+    updated_items: 0,
+    pending_items: 0,
+    error_items: 0,
+    started_at: job.dry_run ? job.started_at ?? startedAt : job.started_at ?? startedAt,
+    updated_at: startedAt,
+  });
+
   for (const item of (items ?? []) as ColorSyncJobItem[]) {
     try {
       const planned = updatePlanByColorId.get(item.product_color_id) ?? null;
+      const invalidLocalPlanned = invalidLocalByColorId.get(item.product_color_id) ?? null;
       if (!planned) {
         pending += 1;
-        await supabase.from("gelato_color_sync_job_items").update({ status: "skipped", attempts: item.attempts + 1 }).eq("id", item.id);
+        await updateColorSyncJobItem(supabase, item.id, { status: "skipped", attempts: item.attempts + 1 });
+        await updateColorSyncJobProgress(supabase, jobId, {
+          processed_items: updated + unchanged + invalidLocal + pending + errorCount,
+          updated_items: updated,
+          pending_items: pending,
+          error_items: errorCount,
+          updated_at: new Date().toISOString(),
+        });
+        continue;
+      }
+
+      if (invalidLocalPlanned) {
+        invalidLocal += 1;
+        await updateColorSyncJobItem(supabase, item.id, { status: "skipped", attempts: item.attempts + 1 });
+        await updateColorSyncJobProgress(supabase, jobId, {
+          processed_items: updated + unchanged + invalidLocal + pending + errorCount,
+          updated_items: updated,
+          pending_items: pending,
+          error_items: errorCount,
+          updated_at: new Date().toISOString(),
+        });
         continue;
       }
 
@@ -388,7 +506,14 @@ export async function processGelatoColorSyncJob(jobId: string) {
       const hasOfficialVisual = hasOfficialVisualData(planned.normalized_color);
       if (planned.action !== "update" || (!plannedPrimaryHex && !hasOfficialVisual)) {
         pending += 1;
-        await supabase.from("gelato_color_sync_job_items").update({ status: "skipped", attempts: item.attempts + 1 }).eq("id", item.id);
+        await updateColorSyncJobItem(supabase, item.id, { status: "skipped", attempts: item.attempts + 1 });
+      await updateColorSyncJobProgress(supabase, jobId, {
+        processed_items: updated + unchanged + invalidLocal + pending + errorCount,
+        updated_items: updated,
+        pending_items: pending,
+        error_items: errorCount,
+        updated_at: new Date().toISOString(),
+      });
         continue;
       }
 
@@ -417,24 +542,39 @@ export async function processGelatoColorSyncJob(jobId: string) {
         if (updateError) throw new Error(updateError.message);
       }
       updated += 1;
-      await supabase.from("gelato_color_sync_job_items").update({ status: "completed", attempts: item.attempts + 1 }).eq("id", item.id);
+      await updateColorSyncJobItem(supabase, item.id, { status: "completed", attempts: item.attempts + 1 });
+      await updateColorSyncJobProgress(supabase, jobId, {
+        processed_items: updated + unchanged + invalidLocal + pending + errorCount,
+        updated_items: updated,
+        pending_items: pending,
+        error_items: errorCount,
+        updated_at: new Date().toISOString(),
+      });
     } catch (error) {
       errorCount += 1;
       pending += 1;
-      await supabase.from("gelato_color_sync_job_items").update({ status: "failed", attempts: item.attempts + 1, error: error instanceof Error ? error.message : String(error) }).eq("id", item.id);
+      await updateColorSyncJobItem(supabase, item.id, { status: "failed", attempts: item.attempts + 1, error: error instanceof Error ? error.message : String(error) });
+      await updateColorSyncJobProgress(supabase, jobId, {
+        processed_items: updated + unchanged + invalidLocal + pending + errorCount,
+        updated_items: updated,
+        pending_items: pending,
+        error_items: errorCount,
+        updated_at: new Date().toISOString(),
+      });
     }
   }
 
   await supabase.from("gelato_color_sync_jobs").update({
     status: job.dry_run ? "dry_run_completed" : "completed",
-    processed_items: updated + errorCount,
+    processed_items: updated + unchanged + invalidLocal + pending + errorCount,
     updated_items: updated,
     pending_items: pending,
     error_items: errorCount,
     last_error: errorCount > 0 ? "Some colors could not be synchronized." : null,
+    completed_at: new Date().toISOString(),
   }).eq("id", jobId);
 
-  return { jobId, updated, pending, errorCount, dryRun: job.dry_run };
+  return { jobId, updated, unchanged, invalidLocal, pending, errorCount, dryRun: job.dry_run };
 }
 
 export async function readGelatoColorSyncJob(jobId: string) {
