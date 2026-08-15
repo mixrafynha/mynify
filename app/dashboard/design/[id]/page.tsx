@@ -1955,6 +1955,24 @@ export default function EditorPage() {
       });
       console.error("[preview] failed", error);
       const message = error instanceof Error ? error.message : "Error saving design";
+      const pageIsUnloading =
+        document.hidden ||
+        document.visibilityState === "hidden" ||
+        !document.body?.isConnected;
+
+      if (
+        pageIsUnloading ||
+        message.includes("navigation cancelled") ||
+        message.includes("was not ready within") ||
+        message.includes("detached from the DOM") ||
+        message.includes("timed out")
+      ) {
+        console.warn("[save-design] skipped error toast during page transition", {
+          message,
+        });
+        return;
+      }
+
       setSaveNotice(message);
       alert(message);
     } finally {
