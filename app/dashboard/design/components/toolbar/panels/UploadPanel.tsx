@@ -3,7 +3,6 @@
 import { Image, UploadCloud, ShieldCheck } from "lucide-react";
 import { ChangeEvent, useState } from "react";
 import { PRINT_IMAGE_LIMITS, bytesToMb } from "../data";
-import { readUploadedImage } from "@/features/upload/useUpload";
 
 type UploadPanelProps = {
   onUpload?: (file: File) => void;
@@ -45,17 +44,9 @@ export default function UploadPanel({ onUpload }: UploadPanelProps) {
       return;
     }
 
-    try {
-      await readUploadedImage(file);
-      setStatus("Image validated successfully.");
-      onUpload(file);
-    } catch {
-      setStatus(
-        "Unable to validate this image. Please use a high-resolution PNG, JPG or WEBP."
-      );
-    } finally {
-      e.target.value = "";
-    }
+    setStatus("Image validated successfully.");
+    onUpload(file);
+    e.target.value = "";
   };
 
   return (

@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 
 import { PRINT_IMAGE_LIMITS, bytesToMb } from "./data";
-import { readUploadedImage } from "@/features/upload/useUpload";
 
 const PanelLoading = () => (
   <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-xs font-black uppercase tracking-[0.14em] text-violet-200/70">
@@ -139,38 +138,32 @@ export default function DesktopToolbar({
     fileInputRef.current.click();
   }, []);
 
-const handleUploadChange = useCallback(
-  async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleUploadChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-    const isValidType =
-      ALLOWED_TYPES.includes(file.type) ||
-      /\.(png|jpg|jpeg|webp)$/i.test(file.name);
+      const isValidType =
+        ALLOWED_TYPES.includes(file.type) ||
+        /\.(png|jpg|jpeg|webp)$/i.test(file.name);
 
-    if (!isValidType) {
-      alert("Apenas PNG, JPG ou WEBP.");
-      e.target.value = "";
-      return;
-    }
+      if (!isValidType) {
+        alert("Apenas PNG, JPG ou WEBP.");
+        e.target.value = "";
+        return;
+      }
 
-    if (file.size > MAX_FILE_SIZE) {
-      alert(`Image should be under ${bytesToMb(MAX_FILE_SIZE)}MB.`);
-      e.target.value = "";
-      return;
-    }
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`Image should be under ${bytesToMb(MAX_FILE_SIZE)}MB.`);
+        e.target.value = "";
+        return;
+      }
 
-    try {
-      await readUploadedImage(file);
       onUpload?.(file);
-    } catch {
-      alert("Não foi possível validar esta imagem. Usa PNG, JPG ou WEBP em alta resolução.");
-    } finally {
       e.target.value = "";
-    }
-  },
-  [onUpload]
-);
+    },
+    [onUpload]
+  );
 
   const safeOnAddText = useCallback(() => {
     if (!onAddText) return;
