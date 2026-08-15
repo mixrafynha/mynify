@@ -155,9 +155,14 @@ function validateIncomingItems(value: unknown) {
       : Array.isArray(entry.files)
         ? entry.files
         : [];
-    if (rawPrintFiles.length > MAX_PRINT_FILES_PER_ITEM) return { items: null, code: "TOO_MANY_PRINT_FILES" };
+    const normalizedPrintFiles = normalizeAvailabilityPrintFiles(
+      rawPrintFiles.map((file) => ({
+        type: safeText(file?.type) || "default",
+        url: safeText(file?.url),
+      })),
+    );
 
-    for (const file of rawPrintFiles) {
+    for (const file of normalizedPrintFiles) {
       if (!isRecord(file)) return { items: null, code: "INVALID_PRINT_FILE" };
       const url = safeText(file.url);
       if (url && !isPublicHttpsUrl(url)) return { items: null, code: "INVALID_PRINT_FILE_URL" };
@@ -177,8 +182,8 @@ function validateIncomingItems(value: unknown) {
       size: boundedText(entry.size) || null,
       quantity,
       productUid,
-      printFiles: Array.isArray(entry.printFiles) ? (entry.printFiles as AvailabilityItem["printFiles"]) : undefined,
-      files: Array.isArray(entry.files) ? (entry.files as AvailabilityItem["files"]) : undefined,
+      printFiles: normalizedPrintFiles,
+      files: normalizedPrintFiles,
     });
   }
 
