@@ -235,6 +235,25 @@ function extractPrintableFiles(source: unknown): Array<{ type: string; url: stri
   return files;
 }
 
+function normalizeAvailabilityPrintFiles(files: Array<{ type?: string; url?: string }>) {
+  const seen = new Set<string>();
+  const normalized: Array<{ type: string; url: string }> = [];
+
+  for (const file of files) {
+    const url = safeText(file?.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    normalized.push({
+      type: safeText(file?.type) || "default",
+      url,
+    });
+
+    if (normalized.length >= MAX_PRINT_FILES_PER_ITEM) break;
+  }
+
+  return normalized;
+}
+
 function shippingUnavailableMessage(item?: {
   color?: string | null;
   size?: string | null;
@@ -716,6 +735,7 @@ export async function POST(req: Request) {
               url: safeText(file?.url),
             }))
             .filter((file) => isPublicHttpsUrl(file.url));
+      const availabilityPrintFiles = normalizeAvailabilityPrintFiles(resolvedPrintFiles);
 
       let reason = "";
       if (!variantId) {
@@ -730,7 +750,7 @@ export async function POST(req: Request) {
         reason = "INVALID_QUANTITY";
       } else if (frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))) {
         reason = "INVALID_PRINT_FILE_URL";
-      } else if (!resolvedPrintFiles.length) {
+      } else if (!availabilityPrintFiles.length) {
         reason = designLookupAttempted && !designFound ? "DESIGN_NOT_FOUND" : "MISSING_PRINT_FILES";
       }
 
@@ -740,7 +760,7 @@ export async function POST(req: Request) {
           productUidSource: productUidFromVariant ? "database" : "missing",
           productUidPresent: Boolean(resolvedProductUid),
           printFilesSource: serverFiles.length > 0 ? "user_product" : frontendFiles.length > 0 ? "frontend" : "missing",
-          printFilesCount: resolvedPrintFiles.length,
+          printFilesCount: availabilityPrintFiles.length,
           quantity,
         })}`,
       );
@@ -771,7 +791,7 @@ export async function POST(req: Request) {
         itemReferenceId,
         productUid: resolvedProductUid!,
         quantity: quantity ?? 1,
-        printFiles: resolvedPrintFiles,
+        printFiles: availabilityPrintFiles,
       });
     }
 
