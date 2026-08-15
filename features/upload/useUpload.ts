@@ -1,6 +1,6 @@
 "use client";
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
 
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
@@ -30,7 +30,7 @@ export async function readUploadedImage(file: File): Promise<UploadedImage> {
   }
 
   if (!validateUploadFileSize(file)) {
-    throw new Error("A imagem deve ter no máximo 2MB.");
+    throw new Error("A imagem deve ter no máximo 25MB.");
   }
 
   const url = URL.createObjectURL(file);
