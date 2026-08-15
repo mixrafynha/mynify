@@ -1,94 +1,56 @@
 "use client";
 
-import { useCallback } from "react";
-import { getCenterPositionForNewElement } from "@/app/dashboard/design/components/canvas/canvasMath";
-
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
-const ALLOWED_TYPES = [
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-];
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-type CanvasElement = {
-  type: "image";
-  src: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  meta: Record<string, unknown>;
+export type UploadedImage = {
+  file: File;
+  url: string;
+  naturalWidth: number;
+  naturalHeight: number;
 };
 
-export function useUpload(
-  addElement?: (el: CanvasElement) => void,
-  safeArea?: { width: number; height: number }
-) {
-  return useCallback(
-    (file: File) => {
-      if (!file) return;
-
-      const isValidType =
-        ALLOWED_TYPES.includes(file.type) ||
-        /\.(png|jpg|jpeg|webp)$/i.test(file.name);
-
-      if (!isValidType) {
-        alert("Apenas PNG, JPG ou WEBP.");
-        return;
-      }
-
-      if (file.size > MAX_FILE_SIZE) {
-        alert("A imagem deve ter no máximo 2MB.");
-        return;
-      }
-
-      if (!addElement) return;
-
-      const url = URL.createObjectURL(file);
-
-      const img = new window.Image();
-
-      img.onload = () => {
-        const MAX_SIZE = 360;
-
-        const ratio = img.width / img.height;
-
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          width = MAX_SIZE;
-          height = MAX_SIZE / ratio;
-        } else {
-          height = MAX_SIZE;
-          width = MAX_SIZE * ratio;
-        }
-
-        const centered = safeArea
-          ? getCenterPositionForNewElement({ width, height }, safeArea)
-          : { x: 180, y: 180, width, height };
-
-        addElement({
-          type: "image",
-          src: url,
-          x: centered.x,
-          y: centered.y,
-          width: centered.width,
-          height: centered.height,
-
-          meta: {
-            fileName: file.name,
-            mimeType: file.type,
-            size: file.size,
-            naturalWidth: img.width,
-            naturalHeight: img.height,
-          },
-        });
-      };
-
-      img.src = url;
-    },
-    [addElement, safeArea]
+export function isValidUploadFile(file: File) {
+  return (
+    ALLOWED_TYPES.includes(file.type) ||
+    /\.(png|jpg|jpeg|webp)$/i.test(file.name)
   );
+}
+
+export function validateUploadFileSize(file: File) {
+  return file.size <= MAX_FILE_SIZE;
+}
+
+export async function readUploadedImage(file: File): Promise<UploadedImage> {
+  if (!file) throw new Error("File is required.");
+
+  if (!isValidUploadFile(file)) {
+    throw new Error("Apenas PNG, JPG ou WEBP.");
+  }
+
+  if (!validateUploadFileSize(file)) {
+    throw new Error("A imagem deve ter no máximo 2MB.");
+  }
+
+  const url = URL.createObjectURL(file);
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new window.Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Não foi possível ler a imagem."));
+      img.src = url;
+    });
+
+    return {
+      file,
+      url,
+      naturalWidth: image.naturalWidth || image.width,
+      naturalHeight: image.naturalHeight || image.height,
+    };
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
 }

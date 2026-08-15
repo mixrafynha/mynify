@@ -22,9 +22,10 @@ import { supabase } from "@/lib/supabase";
 import SaveConfirmModal from "@/app/dashboard/design/components/topbar/components/SaveConfirmModal";
 import { getConfiguredSafeArea } from "@/app/dashboard/design/components/canvas/productConfig";
 import { getLocalSafeArea } from "@/app/dashboard/design/components/canvas/canvasMath";
+import { getCenterPositionForNewElement } from "@/app/dashboard/design/components/canvas/canvasMath";
 
 import { useElements } from "@/features/elements/useElements";
-import { useUpload } from "@/features/upload/useUpload";
+import { readUploadedImage } from "@/features/upload/useUpload";
 
 export type ElementType = {
   id: string;
@@ -968,7 +969,42 @@ export default function EditorPage() {
     safeArea: editorSafeArea,
   });
 
-  const uploadImage = useUpload(addElement, editorSafeArea);
+  const uploadImage = useCallback(async (file: File) => {
+    if (!file) return;
+
+    const uploaded = await readUploadedImage(file);
+    const MAX_SIZE = 360;
+    const ratio = uploaded.naturalWidth / Math.max(1, uploaded.naturalHeight);
+
+    let width = uploaded.naturalWidth;
+    let height = uploaded.naturalHeight;
+
+    if (width > height) {
+      width = MAX_SIZE;
+      height = MAX_SIZE / ratio;
+    } else {
+      height = MAX_SIZE;
+      width = MAX_SIZE * ratio;
+    }
+
+    const centered = getCenterPositionForNewElement({ width, height }, editorSafeArea);
+
+    addElement({
+      type: "image",
+      src: uploaded.url,
+      x: centered.x,
+      y: centered.y,
+      width: centered.width,
+      height: centered.height,
+      meta: {
+        fileName: uploaded.file.name,
+        mimeType: uploaded.file.type,
+        size: uploaded.file.size,
+        naturalWidth: uploaded.naturalWidth,
+        naturalHeight: uploaded.naturalHeight,
+      },
+    });
+  }, [addElement, editorSafeArea]);
 
   const handleUploadChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {

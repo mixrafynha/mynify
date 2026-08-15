@@ -1,3 +1,5 @@
+import { readUploadedImage } from "@/features/upload/useUpload";
+
 type DesignUploaderProps = {
   setDesign: (url: string) => void;
 };
@@ -10,11 +12,16 @@ export default function DesignUploader({ setDesign }: DesignUploaderProps) {
       <input
         type="file"
         accept="image/*"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
-          if (file) {
-            const url = URL.createObjectURL(file);
-            setDesign(url);
+          e.target.value = "";
+          if (!file) return;
+
+          try {
+            const uploaded = await readUploadedImage(file);
+            setDesign(uploaded.url);
+          } catch {
+            // Keep the component lightweight; caller can decide how to surface errors.
           }
         }}
       />

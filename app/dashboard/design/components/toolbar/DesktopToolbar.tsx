@@ -13,7 +13,8 @@ import {
   Layers,
 } from "lucide-react";
 
-import { PRINT_IMAGE_LIMITS, bytesToMb, validatePrintImage } from "./data";
+import { PRINT_IMAGE_LIMITS, bytesToMb } from "./data";
+import { readUploadedImage } from "@/features/upload/useUpload";
 
 const PanelLoading = () => (
   <div className="flex min-h-[120px] items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-xs font-black uppercase tracking-[0.14em] text-violet-200/70">
@@ -160,14 +161,7 @@ const handleUploadChange = useCallback(
     }
 
     try {
-      const quality = await validatePrintImage(file);
-
-      if (!quality.ok) {
-        alert(quality.error ?? "Imagem inválida.");
-        e.target.value = "";
-        return;
-      }
-
+      await readUploadedImage(file);
       onUpload?.(file);
     } catch {
       alert("Não foi possível validar esta imagem. Usa PNG, JPG ou WEBP em alta resolução.");
