@@ -269,13 +269,13 @@ export default function ProductClient({
         />
         <DeliveryPill
           icon={Truck}
-          title="Shipping"
-          value="Quick"
+          title="Delivery"
+          value="CO2 0%"
           tone="text-fuchsia-300"
         />
         <DeliveryPill
           icon={ShieldCheck}
-          title="Delivery"
+          title="Secure checkout"
           value="Ready"
           tone="text-white"
         />
