@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Loader2, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 
@@ -315,6 +316,14 @@ export default function GelatoSyncPage() {
         <p className="max-w-2xl text-sm font-semibold leading-6 text-black/55">
           Cola o `productId`, escolhe o `catalogUid` e dispara a sincronização da família Gelato sem tocar no resto do admin.
         </p>
+        <div className="mt-4">
+          <Link
+            href="/admin/gelato-color-sync"
+            className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-900 transition hover:bg-emerald-100"
+          >
+            Abrir Gelato Color Sync
+          </Link>
+        </div>
       </section>
 
       <section className="grid gap-4 rounded-[28px] border border-black/5 bg-white p-5 shadow-sm sm:p-6 lg:grid-cols-[1fr_1fr]">
