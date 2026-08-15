@@ -19,6 +19,7 @@ import type { ProductDisplayConfig } from "@/app/dashboard/design/components/can
 import type { CanvasColorOption } from "@/app/dashboard/design/components/canvas/hooks/useCanvasColors";
 import { useLoading } from "@/app/context/LoadingContext";
 import { supabase } from "@/lib/supabase";
+import SaveConfirmModal from "@/app/dashboard/design/components/topbar/components/SaveConfirmModal";
 
 import { useElements } from "@/features/elements/useElements";
 import { useUpload } from "@/features/upload/useUpload";
@@ -723,6 +724,7 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [authPopupOpen, setAuthPopupOpen] = useState(false);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [saveConfirmOpen, setSaveConfirmOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedElement, setSelectedElement] = useState<ElementType | null>(
     null,
@@ -1598,14 +1600,6 @@ export default function EditorPage() {
       return;
     }
 
-    const shouldSave = window.confirm(
-      "Do you want to save this design before continuing?",
-    );
-    if (!shouldSave) {
-      console.info("[save-design] cancelled by user before starting");
-      return;
-    }
-
     setLoading({
       active: true,
       label: "Preparing your design…",
@@ -2055,7 +2049,17 @@ export default function EditorPage() {
     router,
     captureCheckoutPreviews,
     setLoading,
-  ]); 
+  ]);
+
+  const handleSaveDesignRequest = useCallback(() => {
+    if (latestStateRef.current.saving) return;
+    setSaveConfirmOpen(true);
+  }, []);
+
+  const handleConfirmSaveDesign = useCallback(() => {
+    setSaveConfirmOpen(false);
+    void handleSaveDesign();
+  }, [handleSaveDesign]);
 
   const handleAuthSuccess = useCallback(() => {
     setAuthPopupOpen(false);
@@ -2260,7 +2264,7 @@ export default function EditorPage() {
             zoomOut={zoomOut}
             zoom={Math.round(zoom * 100)}
             onZoomChange={handleTopBarZoomChange}
-            onSaveDesign={handleSaveDesign}
+            onSaveDesign={handleSaveDesignRequest}
             onPreviewDesign={handlePreviewDesign}
             onUndo={handleUndo}
             onRedo={handleRedo}
@@ -2396,8 +2400,15 @@ export default function EditorPage() {
             }}
             onSuccess={handleAuthSuccess}
           />
-        </div>
-      )}
+          </div>
+        )}
+
+      <SaveConfirmModal
+        open={saveConfirmOpen}
+        saving={saving}
+        onCancel={() => setSaveConfirmOpen(false)}
+        onConfirm={handleConfirmSaveDesign}
+      />
     </>
   );
 }
