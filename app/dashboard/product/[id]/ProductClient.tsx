@@ -260,27 +260,6 @@ export default function ProductClient({
         </div>
       </section>
 
-      <section className="grid gap-3 rounded-[30px] bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-3 sm:grid-cols-3 sm:p-4">
-        <DeliveryPill
-          icon={CheckCircle}
-          title="Production"
-          value="Fast"
-          tone="text-fuchsia-300"
-        />
-        <DeliveryPill
-          icon={Truck}
-          title="Delivery"
-          value="CO2 0%"
-          tone="text-fuchsia-300"
-        />
-        <DeliveryPill
-          icon={ShieldCheck}
-          title="Secure checkout"
-          value="Ready"
-          tone="text-white"
-        />
-      </section>
-
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#15101d]">
         <div className="relative overflow-hidden border-b border-white/[0.06] px-4 py-5 sm:px-6 sm:py-6">
           <div className="relative">
