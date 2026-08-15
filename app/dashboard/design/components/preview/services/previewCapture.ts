@@ -47,6 +47,16 @@ function delay(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
+function isPageTransitioning() {
+  return document.hidden || document.visibilityState === "hidden" || !document.body?.isConnected;
+}
+
+function ensureCaptureStillAlive(node: HTMLElement) {
+  if (!node.isConnected || isPageTransitioning()) {
+    throw new Error("Preview capture aborted during page transition");
+  }
+}
+
 async function waitForStableCaptureState(
   node: HTMLElement,
   expectedIds: string[],
@@ -1194,6 +1204,10 @@ export async function captureVisualMockupPreviewBlob(
     // hidden only for the capture and restored afterwards.
     const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
     for (const image of images) {
+      if (!image.isConnected || !node.isConnected || isPageTransitioning()) {
+        throw new Error("Preview capture aborted during page transition");
+      }
+
       const original = {
         src: image.getAttribute("src"),
         srcset: image.getAttribute("srcset"),
@@ -1243,6 +1257,8 @@ export async function captureVisualMockupPreviewBlob(
         const parsed = isInlineSource ? null : new URL(source, window.location.href);
         const isExternal = Boolean(parsed && parsed.origin !== window.location.origin);
 
+        ensureCaptureStillAlive(node);
+
         if (isInlineSource) {
           // Inline SVG/data URLs and blob URLs are already browser-ready.
           // Never send them through the HTTP proxy: the proxy intentionally
@@ -1259,16 +1275,19 @@ export async function captureVisualMockupPreviewBlob(
             `/api/checkout/image-proxy?url=${encodeURIComponent(parsed.href)}`,
             { cache: "no-store" },
           );
+          ensureCaptureStillAlive(node);
           if (!response.ok) {
             throw new Error(`Preview image proxy failed (${response.status}): ${parsed.href}`);
           }
 
           const blob = await response.blob();
+          ensureCaptureStillAlive(node);
           if (!blob.type.startsWith("image/") || blob.size === 0) {
             throw new Error(`Preview image proxy returned invalid content: ${parsed.href}`);
           }
 
           const dataUrl = await blobToDataUrl(blob);
+          ensureCaptureStillAlive(node);
           image.setAttribute("src", dataUrl);
           await Promise.race([
             image.decode(),
@@ -1279,11 +1298,16 @@ export async function captureVisualMockupPreviewBlob(
         } else {
           image.setAttribute("src", source);
         }
+        ensureCaptureStillAlive(node);
       } catch (error) {
+        if (error instanceof Error && error.message === "Preview capture aborted during page transition") {
+          throw error;
+        }
         throw error instanceof Error ? error : new Error(String(error));
       }
     }
 
+    ensureCaptureStillAlive(node);
     await nextFrame();
 
     const crop = getCaptureCrop(node);
@@ -1308,21 +1332,29 @@ export async function captureVisualMockupPreviewBlob(
 
     let sourceCanvas: HTMLCanvasElement;
     try {
+      ensureCaptureStillAlive(node);
       sourceCanvas = await withTimeout(
         toCanvas(node, captureOptions),
         CHECKOUT_PREVIEW_TIMEOUT_MS,
         "Checkout preview capture",
       );
     } catch (firstError) {
+      if (firstError instanceof Error && firstError.message === "Preview capture aborted during page transition") {
+        throw firstError;
+      }
       await nextFrame();
       await nextFrame();
       try {
+        ensureCaptureStillAlive(node);
         sourceCanvas = await withTimeout(
           toCanvas(node, captureOptions),
           CHECKOUT_PREVIEW_TIMEOUT_MS,
           "Checkout preview capture retry",
         );
       } catch (retryError) {
+        if (retryError instanceof Error && retryError.message === "Preview capture aborted during page transition") {
+          throw retryError;
+        }
         throw normalizeCaptureFailure(retryError ?? firstError);
       }
     }
