@@ -1161,8 +1161,7 @@ export async function captureVisualMockupPreviewBlob(
   const previousTransform = node.style.transform;
   const previousTransformOrigin = node.style.transformOrigin;
   const previousWillChange = node.style.willChange;
-  const captureContainer = document.createElement("div");
-  const captureNode = node.cloneNode(true) as HTMLElement;
+  const restoreImages: Array<() => void> = [];
 
   try {
     await document.fonts.ready.catch(() => undefined);
@@ -1174,36 +1173,14 @@ export async function captureVisualMockupPreviewBlob(
 
     await waitForStableCaptureState(node, expectedIds, 12_000);
 
-    // Snapshot the live DOM once, then finish the proxy/data-url/canvas path
-    // against the clone so page lifecycle changes do not interrupt capture.
-    captureContainer.setAttribute("data-visual-mockup-capture", "true");
-    captureContainer.style.position = "fixed";
-    captureContainer.style.left = "0";
-    captureContainer.style.top = "0";
-    captureContainer.style.width = `${EXPORT_MOCKUP_AREA.width}px`;
-    captureContainer.style.height = `${EXPORT_MOCKUP_AREA.height}px`;
-    captureContainer.style.overflow = "hidden";
-    captureContainer.style.background = "transparent";
-    captureContainer.style.pointerEvents = "none";
-    captureContainer.style.zIndex = "-2147483647";
-    captureContainer.style.isolation = "isolate";
-    captureContainer.style.contain = "layout paint style size";
-
-    captureNode.removeAttribute("id");
-    captureNode.setAttribute("data-visual-mockup-root-clone", "true");
-    captureNode.style.position = "absolute";
-    captureNode.style.left = "0";
-    captureNode.style.top = "0";
-    captureNode.style.width = `${EXPORT_MOCKUP_AREA.width}px`;
-    captureNode.style.height = `${EXPORT_MOCKUP_AREA.height}px`;
-    captureNode.style.transform = "none";
-    captureNode.style.transformOrigin = "top left";
-    captureNode.style.margin = "0";
-    captureNode.style.pointerEvents = "none";
-    captureNode.style.contain = "layout paint style size";
-
-    captureContainer.appendChild(captureNode);
-    document.body.appendChild(captureContainer);
+    // Remove only the editor viewport pan/zoom. Product visualScale and all
+    // artwork transforms remain inside the capture root.
+    node.style.transform = "none";
+    node.style.transformOrigin = "top left";
+    node.style.willChange = "auto";
+    await nextFrame();
+    await nextFrame();
+    await nextFrame();
 
     const width = node.offsetWidth;
     const height = node.offsetHeight;
@@ -1215,8 +1192,31 @@ export async function captureVisualMockupPreviewBlob(
     // external raster images through Next's same-origin image endpoint so the
     // screenshot does not depend on R2/CORS. Invalid/empty image nodes are
     // hidden only for the capture and restored afterwards.
-    const images = Array.from(captureNode.querySelectorAll<HTMLImageElement>("img"));
+    const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
     for (const image of images) {
+      const original = {
+        src: image.getAttribute("src"),
+        srcset: image.getAttribute("srcset"),
+        sizes: image.getAttribute("sizes"),
+        display: image.style.display,
+        loading: image.getAttribute("loading"),
+        decoding: image.getAttribute("decoding"),
+      };
+
+      restoreImages.push(() => {
+        if (original.src === null) image.removeAttribute("src");
+        else image.setAttribute("src", original.src);
+        if (original.srcset === null) image.removeAttribute("srcset");
+        else image.setAttribute("srcset", original.srcset);
+        if (original.sizes === null) image.removeAttribute("sizes");
+        else image.setAttribute("sizes", original.sizes);
+        if (original.loading === null) image.removeAttribute("loading");
+        else image.setAttribute("loading", original.loading);
+        if (original.decoding === null) image.removeAttribute("decoding");
+        else image.setAttribute("decoding", original.decoding);
+        image.style.display = original.display;
+      });
+
       const explicitSrc = String(image.getAttribute("src") || "").trim();
       const currentSrc = String(image.currentSrc || "").trim();
       const source = isUsableImageSource(currentSrc)
@@ -1286,7 +1286,7 @@ export async function captureVisualMockupPreviewBlob(
 
     await nextFrame();
 
-    const crop = getCaptureCrop(captureNode);
+    const crop = getCaptureCrop(node);
     const captureOptions = {
       cacheBust: false,
       includeQueryParams: true,
@@ -1309,7 +1309,7 @@ export async function captureVisualMockupPreviewBlob(
     let sourceCanvas: HTMLCanvasElement;
     try {
       sourceCanvas = await withTimeout(
-        toCanvas(captureNode, captureOptions),
+        toCanvas(node, captureOptions),
         CHECKOUT_PREVIEW_TIMEOUT_MS,
         "Checkout preview capture",
       );
@@ -1318,7 +1318,7 @@ export async function captureVisualMockupPreviewBlob(
       await nextFrame();
       try {
         sourceCanvas = await withTimeout(
-          toCanvas(captureNode, captureOptions),
+          toCanvas(node, captureOptions),
           CHECKOUT_PREVIEW_TIMEOUT_MS,
           "Checkout preview capture retry",
         );
@@ -1350,7 +1350,7 @@ export async function captureVisualMockupPreviewBlob(
     if (!blob.size) throw new Error("Checkout preview produced an empty blob");
     return blob;
   } finally {
-    captureContainer.remove();
+    for (const restore of restoreImages.reverse()) restore();
     node.style.transform = previousTransform;
     node.style.transformOrigin = previousTransformOrigin;
     node.style.willChange = previousWillChange;

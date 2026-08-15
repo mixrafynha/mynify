@@ -17,6 +17,7 @@ import { loadEditorFont } from "@/app/dashboard/design/components/data/fonts";
 import ProductionCaptureLayers from "@/app/dashboard/design/components/capture/ProductionCaptureLayers";
 import type { ProductDisplayConfig } from "@/app/dashboard/design/components/canvas/productConfig";
 import type { CanvasColorOption } from "@/app/dashboard/design/components/canvas/hooks/useCanvasColors";
+import { useLoading } from "@/app/context/LoadingContext";
 import { supabase } from "@/lib/supabase";
 
 import { useElements } from "@/features/elements/useElements";
@@ -592,6 +593,7 @@ function resolveVariantFromRows(
 }
 
 export default function EditorPage() {
+  const { setLoading } = useLoading();
   const params = useParams();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -1596,6 +1598,12 @@ export default function EditorPage() {
       return;
     }
 
+    setLoading({
+      active: true,
+      label: "Preparing your design…",
+      subtitle: "Please wait",
+    });
+
     try {
       const stepContext: {
         step:
@@ -1633,6 +1641,11 @@ export default function EditorPage() {
       }
 
       setSaving(true);
+      setLoading({
+        active: true,
+        label: "Preparing your design…",
+        subtitle: "Please wait",
+      });
       setSaveNotice(null);
       stepContext.step = "sync-state";
       await nextFrame();
@@ -1667,7 +1680,7 @@ export default function EditorPage() {
             }
             return String(uploadResult.url);
           },
-        });
+      });
 
       const designPayload = await designPayloadPromise;
       const designPayloadJson = assertSavePayloadIsJsonOnly(designPayload);
@@ -1675,6 +1688,12 @@ export default function EditorPage() {
         snapshot.frontElements,
         snapshot.backElements,
       );
+
+      setLoading({
+        active: true,
+        label: "Generating preview…",
+        subtitle: "Please wait",
+      });
 
       const parsedDesignPayload = JSON.parse(designPayloadJson);
       const frontData = parsedDesignPayload?.design_data?.sides?.front ?? null;
@@ -1719,6 +1738,11 @@ export default function EditorPage() {
       });
 
       stepContext.step = "request";
+      setLoading({
+        active: true,
+        label: "Saving your design…",
+        subtitle: "Please wait",
+      });
       const response = await fetch("/api/user-products/save-design", {
         method: "POST",
         credentials: "include",
@@ -1798,7 +1822,11 @@ export default function EditorPage() {
         designId: resolvedDesignId,
       });
 
-      setSaving(false);
+      setLoading({
+        active: true,
+        label: "Finalizing…",
+        subtitle: "Please wait",
+      });
 
       console.info("[preview-flow] capture started", {
         userProductId: savedUserProductId,
@@ -1913,18 +1941,20 @@ export default function EditorPage() {
             userProductId: savedUserProductId,
           });
         } else {
-          throw new Error("Checkout preview was not persisted; navigation cancelled");
+          console.warn("[preview-flow] preview persistence skipped after capture failure", {
+            userProductId: savedUserProductId,
+          });
         }
       }
       if (usedSides.includes("front") && !persistedPreview?.frontUrl) {
-        if (!pageIsUnloading) {
-          throw new Error("Front checkout preview is missing; navigation cancelled");
-        }
+        console.warn("[preview-flow] front preview missing; continuing save flow", {
+          userProductId: savedUserProductId,
+        });
       }
       if (usedSides.includes("back") && !persistedPreview?.backUrl) {
-        if (!pageIsUnloading) {
-          throw new Error("Back checkout preview is missing; navigation cancelled");
-        }
+        console.warn("[preview-flow] back preview missing; continuing save flow", {
+          userProductId: savedUserProductId,
+        });
       }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
@@ -1945,6 +1975,11 @@ export default function EditorPage() {
       }
 
       sessionStorage.removeItem(editorStorageKey);
+      setLoading({
+        active: true,
+        label: "Finalizing…",
+        subtitle: "Please wait",
+      });
       setSaveNotice(
         "Design saved and added to cart. Redirecting you to checkout...",
       );
@@ -1964,6 +1999,7 @@ export default function EditorPage() {
         userProductId: savedUserProductId,
         stage: "navigation_started",
       });
+      setSaving(false);
       console.warn("[PREVIEW DIAGNOSTIC] navigation about to start");
       await new Promise((resolve) => window.setTimeout(resolve, 800));
       router.push(`/checkout?${checkoutParams.toString()}`);
@@ -2000,6 +2036,7 @@ export default function EditorPage() {
       if (latestStateRef.current.saving) {
         setSaving(false);
       }
+      setLoading(false);
     }
   }, [
     productId,
@@ -2009,7 +2046,8 @@ export default function EditorPage() {
     editorStorageKey,
     router,
     captureCheckoutPreviews,
-  ]);
+    setLoading,
+  ]); 
 
   const handleAuthSuccess = useCallback(() => {
     setAuthPopupOpen(false);
