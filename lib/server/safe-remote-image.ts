@@ -5,6 +5,7 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 15_000;
 const MAX_REDIRECTS = 3;
 const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const ALLOWED_VECTOR_IMAGE_TYPES = new Set(["image/svg+xml"]);
 
 const DEFAULT_ALLOWED_REMOTE_IMAGE_HOSTS = [
   "pub-32be62cb2f1f47048c590acdfa322022.r2.dev",
@@ -32,6 +33,10 @@ function allowedHosts() {
       readUrlHost(process.env.SUPABASE_URL),
     ].filter((host): host is string => Boolean(host)),
   );
+}
+
+function isTrustedRemoteImageHost(hostname: string) {
+  return allowedHosts().has(hostname.toLowerCase());
 }
 
 function ipv4ToNumber(ip: string) {
@@ -105,7 +110,7 @@ async function validateRemoteImageUrl(rawUrl: string) {
     throw new Error("Blocked remote image port.");
   }
 
-  if (!allowedHosts().has(hostname)) {
+  if (!isTrustedRemoteImageHost(hostname)) {
     throw new Error("Blocked remote image host.");
   }
 
@@ -157,9 +162,15 @@ function normalizeContentType(response: Response) {
   return response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
 }
 
-async function readLimitedResponse(response: Response) {
+function isAllowedRemoteImageContentType(hostname: string, contentType: string) {
+  if (ALLOWED_IMAGE_TYPES.has(contentType)) return true;
+  if (isTrustedRemoteImageHost(hostname) && ALLOWED_VECTOR_IMAGE_TYPES.has(contentType)) return true;
+  return false;
+}
+
+async function readLimitedResponse(response: Response, hostname: string) {
   const contentType = normalizeContentType(response);
-  if (!ALLOWED_IMAGE_TYPES.has(contentType)) {
+  if (!isAllowedRemoteImageContentType(hostname, contentType)) {
     throw new Error("Unsupported remote image content type.");
   }
 
@@ -227,7 +238,12 @@ export async function fetchSafeRemoteImageBuffer(
     throw new Error("Remote image fetch failed.");
   }
 
-  return readLimitedResponse(response);
+  const contentType = normalizeContentType(response);
+  if (!isAllowedRemoteImageContentType(url.hostname, contentType)) {
+    throw new Error("Unsupported remote image content type.");
+  }
+
+  return readLimitedResponse(response, url.hostname);
 }
 
 export async function fetchSafeRemoteImageDataUrl(rawUrl: string) {
