@@ -47,16 +47,6 @@ function delay(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
-function isPageTransitioning() {
-  return document.hidden || document.visibilityState === "hidden" || !document.body?.isConnected;
-}
-
-function ensureCaptureStillAlive(node: HTMLElement) {
-  if (!node.isConnected || isPageTransitioning()) {
-    throw new Error("Preview capture aborted during page transition");
-  }
-}
-
 async function waitForStableCaptureState(
   node: HTMLElement,
   expectedIds: string[],
@@ -1171,7 +1161,8 @@ export async function captureVisualMockupPreviewBlob(
   const previousTransform = node.style.transform;
   const previousTransformOrigin = node.style.transformOrigin;
   const previousWillChange = node.style.willChange;
-  const restoreImages: Array<() => void> = [];
+  const captureContainer = document.createElement("div");
+  const captureNode = node.cloneNode(true) as HTMLElement;
 
   try {
     await document.fonts.ready.catch(() => undefined);
@@ -1183,14 +1174,36 @@ export async function captureVisualMockupPreviewBlob(
 
     await waitForStableCaptureState(node, expectedIds, 12_000);
 
-    // Remove only the editor viewport pan/zoom. Product visualScale and all
-    // artwork transforms remain inside the capture root.
-    node.style.transform = "none";
-    node.style.transformOrigin = "top left";
-    node.style.willChange = "auto";
-    await nextFrame();
-    await nextFrame();
-    await nextFrame();
+    // Snapshot the live DOM once, then finish the proxy/data-url/canvas path
+    // against the clone so page lifecycle changes do not interrupt capture.
+    captureContainer.setAttribute("data-visual-mockup-capture", "true");
+    captureContainer.style.position = "fixed";
+    captureContainer.style.left = "0";
+    captureContainer.style.top = "0";
+    captureContainer.style.width = `${EXPORT_MOCKUP_AREA.width}px`;
+    captureContainer.style.height = `${EXPORT_MOCKUP_AREA.height}px`;
+    captureContainer.style.overflow = "hidden";
+    captureContainer.style.background = "transparent";
+    captureContainer.style.pointerEvents = "none";
+    captureContainer.style.zIndex = "-2147483647";
+    captureContainer.style.isolation = "isolate";
+    captureContainer.style.contain = "layout paint style size";
+
+    captureNode.removeAttribute("id");
+    captureNode.setAttribute("data-visual-mockup-root-clone", "true");
+    captureNode.style.position = "absolute";
+    captureNode.style.left = "0";
+    captureNode.style.top = "0";
+    captureNode.style.width = `${EXPORT_MOCKUP_AREA.width}px`;
+    captureNode.style.height = `${EXPORT_MOCKUP_AREA.height}px`;
+    captureNode.style.transform = "none";
+    captureNode.style.transformOrigin = "top left";
+    captureNode.style.margin = "0";
+    captureNode.style.pointerEvents = "none";
+    captureNode.style.contain = "layout paint style size";
+
+    captureContainer.appendChild(captureNode);
+    document.body.appendChild(captureContainer);
 
     const width = node.offsetWidth;
     const height = node.offsetHeight;
@@ -1202,35 +1215,8 @@ export async function captureVisualMockupPreviewBlob(
     // external raster images through Next's same-origin image endpoint so the
     // screenshot does not depend on R2/CORS. Invalid/empty image nodes are
     // hidden only for the capture and restored afterwards.
-    const images = Array.from(node.querySelectorAll<HTMLImageElement>("img"));
+    const images = Array.from(captureNode.querySelectorAll<HTMLImageElement>("img"));
     for (const image of images) {
-      if (!image.isConnected || !node.isConnected || isPageTransitioning()) {
-        throw new Error("Preview capture aborted during page transition");
-      }
-
-      const original = {
-        src: image.getAttribute("src"),
-        srcset: image.getAttribute("srcset"),
-        sizes: image.getAttribute("sizes"),
-        display: image.style.display,
-        loading: image.getAttribute("loading"),
-        decoding: image.getAttribute("decoding"),
-      };
-
-      restoreImages.push(() => {
-        if (original.src === null) image.removeAttribute("src");
-        else image.setAttribute("src", original.src);
-        if (original.srcset === null) image.removeAttribute("srcset");
-        else image.setAttribute("srcset", original.srcset);
-        if (original.sizes === null) image.removeAttribute("sizes");
-        else image.setAttribute("sizes", original.sizes);
-        if (original.loading === null) image.removeAttribute("loading");
-        else image.setAttribute("loading", original.loading);
-        if (original.decoding === null) image.removeAttribute("decoding");
-        else image.setAttribute("decoding", original.decoding);
-        image.style.display = original.display;
-      });
-
       const explicitSrc = String(image.getAttribute("src") || "").trim();
       const currentSrc = String(image.currentSrc || "").trim();
       const source = isUsableImageSource(currentSrc)
@@ -1257,8 +1243,6 @@ export async function captureVisualMockupPreviewBlob(
         const parsed = isInlineSource ? null : new URL(source, window.location.href);
         const isExternal = Boolean(parsed && parsed.origin !== window.location.origin);
 
-        ensureCaptureStillAlive(node);
-
         if (isInlineSource) {
           // Inline SVG/data URLs and blob URLs are already browser-ready.
           // Never send them through the HTTP proxy: the proxy intentionally
@@ -1275,19 +1259,16 @@ export async function captureVisualMockupPreviewBlob(
             `/api/checkout/image-proxy?url=${encodeURIComponent(parsed.href)}`,
             { cache: "no-store" },
           );
-          ensureCaptureStillAlive(node);
           if (!response.ok) {
             throw new Error(`Preview image proxy failed (${response.status}): ${parsed.href}`);
           }
 
           const blob = await response.blob();
-          ensureCaptureStillAlive(node);
           if (!blob.type.startsWith("image/") || blob.size === 0) {
             throw new Error(`Preview image proxy returned invalid content: ${parsed.href}`);
           }
 
           const dataUrl = await blobToDataUrl(blob);
-          ensureCaptureStillAlive(node);
           image.setAttribute("src", dataUrl);
           await Promise.race([
             image.decode(),
@@ -1298,19 +1279,14 @@ export async function captureVisualMockupPreviewBlob(
         } else {
           image.setAttribute("src", source);
         }
-        ensureCaptureStillAlive(node);
       } catch (error) {
-        if (error instanceof Error && error.message === "Preview capture aborted during page transition") {
-          throw error;
-        }
         throw error instanceof Error ? error : new Error(String(error));
       }
     }
 
-    ensureCaptureStillAlive(node);
     await nextFrame();
 
-    const crop = getCaptureCrop(node);
+    const crop = getCaptureCrop(captureNode);
     const captureOptions = {
       cacheBust: false,
       includeQueryParams: true,
@@ -1332,29 +1308,21 @@ export async function captureVisualMockupPreviewBlob(
 
     let sourceCanvas: HTMLCanvasElement;
     try {
-      ensureCaptureStillAlive(node);
       sourceCanvas = await withTimeout(
-        toCanvas(node, captureOptions),
+        toCanvas(captureNode, captureOptions),
         CHECKOUT_PREVIEW_TIMEOUT_MS,
         "Checkout preview capture",
       );
     } catch (firstError) {
-      if (firstError instanceof Error && firstError.message === "Preview capture aborted during page transition") {
-        throw firstError;
-      }
       await nextFrame();
       await nextFrame();
       try {
-        ensureCaptureStillAlive(node);
         sourceCanvas = await withTimeout(
-          toCanvas(node, captureOptions),
+          toCanvas(captureNode, captureOptions),
           CHECKOUT_PREVIEW_TIMEOUT_MS,
           "Checkout preview capture retry",
         );
       } catch (retryError) {
-        if (retryError instanceof Error && retryError.message === "Preview capture aborted during page transition") {
-          throw retryError;
-        }
         throw normalizeCaptureFailure(retryError ?? firstError);
       }
     }
@@ -1382,7 +1350,7 @@ export async function captureVisualMockupPreviewBlob(
     if (!blob.size) throw new Error("Checkout preview produced an empty blob");
     return blob;
   } finally {
-    for (const restore of restoreImages.reverse()) restore();
+    captureContainer.remove();
     node.style.transform = previousTransform;
     node.style.transformOrigin = previousTransformOrigin;
     node.style.willChange = previousWillChange;
