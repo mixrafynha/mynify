@@ -1813,6 +1813,10 @@ export default function EditorPage() {
         frontBlob: null,
         backBlob: null,
       };
+      const pageIsUnloading =
+        document.hidden ||
+        document.visibilityState === "hidden" ||
+        !document.body?.isConnected;
 
       try {
         await reportPreviewStage({
@@ -1842,21 +1846,28 @@ export default function EditorPage() {
           backSize: previews.backBlob?.size ?? null,
         });
       } catch (error) {
-        await reportPreviewStage({
-          userProductId: savedUserProductId,
-          stage: "capture_failed",
-          side: usedSides.includes("front")
-            ? "front"
-            : usedSides.includes("back")
-              ? "back"
-              : null,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        console.warn("[preview-flow] capture failed", {
-          userProductId: savedUserProductId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw error instanceof Error ? error : new Error(String(error));
+        if (pageIsUnloading) {
+          console.warn("[preview-flow] capture skipped during page transition", {
+            userProductId: savedUserProductId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        } else {
+          await reportPreviewStage({
+            userProductId: savedUserProductId,
+            stage: "capture_failed",
+            side: usedSides.includes("front")
+              ? "front"
+              : usedSides.includes("back")
+                ? "back"
+                : null,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          console.warn("[preview-flow] capture failed", {
+            userProductId: savedUserProductId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error instanceof Error ? error : new Error(String(error));
+        }
       }
 
       let persistedPreview: { frontUrl: string | null; backUrl: string | null } | null = null;
@@ -1897,13 +1908,23 @@ export default function EditorPage() {
       }
 
       if (!persistedPreview) {
-        throw new Error("Checkout preview was not persisted; navigation cancelled");
+        if (pageIsUnloading) {
+          console.warn("[preview-flow] preview persistence skipped during page transition", {
+            userProductId: savedUserProductId,
+          });
+        } else {
+          throw new Error("Checkout preview was not persisted; navigation cancelled");
+        }
       }
-      if (usedSides.includes("front") && !persistedPreview.frontUrl) {
-        throw new Error("Front checkout preview is missing; navigation cancelled");
+      if (usedSides.includes("front") && !persistedPreview?.frontUrl) {
+        if (!pageIsUnloading) {
+          throw new Error("Front checkout preview is missing; navigation cancelled");
+        }
       }
-      if (usedSides.includes("back") && !persistedPreview.backUrl) {
-        throw new Error("Back checkout preview is missing; navigation cancelled");
+      if (usedSides.includes("back") && !persistedPreview?.backUrl) {
+        if (!pageIsUnloading) {
+          throw new Error("Back checkout preview is missing; navigation cancelled");
+        }
       }
 
       const cartItemId = String(data?.cartItem?.id || "").trim();
