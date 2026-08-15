@@ -1292,7 +1292,28 @@ export default function EditorPage() {
         ),
         35_000,
         `${targetSide} preview export`,
-      );
+      ).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        const pageIsUnloading =
+          document.hidden ||
+          document.visibilityState === "hidden" ||
+          !document.body?.isConnected;
+
+        if (
+          pageIsUnloading ||
+          message.includes("was not ready within") ||
+          message.includes("detached from the DOM") ||
+          message.includes("timed out")
+        ) {
+          console.warn("[preview] capture skipped during page transition", {
+            side: targetSide,
+            message,
+          });
+          return null;
+        }
+
+        throw error;
+      });
       if (!blob || blob.size === 0) {
         throw new Error(`${targetSide} capture returned an empty blob`);
       }
