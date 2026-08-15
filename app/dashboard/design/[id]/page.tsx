@@ -1598,6 +1598,14 @@ export default function EditorPage() {
       return;
     }
 
+    const shouldSave = window.confirm(
+      "Do you want to save this design before continuing?",
+    );
+    if (!shouldSave) {
+      console.info("[save-design] cancelled by user before starting");
+      return;
+    }
+
     setLoading({
       active: true,
       label: "Preparing your design…",
