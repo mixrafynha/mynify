@@ -117,7 +117,7 @@ export async function getProducts({
       if (!colorsMap.has(color)) {
         colorsMap.set(color, {
           color,
-          color_hex: variant.color_hex || "#ccc",
+          color_hex: variant.color_hex || "",
         });
       }
     }

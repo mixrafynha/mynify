@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 export type CanvasColorOption = {
   name: string;
   hex: string;
+  cssBackground?: string | null;
+  kind?: "solid" | "gradient" | "multicolor" | "unknown";
   variantId?: string | null;
   productColorId?: string | null;
   size?: string | null;
@@ -62,13 +64,30 @@ function normalizeColors(input: any, selectedSize?: string | null): CanvasColorO
       : null;
     const variant = matchingVariant || variants[0] || color;
     if (selectedSize && !matchingVariant) return [];
-    const hex = String(color?.hex || color?.hexCode || color?.hex_code || color?.colorHex || color?.color_hex || color?.value || color?.color || variant?.colorHex || variant?.color_hex || "").trim();
-    if (!isValidHexColor(hex)) return [];
+    const visual = color?.visual || color?.color_visual || variant?.colorVisual || variant?.color_visual || null;
+    const hex = String(
+      visual?.hex ||
+      color?.hex ||
+      color?.hexCode ||
+      color?.hex_code ||
+      color?.colorHex ||
+      color?.color_hex ||
+      color?.value ||
+      color?.color ||
+      variant?.colorHex ||
+      variant?.color_hex ||
+      "",
+    ).trim();
+    const cssBackground = String(visual?.cssBackground || visual?.css_background || "").trim() || null;
+    const isSolidHex = isValidHexColor(hex);
+    if (!isSolidHex && !cssBackground) return [];
     const frontUrl = readUrl(variant, "front") || readUrl(color, "front");
     const backUrl = readUrl(variant, "back") || readUrl(color, "back");
     return [{
       name: String(color?.name || color?.label || variant?.colorName || variant?.color_name || hex),
       hex,
+      cssBackground,
+      kind: visual?.kind || (cssBackground && /gradient\(/i.test(cssBackground) ? "gradient" : "solid"),
       variantId: text(variant?.variantId || variant?.variant_id || variant?.id),
       productColorId: text(color?.productColorId || color?.product_color_id || color?.id || variant?.productColorId || variant?.product_color_id),
       size: text(variant?.size) || selectedSize || null,
@@ -120,8 +139,9 @@ export function useCanvasColors(productId: string | null, mockupColor: string, s
   }, [productId]);
 
   useEffect(() => {
-    if (!availableColors.length || isValidHexColor(mockupColor)) return;
-    setMockupColor?.(availableColors[0].hex);
+    if (!availableColors.length) return;
+    if (isValidHexColor(mockupColor) || String(mockupColor || "").includes("gradient(")) return;
+    setMockupColor?.(availableColors[0].hex || availableColors[0].cssBackground || mockupColor);
   }, [availableColors, mockupColor, setMockupColor]);
 
   return { showColors, setShowColors, availableColors };

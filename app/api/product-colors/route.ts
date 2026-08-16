@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { resolveProductColorVisual } from "@/lib/gelato/product-color-visual";
 
 export const revalidate = 60;
 
@@ -15,7 +16,17 @@ type ColorRow = {
   id: string;
   color: string | null;
   color_hex: string | null;
+  gelato_color_key?: string | null;
+  gelato_attributes?: Record<string, unknown> | null;
+  gelato_color_data?: Record<string, unknown> | null;
   position: number | null;
+};
+
+type ColorResponseRow = {
+  id: string;
+  name: string;
+  hex: string;
+  visual: ReturnType<typeof resolveProductColorVisual>;
 };
 
 export async function GET(req: Request) {
@@ -32,7 +43,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseServer();
     const { data, error } = await supabase
       .from("product_colors")
-      .select("id, color, color_hex, position")
+      .select("id, color, color_hex, gelato_color_key, gelato_attributes, gelato_color_data, position")
       .eq("product_id", productId)
       .order("position", { ascending: true });
 
@@ -44,7 +55,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const uniqueColors = new Map<string, { id: string; name: string; hex: string }>();
+    const uniqueColors = new Map<string, ColorResponseRow>();
 
     for (const item of (data ?? []) as ColorRow[]) {
       const name = item.color?.trim();
@@ -54,7 +65,20 @@ export async function GET(req: Request) {
         uniqueColors.set(key, {
           id: item.id,
           name,
-          hex: item.color_hex ?? "#cccccc",
+          hex: (resolveProductColorVisual({
+            color: item.color,
+            colorHex: item.color_hex,
+            gelatoColorKey: item.gelato_color_key,
+            gelatoAttributes: item.gelato_attributes,
+            gelatoColorData: item.gelato_color_data,
+          }).hex ?? item.color_hex ?? "") as string,
+          visual: resolveProductColorVisual({
+            color: item.color,
+            colorHex: item.color_hex,
+            gelatoColorKey: item.gelato_color_key,
+            gelatoAttributes: item.gelato_attributes,
+            gelatoColorData: item.gelato_color_data,
+          }),
         });
       }
     }

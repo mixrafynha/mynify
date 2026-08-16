@@ -409,6 +409,20 @@ export async function buildDesignSavePayload(
   // fallback; otherwise changing the mockup colour could save the old colour.
   const selectedColor =
     input.mockupColor || input.color || selectedVariant?.colorHex || "#ffffff";
+  const selectedColorVisual =
+    selectedVariant?.colorVisual ||
+    (selectedVariant?.colorHex
+      ? {
+          kind: "solid",
+          cssBackground: selectedVariant.colorHex,
+          hex: selectedVariant.colorHex,
+          name: selectedVariant.colorName || null,
+          gelatoColorKey: null,
+          currentHex: selectedVariant.colorHex,
+          migrationHex: null,
+          hexes: [selectedVariant.colorHex],
+        }
+      : null);
 
   const frontUnprocessed = elementsForSide(input, "front");
   const backUnprocessed = elementsForSide(input, "back");
@@ -495,6 +509,7 @@ export async function buildDesignSavePayload(
     status: "draft",
     color: selectedColor,
     mockupColor: input.mockupColor || selectedColor,
+    selectedColorVisual,
     sides: {
       front: buildSideDatabaseData({
         side: "front",
@@ -622,6 +637,7 @@ export async function buildDesignSavePayload(
     status: "draft",
     color: selectedColor,
     mockupColor: input.mockupColor || selectedColor,
+    selectedColorVisual,
 
     designFront: frontElements,
     designBack: backElements,

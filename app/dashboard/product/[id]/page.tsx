@@ -98,7 +98,7 @@ async function getProduct(id: string) {
       id: color.id,
       product_id: color.product_id,
       color: color.color,
-      color_hex: color.color_hex || "#ccc",
+      color_hex: color.color_hex || null,
       mockup_front: color.mockup_front,
       mockup_back: color.mockup_back,
       thumbnail: color.thumbnail,
@@ -143,7 +143,7 @@ async function getProduct(id: string) {
           price: variant.price != null ? Number(variant.price) : null,
           sku: variant.sku ?? null,
           color: color?.color || null,
-          color_hex: color?.color_hex || "#ccc",
+          color_hex: color?.color_hex || null,
         };
       });
     }

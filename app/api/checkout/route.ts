@@ -69,6 +69,7 @@ type CartItemRow = {
   currency: string | null;
   size: string | null;
   color: string | null;
+  selected_color_visual: Record<string, unknown> | null;
   sku: string | null;
 };
 
@@ -418,6 +419,7 @@ export async function POST(req: Request) {
           currency,
           size,
           color,
+          selected_color_visual,
           sku
         `)
         .eq("user_id", user.id)

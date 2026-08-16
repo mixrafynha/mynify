@@ -68,6 +68,13 @@ export type CartVariant = {
     image?: string | null;
     image_url?: string | null;
   } | null;
+  color_visual?: {
+    kind?: "solid" | "gradient" | "multicolor" | "unknown";
+    cssBackground?: string | null;
+    hex?: string | null;
+    name?: string | null;
+    gelatoColorKey?: string | null;
+  } | null;
 };
 
 export type CartItem = {
@@ -2159,6 +2166,8 @@ export function variantColor(variant: CartVariant) {
 
 export function variantHex(variant: CartVariant) {
   return (
+    variant.color_visual?.hex ||
+    variant.color_visual?.cssBackground ||
     variant.color_hex ||
     variant.hex ||
     variant.product_color?.color_hex ||

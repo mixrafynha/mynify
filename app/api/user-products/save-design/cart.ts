@@ -63,6 +63,11 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     body.selected_color ||
     designData?.selectedColor ||
     null;
+  const selectedColorVisual =
+    body.selectedColorVisual ||
+    body.selected_color_visual ||
+    designData?.selectedColorVisual ||
+    null;
 
   const variantId =
     body.variantId ||
@@ -105,6 +110,7 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     design_id: userProduct.id,
     variant_id: valueOrNull(variantId),
     selected_color: selectedColor,
+    selected_color_visual: selectedColorVisual,
     selected_variant: selectedVariant,
     mockup_url: mockupUrl,
     title,

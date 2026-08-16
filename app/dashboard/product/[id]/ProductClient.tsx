@@ -28,6 +28,13 @@ type Variant = {
   sku?: string | null;
   color?: string | null;
   color_hex?: string | null;
+  color_visual?: {
+    kind?: "solid" | "gradient" | "multicolor" | "unknown";
+    cssBackground?: string | null;
+    hex?: string | null;
+    name?: string | null;
+    gelatoColorKey?: string | null;
+  } | null;
   product_color_id?: string;
 };
 
@@ -74,7 +81,8 @@ export default function ProductClient({
           stock: Number(variant.stock ?? 0),
           price: variant.price != null ? Number(variant.price) : null,
           color: variant.color ?? null,
-          color_hex: variant.color_hex || "#cccccc",
+          color_hex: variant.color_visual?.hex || variant.color_hex || null,
+          color_visual: variant.color_visual || null,
         }))
       : [];
 
@@ -89,7 +97,12 @@ export default function ProductClient({
 
     setVariants(mapped);
     setSelectedVariant(initial);
-    setSelectedColor(initial?.color ?? null);
+    setSelectedColor(
+      initial?.color_visual?.cssBackground ||
+        initial?.color_hex ||
+        initial?.color ||
+        null,
+    );
   }, [product]);
 
   const colors = useMemo(() => {
@@ -98,6 +111,7 @@ export default function ProductClient({
       {
         name: string | null | undefined;
         hex: string;
+        cssBackground?: string | null;
         variant: Variant;
       }
     >();
@@ -110,7 +124,8 @@ export default function ProductClient({
       if (!uniqueColors.has(key)) {
         uniqueColors.set(key, {
           name: variant.color,
-          hex: variant.color_hex || "#cccccc",
+          hex: variant.color_visual?.hex || variant.color_hex || "",
+          cssBackground: variant.color_visual?.cssBackground || variant.color_visual?.hex || variant.color_hex || null,
           variant,
         });
       }
@@ -210,7 +225,11 @@ export default function ProductClient({
 
   const handleSizeChange = useCallback(
     (variant: Variant) => {
-      const nextColor = variant?.color ?? selectedColor;
+      const nextColor =
+        variant?.color_visual?.cssBackground ||
+        variant?.color_hex ||
+        variant?.color ||
+        selectedColor;
 
       setSelectedVariant(variant);
       setSelectedColor(nextColor);

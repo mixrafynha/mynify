@@ -33,6 +33,16 @@ export type SelectedProductVariant = {
   size?: string | null;
   colorName?: string | null;
   colorHex?: string | null;
+  colorVisual?: {
+    kind?: "solid" | "gradient" | "multicolor" | "unknown";
+    cssBackground?: string | null;
+    hex?: string | null;
+    name?: string | null;
+    gelatoColorKey?: string | null;
+    currentHex?: string | null;
+    migrationHex?: string | null;
+    hexes?: string[];
+  } | null;
   sku?: string | null;
   price?: number | string | null;
   variantPrice?: number | string | null;

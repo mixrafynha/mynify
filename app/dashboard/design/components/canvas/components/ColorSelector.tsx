@@ -33,7 +33,11 @@ function ColorSelector({
           <Palette size={13} />
           <span
             className="h-3.5 w-3.5 rounded-full border border-white/35"
-            style={{ backgroundColor: mockupColor }}
+            style={
+              String(mockupColor).includes("gradient(")
+                ? { backgroundImage: mockupColor }
+                : { backgroundColor: mockupColor }
+            }
           />
           <span className="hidden sm:inline">Color</span>
         </button>
@@ -58,7 +62,11 @@ function ColorSelector({
                     className={`relative h-[22px] w-[22px] shrink-0 rounded-full border transition active:scale-95 md:h-8 md:w-8 ${
                       selected ? "border-white ring-2 ring-violet-300/80" : "border-white/20 hover:border-white/60"
                     }`}
-                    style={{ backgroundColor: color.hex }}
+                style={
+                  color.cssBackground && /gradient\(/i.test(color.cssBackground)
+                    ? { backgroundImage: color.cssBackground }
+                    : { backgroundColor: color.cssBackground || color.hex }
+                }
                   >
                     {selected && <span className="absolute inset-[2px] rounded-full border border-black/25 md:inset-[4px]" />}
                   </button>

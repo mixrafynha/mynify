@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { resolveProductColorVisual } from "@/lib/gelato/product-color-visual";
 
 export const revalidate = 60;
 
@@ -43,6 +44,9 @@ type ColorRow = {
   product_id: string;
   color: string | null;
   color_hex: string | null;
+  gelato_color_key?: string | null;
+  gelato_attributes?: Record<string, unknown> | null;
+  gelato_color_data?: Record<string, unknown> | null;
   mockup_front: string | null;
   mockup_back: string | null;
   thumbnail: string | null;
@@ -107,7 +111,7 @@ export async function GET(
       supabase
         .from("product_colors")
         .select(
-          "id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position",
+          "id, product_id, color, color_hex, gelato_color_key, gelato_attributes, gelato_color_data, mockup_front, mockup_back, thumbnail, position",
         )
         .eq("product_id", id)
         .order("position", { ascending: true }),
@@ -136,7 +140,20 @@ export async function GET(
       id: color.id,
       product_id: color.product_id,
       color: color.color,
-      color_hex: color.color_hex || "#ccc",
+      color_hex: resolveProductColorVisual({
+        color: color.color,
+        colorHex: color.color_hex,
+        gelatoColorKey: color.gelato_color_key,
+        gelatoAttributes: color.gelato_attributes,
+        gelatoColorData: color.gelato_color_data,
+      }).hex ?? color.color_hex ?? null,
+      color_visual: resolveProductColorVisual({
+        color: color.color,
+        colorHex: color.color_hex,
+        gelatoColorKey: color.gelato_color_key,
+        gelatoAttributes: color.gelato_attributes,
+        gelatoColorData: color.gelato_color_data,
+      }),
       mockup_front: color.mockup_front,
       mockup_back: color.mockup_back,
       thumbnail: color.thumbnail,
@@ -177,7 +194,8 @@ export async function GET(
         price: variant.price != null ? Number(variant.price) : null,
         sku: variant.sku ?? null,
         color: color?.color || null,
-        color_hex: color?.color_hex || "#ccc",
+        color_hex: color?.color_hex || null,
+        color_visual: color?.color_visual ?? null,
       };
     });
 

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { resolveProductColorVisual } from "@/lib/gelato/product-color-visual";
 
 export const revalidate = 60;
 
@@ -16,6 +17,9 @@ type ColorRow = {
   product_id: string;
   color: string | null;
   color_hex: string | null;
+  gelato_color_key?: string | null;
+  gelato_attributes?: Record<string, unknown> | null;
+  gelato_color_data?: Record<string, unknown> | null;
   mockup_front: string | null;
   mockup_back: string | null;
   thumbnail: string | null;
@@ -58,7 +62,7 @@ export async function GET(req: Request) {
     const supabase = await createSupabaseServer();
     const { data: colorRows, error: colorsError } = await supabase
       .from("product_colors")
-      .select("id, product_id, color, color_hex, mockup_front, mockup_back, thumbnail, position")
+      .select("id, product_id, color, color_hex, gelato_color_key, gelato_attributes, gelato_color_data, mockup_front, mockup_back, thumbnail, position")
       .eq("product_id", productId)
       .order("position", { ascending: true });
 
@@ -77,7 +81,20 @@ export async function GET(req: Request) {
         product_id: color.product_id,
         name: color.color,
         color: color.color,
-        color_hex: color.color_hex ?? "#d1d5db",
+        color_hex: resolveProductColorVisual({
+          color: color.color,
+          colorHex: color.color_hex,
+          gelatoColorKey: color.gelato_color_key,
+          gelatoAttributes: color.gelato_attributes,
+          gelatoColorData: color.gelato_color_data,
+        }).hex ?? color.color_hex ?? null,
+        color_visual: resolveProductColorVisual({
+          color: color.color,
+          colorHex: color.color_hex,
+          gelatoColorKey: color.gelato_color_key,
+          gelatoAttributes: color.gelato_attributes,
+          gelatoColorData: color.gelato_color_data,
+        }),
         image,
         position: color.position ?? 0,
         raw: color,
@@ -151,7 +168,8 @@ export async function GET(req: Request) {
         country_available: marketAvailability ? marketAvailability.is_available : null,
         color: color?.color ?? null,
         color_name: color?.color ?? null,
-        color_hex: color?.color_hex ?? "#d1d5db",
+        color_hex: color?.color_hex ?? null,
+        color_visual: color?.color_visual ?? null,
         image,
         image_url: image,
         product_color: color,

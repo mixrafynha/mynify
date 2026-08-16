@@ -60,6 +60,16 @@ type EditorVariantSelection = {
   size: string | null;
   colorName: string | null;
   colorHex: string | null;
+  colorVisual?: {
+    kind?: "solid" | "gradient" | "multicolor" | "unknown";
+    cssBackground?: string | null;
+    hex?: string | null;
+    name?: string | null;
+    gelatoColorKey?: string | null;
+    currentHex?: string | null;
+    migrationHex?: string | null;
+    hexes?: string[];
+  } | null;
   sku: string | null;
   price: string | null;
   variantPrice: string | null;
@@ -516,6 +526,7 @@ function buildVariantSelection(
     size,
     colorName,
     colorHex,
+    colorVisual: colorHex ? { kind: "solid", cssBackground: colorHex, hex: colorHex, name: colorName, gelatoColorKey: null, currentHex: colorHex, migrationHex: null, hexes: [colorHex] } : null,
     sku,
     price,
     variantPrice: price,
@@ -532,6 +543,9 @@ function mapSelectedVariantRow(row: EditorVariantRow | null): EditorVariantSelec
   const productColorId = row.product_color_id ?? row.product_colors?.id ?? null;
   const colorName = row.product_colors?.color ?? null;
   const colorHex = normalizeHexColor(row.color_hex ?? row.product_colors?.color_hex ?? null);
+  const colorVisual = row.gelato_attributes?.colorVisual && typeof row.gelato_attributes.colorVisual === "object"
+    ? (row.gelato_attributes.colorVisual as any)
+    : row.product_colors?.color_visual ?? null;
   const gelatoAttributes = row.gelato_attributes && typeof row.gelato_attributes === "object"
     ? row.gelato_attributes
     : null;
@@ -546,6 +560,7 @@ function mapSelectedVariantRow(row: EditorVariantRow | null): EditorVariantSelec
     size: normalizeSize(row.size) || null,
     colorName: colorName ? String(colorName) : null,
     colorHex,
+    colorVisual,
     sku: row.sku ?? null,
     price: row.price == null ? null : String(row.price),
     variantPrice: row.price == null ? null : String(row.price),
@@ -747,10 +762,11 @@ export default function EditorPage() {
   const [capturePreviewSides, setCapturePreviewSides] = useState<CapturePreviewSides>({});
 
   useEffect(() => {
-    if (selectedVariant?.colorHex && !draftHydrated) {
-      setMockupColor(selectedVariant.colorHex);
+    const nextMockupColor = selectedVariant?.colorVisual?.cssBackground || selectedVariant?.colorHex || null;
+    if (nextMockupColor && !draftHydrated) {
+      setMockupColor(nextMockupColor);
     }
-  }, [selectedVariant?.colorHex, draftHydrated]);
+  }, [draftHydrated, selectedVariant?.colorHex, selectedVariant?.colorVisual?.cssBackground]);
 
   useEffect(() => {
     const variantId = selectedVariant?.variantId;
