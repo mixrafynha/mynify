@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
@@ -217,8 +218,11 @@ export async function GET() {
     console.info("[cart-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
 
     if (authError || !user) {
-      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
-      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+      const totalMs = Date.now() - requestStartedAt;
+      const responseBody = JSON.stringify({ items: [] });
+      console.info("[cart-perf] response_ready", { totalMs, status: 200, itemCount: 0 });
+      console.info("[cart-response] unauthenticated_empty", { status: 200, bytes: Buffer.byteLength(responseBody) });
+      return NextResponse.json({ items: [] }, { status: 200, headers: { "Cache-Control": "no-store" } });
     }
 
     console.info("[cart-perf] cart_query_start");
@@ -229,20 +233,31 @@ export async function GET() {
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
     console.info(
-      "[cart-perf] cart_query_done durationMs=" +
-        (Date.now() - cartQueryStartedAt) +
-        " rows=" +
-        ((data ?? []).length ?? 0)
+      "[cart-perf] cart_query_done",
+      {
+        durationMs: Date.now() - cartQueryStartedAt,
+        rows: (data ?? []).length ?? 0,
+        hasError: Boolean(error),
+        errorCode: null,
+      }
     );
 
     if (error) {
-      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
-      return Response.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
+      console.error("[cart-response] query_error", {
+        status: 500,
+        error: error.message,
+        code: null,
+      });
+      console.info("[cart-perf] response_ready", { totalMs: Date.now() - requestStartedAt, status: 500, itemCount: 0 });
+      return NextResponse.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
     if (!(data ?? []).length) {
-      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
-      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+      const totalMs = Date.now() - requestStartedAt;
+      const responseBody = JSON.stringify({ items: [] });
+      console.info("[cart-response] empty_cart", { status: 200, itemCount: 0, bytes: Buffer.byteLength(responseBody) });
+      console.info("[cart-perf] response_ready", { totalMs, status: 200, itemCount: 0 });
+      return NextResponse.json({ items: [] }, { status: 200, headers: { "Cache-Control": "no-store" } });
     }
 
     console.info("[cart-perf] item_resolution_start count=" + (data ?? []).length);
@@ -269,8 +284,9 @@ export async function GET() {
         userProductsResult.error?.message ??
         productColorsResult.error?.message ??
         "Failed to resolve cart references";
+      console.error("[cart-response] batch_resolution_error", { status: 500, message });
       console.warn("[cart] unresolved_reference_batch_error", { message });
-      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ error: message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
     const userProductAssetsById = new Map<string, UserProductAssets>();
@@ -300,8 +316,12 @@ export async function GET() {
       : { data: [] as ProductVariantRow[] | null, error: null };
 
     if (variantsResult.error) {
+      console.error("[cart-response] variants_resolution_error", {
+        status: 500,
+        message: variantsResult.error.message,
+      });
       console.warn("[cart] unresolved_reference_batch_error", { message: variantsResult.error.message });
-      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ error: variantsResult.error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
     const variantsById = new Map<string, CartVariantRelation>();
@@ -385,18 +405,42 @@ export async function GET() {
         variants: availableVariants,
       };
     });
+    let responseBody: string;
+    try {
+      responseBody = JSON.stringify({ items });
+      console.info("[cart-response] serialization_ok", {
+        status: 200,
+        itemCount: items.length,
+        bytes: Buffer.byteLength(responseBody),
+      });
+    } catch (error) {
+      console.error("[cart-response] serialization_failed", {
+        status: 500,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      throw error;
+    }
     console.info(
-      "[cart-perf] item_resolution_done durationMs=" +
-        (Date.now() - itemResolutionStartedAt) +
-        " rows=" +
-        items.length
+      "[cart-perf] item_resolution_done",
+      { durationMs: Date.now() - itemResolutionStartedAt, rows: items.length }
     );
 
-    console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
-    return Response.json({ items }, { headers: { "Cache-Control": "no-store" } });
+    console.info("[cart-perf] response_ready", {
+      totalMs: Date.now() - requestStartedAt,
+      status: 200,
+      itemCount: items.length,
+    });
+    console.log("[cart-response] success", { status: 200, itemCount: items.length });
+    return NextResponse.json({ items }, { status: 200, headers: { "Cache-Control": "no-store" } });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    return Response.json(
+    console.error("[cart-response] catch", {
+      status: 500,
+      message,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    return NextResponse.json(
       { error: "Server error", details: message },
       { status: 500, headers: { "Cache-Control": "no-store" } },
     );
