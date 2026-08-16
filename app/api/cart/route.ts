@@ -31,7 +31,6 @@ type CartItem = {
   currency: string | null;
   quantity: number | null;
   color: string | null;
-  selected_color_visual?: Record<string, unknown> | null;
   size: string | null;
   sku: string | null;
   image: string | null;
@@ -229,7 +228,7 @@ export async function GET() {
     const cartQueryStartedAt = Date.now();
     const { data, error } = (await supabase
       .from("cart_items")
-      .select("id, product_id, user_product_id, design_id, variant_id, title, price, currency, quantity, color, selected_color_visual, size, sku, image, created_at")
+      .select("id, product_id, user_product_id, design_id, variant_id, title, price, currency, quantity, color, size, sku, image, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
     console.info(
@@ -391,7 +390,6 @@ export async function GET() {
         previewFront,
         previewBack,
         product_variants: variantRelation,
-        selected_color_visual: item.selected_color_visual ?? null,
         product_uid: gelatoProductUid,
         productUid: gelatoProductUid,
         gelato_product_uid: gelatoProductUid,
