@@ -185,15 +185,20 @@ export default function CatalogPage() {
                 <div className="mb-5 flex items-center justify-between gap-4">
                   <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">{safeText(label)}</h2>
                 </div>
-                <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {grouped[key].map((product) => (
-                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] p-3 shadow-[0_0_30px_rgba(168,85,247,0.08)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/40">
-                      <div className="relative mb-4 aspect-square overflow-hidden rounded-xl bg-black/40">
+                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-[1.6rem] border border-white/8 bg-white/[0.028] p-4 shadow-[0_0_22px_rgba(168,85,247,0.05)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/35 sm:p-3">
+                      <div className="relative mb-4 aspect-[4/5] overflow-hidden rounded-[1.15rem] bg-black/30 sm:aspect-square">
                         <Image src={imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw" className="object-contain transition duration-500 group-hover:scale-105" />
                       </div>
                       <h3 className="truncate text-sm font-black text-white sm:text-base">{safeText(product.title)}</h3>
-                      <p className="mt-1 text-sm font-bold text-white/70">{formatPrice(product.price, product.currency)}</p>
-                      <div className="mt-4 flex h-11 items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 font-bold text-white transition group-hover:scale-[1.02]">
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-white/70">{formatPrice(product.price, product.currency)}</p>
+                        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-cyan-100">
+                          Unisex
+                        </span>
+                      </div>
+                      <div className="mt-4 flex h-9 items-center justify-center rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 text-[11px] font-black uppercase tracking-[0.12em] text-white transition group-hover:scale-[1.02] sm:h-10 sm:text-[12px]">
                         Design now
                       </div>
                     </Link>

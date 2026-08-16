@@ -535,7 +535,7 @@ export function ProductRight({
               <button
                 type="button"
                 onClick={() => setShippingMenuOpen((prev) => !prev)}
-                className="mt-1 flex h-11 w-full items-center justify-between gap-3 border border-[#d8dde5] px-3 text-left text-sm font-semibold text-[#111111]"
+                className="mt-1 flex h-10 w-full items-center justify-between gap-2 border border-[#d8dde5] px-3 text-left text-sm font-semibold text-[#111111]"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="text-base leading-none">
@@ -558,7 +558,7 @@ export function ProductRight({
                         setShippingCountryIso(country.iso);
                         setShippingMenuOpen(false);
                       }}
-                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-black/[0.03] ${
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-black/[0.03] ${
                         selectedShippingCountry?.iso === country.iso
                           ? "font-black text-[#111111]"
                           : "text-[#333333]"
@@ -621,26 +621,26 @@ export function ProductRight({
             type="button"
             disabled={loading || availabilityStatus === "unavailable"}
             onClick={handleStartDesigning}
-            className="group relative flex h-[58px] items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-4 text-[12px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:hover:brightness-110"
+            className="group relative flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-3 text-[11px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:h-[58px] md:px-4 md:text-[12px] md:hover:brightness-110"
           >
             <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
-            <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10">
-              <Palette size={16} />
+            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10 md:h-9 md:w-9">
+              <Palette size={14} className="md:h-4 md:w-4" />
             </span>
             <span className="relative">{loading ? "Opening..." : "BUY FOR YOUR SELF"}</span>
           </button>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
             <Check size={12} className="text-cyan-300" />
             Production
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
             <Sparkles size={12} className="text-fuchsia-300" />
             Delivery CO2 0%
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
             <Globe2 size={12} className="text-emerald-300" />
             Secure checkout Ready
           </span>
