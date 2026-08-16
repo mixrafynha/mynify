@@ -76,11 +76,25 @@ export async function GET() {
   const { data, error } = await supabase
     .from("products")
     .select(`
-      *,
-      product_colors (
-        *,
-        product_variants (*)
-      )
+      id,
+      title,
+      slug,
+      description,
+      price,
+      discount_price,
+      image,
+      images,
+      category,
+      tags,
+      is_active,
+      is_new,
+      is_hot,
+      status,
+      audience,
+      sales_count,
+      created_at,
+      updated_at,
+      deleted_at
     `)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
