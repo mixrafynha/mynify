@@ -82,6 +82,12 @@ export default function ColorSelector({
           const hasStock = available.some(isVariantSelectable);
           const isActive = normalize(selectedColor || "") === normalizedColor;
           const colorHex =
+            c.visual?.cssBackground ||
+            c.visual?.hex ||
+            c.color_visual?.cssBackground ||
+            c.color_visual?.hex ||
+            available.find((v: any) => v.color_visual?.cssBackground)?.color_visual?.cssBackground ||
+            available.find((v: any) => v.color_visual?.hex)?.color_visual?.hex ||
             available.find((v: any) => v.color_hex)?.color_hex ||
             available[0]?.color_hex ||
             c.hex ||
@@ -112,7 +118,11 @@ export default function ColorSelector({
                     ? "scale-110 ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
                     : "ring-1 ring-white/20 hover:scale-105"
                 } ${!hasStock ? "opacity-30" : ""}`}
-                style={{ backgroundColor: colorHex }}
+                style={
+                  String(colorHex).includes("gradient(")
+                    ? { backgroundImage: colorHex }
+                    : { backgroundColor: colorHex }
+                }
               />
             </button>
           );

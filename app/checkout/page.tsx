@@ -1713,7 +1713,14 @@ export default function CheckoutPage() {
                                         : variantPrice(variant, price);
                                       return (
                                         <button key={`${color}-${variantId(variant)}`} type="button" title={`${color} · ${money(optionPrice)}`} aria-label={`Select ${color}`} disabled={busy || !available} onClick={() => changeVariantByColor(item, color)} className={`group grid h-10 w-10 place-items-center rounded-full border transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white/12 ring-2 ring-white/25" : "border-white/15 hover:border-white/35"}`}>
-                                          <span className="h-7 w-7 rounded-full border border-black/25" style={{ backgroundColor: variantHex(variant) }} />
+                                          <span
+                                            className="h-7 w-7 rounded-full border border-black/25"
+                                            style={
+                                              String(variantHex(variant)).includes("gradient(")
+                                                ? { backgroundImage: variantHex(variant) }
+                                                : { backgroundColor: variantHex(variant) }
+                                            }
+                                          />
                                         </button>
                                       );
                                     })}

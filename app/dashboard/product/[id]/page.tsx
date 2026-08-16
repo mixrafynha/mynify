@@ -52,15 +52,11 @@ const VARIANT_SELECT_FIELDS = [
   "sku",
 ].join(", ");
 
-async function getProduct(id: string) {
+async function getProduct(supabase: Awaited<ReturnType<typeof createSupabaseServer>>, id: string) {
   try {
     if (!id) return null;
 
     const productStageStartedAt = Date.now();
-    const clientStartedAt = Date.now();
-    const supabase = await createSupabaseServer();
-    console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
-
     console.info("[product-perf] product_start");
     const { data: product, error: productError } = await supabase
       .from("products")
@@ -178,10 +174,7 @@ async function getProduct(id: string) {
   }
 }
 
-async function getUser() {
-  const clientStartedAt = Date.now();
-  const supabase = await createSupabaseServer();
-  console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
+async function getUser(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
   console.info("[product-perf] auth_getUser_start");
   const authStartedAt = Date.now();
   const { data } = await supabase.auth.getUser();
@@ -209,7 +202,10 @@ export default async function ProductPage({
 
   console.info("[product-perf] auth_start");
   const authStartedAt = Date.now();
-  const [product, user] = await Promise.all([getProduct(id), getUser()]);
+  const clientStartedAt = Date.now();
+  const supabase = await createSupabaseServer();
+  console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
+  const [product, user] = await Promise.all([getProduct(supabase, id), getUser(supabase)]);
   console.info("[product-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
 
   if (!product) {

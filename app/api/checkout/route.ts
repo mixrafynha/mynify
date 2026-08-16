@@ -92,6 +92,8 @@ type VariantRow = {
   gelato_product_uid: string | null;
   gelato_variant_uid: string | null;
   gelato_attributes: Record<string, unknown> | null;
+  color_hex?: string | null;
+  color_visual?: Record<string, unknown> | null;
 };
 
 type ProductColorOwnershipRow = {
@@ -438,7 +440,6 @@ export async function POST(req: Request) {
       }
 
       const cartItems = (cartRows ?? []) as CartItemRow[];
-
       if (cartItems.length !== effectiveCartItemIds.length) {
         return NextResponse.json(
           {
@@ -581,7 +582,7 @@ export async function POST(req: Request) {
         ((userProductRows ?? []) as UserProductRow[]).map((row) => [row.id, row]),
       );
 
-     const variantMap = new Map(
+      const variantMap = new Map(
       variants.map((variant) => [variant.id, variant]),
     );
       const productColorProductMap = new Map(
@@ -688,7 +689,6 @@ export async function POST(req: Request) {
         const variant = cartItem.variant_id
           ? variantMap.get(cartItem.variant_id) ?? null
           : null;
-
         if (cartItem.variant_id && !variant) {
           return NextResponse.json(
             {

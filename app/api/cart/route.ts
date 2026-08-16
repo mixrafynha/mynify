@@ -13,6 +13,9 @@ type CartVariantRelation = {
   sku: string | null;
   product_color_id: string | null;
   gelato_product_uid: string | null;
+  color?: string | null;
+  color_hex?: string | null;
+  color_visual?: Record<string, unknown> | null;
 };
 
 type CartItem = {
@@ -26,6 +29,7 @@ type CartItem = {
   currency: string | null;
   quantity: number | null;
   color: string | null;
+  selected_color_visual?: Record<string, unknown> | null;
   size: string | null;
   sku: string | null;
   image: string | null;
@@ -238,6 +242,7 @@ export async function GET() {
         currency,
         quantity,
         color,
+        selected_color_visual,
         size,
         sku,
         image,
@@ -268,11 +273,19 @@ export async function GET() {
 
     console.info("[cart-perf] item_resolution_start count=" + (data ?? []).length);
     const itemResolutionStartedAt = Date.now();
+    const availableVariantsByProductId = new Map<string, Promise<Awaited<ReturnType<typeof getAvailableVariants>>>>();
+    const userProductAssetsById = new Map<string, Promise<UserProductAssets>>();
     const items = await Promise.all(
       (data ?? []).map(async (item) => {
         console.info("[cart-perf] cart_item_start");
         const availableVariantsStart = Date.now();
-        const availableVariants = await getAvailableVariants(supabase, item.product_id);
+        const availableVariantsPromise =
+          availableVariantsByProductId.get(item.product_id) ??
+          (async () => getAvailableVariants(supabase, item.product_id))();
+        if (!availableVariantsByProductId.has(item.product_id)) {
+          availableVariantsByProductId.set(item.product_id, availableVariantsPromise);
+        }
+        const availableVariants = await availableVariantsPromise;
         console.info(
           "[cart-perf] cart_item_available_variants_done durationMs=" +
             (Date.now() - availableVariantsStart) +
@@ -281,9 +294,24 @@ export async function GET() {
         );
         const selectedVariant = availableVariants.find((variant) => variant.id === item.variant_id) ?? null;
         const variantRelation = firstRelation(item.product_variants);
-
         const userProductStartedAt = Date.now();
-        const userProductAssets = await resolveUserProductAssets(supabase, item.user_product_id);
+        const userProductPromise =
+          item.user_product_id
+            ? userProductAssetsById.get(item.user_product_id) ??
+              (async () => resolveUserProductAssets(supabase, item.user_product_id))()
+            : Promise.resolve({
+                user_product_id: null,
+                base_product_id: null,
+                print_files: null,
+                printFiles: null,
+                mockups: null,
+                design_data: null,
+                designData: null,
+              } as UserProductAssets);
+        if (item.user_product_id && !userProductAssetsById.has(item.user_product_id)) {
+          userProductAssetsById.set(item.user_product_id, userProductPromise);
+        }
+        const userProductAssets = await userProductPromise;
         console.info(
           "[cart-perf] cart_item_user_product_done durationMs=" + (Date.now() - userProductStartedAt)
         );
@@ -312,6 +340,7 @@ export async function GET() {
           previewFront,
           previewBack,
           product_variants: variantRelation,
+          selected_color_visual: item.selected_color_visual ?? null,
           product_uid: gelatoProductUid,
           productUid: gelatoProductUid,
           gelato_product_uid: gelatoProductUid,

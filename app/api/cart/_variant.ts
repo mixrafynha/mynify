@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { resolveProductColorVisual } from "@/lib/gelato/product-color-visual";
 
 export type SupabaseServerClient = ReturnType<typeof createSupabaseServer>;
 
@@ -7,10 +8,13 @@ export type ProductColor = {
   product_id: string | null;
   color: string | null;
   color_hex: string | null;
+  gelato_attributes?: Record<string, unknown> | null;
+  gelato_color_data?: Record<string, unknown> | null;
   image?: string | null;
   mockup_front?: string | null;
   thumbnail?: string | null;
   position?: number | null;
+  color_visual?: ReturnType<typeof resolveProductColorVisual> | null;
 };
 
 export type ProductVariant = {
@@ -47,6 +51,7 @@ export type ResolvedVariant = {
   color: string | null;
   color_hex: string | null;
   colorHex: string | null;
+  color_visual: ReturnType<typeof resolveProductColorVisual> | null;
   image: string | null;
 };
 
@@ -107,8 +112,9 @@ export function resolveVariantRow(
     color: color?.color ?? null,
     color_hex: color?.color_hex ?? null,
     colorHex: color?.color_hex ?? null,
-    image: color?.image ?? color?.mockup_front ?? color?.thumbnail ?? null,
-  };
+    color_visual: color?.color_visual ?? null,
+  image: color?.image ?? color?.mockup_front ?? color?.thumbnail ?? null,
+};
 }
 
 export async function resolveVariantById(
@@ -127,11 +133,21 @@ export async function resolveVariantById(
 
   const { data: color } = (await supabase
     .from("product_colors")
-    .select("id, product_id, color, color_hex, mockup_front, thumbnail")
+    .select("id, product_id, color, color_hex, gelato_attributes, gelato_color_data, mockup_front, thumbnail")
     .eq("id", variant.product_color_id)
     .maybeSingle()) as SupabaseSingleResponse<ProductColor>;
 
-  return resolveVariantRow(variant, color);
+  const visual = color
+    ? resolveProductColorVisual({
+        color: color.color,
+        colorName: color.color,
+        colorHex: color.color_hex,
+        gelatoAttributes: color.gelato_attributes,
+        gelatoColorData: color.gelato_color_data,
+      })
+    : null;
+
+  return resolveVariantRow(variant, color ? { ...color, color_visual: visual } : null);
 }
 
 export async function getAvailableVariants(
@@ -142,7 +158,7 @@ export async function getAvailableVariants(
 
   const { data: colors, error: colorsError } = (await supabase
     .from("product_colors")
-    .select("id, product_id, color, color_hex, mockup_front, thumbnail, position")
+    .select("id, product_id, color, color_hex, gelato_attributes, gelato_color_data, mockup_front, thumbnail, position")
     .in("product_id", productIds)
     .order("position", { ascending: true })) as SupabaseManyResponse<ProductColor>;
 
@@ -160,7 +176,21 @@ export async function getAvailableVariants(
 
   if (variantsError || !variants?.length) return [];
 
-  const colorMap = new Map<string, ProductColor>(colors.map((color) => [color.id, color]));
+  const colorMap = new Map<string, ProductColor>(
+    colors.map((color) => [
+      color.id,
+      {
+        ...color,
+        color_visual: resolveProductColorVisual({
+          color: color.color,
+          colorName: color.color,
+          colorHex: color.color_hex,
+          gelatoAttributes: color.gelato_attributes,
+          gelatoColorData: color.gelato_color_data,
+        }),
+      },
+    ]),
+  );
 
   return variants.map((variant) => resolveVariantRow(variant, colorMap.get(variant.product_color_id ?? "") ?? null));
 }
