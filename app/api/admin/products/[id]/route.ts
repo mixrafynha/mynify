@@ -60,6 +60,111 @@ function dedupeVariants(variants: NormalizedVariant[]) {
   });
 }
 
+async function loadFullProduct(
+  supabase: ReturnType<typeof createSupabaseAdmin>,
+  id: string,
+) {
+  const { data: product, error: productError } = await supabase
+    .from("products")
+    .select(`
+      id,
+      title,
+      slug,
+      description,
+      price,
+      discount_price,
+      image,
+      images,
+      category,
+      tags,
+      is_active,
+      is_new,
+      is_hot,
+      status,
+      audience,
+      sales_count,
+      profit_markup_percentage,
+      created_at,
+      updated_at,
+      deleted_at
+    `)
+    .eq("id", id)
+    .maybeSingle();
+
+  if (productError || !product) {
+    return { product: null, error: productError };
+  }
+
+  const { data: colors, error: colorsError } = await supabase
+    .from("product_colors")
+    .select(`
+      id,
+      product_id,
+      color,
+      color_hex,
+      mockup_front,
+      mockup_back,
+      thumbnail,
+      position,
+      gelato_color_key,
+      gelato_sync_status,
+      gelato_attributes,
+      gelato_color_data,
+      gelato_color_synced_at
+    `)
+    .eq("product_id", id)
+    .order("position", { ascending: true });
+
+  if (colorsError) {
+    return { product: null, error: colorsError };
+  }
+
+  const colorIds = (colors ?? []).map((color) => color.id);
+  let variantsByColor = new Map<string, unknown[]>();
+
+  if (colorIds.length > 0) {
+    const { data: variants, error: variantsError } = await supabase
+      .from("product_variants")
+      .select(`
+        id,
+        product_color_id,
+        size,
+        sku,
+        stock,
+        price,
+        name,
+        gelato_product_uid,
+        gelato_variant_uid,
+        gelato_variant_key,
+        gelato_sync_status,
+        gelato_attributes
+      `)
+      .in("product_color_id", colorIds);
+
+    if (variantsError) {
+      return { product: null, error: variantsError };
+    }
+
+    variantsByColor = new Map(
+      colorIds.map((colorId) => [
+        colorId,
+        (variants ?? []).filter((variant) => variant.product_color_id === colorId),
+      ]),
+    );
+  }
+
+  return {
+    product: {
+      ...product,
+      product_colors: (colors ?? []).map((color) => ({
+        ...color,
+        product_variants: variantsByColor.get(color.id) ?? [],
+      })),
+    },
+    error: null,
+  };
+}
+
 /* ================= GET PRODUCT ================= */
 export async function GET(
   req: Request,
@@ -85,17 +190,7 @@ export async function GET(
 
   const supabase = createSupabaseAdmin();
 
-  const { data, error } = await supabase
-    .from("products")
-    .select(`
-      *,
-      product_colors (
-        *,
-        product_variants (*)
-      )
-    `)
-    .eq("id", id)
-    .maybeSingle();
+  const { product, error } = await loadFullProduct(supabase, id);
 
   if (error) {
     return NextResponse.json(
@@ -104,14 +199,14 @@ export async function GET(
     );
   }
 
-  if (!data) {
+  if (!product) {
     return NextResponse.json(
       { error: "Product not found" },
       { status: 404 }
     );
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data: product });
 }
 
 /* ================= PATCH PRODUCT ================= */
@@ -460,31 +555,11 @@ export async function PATCH(
 
   if (body.profit_markup_percentage !== undefined) {
     const refreshResult = await refreshProductVariantSellingPrices(id);
-    const { data: fullProduct } = await supabase
-      .from("products")
-      .select(`
-        *,
-        product_colors (
-          *,
-          product_variants (*)
-        )
-      `)
-      .eq("id", id)
-      .maybeSingle();
+    const { product: fullProduct } = await loadFullProduct(supabase, id);
     return NextResponse.json({ data: fullProduct ?? data, pricing: refreshResult });
   }
 
-  const { data: fullProduct } = await supabase
-    .from("products")
-    .select(`
-      *,
-      product_colors (
-        *,
-        product_variants (*)
-      )
-    `)
-    .eq("id", id)
-    .maybeSingle();
+  const { product: fullProduct } = await loadFullProduct(supabase, id);
 
   return NextResponse.json({ data: fullProduct ?? data });
 }
