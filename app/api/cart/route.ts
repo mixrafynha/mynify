@@ -1,5 +1,4 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { getAvailableVariants } from "./_variant";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +15,8 @@ type CartVariantRelation = {
   color?: string | null;
   color_hex?: string | null;
   color_visual?: Record<string, unknown> | null;
+  product_id?: string | null;
+  image?: string | null;
 };
 
 type CartItem = {
@@ -39,33 +40,41 @@ type CartItem = {
   product_variants?: CartVariantRelation | CartVariantRelation[] | null;
 };
 
-type UserProductRelation = {
-  id: string;
-  base_product_id: string | null;
-  print_files: Record<string, unknown> | null;
-  mockups: Record<string, unknown> | null;
-  design_data: Record<string, unknown> | null;
-};
-
 type UserProductAssets = {
   user_product_id: string | null;
   base_product_id: string | null;
-  print_files: Record<string, unknown> | null;
-  printFiles: Record<string, unknown> | null;
   mockups: Record<string, unknown> | null;
   design_data: Record<string, unknown> | null;
   designData: Record<string, unknown> | null;
+};
+
+type ProductColorRow = {
+  id: string;
+  product_id: string | null;
+  color: string | null;
+  color_hex: string | null;
+  gelato_attributes: Record<string, unknown> | null;
+  gelato_color_data: Record<string, unknown> | null;
+  mockup_front: string | null;
+  thumbnail: string | null;
+  position: number | null;
+};
+
+type ProductVariantRow = {
+  id: string;
+  size: string | null;
+  stock: number | null;
+  price: number | string | null;
+  sku: string | null;
+  name: string | null;
+  gelato_product_uid: string | null;
+  product_color_id: string | null;
 };
 
 type SupabaseManyResponse<T> = {
   data: T[] | null;
   error: { message: string } | null;
 };
-
-function firstRelation<T>(value: T | T[] | null | undefined): T | null {
-  if (!value) return null;
-  return Array.isArray(value) ? value[0] ?? null : value;
-}
 
 function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
@@ -160,49 +169,34 @@ function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   return selected;
 }
 
-async function resolveUserProductAssets(
-  supabase: ReturnType<typeof createSupabaseServer>,
-  userProductId: string | null,
-): Promise<UserProductAssets> {
-  if (!userProductId) {
-    return {
-      user_product_id: null,
-      base_product_id: null,
-      print_files: null,
-      printFiles: null,
-      mockups: null,
-      design_data: null,
-      designData: null,
-    };
-  }
-
-  const { data } = (await supabase
-    .from("user_products")
-    .select("id, base_product_id, print_files, mockups, design_data")
-    .eq("id", userProductId)
-    .maybeSingle()) as { data: UserProductRelation | null; error: { message: string } | null };
-
-  if (!data) {
-    return {
-      user_product_id: null,
-      base_product_id: null,
-      print_files: null,
-      printFiles: null,
-      mockups: null,
-      design_data: null,
-      designData: null,
-    };
-  }
-
+function buildResolvedVariantRow(
+  variant: ProductVariantRow,
+  color: ProductColorRow | null,
+): CartVariantRelation {
   return {
-    user_product_id: data.id,
-    base_product_id: data.base_product_id,
-    print_files: data.print_files,
-    printFiles: data.print_files,
-    mockups: parseMockups(data.mockups),
-    design_data: data.design_data,
-    designData: data.design_data,
+    id: variant.id,
+    stock: variant.stock,
+    size: variant.size,
+    price: variant.price,
+    sku: variant.sku,
+    product_color_id: variant.product_color_id,
+    gelato_product_uid: variant.gelato_product_uid,
+    color: color?.color ?? null,
+    color_hex: color?.color_hex ?? null,
+    color_visual: color
+      ? {
+          color: color.color,
+          color_hex: color.color_hex,
+          product_id: color.product_id,
+        }
+      : null,
+    product_id: color?.product_id ?? null,
+    image: color?.mockup_front ?? color?.thumbnail ?? null,
   };
+}
+
+function mergeProductIds(values: Array<string | null | undefined>) {
+  return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
 
 export async function GET() {
@@ -231,32 +225,7 @@ export async function GET() {
     const cartQueryStartedAt = Date.now();
     const { data, error } = (await supabase
       .from("cart_items")
-      .select(`
-        id,
-        product_id,
-        user_product_id,
-        design_id,
-        variant_id,
-        title,
-        price,
-        currency,
-        quantity,
-        color,
-        selected_color_visual,
-        size,
-        sku,
-        image,
-        created_at,
-        product_variants!cart_items_variant_id_fkey (
-          id,
-          stock,
-          size,
-          price,
-          sku,
-          product_color_id,
-          gelato_product_uid
-        )
-      `)
+      .select("id, product_id, user_product_id, design_id, variant_id, title, price, currency, quantity, color, selected_color_visual, size, sku, image, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
     console.info(
@@ -271,90 +240,151 @@ export async function GET() {
       return Response.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
 
+    if (!(data ?? []).length) {
+      console.info("[cart-perf] response_ready totalMs=" + (Date.now() - requestStartedAt));
+      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+    }
+
     console.info("[cart-perf] item_resolution_start count=" + (data ?? []).length);
     const itemResolutionStartedAt = Date.now();
-    const availableVariantsByProductId = new Map<string, Promise<Awaited<ReturnType<typeof getAvailableVariants>>>>();
-    const userProductAssetsById = new Map<string, Promise<UserProductAssets>>();
-    const items = await Promise.all(
-      (data ?? []).map(async (item) => {
-        console.info("[cart-perf] cart_item_start");
-        const availableVariantsStart = Date.now();
-        const availableVariantsPromise =
-          availableVariantsByProductId.get(item.product_id) ??
-          (async () => getAvailableVariants(supabase, item.product_id))();
-        if (!availableVariantsByProductId.has(item.product_id)) {
-          availableVariantsByProductId.set(item.product_id, availableVariantsPromise);
-        }
-        const availableVariants = await availableVariantsPromise;
-        console.info(
-          "[cart-perf] cart_item_available_variants_done durationMs=" +
-            (Date.now() - availableVariantsStart) +
-            " rows=" +
-            availableVariants.length
-        );
-        const selectedVariant = availableVariants.find((variant) => variant.id === item.variant_id) ?? null;
-        const variantRelation = firstRelation(item.product_variants);
-        const userProductStartedAt = Date.now();
-        const userProductPromise =
-          item.user_product_id
-            ? userProductAssetsById.get(item.user_product_id) ??
-              (async () => resolveUserProductAssets(supabase, item.user_product_id))()
-            : Promise.resolve({
-                user_product_id: null,
-                base_product_id: null,
-                print_files: null,
-                printFiles: null,
-                mockups: null,
-                design_data: null,
-                designData: null,
-              } as UserProductAssets);
-        if (item.user_product_id && !userProductAssetsById.has(item.user_product_id)) {
-          userProductAssetsById.set(item.user_product_id, userProductPromise);
-        }
-        const userProductAssets = await userProductPromise;
-        console.info(
-          "[cart-perf] cart_item_user_product_done durationMs=" + (Date.now() - userProductStartedAt)
-        );
+    const cartItems = data ?? [];
+    const productIds = mergeProductIds(cartItems.map((item) => item.product_id));
+    const userProductIds = mergeProductIds(cartItems.map((item) => item.user_product_id));
 
-        const gelatoProductUid = variantRelation?.gelato_product_uid ?? selectedVariant?.gelato_product_uid ?? null;
-        const previewStartedAt = Date.now();
-        const previewFront = frontMockupUrl(userProductAssets.mockups);
-        const previewBack = backMockupUrl(userProductAssets.mockups);
-        const displayPrice = resolveDisplayPrice({
-          itemPrice: item.price,
-          variantPrice: variantRelation?.price ?? selectedVariant?.price ?? null,
-          userProductAssets,
-        });
-        console.info(
-          "[cart-perf] cart_item_preview_resolution_done durationMs=" +
-            (Date.now() - previewStartedAt)
-        );
+    const [userProductsResult, productColorsResult] = await Promise.all([
+      userProductIds.length
+        ? supabase.from("user_products").select("id, base_product_id, mockups, design_data").in("id", userProductIds)
+        : Promise.resolve({ data: [] as { id: string; base_product_id: string | null; mockups: Record<string, unknown> | null; design_data: Record<string, unknown> | null; }[] | null, error: null }),
+      productIds.length
+        ? supabase
+            .from("product_colors")
+            .select("id, product_id, color, color_hex, gelato_attributes, gelato_color_data, mockup_front, thumbnail, position")
+            .in("product_id", productIds)
+            .order("position", { ascending: true })
+        : Promise.resolve({ data: [] as ProductColorRow[] | null, error: null }),
+    ]);
 
-        return {
-          ...item,
-          ...userProductAssets,
-          price: displayPrice,
-          cached_price: item.price,
-          price_source: displayPrice === item.price ? "cart_items" : "product_variants",
-          image: previewFront ?? item.image,
-          previewFront,
-          previewBack,
-          product_variants: variantRelation,
-          selected_color_visual: item.selected_color_visual ?? null,
-          product_uid: gelatoProductUid,
-          productUid: gelatoProductUid,
-          gelato_product_uid: gelatoProductUid,
-          gelatoProductUid: gelatoProductUid,
-          design_id: item.design_id,
-          designId: item.design_id,
+    if (userProductsResult.error || productColorsResult.error) {
+      const message =
+        userProductsResult.error?.message ??
+        productColorsResult.error?.message ??
+        "Failed to resolve cart references";
+      console.warn("[cart] unresolved_reference_batch_error", { message });
+      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const userProductAssetsById = new Map<string, UserProductAssets>();
+    (userProductsResult.data ?? []).forEach((row) => {
+      if (!row?.id) return;
+      userProductAssetsById.set(row.id, {
+        user_product_id: row.id,
+        base_product_id: row.base_product_id,
+        mockups: parseMockups(row.mockups),
+        design_data: row.design_data,
+        designData: row.design_data,
+      });
+    });
+
+    const colorMap = new Map<string, ProductColorRow>();
+    (productColorsResult.data ?? []).forEach((row) => {
+      if (row?.id) colorMap.set(row.id, row);
+    });
+
+    const productColorIds = mergeProductIds((productColorsResult.data ?? []).map((row) => row.id));
+    const variantsResult = productColorIds.length
+      ? await supabase
+          .from("product_variants")
+          .select("id, size, stock, price, sku, name, gelato_product_uid, product_color_id")
+          .in("product_color_id", productColorIds)
+          .order("size", { ascending: true })
+      : { data: [] as ProductVariantRow[] | null, error: null };
+
+    if (variantsResult.error) {
+      console.warn("[cart] unresolved_reference_batch_error", { message: variantsResult.error.message });
+      return Response.json({ items: [] }, { headers: { "Cache-Control": "no-store" } });
+    }
+
+    const variantsById = new Map<string, CartVariantRelation>();
+    (variantsResult.data ?? []).forEach((row) => {
+      if (!row?.id) return;
+      variantsById.set(row.id, buildResolvedVariantRow(row, row.product_color_id ? colorMap.get(row.product_color_id) ?? null : null));
+    });
+
+    const variantsByProductId = new Map<string, CartVariantRelation[]>();
+    for (const row of variantsResult.data ?? []) {
+      if (!row?.product_color_id) continue;
+      const color = colorMap.get(row.product_color_id);
+      const productId = color?.product_id;
+      if (!productId) continue;
+      const variant = buildResolvedVariantRow(row, color);
+      const existing = variantsByProductId.get(productId) ?? [];
+      existing.push(variant);
+      variantsByProductId.set(productId, existing);
+    }
+
+    const items = cartItems.map((item) => {
+      const variantRelation = item.variant_id ? variantsById.get(item.variant_id) ?? null : null;
+      const userProductAssets = item.user_product_id
+        ? userProductAssetsById.get(item.user_product_id) ??
+          ({
+            user_product_id: null,
+            base_product_id: null,
+            mockups: null,
+            design_data: null,
+            designData: null,
+          } as UserProductAssets)
+        : ({
+            user_product_id: null,
+            base_product_id: null,
+            mockups: null,
+            design_data: null,
+            designData: null,
+          } as UserProductAssets);
+
+      if (item.variant_id && !variantRelation) {
+        console.warn("[cart] unresolved_reference", {
+          cartItemId: item.id,
+          productId: item.product_id,
+          variantId: item.variant_id,
           userProductId: item.user_product_id,
-          stock: variantRelation?.stock ?? selectedVariant?.stock ?? null,
-          selectedVariant,
-          availableVariants,
-          variants: availableVariants,
-        };
-      }),
-    );
+        });
+      }
+
+      const selectedVariant = variantRelation;
+      const previewFront = frontMockupUrl(userProductAssets.mockups);
+      const previewBack = backMockupUrl(userProductAssets.mockups);
+      const displayPrice = resolveDisplayPrice({
+        itemPrice: item.price,
+        variantPrice: variantRelation?.price ?? null,
+        userProductAssets,
+      });
+      const availableVariants = variantsByProductId.get(item.product_id) ?? [];
+      const gelatoProductUid = variantRelation?.gelato_product_uid ?? null;
+
+      return {
+        ...item,
+        ...userProductAssets,
+        price: displayPrice,
+        cached_price: item.price,
+        price_source: displayPrice === item.price ? "cart_items" : "product_variants",
+        image: previewFront ?? item.image ?? variantRelation?.image ?? null,
+        previewFront,
+        previewBack,
+        product_variants: variantRelation,
+        selected_color_visual: item.selected_color_visual ?? null,
+        product_uid: gelatoProductUid,
+        productUid: gelatoProductUid,
+        gelato_product_uid: gelatoProductUid,
+        gelatoProductUid: gelatoProductUid,
+        design_id: item.design_id,
+        designId: item.design_id,
+        userProductId: item.user_product_id,
+        stock: variantRelation?.stock ?? null,
+        selectedVariant,
+        availableVariants,
+        variants: availableVariants,
+      };
+    });
     console.info(
       "[cart-perf] item_resolution_done durationMs=" +
         (Date.now() - itemResolutionStartedAt) +
