@@ -17,18 +17,24 @@ export async function POST(request: Request) {
     const productId = typeof body?.productId === "string" ? body.productId.trim() : "";
     const catalogUid = typeof body?.catalogUid === "string" ? body.catalogUid.trim() : "";
     const referenceProductUid = typeof body?.referenceProductUid === "string" ? body.referenceProductUid.trim() : "";
-    const dryRun = body?.dryRun !== false;
+    const dryRun = typeof body?.dryRun === "boolean" ? body.dryRun : null;
     if (!productId) return NextResponse.json({ ok: false, error: "Missing productId." }, { status: 400 });
     if (!catalogUid) return NextResponse.json({ ok: false, error: "Missing catalogUid." }, { status: 400 });
     if (!referenceProductUid) return NextResponse.json({ ok: false, error: "Missing referenceProductUid." }, { status: 400 });
+    if (dryRun === null) return NextResponse.json({ ok: false, error: "Missing dryRun." }, { status: 400 });
 
     const result = await createGelatoColorSyncJob({ productId, catalogUid, referenceProductUid, dryRun });
+    if (!result.jobId) {
+      return NextResponse.json({ ok: false, error: "Failed to create color sync job." }, { status: 500 });
+    }
 
-    await tasks.trigger("gelato-color-sync", {
+    const triggerPayload = {
       productId,
       jobId: result.jobId,
       dryRun,
-    });
+    };
+
+    await tasks.trigger("gelato-color-sync", triggerPayload);
 
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
