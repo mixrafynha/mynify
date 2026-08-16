@@ -5,6 +5,7 @@ import { aptGet } from "@trigger.dev/build/extensions/core";
 export default defineConfig({
   project: "proj_hbgmuokflilebytpwhkm",
   dirs: ["./trigger"],
+  runtime: "node-22",
   maxDuration: 300,
   build: {
     external: ["chromium-bidi"],
