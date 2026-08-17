@@ -69,7 +69,6 @@ type CartItemRow = {
   currency: string | null;
   size: string | null;
   color: string | null;
-  selected_color_visual: Record<string, unknown> | null;
   sku: string | null;
 };
 
@@ -421,7 +420,6 @@ export async function POST(req: Request) {
           currency,
           size,
           color,
-          selected_color_visual,
           sku
         `)
         .eq("user_id", user.id)
@@ -430,7 +428,10 @@ export async function POST(req: Request) {
 
       if (cartError) {
         console.error("CHECKOUT_CART_ERROR", {
-          code: cartError.code,
+          code: cartError?.code ?? null,
+          message: cartError?.message ?? null,
+          details: cartError?.details ?? null,
+          hint: cartError?.hint ?? null,
         });
 
         return NextResponse.json(
