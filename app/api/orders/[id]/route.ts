@@ -49,7 +49,7 @@ export async function GET(
         product_price,
         product_currency,
         product_image,
-        order_items (
+        order_items!order_items_order_id_fkey (
           id,
           order_id,
           cart_item_id,
