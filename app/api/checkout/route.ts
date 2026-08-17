@@ -139,6 +139,35 @@ function resolveStripeImage(userProduct: UserProductRow | null, product: Product
   );
 }
 
+function resolveOrderItemMockupFront(userProduct: UserProductRow | null): string | null {
+  const mockups = userProduct?.mockups && typeof userProduct.mockups === "object"
+    ? userProduct.mockups as Record<string, unknown>
+    : null;
+
+  return (
+    asPublicImageUrl(mockups?.front) ??
+    asPublicImageUrl(mockups?.front_url) ??
+    asPublicImageUrl(mockups?.checkout_thumbnail_front_url) ??
+    asPublicImageUrl(mockups?.checkout_thumbnail_url) ??
+    asPublicImageUrl(userProduct?.image) ??
+    null
+  );
+}
+
+function resolveOrderItemMockupBack(userProduct: UserProductRow | null): string | null {
+  const mockups = userProduct?.mockups && typeof userProduct.mockups === "object"
+    ? userProduct.mockups as Record<string, unknown>
+    : null;
+
+  return (
+    asPublicImageUrl(mockups?.back) ??
+    asPublicImageUrl(mockups?.back_url) ??
+    asPublicImageUrl(mockups?.checkout_thumbnail_back_url) ??
+    asPublicImageUrl(mockups?.checkout_thumbnail_back) ??
+    null
+  );
+}
+
 function isUuid(value: unknown): value is string {
   return (
     typeof value === "string" &&
@@ -724,6 +753,8 @@ export async function POST(req: Request) {
         sku: string | null;
         gelato_product_uid: string | null;
         image: string | null;
+        mockup_front: string | null;
+        mockup_back: string | null;
       }> = [];
 
       // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
@@ -893,6 +924,8 @@ export async function POST(req: Request) {
           .join(" · ");
 
         const stripeImage = resolveStripeImage(userProduct, product);
+        const mockupFront = resolveOrderItemMockupFront(userProduct);
+        const mockupBack = resolveOrderItemMockupBack(userProduct);
 
         console.info("[checkout:final:stripe-image]", {
           cartItemId: cartItem.id,
@@ -940,6 +973,8 @@ export async function POST(req: Request) {
           gelato_product_uid:
             variant?.gelato_product_uid ?? null,
           image: stripeImage,
+          mockup_front: mockupFront,
+          mockup_back: mockupBack,
         });
       }
 
@@ -1200,6 +1235,8 @@ export async function POST(req: Request) {
         unit_price: item.unit_amount / 100,
         currency: "EUR",
         image: item.image,
+        mockup_front: item.mockup_front,
+        mockup_back: item.mockup_back,
         gelato_product_uid: item.gelato_product_uid,
       }));
 

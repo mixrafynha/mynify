@@ -165,6 +165,16 @@ function resolveItemPreview(item: OrderItem) {
   );
 }
 
+function resolveItemFrontImage(item: OrderItem | null) {
+  if (!item) return null;
+  return item.mockup_front || item.image || null;
+}
+
+function resolveItemBackImage(item: OrderItem | null) {
+  if (!item) return null;
+  return item.mockup_back || null;
+}
+
 function resolveItemMockupHtml(item: OrderItem, side: "front" | "back") {
   const printFiles =
     item.print_files && typeof item.print_files === "object"
@@ -251,21 +261,25 @@ export default async function OrderPage({
   }
 
   const firstItem = order.items[0] ?? null;
-  const imageItem =
-    order.items.find((item) => item?.image || item?.mockup_front || item?.mockup_back) ??
+  const frontItem =
+    order.items.find((item) => item?.mockup_front || item?.image) ??
     firstItem;
-  const resolvedImage =
-    imageItem?.image ??
-    imageItem?.mockup_front ??
-    imageItem?.mockup_back ??
+  const backItem =
+    order.items.find((item) => item?.mockup_back) ??
+    null;
+  const resolvedFrontImage =
+    resolveItemFrontImage(frontItem ?? firstItem ?? null) ??
     order.product.image ??
     null;
+  const resolvedBackImage =
+    resolveItemBackImage(backItem);
 
   console.log("[orders-ui:image-debug]", {
     firstItemImage: firstItem?.image ?? null,
-    imageItemImage: imageItem?.image ?? null,
+    imageItemImage: frontItem?.image ?? null,
     productImage: order?.product?.image ?? null,
-    resolvedImage,
+    resolvedFrontImage,
+    resolvedBackImage,
   });
 
   return (
@@ -295,13 +309,13 @@ export default async function OrderPage({
           <div className="grid gap-6 lg:grid-cols-2">
             {renderMockupPanel({
               title: "Front mockup",
-              image: resolvedImage,
-              html: imageItem ? resolveItemMockupHtml(imageItem, "front") : null,
+              image: resolvedFrontImage,
+              html: frontItem ? resolveItemMockupHtml(frontItem, "front") : null,
             })}
             {renderMockupPanel({
               title: "Back mockup",
-              image: resolvedImage,
-              html: imageItem ? resolveItemMockupHtml(imageItem, "back") : null,
+              image: resolvedBackImage,
+              html: backItem ? resolveItemMockupHtml(backItem, "back") : null,
             })}
           </div>
 

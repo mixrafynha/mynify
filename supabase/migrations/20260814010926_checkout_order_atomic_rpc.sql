@@ -128,6 +128,8 @@ begin
     unit_price,
     currency,
     image,
+    mockup_front,
+    mockup_back,
     gelato_product_uid
   )
   select
@@ -145,6 +147,8 @@ begin
     nullif(item->>'unit_price', '')::numeric,
     coalesce(item->>'currency', 'EUR'),
     nullif(item->>'image', ''),
+    nullif(item->>'mockup_front', ''),
+    nullif(item->>'mockup_back', ''),
     nullif(item->>'gelato_product_uid', '')
   from jsonb_array_elements(p_order_items) as item;
 
