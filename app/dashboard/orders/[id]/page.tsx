@@ -90,6 +90,23 @@ async function getOrder(id: string): Promise<Order | null> {
     return null;
   }
 
+  console.log("[orders-ui:raw-order-items]", {
+    rawKeys: Object.keys(data ?? {}),
+    orderItemsCount: Array.isArray(data?.order_items)
+      ? data.order_items.length
+      : null,
+    itemsCount: Array.isArray((data as any)?.items)
+      ? (data as any).items.length
+      : null,
+    orderItemsFirst:
+      Array.isArray(data?.order_items) && data.order_items[0]
+        ? {
+            id: data.order_items[0].id,
+            image: data.order_items[0].image ?? null,
+          }
+        : null,
+  });
+
   const items = Array.isArray(data.order_items) ? data.order_items : [];
 
   return {

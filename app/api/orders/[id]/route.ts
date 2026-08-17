@@ -80,6 +80,25 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    console.log("[orders-api:raw-order-items]", {
+      requestedOrderId: orderId,
+      rawKeys: Object.keys(data ?? {}),
+      orderItemsCount: Array.isArray(data?.order_items)
+        ? data.order_items.length
+        : null,
+      itemsCount: Array.isArray((data as any)?.items)
+        ? (data as any).items.length
+        : null,
+      orderItemsFirst:
+        Array.isArray(data?.order_items) && data.order_items[0]
+          ? {
+              id: data.order_items[0].id,
+              order_id: data.order_items[0].order_id,
+              image: data.order_items[0].image ?? null,
+            }
+          : null,
+    });
+
     const items = Array.isArray(data.order_items) ? data.order_items : [];
     const firstItem = items[0] ?? null;
     const imageItem =
