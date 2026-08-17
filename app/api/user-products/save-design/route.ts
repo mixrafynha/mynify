@@ -419,7 +419,7 @@ export async function POST(req: Request) {
 
     const shouldAddToCart = body.addToCart !== false;
     let cartItem = null;
-    let cartMode: "extended" | "basic" | null = null;
+    let cartMode: "basic" | "extended" | "compatible" | null = null;
 
     if (shouldAddToCart) {
       saveContext.step = "cart";
