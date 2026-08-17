@@ -285,6 +285,7 @@ export async function POST(req: Request) {
   const timings = {
     authMs: 0,
     cartLoadMs: 0,
+    productsMs: 0,
     userProductsMs: 0,
     variantsMs: 0,
     availabilityMs: 0,
@@ -486,6 +487,11 @@ export async function POST(req: Request) {
         .from("products")
         .select("id, title, price, currency, image, images")
         .in("id", productIds);
+      let productsQueryMs = 0;
+      const trackedProductsPromise = productsPromise.then((result) => {
+        productsQueryMs = elapsedSince(productsStartedAt);
+        return result;
+      });
 
       const variantsStartedAt = Date.now();
       const variantsPromise = variantIds.length > 0
@@ -503,6 +509,11 @@ export async function POST(req: Request) {
             `)
             .in("id", variantIds)
         : Promise.resolve({ data: [] as VariantRow[], error: null });
+      let variantsQueryMs = 0;
+      const trackedVariantsPromise = variantsPromise.then((result) => {
+        variantsQueryMs = elapsedSince(variantsStartedAt);
+        return result;
+      });
 
       const userProductIds = [
         ...new Set(
@@ -518,23 +529,42 @@ export async function POST(req: Request) {
             .select("id, price, markup, final_price, currency, image, mockups, design_data")
             .in("id", userProductIds)
         : Promise.resolve({ data: [] as UserProductRow[], error: null });
+      let userProductsQueryMs = 0;
+      const trackedUserProductsPromise = userProductsPromise.then((result) => {
+        userProductsQueryMs = elapsedSince(userProductsStartedAt);
+        return result;
+      });
 
       const [
         { data: productRows, error: productsError },
         { data: variantRows, error: variantsError },
         { data: userProductRows, error: userProductsError },
-      ] = await Promise.all([productsPromise, variantsPromise, userProductsPromise]);
+      ] = await Promise.all([trackedProductsPromise, trackedVariantsPromise, trackedUserProductsPromise]);
       const parallelLoadMs = Math.max(
-        elapsedSince(productsStartedAt),
-        elapsedSince(variantsStartedAt),
-        elapsedSince(userProductsStartedAt),
+        productsQueryMs,
+        variantsQueryMs,
+        userProductsQueryMs,
       );
-      timings.variantsMs += parallelLoadMs;
-      timings.userProductsMs += parallelLoadMs;
+      timings.productsMs += productsQueryMs;
+      timings.variantsMs += variantsQueryMs;
+      timings.userProductsMs += userProductsQueryMs;
       logCheckoutPerf("catalog_batch_done", productsStartedAt, {
         productCount: productIds.length,
         variantCount: variantIds.length,
         userProductCount: userProductIds.length,
+        productsQueryMs,
+        variantsQueryMs,
+        userProductsQueryMs,
+        parallelLoadMs,
+      });
+
+      const userProductsPayloadBytes = Buffer.byteLength(
+        JSON.stringify(userProductRows ?? []),
+        "utf8",
+      );
+      console.info("[checkout:final:user-products-payload]", {
+        userProductCount: userProductIds.length,
+        userProductsPayloadBytes,
       });
 
       if (productsError) {
@@ -1322,6 +1352,7 @@ export async function POST(req: Request) {
         totalMs: elapsedSince(requestStartedAt),
         authMs: timings.authMs,
         cartLoadMs: timings.cartLoadMs,
+        productsMs: timings.productsMs,
         userProductsMs: timings.userProductsMs,
         variantsMs: timings.variantsMs,
         availabilityMs: timings.availabilityMs,
