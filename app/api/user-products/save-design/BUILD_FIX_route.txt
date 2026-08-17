@@ -1,0 +1,7 @@
+In app/api/user-products/save-design/route.ts change:
+
+let cartMode: "basic" | "extended" | null = null;
+
+to:
+
+let cartMode: "basic" | "extended" | "compatible" | null = null;
