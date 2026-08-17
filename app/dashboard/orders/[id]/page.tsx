@@ -136,11 +136,11 @@ function resolveItemPreview(item: OrderItem) {
       : {};
 
   return (
-    item.image ||
-    item.mockup_front ||
-    item.mockup_back ||
     (typeof selectedVariant.front === "string" ? selectedVariant.front : null) ||
     (typeof selectedVariant.back === "string" ? selectedVariant.back : null) ||
+    item.mockup_front ||
+    item.mockup_back ||
+    item.image ||
     (typeof printFiles.front === "string" ? printFiles.front : null) ||
     (typeof printFiles.back === "string" ? printFiles.back : null) ||
     null
@@ -262,9 +262,8 @@ export default async function OrderPage({
             {renderMockupPanel({
               title: "Front mockup",
               image:
-                firstItem?.image ||
                 firstItem?.mockup_front ||
-                firstItem?.mockup_back ||
+                firstItem?.image ||
                 order.product.image ||
                 null,
               html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
@@ -272,9 +271,9 @@ export default async function OrderPage({
             {renderMockupPanel({
               title: "Back mockup",
               image:
-                firstItem?.image ||
                 firstItem?.mockup_back ||
                 firstItem?.mockup_front ||
+                firstItem?.image ||
                 order.product.image ||
                 null,
               html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
