@@ -1,7 +1,7 @@
 import Sidebar from "@/app/components/sidebar";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { ImageIcon } from "lucide-react";
+import { ArrowRight, Headphones, ImageIcon, Truck } from "lucide-react";
 
 type OrderItem = {
   id: string;
@@ -34,6 +34,7 @@ type Order = {
   };
   items: OrderItem[];
   status: string;
+  gelato_status?: string | null;
   stripe_session_id: string;
   created_at: string;
 };
@@ -52,6 +53,7 @@ async function getOrder(id: string): Promise<Order | null> {
     .select(`
       id,
       status,
+      gelato_status,
       created_at,
       stripe_session_id,
       product_title,
@@ -139,6 +141,7 @@ async function getOrder(id: string): Promise<Order | null> {
       })),
     status: data.status,
     stripe_session_id: data.stripe_session_id,
+    gelato_status: data.gelato_status ?? null,
     created_at: data.created_at,
   };
 }
@@ -274,6 +277,8 @@ export default async function OrderPage({
     null;
   const resolvedBackImage =
     resolveItemBackImage(backItem);
+  const supportHref = `/support?orderId=${encodeURIComponent(order.id)}`;
+  const trackHref = "#tracking";
 
   console.log("[orders-ui:image-debug]", {
     firstItemImage: firstItem?.image ?? null,
@@ -338,26 +343,44 @@ export default async function OrderPage({
             </span>
           </div>
 
-          {order.status !== "paid" && (
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <Link
-                href={`/api/stripe/retry/${order.id}`}
-                className="inline-flex flex-1 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-[0_14px_35px_rgba(168,85,247,0.22)] transition hover:brightness-110 active:scale-[0.99]"
-              >
-                Complete payment
-              </Link>
-
-              <form action="/api/orders/delete" method="POST" className="flex-1">
-                <input type="hidden" name="id" value={order.id} />
-                <button
-                  type="submit"
-                  className="w-full rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-black text-white/65 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-200"
-                >
-                  Cancel order
-                </button>
-              </form>
+          <div id="tracking" className="mt-6 rounded-[30px] border border-white/[0.06] bg-white/[0.035] p-4 backdrop-blur-xl sm:p-5">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-400">
+                  Tracking
+                </p>
+                <h2 className="mt-1 text-lg font-black tracking-[-0.04em] text-white">
+                  {order.gelato_status ? `Gelato status: ${order.gelato_status}` : "Tracking pending"}
+                </h2>
+                <p className="mt-1 text-sm text-white/45">
+                  We keep the order progress and support links in one place.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-white/45">
+                <Truck size={14} className="text-violet-300" />
+                {order.status}
+              </div>
             </div>
-          )}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Link
+              href={trackHref}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-[0_14px_35px_rgba(168,85,247,0.22)] transition hover:brightness-110 active:scale-[0.99]"
+            >
+              Track order
+              <ArrowRight size={16} />
+            </Link>
+
+            <Link
+              href={supportHref}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-black text-white/75 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white"
+            >
+              Need help with this order?
+              <Headphones size={16} />
+            </Link>
+          </div>
+
           <p className="mt-4 text-xs text-white/35">
             Only the mockups are shown here. Item and payment metadata stay hidden to keep the page focused.
           </p>
