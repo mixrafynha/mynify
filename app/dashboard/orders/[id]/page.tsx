@@ -233,6 +233,18 @@ export default async function OrderPage({
   }
 
   const firstItem = order.items[0] ?? null;
+  const resolvedImage =
+    firstItem?.image ||
+    firstItem?.mockup_front ||
+    firstItem?.mockup_back ||
+    order.product.image ||
+    null;
+
+  console.log("[orders-ui:image-debug]", {
+    firstItemImage: firstItem?.image ?? null,
+    productImage: order?.product?.image ?? null,
+    resolvedImage,
+  });
 
   return (
     <div className="flex min-h-screen bg-[#f6f6f2]">
@@ -261,21 +273,12 @@ export default async function OrderPage({
           <div className="grid gap-5 lg:grid-cols-2">
             {renderMockupPanel({
               title: "Front mockup",
-              image:
-                firstItem?.mockup_front ||
-                firstItem?.image ||
-                order.product.image ||
-                null,
+              image: resolvedImage,
               html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
             })}
             {renderMockupPanel({
               title: "Back mockup",
-              image:
-                firstItem?.mockup_back ||
-                firstItem?.mockup_front ||
-                firstItem?.image ||
-                order.product.image ||
-                null,
+              image: resolvedImage,
               html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
             })}
           </div>
