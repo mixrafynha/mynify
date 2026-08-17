@@ -1,7 +1,7 @@
 import Sidebar from "@/app/components/sidebar";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { FileImage, ImageIcon, Package } from "lucide-react";
+import { FileImage, ImageIcon, Package, Truck, CreditCard, ReceiptText } from "lucide-react";
 
 type OrderItem = {
   id: string;
@@ -16,6 +16,12 @@ type OrderItem = {
   mockup_front: string | null;
   mockup_back: string | null;
   print_files: Record<string, unknown> | null;
+  selected_variant?: Record<string, unknown> | null;
+  product_id?: string | null;
+  variant_id?: string | null;
+  user_product_id?: string | null;
+  gelato_product_uid?: string | null;
+  created_at?: string | null;
 };
 
 type Order = {
@@ -54,6 +60,10 @@ async function getOrder(id: string): Promise<Order | null> {
       product_image,
       order_items (
         id,
+        cart_item_id,
+        user_product_id,
+        product_id,
+        variant_id,
         title,
         quantity,
         size,
@@ -64,7 +74,10 @@ async function getOrder(id: string): Promise<Order | null> {
         image,
         mockup_front,
         mockup_back,
-        print_files
+        print_files,
+        selected_variant,
+        gelato_product_uid,
+        created_at
       )
     `)
     .eq("id", id)
@@ -99,6 +112,12 @@ async function getOrder(id: string): Promise<Order | null> {
       mockup_front: item.mockup_front ?? null,
       mockup_back: item.mockup_back ?? null,
       print_files: item.print_files ?? null,
+      selected_variant: item.selected_variant ?? null,
+      product_id: item.product_id ?? null,
+      variant_id: item.variant_id ?? null,
+      user_product_id: item.user_product_id ?? null,
+      gelato_product_uid: item.gelato_product_uid ?? null,
+      created_at: item.created_at ?? null,
     })),
     status: data.status,
     stripe_session_id: data.stripe_session_id,
@@ -111,14 +130,90 @@ function resolveItemPreview(item: OrderItem) {
     item.print_files && typeof item.print_files === "object"
       ? (item.print_files as Record<string, unknown>)
       : {};
+  const selectedVariant =
+    item.selected_variant && typeof item.selected_variant === "object"
+      ? item.selected_variant
+      : {};
 
   return (
+    (typeof selectedVariant.front === "string" ? selectedVariant.front : null) ||
+    (typeof selectedVariant.back === "string" ? selectedVariant.back : null) ||
     item.mockup_front ||
     item.image ||
     (typeof printFiles.front === "string" ? printFiles.front : null) ||
     (typeof printFiles.back === "string" ? printFiles.back : null) ||
     item.mockup_back ||
     null
+  );
+}
+
+function resolveItemMockupHtml(item: OrderItem, side: "front" | "back") {
+  const printFiles =
+    item.print_files && typeof item.print_files === "object"
+      ? (item.print_files as Record<string, unknown>)
+      : {};
+  const selectedVariant =
+    item.selected_variant && typeof item.selected_variant === "object"
+      ? (item.selected_variant as Record<string, unknown>)
+      : {};
+
+  const candidates = [
+    side === "front" ? printFiles.front_html : printFiles.back_html,
+    side === "front" ? printFiles.mockup_html_front : printFiles.mockup_html_back,
+    side === "front" ? printFiles.html_front : printFiles.html_back,
+    side === "front" ? selectedVariant.front_html : selectedVariant.back_html,
+    side === "front" ? selectedVariant.mockup_html_front : selectedVariant.mockup_html_back,
+  ];
+
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  return null;
+}
+
+function renderMockupPanel({
+  title,
+  image,
+  html,
+}: {
+  title: string;
+  image: string | null;
+  html: string | null;
+}) {
+  const fallbackHtml = image
+    ? `
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f4f4f5;">
+        <img src="${image}" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" />
+      </div>
+    `
+    : `
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#f8fafc,#e5e7eb);color:#94a3b8;font:600 14px/1.2 Arial,sans-serif;">
+        No mockup available
+      </div>
+    `;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+      <div className="border-b border-gray-100 px-4 py-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+          {title}
+        </p>
+      </div>
+      <div className="aspect-[4/5] bg-white">
+        {html ? (
+          <div
+            className="h-full w-full"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        ) : (
+          <div
+            className="h-full w-full"
+            dangerouslySetInnerHTML={{ __html: fallbackHtml }}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -136,6 +231,8 @@ export default async function OrderPage({
       </div>
     );
   }
+
+  const firstItem = order.items[0] ?? null;
 
   return (
     <div className="flex min-h-screen bg-gradient-to-b from-[#f6f6f4] to-[#f1f1ec]">
@@ -202,9 +299,44 @@ export default async function OrderPage({
                 {order.product.currency} {order.product.price}
               </p>
 
-              <div className="space-y-1 border-t pt-3 text-xs text-gray-400">
-                <p>Created: {new Date(order.created_at).toLocaleString()}</p>
-                <p className="break-all">Stripe session: {order.stripe_session_id}</p>
+              <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-gray-600">
+                    <ReceiptText size={15} />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Order</p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">#{order.id}</p>
+                  <p className="mt-1 text-xs text-gray-500">Created {new Date(order.created_at).toLocaleString()}</p>
+                </div>
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-gray-600">
+                    <CreditCard size={15} />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Payment</p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">Stripe session</p>
+                  <p className="mt-1 break-all text-xs text-gray-500">{order.stripe_session_id}</p>
+                </div>
+                <div className="rounded-2xl bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-gray-600">
+                    <Truck size={15} />
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Shipping</p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">Status {order.status}</p>
+                  <p className="mt-1 text-xs text-gray-500">Details available in the item and API payload.</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 border-t pt-4 lg:grid-cols-2">
+                {renderMockupPanel({
+                  title: "Front mockup HTML",
+                  image: order.product.image ?? null,
+                  html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
+                })}
+                {renderMockupPanel({
+                  title: "Back mockup HTML",
+                  image: firstItem ? resolveItemPreview(firstItem) : null,
+                  html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
+                })}
               </div>
 
               {order.items.length > 0 && (
@@ -265,6 +397,26 @@ export default async function OrderPage({
                               </div>
 
                               <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
+                                {item.product_id && (
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
+                                    Product {item.product_id.slice(0, 8)}
+                                  </span>
+                                )}
+                                {item.variant_id && (
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
+                                    Variant {item.variant_id.slice(0, 8)}
+                                  </span>
+                                )}
+                                {item.user_product_id && (
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
+                                    User product {item.user_product_id.slice(0, 8)}
+                                  </span>
+                                )}
+                                {item.gelato_product_uid && (
+                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
+                                    Gelato {item.gelato_product_uid}
+                                  </span>
+                                )}
                                 {item.sku && (
                                   <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
                                     SKU {item.sku}
@@ -287,6 +439,12 @@ export default async function OrderPage({
                                   </span>
                                 )}
                               </div>
+
+                              {item.created_at && (
+                                <p className="text-[11px] text-gray-400">
+                                  Item created {new Date(item.created_at).toLocaleString()}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </div>
