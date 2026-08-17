@@ -201,7 +201,7 @@ function renderMockupPanel({
           {title}
         </p>
       </div>
-      <div className="aspect-[4/5] bg-[#f7f7f4]">
+      <div className="aspect-[5/6] bg-[#f7f7f4]">
         {html ? (
           <div
             className="h-full w-full"
@@ -266,7 +266,7 @@ export default async function OrderPage({
             </Link>
           </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-6 lg:grid-cols-2">
             {renderMockupPanel({
               title: "Front mockup",
               image: resolvedImage,

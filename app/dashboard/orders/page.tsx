@@ -163,7 +163,7 @@ export default function OrdersPage() {
         </header>
 
         {loading ? (
-          <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          <section className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 8 }).map(
               (_, i) => (
                 <div
@@ -202,11 +202,11 @@ export default function OrdersPage() {
                   href={`/dashboard/orders/${o.id}`}
                   className="group"
                 >
-                  <article className="relative overflow-hidden rounded-[30px] border border-white/[0.05] bg-white/[0.045] p-4 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-violet-500/30 sm:p-5">
+                  <article className="relative overflow-hidden rounded-[32px] border border-white/[0.05] bg-white/[0.045] p-5 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:border-violet-500/30 sm:p-6">
                     <div className="mb-4 flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-500/10 text-violet-400">
-                          <ShoppingBag size={20} />
+                        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-500/10 text-violet-400">
+                          <ShoppingBag size={22} />
                         </div>
 
                         <div>
@@ -239,7 +239,7 @@ export default function OrdersPage() {
                       </span>
                     </div>
 
-                    <h3 className="line-clamp-2 text-base font-black leading-5 tracking-[-0.035em] text-white transition group-hover:text-violet-300">
+                    <h3 className="line-clamp-2 text-[1.05rem] font-black leading-6 tracking-[-0.04em] text-white transition group-hover:text-violet-300">
                       {o.product.title}
                     </h3>
 
@@ -249,7 +249,7 @@ export default function OrdersPage() {
                           Total
                         </p>
 
-                        <p className="mt-1 text-xl font-black tracking-[-0.04em] text-violet-400">
+                        <p className="mt-1 text-[1.35rem] font-black tracking-[-0.05em] text-violet-400">
                           {o.product.currency}{" "}
                           {o.product.price}
                         </p>
