@@ -185,20 +185,20 @@ export default function CatalogPage() {
                 <div className="mb-5 flex items-center justify-between gap-4">
                   <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">{safeText(label)}</h2>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
                   {grouped[key].map((product) => (
-                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-none border border-white/8 bg-white/[0.028] p-2.5 shadow-[0_0_18px_rgba(168,85,247,0.04)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/35 sm:p-3">
-                      <div className="relative mb-3 aspect-square overflow-hidden rounded-none bg-black/30">
+                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-none border border-white/8 bg-white/[0.028] p-2.5 shadow-[0_0_18px_rgba(168,85,247,0.04)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/35 sm:p-3 lg:p-4">
+                      <div className="relative mb-3 aspect-square overflow-hidden rounded-none bg-black/30 lg:mb-4">
                         <Image src={imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw" className="object-contain transition duration-500 group-hover:scale-105" />
                       </div>
-                      <h3 className="truncate text-[12px] font-black leading-tight text-white sm:text-base">{safeText(product.title)}</h3>
+                      <h3 className="truncate text-[12px] font-black leading-tight text-white sm:text-base lg:text-[1.05rem]">{safeText(product.title)}</h3>
                       <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-bold text-white/70 sm:text-sm">{formatPrice(product.price, product.currency)}</p>
-                        <span className="rounded-none border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100">
+                        <p className="text-[11px] font-bold text-white/70 sm:text-sm lg:text-[0.95rem]">{formatPrice(product.price, product.currency)}</p>
+                        <span className="rounded-none border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100 lg:px-2.5 lg:py-1 lg:text-[10px]">
                           Unisex
                         </span>
                       </div>
-                      <div className="mt-3 flex h-8 items-center justify-center rounded-none bg-gradient-to-r from-purple-600 to-fuchsia-500 text-[10px] font-black uppercase tracking-[0.12em] text-white transition group-hover:scale-[1.02] sm:h-9 sm:text-[11px]">
+                      <div className="mt-3 flex h-8 items-center justify-center rounded-none bg-gradient-to-r from-purple-600 to-fuchsia-500 text-[10px] font-black uppercase tracking-[0.12em] text-white transition group-hover:scale-[1.02] sm:h-9 sm:text-[11px] lg:mt-4 lg:h-10 lg:text-[12px]">
                         Design now
                       </div>
                     </Link>
