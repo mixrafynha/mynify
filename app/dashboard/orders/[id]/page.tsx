@@ -60,6 +60,7 @@ async function getOrder(id: string): Promise<Order | null> {
       product_image,
       order_items (
         id,
+        order_id,
         cart_item_id,
         user_product_id,
         product_id,
@@ -99,11 +100,11 @@ async function getOrder(id: string): Promise<Order | null> {
       currency: data.product_currency ?? "€",
       image: data.product_image ?? null,
     },
-    items: items.map((item: any) => ({
-      id: String(item.id),
-      title: String(item.title ?? "Product"),
-      quantity: Number(item.quantity ?? 1),
-      size: item.size ?? null,
+      items: items.map((item: any) => ({
+        id: String(item.id),
+        title: String(item.title ?? "Product"),
+        quantity: Number(item.quantity ?? 1),
+        size: item.size ?? null,
       color: item.color ?? null,
       sku: item.sku ?? null,
       unit_price: item.unit_price != null ? Number(item.unit_price) : null,
@@ -115,10 +116,10 @@ async function getOrder(id: string): Promise<Order | null> {
       selected_variant: item.selected_variant ?? null,
       product_id: item.product_id ?? null,
       variant_id: item.variant_id ?? null,
-      user_product_id: item.user_product_id ?? null,
-      gelato_product_uid: item.gelato_product_uid ?? null,
-      created_at: item.created_at ?? null,
-    })),
+        user_product_id: item.user_product_id ?? null,
+        gelato_product_uid: item.gelato_product_uid ?? null,
+        created_at: item.created_at ?? null,
+      })),
     status: data.status,
     stripe_session_id: data.stripe_session_id,
     created_at: data.created_at,
@@ -233,12 +234,7 @@ export default async function OrderPage({
   }
 
   const firstItem = order.items[0] ?? null;
-  const resolvedImage =
-    firstItem?.image ||
-    firstItem?.mockup_front ||
-    firstItem?.mockup_back ||
-    order.product.image ||
-    null;
+  const resolvedImage = firstItem?.image ?? order.product.image ?? null;
 
   console.log("[orders-ui:image-debug]", {
     firstItemImage: firstItem?.image ?? null,

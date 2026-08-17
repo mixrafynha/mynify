@@ -51,6 +51,7 @@ export async function GET(
         product_image,
         order_items (
           id,
+          order_id,
           cart_item_id,
           user_product_id,
           product_id,
@@ -81,12 +82,6 @@ export async function GET(
 
     const items = Array.isArray(data.order_items) ? data.order_items : [];
     const firstItem = items[0] ?? null;
-    console.log("[orders:image-debug]", {
-      orderId: data?.id ?? null,
-      firstItemId: firstItem?.id ?? null,
-      firstItemImage: firstItem?.image ?? null,
-      productImage: data?.product_image ?? null,
-    });
 
     return NextResponse.json({
       data: {
