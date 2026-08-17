@@ -1,7 +1,7 @@
 import Sidebar from "@/app/components/sidebar";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { FileImage, ImageIcon, Package, Truck, CreditCard, ReceiptText } from "lucide-react";
+import { ImageIcon } from "lucide-react";
 
 type OrderItem = {
   id: string;
@@ -139,10 +139,10 @@ function resolveItemPreview(item: OrderItem) {
     (typeof selectedVariant.front === "string" ? selectedVariant.front : null) ||
     (typeof selectedVariant.back === "string" ? selectedVariant.back : null) ||
     item.mockup_front ||
+    item.mockup_back ||
     item.image ||
     (typeof printFiles.front === "string" ? printFiles.front : null) ||
     (typeof printFiles.back === "string" ? printFiles.back : null) ||
-    item.mockup_back ||
     null
   );
 }
@@ -180,7 +180,7 @@ function renderMockupPanel({
   title: string;
   image: string | null;
   html: string | null;
-}) {
+  }) {
   const fallbackHtml = image
     ? `
       <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f4f4f5;">
@@ -194,13 +194,13 @@ function renderMockupPanel({
     `;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-      <div className="border-b border-gray-100 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
+    <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+      <div className="border-b border-black/5 px-5 py-4 sm:px-6">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">
           {title}
         </p>
       </div>
-      <div className="aspect-[4/5] bg-white">
+      <div className="aspect-[4/5] bg-[#f7f7f4]">
         {html ? (
           <div
             className="h-full w-full"
@@ -235,250 +235,89 @@ export default async function OrderPage({
   const firstItem = order.items[0] ?? null;
 
   return (
-    <div className="flex min-h-screen bg-gradient-to-b from-[#f6f6f4] to-[#f1f1ec]">
+    <div className="flex min-h-screen bg-[#f6f6f2]">
       <Sidebar />
 
       <div className="flex-1 md:pl-[280px]">
-        <div className="mx-auto max-w-4xl space-y-8 px-4 py-10 sm:px-6 lg:px-10">
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
-              Order Details
-            </h1>
+        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-[0.24em] text-gray-500">
+                Order details
+              </p>
+              <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-gray-950 sm:text-3xl">
+                #{order.id.slice(0, 8)}
+              </h1>
+            </div>
 
             <Link
               href="/dashboard/orders"
-              className="text-sm text-gray-500 transition hover:text-black"
+              className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-black/20 hover:text-black"
             >
               ← Back
             </Link>
           </div>
 
-          <div className="overflow-hidden rounded-3xl border border-gray-100 bg-white/80 shadow-lg backdrop-blur-xl">
-            <div className="relative aspect-[16/10] w-full overflow-hidden bg-gray-100 sm:aspect-[16/9]">
-              {order.product.image ? (
-                <img
-                  src={order.product.image}
-                  alt={order.product.title}
-                  className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
-                  loading="lazy"
-                  onError={(event) => {
-                    (event.target as HTMLImageElement).src = "/placeholder.png";
-                  }}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-                  No image available
-                </div>
-              )}
-
-              <div className="absolute inset-0 bg-gradient-to-t from-black/10 via-transparent to-transparent" />
-            </div>
-
-            <div className="space-y-5 p-5 sm:p-6">
-              <div className="flex items-center justify-between">
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
-                    order.status === "paid"
-                      ? "bg-green-100 text-green-700"
-                      : "bg-yellow-100 text-yellow-700"
-                  }`}
-                >
-                  {order.status}
-                </span>
-
-                <span className="font-mono text-xs text-gray-400">
-                  #{order.id.slice(0, 8)}
-                </span>
-              </div>
-
-              <h2 className="text-lg font-semibold leading-snug sm:text-xl">
-                {order.product.title}
-              </h2>
-
-              <p className="text-base text-gray-600 sm:text-lg">
-                {order.product.currency} {order.product.price}
-              </p>
-
-              <div className="grid gap-3 border-t pt-4 sm:grid-cols-3">
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-gray-600">
-                    <ReceiptText size={15} />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Order</p>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">#{order.id}</p>
-                  <p className="mt-1 text-xs text-gray-500">Created {new Date(order.created_at).toLocaleString()}</p>
-                </div>
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-gray-600">
-                    <CreditCard size={15} />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Payment</p>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">Stripe session</p>
-                  <p className="mt-1 break-all text-xs text-gray-500">{order.stripe_session_id}</p>
-                </div>
-                <div className="rounded-2xl bg-gray-50 p-4">
-                  <div className="mb-2 flex items-center gap-2 text-gray-600">
-                    <Truck size={15} />
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em]">Shipping</p>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">Status {order.status}</p>
-                  <p className="mt-1 text-xs text-gray-500">Details available in the item and API payload.</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 border-t pt-4 lg:grid-cols-2">
-                {renderMockupPanel({
-                  title: "Front mockup HTML",
-                  image: order.product.image ?? null,
-                  html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
-                })}
-                {renderMockupPanel({
-                  title: "Back mockup HTML",
-                  image: firstItem ? resolveItemPreview(firstItem) : null,
-                  html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
-                })}
-              </div>
-
-              {order.items.length > 0 && (
-                <div className="space-y-3 border-t pt-4">
-                  <div className="flex items-center gap-2">
-                    <Package size={16} className="text-violet-500" />
-                    <p className="text-sm font-semibold text-gray-700">
-                      Order items
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3">
-                    {order.items.map((item) => {
-                      const preview = resolveItemPreview(item);
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="overflow-hidden rounded-2xl border border-gray-100 bg-white"
-                        >
-                          <div className="flex gap-4 p-4">
-                            <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-gray-100">
-                              {preview ? (
-                                <img
-                                  src={preview}
-                                  alt={item.title}
-                                  className="h-full w-full object-cover"
-                                  loading="lazy"
-                                  onError={(event) => {
-                                    (event.target as HTMLImageElement).src = "/placeholder.png";
-                                  }}
-                                />
-                              ) : (
-                                <div className="flex h-full w-full items-center justify-center text-gray-400">
-                                  <ImageIcon size={20} />
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                  <p className="truncate text-base font-semibold text-gray-900">
-                                    {item.title}
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-gray-500">
-                                    {item.quantity}x {item.size ?? "One size"}
-                                    {item.color ? ` • ${item.color}` : ""}
-                                  </p>
-                                </div>
-
-                                <div className="text-right">
-                                  <p className="text-sm font-semibold text-gray-900">
-                                    {item.currency ?? order.product.currency}{" "}
-                                    {item.unit_price ?? order.product.price}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex flex-wrap gap-2 text-[11px] text-gray-500">
-                                {item.product_id && (
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
-                                    Product {item.product_id.slice(0, 8)}
-                                  </span>
-                                )}
-                                {item.variant_id && (
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
-                                    Variant {item.variant_id.slice(0, 8)}
-                                  </span>
-                                )}
-                                {item.user_product_id && (
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
-                                    User product {item.user_product_id.slice(0, 8)}
-                                  </span>
-                                )}
-                                {item.gelato_product_uid && (
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
-                                    Gelato {item.gelato_product_uid}
-                                  </span>
-                                )}
-                                {item.sku && (
-                                  <span className="rounded-full bg-gray-100 px-2.5 py-1 font-medium">
-                                    SKU {item.sku}
-                                  </span>
-                                )}
-                                {item.mockup_front && (
-                                  <span className="rounded-full bg-violet-50 px-2.5 py-1 font-medium text-violet-700">
-                                    Front mockup
-                                  </span>
-                                )}
-                                {item.mockup_back && (
-                                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 font-medium text-cyan-700">
-                                    Back mockup
-                                  </span>
-                                )}
-                                {item.print_files && (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-                                    <FileImage size={11} />
-                                    Print files
-                                  </span>
-                                )}
-                              </div>
-
-                              {item.created_at && (
-                                <p className="text-[11px] text-gray-400">
-                                  Item created {new Date(item.created_at).toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-3 pt-4">
-                {order.status !== "paid" && (
-                  <Link
-                    href={`/api/stripe/retry/${order.id}`}
-                    className="block rounded-xl bg-black py-3 text-center text-white transition hover:opacity-90 active:scale-[0.99]"
-                  >
-                    Complete payment
-                  </Link>
-                )}
-
-                {order.status !== "paid" && (
-                  <form action="/api/orders/delete" method="POST">
-                    <input type="hidden" name="id" value={order.id} />
-
-                    <button
-                      type="submit"
-                      className="w-full rounded-xl border border-red-300 py-2.5 text-red-600 transition hover:bg-red-50"
-                    >
-                      Cancel order
-                    </button>
-                  </form>
-                )}
-              </div>
-            </div>
+          <div className="grid gap-5 lg:grid-cols-2">
+            {renderMockupPanel({
+              title: "Front mockup",
+              image:
+                firstItem?.mockup_front ||
+                firstItem?.image ||
+                order.product.image ||
+                null,
+              html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
+            })}
+            {renderMockupPanel({
+              title: "Back mockup",
+              image:
+                firstItem?.mockup_back ||
+                firstItem?.mockup_front ||
+                firstItem?.image ||
+                order.product.image ||
+                null,
+              html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
+            })}
           </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                order.status === "paid"
+                  ? "bg-green-100 text-green-700"
+                  : "bg-yellow-100 text-yellow-700"
+              }`}
+            >
+              {order.status}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow-sm ring-1 ring-black/5">
+              {new Date(order.created_at).toLocaleDateString()}
+            </span>
+          </div>
+
+          {order.status !== "paid" && (
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href={`/api/stripe/retry/${order.id}`}
+                className="inline-flex flex-1 items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 active:scale-[0.99]"
+              >
+                Complete payment
+              </Link>
+
+              <form action="/api/orders/delete" method="POST" className="flex-1">
+                <input type="hidden" name="id" value={order.id} />
+                <button
+                  type="submit"
+                  className="w-full rounded-full border border-red-300 bg-white px-5 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                >
+                  Cancel order
+                </button>
+              </form>
+            </div>
+          )}
+          <p className="mt-4 text-xs text-gray-400">
+            Only the mockups are shown here. Item and payment metadata stay hidden to keep the page focused.
+          </p>
         </div>
       </div>
     </div>
