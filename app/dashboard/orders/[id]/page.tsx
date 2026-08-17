@@ -225,12 +225,12 @@ function renderMockupPanel({
     `;
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-white/[0.08] bg-white/[0.045] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+    <div className="overflow-hidden rounded-none border border-white/[0.08] bg-white/[0.045] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4 sm:px-6">
         <p className="text-[11px] font-black uppercase tracking-[0.22em] text-violet-200/80">
           {title}
         </p>
-        <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-400 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]" />
+        <span className="h-2 w-2 rounded-none bg-gradient-to-r from-fuchsia-400 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]" />
       </div>
       <div className="aspect-[5/6] bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.1),transparent_42%),linear-gradient(180deg,#0a0a15_0%,#080814_100%)]">
         {html ? (
@@ -292,9 +292,9 @@ export default async function OrderPage({
     <div className="flex min-h-screen bg-[#080814] text-white">
       <Sidebar />
 
-      <div className="flex-1 md:pl-[280px]">
-        <div className="w-full px-3 py-4 sm:px-5 sm:py-6 md:px-6 lg:px-0 lg:pr-6">
-          <div className="mb-5 flex flex-col gap-4 rounded-[30px] border border-white/[0.06] bg-white/[0.035] px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <div className="flex-1 md:pl-[80px]">
+        <div className="w-full px-2 py-3 sm:px-3 sm:py-4 md:px-4 lg:px-0 lg:pr-4">
+          <div className="mb-5 flex flex-col gap-4 rounded-none border border-white/[0.06] bg-white/[0.035] px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-400">
                 Order details
@@ -309,7 +309,7 @@ export default async function OrderPage({
 
             <Link
               href="/dashboard/orders"
-              className="shrink-0 inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-black text-white/70 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white"
+              className="shrink-0 inline-flex items-center justify-center rounded-none border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-black text-white/70 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white"
             >
               ← Back
             </Link>
@@ -330,7 +330,7 @@ export default async function OrderPage({
 
           <div className="mt-5 flex flex-wrap gap-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.14em] ${
+              className={`rounded-none px-3 py-1 text-xs font-black uppercase tracking-[0.14em] ${
                 order.status === "paid"
                   ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-400/20"
                   : "bg-amber-500/10 text-amber-300 ring-1 ring-amber-400/20"
@@ -338,7 +338,7 @@ export default async function OrderPage({
             >
               {order.status}
             </span>
-            <span className="rounded-full bg-white/[0.04] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-white/50 ring-1 ring-white/[0.06]">
+            <span className="rounded-none bg-white/[0.04] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-white/50 ring-1 ring-white/[0.06]">
               {new Date(order.created_at).toLocaleDateString()}
             </span>
           </div>
