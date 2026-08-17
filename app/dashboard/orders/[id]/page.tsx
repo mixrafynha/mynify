@@ -234,10 +234,19 @@ export default async function OrderPage({
   }
 
   const firstItem = order.items[0] ?? null;
-  const resolvedImage = firstItem?.image ?? order.product.image ?? null;
+  const imageItem =
+    order.items.find((item) => item?.image || item?.mockup_front || item?.mockup_back) ??
+    firstItem;
+  const resolvedImage =
+    imageItem?.image ??
+    imageItem?.mockup_front ??
+    imageItem?.mockup_back ??
+    order.product.image ??
+    null;
 
   console.log("[orders-ui:image-debug]", {
     firstItemImage: firstItem?.image ?? null,
+    imageItemImage: imageItem?.image ?? null,
     productImage: order?.product?.image ?? null,
     resolvedImage,
   });
@@ -270,12 +279,12 @@ export default async function OrderPage({
             {renderMockupPanel({
               title: "Front mockup",
               image: resolvedImage,
-              html: firstItem ? resolveItemMockupHtml(firstItem, "front") : null,
+              html: imageItem ? resolveItemMockupHtml(imageItem, "front") : null,
             })}
             {renderMockupPanel({
               title: "Back mockup",
               image: resolvedImage,
-              html: firstItem ? resolveItemMockupHtml(firstItem, "back") : null,
+              html: imageItem ? resolveItemMockupHtml(imageItem, "back") : null,
             })}
           </div>
 

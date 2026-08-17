@@ -82,6 +82,9 @@ export async function GET(
 
     const items = Array.isArray(data.order_items) ? data.order_items : [];
     const firstItem = items[0] ?? null;
+    const imageItem =
+      items.find((item) => item?.image || item?.mockup_front || item?.mockup_back) ??
+      firstItem;
 
     return NextResponse.json({
       data: {
@@ -107,7 +110,7 @@ export async function GET(
           title: firstItem?.title ?? data.product_title,
           price: firstItem?.unit_price ?? data.product_price,
           currency: firstItem?.currency ?? data.product_currency ?? "EUR",
-          image: firstItem?.image ?? data.product_image ?? null,
+          image: imageItem?.image ?? imageItem?.mockup_front ?? imageItem?.mockup_back ?? data.product_image ?? null,
         },
       },
     });
