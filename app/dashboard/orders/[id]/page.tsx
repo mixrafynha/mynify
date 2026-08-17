@@ -211,32 +211,33 @@ function renderMockupPanel({
   }) {
   const fallbackHtml = image
     ? `
-      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:#f4f4f5;">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#0b0c19,#090914);">
         <img src="${image}" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" />
       </div>
     `
     : `
-      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#f8fafc,#e5e7eb);color:#94a3b8;font:600 14px/1.2 Arial,sans-serif;">
+      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#0b0c19,#090914);color:#7c83a3;font:600 14px/1.2 Arial,sans-serif;">
         No mockup available
       </div>
     `;
 
   return (
-    <div className="overflow-hidden rounded-[28px] border border-black/5 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-      <div className="border-b border-black/5 px-5 py-4 sm:px-6">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-500">
+    <div className="overflow-hidden rounded-[28px] border border-white/[0.08] bg-white/[0.045] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4 sm:px-6">
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-violet-200/80">
           {title}
         </p>
+        <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-400 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]" />
       </div>
-      <div className="aspect-[5/6] bg-[#f7f7f4]">
+      <div className="aspect-[5/6] bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.1),transparent_42%),linear-gradient(180deg,#0a0a15_0%,#080814_100%)]">
         {html ? (
           <div
-            className="h-full w-full"
+            className="h-full w-full overflow-hidden"
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (
           <div
-            className="h-full w-full"
+            className="h-full w-full overflow-hidden"
             dangerouslySetInnerHTML={{ __html: fallbackHtml }}
           />
         )}
@@ -283,30 +284,33 @@ export default async function OrderPage({
   });
 
   return (
-    <div className="flex min-h-screen bg-[#f6f6f2]">
+    <div className="flex min-h-screen bg-[#080814] text-white">
       <Sidebar />
 
       <div className="flex-1 md:pl-[280px]">
-        <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="mb-6 flex items-center justify-between gap-4">
+        <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6 md:px-8">
+          <div className="mb-5 flex flex-col gap-4 rounded-[30px] border border-white/[0.06] bg-white/[0.035] px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="min-w-0">
-              <p className="text-xs uppercase tracking-[0.24em] text-gray-500">
+              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-400">
                 Order details
               </p>
-              <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight text-gray-950 sm:text-3xl">
+              <h1 className="mt-1 truncate text-2xl font-black tracking-[-0.06em] text-white sm:text-3xl">
                 #{order.id.slice(0, 8)}
               </h1>
+              <p className="mt-1 text-sm font-semibold text-white/45">
+                Review front and back mockups for this order.
+              </p>
             </div>
 
             <Link
               href="/dashboard/orders"
-              className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition hover:border-black/20 hover:text-black"
+              className="shrink-0 inline-flex items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] px-4 py-2 text-sm font-black text-white/70 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white"
             >
               ← Back
             </Link>
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {renderMockupPanel({
               title: "Front mockup",
               image: resolvedFrontImage,
@@ -321,15 +325,15 @@ export default async function OrderPage({
 
           <div className="mt-5 flex flex-wrap gap-2">
             <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
+              className={`rounded-full px-3 py-1 text-xs font-black uppercase tracking-[0.14em] ${
                 order.status === "paid"
-                  ? "bg-green-100 text-green-700"
-                  : "bg-yellow-100 text-yellow-700"
+                  ? "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-400/20"
+                  : "bg-amber-500/10 text-amber-300 ring-1 ring-amber-400/20"
               }`}
             >
               {order.status}
             </span>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-500 shadow-sm ring-1 ring-black/5">
+            <span className="rounded-full bg-white/[0.04] px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-white/50 ring-1 ring-white/[0.06]">
               {new Date(order.created_at).toLocaleDateString()}
             </span>
           </div>
@@ -338,7 +342,7 @@ export default async function OrderPage({
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <Link
                 href={`/api/stripe/retry/${order.id}`}
-                className="inline-flex flex-1 items-center justify-center rounded-full bg-black px-5 py-3 text-sm font-medium text-white transition hover:opacity-90 active:scale-[0.99]"
+                className="inline-flex flex-1 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-[0_14px_35px_rgba(168,85,247,0.22)] transition hover:brightness-110 active:scale-[0.99]"
               >
                 Complete payment
               </Link>
@@ -347,14 +351,14 @@ export default async function OrderPage({
                 <input type="hidden" name="id" value={order.id} />
                 <button
                   type="submit"
-                  className="w-full rounded-full border border-red-300 bg-white px-5 py-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+                  className="w-full rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-black text-white/65 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-200"
                 >
                   Cancel order
                 </button>
               </form>
             </div>
           )}
-          <p className="mt-4 text-xs text-gray-400">
+          <p className="mt-4 text-xs text-white/35">
             Only the mockups are shown here. Item and payment metadata stay hidden to keep the page focused.
           </p>
         </div>
