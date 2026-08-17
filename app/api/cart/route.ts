@@ -4,7 +4,6 @@ import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
 type CartVariantRelation = {
   id: string;
   stock: number | null;
@@ -19,7 +18,6 @@ type CartVariantRelation = {
   product_id?: string | null;
   image?: string | null;
 };
-
 type CartItem = {
   id: string;
   product_id: string;
@@ -34,12 +32,12 @@ type CartItem = {
   size: string | null;
   sku: string | null;
   image: string | null;
+  mockup_url: string | null;
   previewFront?: string | null;
   previewBack?: string | null;
   created_at: string | null;
   product_variants?: CartVariantRelation | CartVariantRelation[] | null;
 };
-
 type UserProductAssets = {
   user_product_id: string | null;
   base_product_id: string | null;
@@ -47,7 +45,6 @@ type UserProductAssets = {
   design_data: Record<string, unknown> | null;
   designData: Record<string, unknown> | null;
 };
-
 type ProductColorRow = {
   id: string;
   product_id: string | null;
@@ -59,7 +56,6 @@ type ProductColorRow = {
   thumbnail: string | null;
   position: number | null;
 };
-
 type ProductVariantRow = {
   id: string;
   size: string | null;
@@ -79,7 +75,6 @@ type SupabaseManyResponse<T> = {
 function publicString(value: unknown): string | null {
   return typeof value === "string" && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
 }
-
 function realCanvasFrontMockup(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
 
@@ -97,7 +92,6 @@ function realCanvasBackMockup(mockups: Record<string, unknown> | null): string |
   if (!back) return null;
   return back;
 }
-
 function parseMockups(value: unknown): Record<string, unknown> | null {
   if (!value) return null;
   if (typeof value === "string") {
@@ -115,7 +109,6 @@ function parseMockups(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null;
 }
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -131,11 +124,9 @@ function resolveDisplayPrice(args: {
     args.variantPrice === null || args.variantPrice === undefined
       ? null
       : Number(args.variantPrice);
-
   if (!Number.isFinite(currentVariantPrice) || currentVariantPrice === null || currentVariantPrice <= 0) {
     return args.itemPrice;
   }
-
   const designData = asRecord(args.userProductAssets.design_data);
   const sides = asRecord(designData?.sides);
   const front = asRecord(sides?.front);
@@ -147,7 +138,6 @@ function resolveDisplayPrice(args: {
 
   return currentVariantPrice + secondPrintCharge;
 }
-
 function frontMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   const selected =
@@ -158,7 +148,6 @@ function frontMockupUrl(mockups: Record<string, unknown> | null): string | null 
     publicString(mockups.mockup_front);
   return selected;
 }
-
 function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
   if (!mockups) return null;
   const selected =
@@ -168,7 +157,6 @@ function backMockupUrl(mockups: Record<string, unknown> | null): string | null {
     null;
   return selected;
 }
-
 function buildResolvedVariantRow(
   variant: ProductVariantRow,
   color: ProductColorRow | null,
@@ -194,7 +182,6 @@ function buildResolvedVariantRow(
     image: color?.mockup_front ?? color?.thumbnail ?? null,
   };
 }
-
 function mergeProductIds(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value))));
 }
@@ -207,7 +194,6 @@ export async function GET() {
     const clientStartedAt = Date.now();
     const supabase = createSupabaseServer();
     console.info("[cart-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
-
     console.info("[cart-perf] auth_start");
     const authStartedAt = Date.now();
     const {
@@ -215,7 +201,6 @@ export async function GET() {
       error: authError,
     } = await supabase.auth.getUser();
     console.info("[cart-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
-
     if (authError || !user) {
       const totalMs = Date.now() - requestStartedAt;
       const responseBody = JSON.stringify({ items: [] });
@@ -223,12 +208,11 @@ export async function GET() {
       console.info("[cart-response] unauthenticated_empty", { status: 200, bytes: Buffer.byteLength(responseBody) });
       return NextResponse.json({ items: [] }, { status: 200, headers: { "Cache-Control": "no-store" } });
     }
-
     console.info("[cart-perf] cart_query_start");
     const cartQueryStartedAt = Date.now();
     const { data, error } = (await supabase
       .from("cart_items")
-      .select("id, product_id, user_product_id, design_id, variant_id, title, price, currency, quantity, color, size, sku, image, created_at")
+      .select("id, product_id, user_product_id, design_id, variant_id, title, price, currency, quantity, color, size, sku, image, mockup_url, created_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })) as SupabaseManyResponse<CartItem>;
     console.info(
@@ -240,7 +224,6 @@ export async function GET() {
         errorCode: null,
       }
     );
-
     if (error) {
       console.error("[cart-response] query_error", {
         status: 500,
@@ -250,7 +233,6 @@ export async function GET() {
       console.info("[cart-perf] response_ready", { totalMs: Date.now() - requestStartedAt, status: 500, itemCount: 0 });
       return NextResponse.json({ error: error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
-
     if (!(data ?? []).length) {
       const totalMs = Date.now() - requestStartedAt;
       const responseBody = JSON.stringify({ items: [] });
@@ -258,13 +240,11 @@ export async function GET() {
       console.info("[cart-perf] response_ready", { totalMs, status: 200, itemCount: 0 });
       return NextResponse.json({ items: [] }, { status: 200, headers: { "Cache-Control": "no-store" } });
     }
-
     console.info("[cart-perf] item_resolution_start count=" + (data ?? []).length);
     const itemResolutionStartedAt = Date.now();
     const cartItems = data ?? [];
     const productIds = mergeProductIds(cartItems.map((item) => item.product_id));
     const userProductIds = mergeProductIds(cartItems.map((item) => item.user_product_id));
-
     const [userProductsResult, productColorsResult] = await Promise.all([
       userProductIds.length
         ? supabase.from("user_products").select("id, base_product_id, mockups, design_data").in("id", userProductIds)
@@ -277,7 +257,6 @@ export async function GET() {
             .order("position", { ascending: true })
         : Promise.resolve({ data: [] as ProductColorRow[] | null, error: null }),
     ]);
-
     if (userProductsResult.error || productColorsResult.error) {
       const message =
         userProductsResult.error?.message ??
@@ -287,7 +266,6 @@ export async function GET() {
       console.warn("[cart] unresolved_reference_batch_error", { message });
       return NextResponse.json({ error: message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
-
     const userProductAssetsById = new Map<string, UserProductAssets>();
     (userProductsResult.data ?? []).forEach((row) => {
       if (!row?.id) return;
@@ -299,12 +277,10 @@ export async function GET() {
         designData: row.design_data,
       });
     });
-
     const colorMap = new Map<string, ProductColorRow>();
     (productColorsResult.data ?? []).forEach((row) => {
       if (row?.id) colorMap.set(row.id, row);
     });
-
     const productColorIds = mergeProductIds((productColorsResult.data ?? []).map((row) => row.id));
     const variantsResult = productColorIds.length
       ? await supabase
@@ -313,7 +289,6 @@ export async function GET() {
           .in("product_color_id", productColorIds)
           .order("size", { ascending: true })
       : { data: [] as ProductVariantRow[] | null, error: null };
-
     if (variantsResult.error) {
       console.error("[cart-response] variants_resolution_error", {
         status: 500,
@@ -322,13 +297,11 @@ export async function GET() {
       console.warn("[cart] unresolved_reference_batch_error", { message: variantsResult.error.message });
       return NextResponse.json({ error: variantsResult.error.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }
-
     const variantsById = new Map<string, CartVariantRelation>();
     (variantsResult.data ?? []).forEach((row) => {
       if (!row?.id) return;
       variantsById.set(row.id, buildResolvedVariantRow(row, row.product_color_id ? colorMap.get(row.product_color_id) ?? null : null));
     });
-
     const variantsByProductId = new Map<string, CartVariantRelation[]>();
     for (const row of variantsResult.data ?? []) {
       if (!row?.product_color_id) continue;
@@ -340,7 +313,6 @@ export async function GET() {
       existing.push(variant);
       variantsByProductId.set(productId, existing);
     }
-
     const items = cartItems.map((item) => {
       const variantRelation = item.variant_id ? variantsById.get(item.variant_id) ?? null : null;
       const userProductAssets = item.user_product_id
@@ -359,7 +331,6 @@ export async function GET() {
             design_data: null,
             designData: null,
           } as UserProductAssets);
-
       if (item.variant_id && !variantRelation) {
         console.warn("[cart] unresolved_reference", {
           cartItemId: item.id,
@@ -368,9 +339,9 @@ export async function GET() {
           userProductId: item.user_product_id,
         });
       }
-
       const selectedVariant = variantRelation;
-      const previewFront = frontMockupUrl(userProductAssets.mockups);
+      const persistedMockup = publicString(item.mockup_url);
+      const previewFront = frontMockupUrl(userProductAssets.mockups) ?? persistedMockup;
       const previewBack = backMockupUrl(userProductAssets.mockups);
       const displayPrice = resolveDisplayPrice({
         itemPrice: item.price,
@@ -379,7 +350,6 @@ export async function GET() {
       });
       const availableVariants = variantsByProductId.get(item.product_id) ?? [];
       const gelatoProductUid = variantRelation?.gelato_product_uid ?? null;
-
       return {
         ...item,
         ...userProductAssets,
@@ -423,7 +393,6 @@ export async function GET() {
       "[cart-perf] item_resolution_done",
       { durationMs: Date.now() - itemResolutionStartedAt, rows: items.length }
     );
-
     console.info("[cart-perf] response_ready", {
       totalMs: Date.now() - requestStartedAt,
       status: 200,

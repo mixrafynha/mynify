@@ -17,7 +17,6 @@ function asNumber(value: unknown, fallback = 0) {
 function normalizeQuantity(value: unknown) {
   return Math.max(1, Math.floor(asNumber(value, 1)));
 }
-
 function parseJsonIfString<T>(value: unknown, fallback: T): T {
   if (typeof value !== "string") return (value ?? fallback) as T;
 
@@ -33,7 +32,6 @@ function isMissingColumnError(error: unknown) {
     error && typeof error === "object" && "message" in error
       ? String((error as { message?: unknown }).message || "")
       : String(error || "");
-
   return (
     message.includes("column") ||
     message.includes("schema cache") ||
@@ -47,11 +45,9 @@ function valueOrNull(value: unknown) {
 
 export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
   const { supabase, userId, userProduct, body } = args;
-
   const designData = parseJsonIfString<any>(userProduct.design_data, {});
   const printFiles = parseJsonIfString<any>(userProduct.print_files, {});
   const mockups = parseJsonIfString<any>(userProduct.mockups, {});
-
   const quantity = normalizeQuantity(body.quantity);
   const selectedVariant =
     body.selectedVariant ||
@@ -63,12 +59,6 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     body.selected_color ||
     designData?.selectedColor ||
     null;
-  const selectedColorVisual =
-    body.selectedColorVisual ||
-    body.selected_color_visual ||
-    designData?.selectedColorVisual ||
-    null;
-
   const variantId =
     body.variantId ||
     body.variant_id ||
@@ -78,15 +68,14 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
   const title = userProduct.title;
   const price = asNumber(userProduct.final_price ?? userProduct.price, 0);
   const currency = "EUR";
-
   const mockupUrl =
     mockups?.front ||
     mockups?.back ||
     mockups?.checkout_thumbnail_url ||
     mockups?.checkoutThumbnailUrl ||
     userProduct.ai_mockup_url ||
-    userProduct.image ||
     userProduct.design_image_url ||
+    userProduct.image ||
     printFiles?.front ||
     printFiles?.back ||
     null;
@@ -99,10 +88,13 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     designData?.mockupColor ||
     designData?.color ||
     null;
-
   const size = body.size || selectedVariant?.size || selectedVariant?.name || null;
   const sku = body.sku || selectedVariant?.sku || null;
 
+  // Keep the saved-design relationship in the primary insert. Do not include
+  // legacy/non-existent columns such as selected_color_visual or item_type:
+  // if one of those fails, the old fallback used to lose user_product_id and
+  // the later mockup-preview update could no longer find this cart item.
   const extendedPayload = {
     user_id: userId,
     product_id: userProduct.base_product_id,
@@ -110,7 +102,6 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     design_id: userProduct.id,
     variant_id: valueOrNull(variantId),
     selected_color: selectedColor,
-    selected_color_visual: selectedColorVisual,
     selected_variant: selectedVariant,
     mockup_url: mockupUrl,
     title,
@@ -121,9 +112,7 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     color,
     size,
     sku,
-    item_type: "custom_design",
   };
-
   const { data: extendedData, error: extendedError } = await supabase
     .from("cart_items")
     .insert(extendedPayload)
@@ -138,10 +127,16 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     return { data: null, error: extendedError, mode: "extended" as const };
   }
 
-  const basicPayload = {
+  // Compatibility fallback: omit optional JSON fields, but NEVER drop the
+  // relationship used by /mockup-preview to replace the temporary image with
+  // the captured HTML/WebP mockup.
+  const compatiblePayload = {
     user_id: userId,
     product_id: userProduct.base_product_id,
+    user_product_id: userProduct.id,
+    design_id: userProduct.id,
     variant_id: valueOrNull(variantId),
+    mockup_url: mockupUrl,
     title,
     price,
     currency,
@@ -152,15 +147,15 @@ export async function addSavedDesignToCart(args: AddSavedDesignToCartArgs) {
     sku,
   };
 
-  const { data: basicData, error: basicError } = await supabase
+  const { data: compatibleData, error: compatibleError } = await supabase
     .from("cart_items")
-    .insert(basicPayload)
+    .insert(compatiblePayload)
     .select()
     .single();
 
   return {
-    data: basicData,
-    error: basicError,
-    mode: "basic" as const,
+    data: compatibleData,
+    error: compatibleError,
+    mode: "compatible" as const,
   };
 }

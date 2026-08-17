@@ -10,7 +10,7 @@ type Payload = {
 
 export const gelatoColorSync = task({
   id: "gelato-color-sync",
-  maxDuration: 300,
+  maxDuration: 1800,
   retry: {
     maxAttempts: 3,
     factor: 2,
