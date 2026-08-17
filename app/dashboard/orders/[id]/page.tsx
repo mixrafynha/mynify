@@ -293,7 +293,7 @@ export default async function OrderPage({
       <Sidebar />
 
       <div className="flex-1 md:pl-[280px]">
-        <div className="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6 md:px-8">
+        <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-5 sm:py-6 md:px-8 lg:mx-0 lg:max-w-[calc(100vw-320px)] lg:pr-8">
           <div className="mb-5 flex flex-col gap-4 rounded-[30px] border border-white/[0.06] bg-white/[0.035] px-4 py-4 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="min-w-0">
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-violet-400">
@@ -363,10 +363,10 @@ export default async function OrderPage({
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:flex sm:gap-3">
             <Link
               href={trackHref}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 px-5 py-3 text-sm font-black text-white shadow-[0_14px_35px_rgba(168,85,247,0.22)] transition hover:brightness-110 active:scale-[0.99]"
+              className="inline-flex aspect-square flex-col items-center justify-center gap-2 rounded-none bg-gradient-to-r from-violet-600 via-fuchsia-500 to-cyan-500 px-3 py-3 text-center text-[11px] font-black uppercase leading-none text-white shadow-[0_14px_35px_rgba(168,85,247,0.22)] transition hover:brightness-110 active:scale-[0.99] sm:aspect-auto sm:flex-1 sm:flex-row sm:px-5 sm:py-3 sm:text-sm sm:normal-case"
             >
               Track order
               <ArrowRight size={16} />
@@ -374,7 +374,7 @@ export default async function OrderPage({
 
             <Link
               href={supportHref}
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.04] px-5 py-3 text-sm font-black text-white/75 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white"
+              className="inline-flex aspect-square flex-col items-center justify-center gap-2 rounded-none border border-white/[0.08] bg-white/[0.04] px-3 py-3 text-center text-[11px] font-black uppercase leading-none text-white/75 transition hover:border-violet-500/30 hover:bg-white/[0.06] hover:text-white sm:aspect-auto sm:flex-1 sm:flex-row sm:px-5 sm:py-3 sm:text-sm sm:normal-case"
             >
               Need help with this order?
               <Headphones size={16} />
