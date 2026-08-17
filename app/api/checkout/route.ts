@@ -260,14 +260,6 @@ function elapsedSince(startedAt: number) {
   return Date.now() - startedAt;
 }
 
-function logCheckoutPerf(stage: string, startedAt: number, extra?: Record<string, unknown>) {
-  console.info("[checkout-perf]", {
-    stage,
-    durationMs: elapsedSince(startedAt),
-    ...(extra ?? {}),
-  });
-}
-
 function isInvalidSelectedShippingMethod(input: {
   shipmentMethodUid: string | null;
   serviceType?: string | null;
@@ -299,7 +291,6 @@ export async function POST(req: Request) {
   try {
     const token = getBearerToken(req);
     const cookieHeaderPresent = Boolean(req.headers.get("cookie"));
-    const requestStartedAt = Date.now();
 
     console.info("[checkout:final:01-auth-start]", {
       cookieHeaderPresent,
@@ -314,7 +305,6 @@ export async function POST(req: Request) {
       ? await supabase.auth.getUser(token)
       : await cookieSupabase!.auth.getUser();
     timings.authMs += elapsedSince(authStartedAt);
-    logCheckoutPerf("auth_done", authStartedAt);
 
     const user = authResult.data.user;
     const userError = authResult.error;
@@ -365,7 +355,6 @@ export async function POST(req: Request) {
       | null = null;
 
     if (body.draftOrderId) {
-      const draftStartedAt = Date.now();
       const { data: draftRow, error: draftError } = await supabase
         .from("checkout_drafts")
         .select("cart_item_ids, gelato_draft_order_id, selected_shipping_method, shipping_address, subtotal, shipping_amount, total, currency")
@@ -385,10 +374,6 @@ export async function POST(req: Request) {
           { status: 500 },
         );
       }
-      logCheckoutPerf("draft_load_done", draftStartedAt, {
-        draftOrderId: body.draftOrderId,
-        found: Boolean(draftRow),
-      });
 
       if (!draftRow) {
         return NextResponse.json(
@@ -440,9 +425,6 @@ export async function POST(req: Request) {
         .eq("user_id", user.id)
         .in("id", effectiveCartItemIds);
       timings.cartLoadMs += elapsedSince(cartStartedAt);
-      logCheckoutPerf("cart_load_done", cartStartedAt, {
-        itemCount: effectiveCartItemIds.length,
-      });
 
       if (cartError) {
         console.error("CHECKOUT_CART_ERROR", {
@@ -531,11 +513,6 @@ export async function POST(req: Request) {
       );
       timings.variantsMs += parallelLoadMs;
       timings.userProductsMs += parallelLoadMs;
-      logCheckoutPerf("catalog_batch_done", productsStartedAt, {
-        productCount: productIds.length,
-        variantCount: variantIds.length,
-        userProductCount: userProductIds.length,
-      });
 
       if (productsError) {
         console.error("CHECKOUT_PRODUCTS_ERROR", {
@@ -575,40 +552,13 @@ export async function POST(req: Request) {
             .filter((id): id is string => Boolean(id)),
         ),
       ];
-
-      const shippingCountryCode = resolveCheckoutCountryCode(body);
-      const productColorsStartedAt = Date.now();
-      const productColorsPromise = variantColorIds.length > 0
-        ? supabase
-            .from("product_colors")
-            .select("id, product_id")
-            .in("id", variantColorIds)
-        : Promise.resolve({ data: [] as ProductColorOwnershipRow[], error: null });
-      const availabilityStartedAt = Date.now();
-      const availabilityResults = new Map<string, Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>();
-      const availabilityPromise = Promise.all(
-        variants.map(async (variant) => {
-          const result = await checkGelatoRegionalAvailability({
-            variantId: variant.id,
-            countryCode: shippingCountryCode ?? "",
-            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
-            resolveVariant: async () => variant,
-          });
-          availabilityResults.set(variant.id, result);
-        }),
-      );
-
-      const [{ data: productColorRows, error: productColorsError }] = await Promise.all([
-        productColorsPromise,
-        availabilityPromise,
-      ]);
-      timings.availabilityMs += elapsedSince(availabilityStartedAt);
-      logCheckoutPerf("availability_done", availabilityStartedAt, {
-        variantCount: variants.length,
-      });
-      logCheckoutPerf("product_colors_done", productColorsStartedAt, {
-        colorCount: variantColorIds.length,
-      });
+      const { data: productColorRows, error: productColorsError } =
+        variantColorIds.length > 0
+          ? await supabase
+              .from("product_colors")
+              .select("id, product_id")
+              .in("id", variantColorIds)
+          : { data: [] as ProductColorOwnershipRow[], error: null };
 
       if (productColorsError) {
         console.error("CHECKOUT_PRODUCT_COLORS_ERROR", {
@@ -620,6 +570,9 @@ export async function POST(req: Request) {
           { status: 500 },
         );
       }
+
+      const shippingCountryCode = resolveCheckoutCountryCode(body);
+
       const productMap = new Map(
         ((productRows ?? []) as ProductRow[]).map((product) => [
           product.id,
@@ -696,6 +649,21 @@ export async function POST(req: Request) {
       // Ryfio checkout is EUR-only. Mixed stored currency labels are ignored;
       // official numeric prices are charged directly as EUR.
       const checkoutCurrency = "EUR";
+      const availabilityStartedAt = Date.now();
+      const availabilityResults = new Map<string, Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>();
+      await Promise.all(
+        variants.map(async (variant) => {
+          const result = await checkGelatoRegionalAvailability({
+            variantId: variant.id,
+            countryCode: shippingCountryCode ?? "",
+            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+            resolveVariant: async () => variant,
+          });
+          availabilityResults.set(variant.id, result);
+        }),
+      );
+      timings.availabilityMs += elapsedSince(availabilityStartedAt);
+
       for (const cartItem of cartItems) {
         const product = productMap.get(cartItem.product_id);
 
@@ -1014,9 +982,6 @@ export async function POST(req: Request) {
         currency: selectedQuoteOption.currency,
         policy: "reuse_successful_gelato_draft_shipping",
       });
-      logCheckoutPerf("shipping_done", Date.now(), {
-        source: "draft",
-      });
 
       const baseUrl =
         process.env.NEXT_PUBLIC_URL?.replace(/\/$/, "") ||
@@ -1236,7 +1201,6 @@ export async function POST(req: Request) {
         ? `ryfio-checkout:${user.id}:${body.draftOrderId}`
         : undefined;
 
-      const stripeSessionStartedAt = Date.now();
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         automatic_tax: { enabled: true },
@@ -1293,9 +1257,6 @@ export async function POST(req: Request) {
       if (!session.url) {
         throw new Error("Stripe did not return a checkout URL");
       }
-      logCheckoutPerf("stripe_session_done", stripeSessionStartedAt, {
-        mode: "draft_or_fresh",
-      });
 
       const persistSessionStartedAt = Date.now();
       const { error: updateError } = await supabase
@@ -1318,18 +1279,6 @@ export async function POST(req: Request) {
 
       timings.totalMs = elapsedSince(totalStartedAt);
       console.info("[checkout:final:timings]", timings);
-      console.info("[checkout:perf:summary]", {
-        totalMs: elapsedSince(requestStartedAt),
-        authMs: timings.authMs,
-        cartLoadMs: timings.cartLoadMs,
-        userProductsMs: timings.userProductsMs,
-        variantsMs: timings.variantsMs,
-        availabilityMs: timings.availabilityMs,
-        quotePreparationMs: timings.quotePreparationMs,
-        idempotencyMs: timings.idempotencyMs,
-        gelatoMs: timings.gelatoMs,
-        persistMs: timings.persistMs,
-      });
 
       return NextResponse.json({
         url: session.url,
@@ -1415,7 +1364,6 @@ export async function POST(req: Request) {
 
     createdOrderId = order.id;
 
-    const stripeSessionStartedAt = Date.now();
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       automatic_tax: { enabled: true },
@@ -1457,9 +1405,6 @@ export async function POST(req: Request) {
     if (!session.url) {
       throw new Error("Stripe did not return a checkout URL");
     }
-    logCheckoutPerf("stripe_session_done", stripeSessionStartedAt, {
-      mode: "legacy_product",
-    });
 
     const { error: updateError } = await supabase
       .from("orders")
