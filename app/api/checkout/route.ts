@@ -293,6 +293,9 @@ export async function POST(req: Request) {
     idempotencyMs: 0,
     gelatoMs: 0,
     persistMs: 0,
+    ordersLookupMs: 0,
+    persistOrderRpcMs: 0,
+    ordersUpdateStripeSessionIdMs: 0,
     totalMs: 0,
   };
   const stripe = getStripeClient();
@@ -1113,14 +1116,14 @@ export async function POST(req: Request) {
       let order: PersistedCheckoutOrder | null = null;
 
       if (body.draftOrderId) {
-        const persistStartedAt = Date.now();
+        const ordersLookupStartedAt = Date.now();
         const { data: existingOrder, error: existingOrderError } = await supabase
           .from("orders")
           .select("id, stripe_session_id, payment_status, status")
           .eq("checkout_draft_id", body.draftOrderId)
           .eq("user_id", user.id)
           .maybeSingle();
-        timings.persistMs += elapsedSince(persistStartedAt);
+        timings.ordersLookupMs += elapsedSince(ordersLookupStartedAt);
 
         if (existingOrderError) {
           console.error("CHECKOUT_EXISTING_ORDER_LOOKUP_ERROR", {
@@ -1211,7 +1214,7 @@ export async function POST(req: Request) {
           p_order_items: orderItemRows,
         },
       );
-      timings.persistMs += elapsedSince(persistCheckoutStartedAt);
+      timings.persistOrderRpcMs += elapsedSince(persistCheckoutStartedAt);
 
       if (persistCheckoutError || !Array.isArray(persistedOrderRows) || !persistedOrderRows[0]?.id) {
         console.error("CHECKOUT_ORDER_PERSIST_ERROR", {
@@ -1323,6 +1326,7 @@ export async function POST(req: Request) {
       if (!session.url) {
         throw new Error("Stripe did not return a checkout URL");
       }
+      const stripeSessionCreateMs = elapsedSince(stripeSessionStartedAt);
       logCheckoutPerf("stripe_session_done", stripeSessionStartedAt, {
         mode: "draft_or_fresh",
       });
@@ -1336,7 +1340,11 @@ export async function POST(req: Request) {
         })
         .eq("id", order.id)
         .eq("user_id", user.id);
-      timings.persistMs += elapsedSince(persistSessionStartedAt);
+      timings.ordersUpdateStripeSessionIdMs += elapsedSince(persistSessionStartedAt);
+      timings.persistMs =
+        timings.ordersLookupMs +
+        timings.persistOrderRpcMs +
+        timings.ordersUpdateStripeSessionIdMs;
 
       if (updateError) {
         console.error("CHECKOUT_ORDER_UPDATE_ERROR", {
@@ -1360,6 +1368,10 @@ export async function POST(req: Request) {
         idempotencyMs: timings.idempotencyMs,
         gelatoMs: timings.gelatoMs,
         persistMs: timings.persistMs,
+        ordersLookupMs: timings.ordersLookupMs,
+        persistOrderRpcMs: timings.persistOrderRpcMs,
+        stripeSessionCreateMs,
+        ordersUpdateStripeSessionIdMs: timings.ordersUpdateStripeSessionIdMs,
       });
 
       return NextResponse.json({
