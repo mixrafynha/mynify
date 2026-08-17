@@ -451,6 +451,14 @@ export default function CheckoutPage() {
   const availabilityAbortController = useRef<AbortController | null>(null);
   const availabilityRequestId = useRef(0);
   const availabilityRequestSignatureRef = useRef("");
+  const draftPreparationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftPreparationPromiseRef = useRef<{
+    fingerprint: string;
+    promise: Promise<string | null>;
+  } | null>(null);
+  const preparedDraftOrderIdRef = useRef<string | null>(null);
+  const preparedDraftFingerprintRef = useRef<string>("");
+  const previousDraftPreparationFingerprintRef = useRef<string>("");
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -458,6 +466,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [draftOrderId, setDraftOrderId] = useState<string | null>(null);
+  const [draftPreparationStatus, setDraftPreparationStatus] = useState<"idle" | "preparing" | "ready" | "error">("idle");
   const [shippingMethodSelection, setShippingMethodSelection] = useState<NormalizedShippingMethod | null>(null);
   const [selectedShippingMethodId, setSelectedShippingMethodId] = useState<string>("");
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
@@ -660,6 +669,52 @@ export default function CheckoutPage() {
     findShippingMethod(form.shippingMethod) ??
     null;
   const selectedShippingMethod = selectedShippingMethodRaw;
+  const selectedShippingMethodFingerprint = useMemo(
+    () =>
+      selectedShippingMethod
+        ? [
+            selectedShippingMethod.id ?? "",
+            selectedShippingMethod.shipmentMethodUid ?? "",
+            selectedShippingMethod.code ?? "",
+            selectedShippingMethod.name ?? "",
+            selectedShippingMethod.price ?? "",
+            selectedShippingMethod.currency ?? "",
+          ].join(":")
+        : "",
+    [selectedShippingMethod],
+  );
+  const draftPreparationFingerprint = useMemo(() => {
+    return JSON.stringify({
+      cartItemIds: items.map((item) => item.id),
+      variantIds: items.map((item) => item.variant_id ?? item.selectedVariant?.id ?? ""),
+      quantities: items.map((item) => Number(item.quantity) || 0),
+      itemDesignState: items.map((item) => [
+        item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? item.id,
+        item.design_data && typeof item.design_data === "object"
+          ? (item.design_data as Record<string, unknown>).printFileStatus ?? (item.design_data as Record<string, unknown>).printFileRunId ?? null
+          : null,
+        item.print_files && typeof item.print_files === "object"
+          ? (item.print_files as Record<string, unknown>).status ?? null
+          : null,
+      ]),
+      shippingAddress: {
+        fullName: form.fullName.trim(),
+        firstName: form.fullName.trim().split(/\s+/).filter(Boolean).slice(0, -1).join(" "),
+        lastName: form.fullName.trim().split(/\s+/).filter(Boolean).at(-1) ?? "",
+        email: form.email.trim(),
+        phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+        address: form.address.trim(),
+        apartment: form.apartment.trim(),
+        city: form.city.trim(),
+        state: form.state.trim(),
+        stateCode: form.stateCode.trim(),
+        postalCode: form.postalCode.trim(),
+        country: form.country.trim(),
+        countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+      },
+      shippingMethod: selectedShippingMethodFingerprint,
+    });
+  }, [form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode, items, selectedShippingMethodFingerprint]);
   const shipping =
     subtotal > 0 && step !== "shipping" && printFilesReady
       ? typeof selectedShippingMethod?.price === "number"
@@ -699,6 +754,168 @@ export default function CheckoutPage() {
     productAvailability.available &&
     Boolean(validatedShippingMethods?.length) &&
     Boolean(selectedShippingMethod?.id);
+
+  const buildDraftOrderPayload = useCallback(() => {
+    const nameParts = form.fullName.trim().split(/\s+/).filter(Boolean);
+    const firstName = nameParts.slice(0, -1).join(" ");
+    const lastName = nameParts.at(-1) ?? "";
+
+    return {
+      cartItemIds: items.map((item) => item.id),
+      address: {
+        firstName,
+        lastName,
+        addressLine1: form.address,
+        addressLine2: form.apartment || null,
+        city: form.city,
+        state: form.state.trim() || form.stateCode.trim() || null,
+        stateCode: form.stateCode.trim() || form.state.trim() || null,
+        postalCode: form.postalCode,
+        countryCode: form.country,
+        email: form.email,
+        phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+      },
+      customer: {
+        fullName: form.fullName,
+        email: form.email,
+        phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+        country: form.country,
+        countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+        address: form.address,
+        apartment: form.apartment,
+        city: form.city,
+        state: form.state.trim() || form.stateCode.trim() || null,
+        stateCode: form.stateCode.trim() || form.state.trim() || null,
+        postalCode: form.postalCode,
+      },
+      shippingMethod: selectedShippingMethod,
+    };
+  }, [form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode, items, selectedShippingMethod]);
+
+  const prepareDraftOrder = useCallback(async (fingerprint: string) => {
+    const payload = buildDraftOrderPayload();
+
+    if (
+      draftPreparationPromiseRef.current &&
+      draftPreparationPromiseRef.current.fingerprint === fingerprint
+    ) {
+      console.info("[draft-preparation-reused]", { fingerprint });
+      return draftPreparationPromiseRef.current.promise;
+    }
+
+    console.info("[draft-preparation-started]", { fingerprint });
+    setDraftPreparationStatus("preparing");
+
+    const promise = (async () => {
+      try {
+        const draftRes = await fetch("/api/checkout/draft-order", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify(payload),
+        });
+        const draftData = await draftRes.json().catch(() => null);
+        if (!draftRes.ok || !draftData?.success) {
+          throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
+        }
+
+        const preparedId = draftData.draftOrderId ?? null;
+        preparedDraftOrderIdRef.current = preparedId;
+        preparedDraftFingerprintRef.current = fingerprint;
+        setDraftOrderId(preparedId);
+        setDraftPreparationStatus("ready");
+        console.info("[draft-preparation-done]", { fingerprint, draftOrderId: preparedId });
+        return preparedId;
+      } catch (error) {
+        if (previousDraftPreparationFingerprintRef.current === fingerprint) {
+          setDraftPreparationStatus("error");
+        }
+        preparedDraftOrderIdRef.current = null;
+        preparedDraftFingerprintRef.current = "";
+        throw error;
+      } finally {
+        if (draftPreparationPromiseRef.current?.fingerprint === fingerprint) {
+          draftPreparationPromiseRef.current = null;
+        }
+      }
+    })();
+
+    draftPreparationPromiseRef.current = { fingerprint, promise };
+    return promise;
+  }, [buildDraftOrderPayload]);
+
+  useEffect(() => {
+    if (draftPreparationTimer.current) clearTimeout(draftPreparationTimer.current);
+
+    const shouldPrepareDraft =
+      step === "payment" &&
+      canPay &&
+      !hasAvailabilityBlock &&
+      Boolean(selectedShippingMethod?.id) &&
+      hasCompleteShippingAddress &&
+      items.length > 0 &&
+      !loading &&
+      !submitting;
+
+    if (!shouldPrepareDraft) {
+      if (previousDraftPreparationFingerprintRef.current && previousDraftPreparationFingerprintRef.current !== draftPreparationFingerprint) {
+        console.info("[draft-preparation-invalidated]", {
+          previousFingerprint: previousDraftPreparationFingerprintRef.current,
+          nextFingerprint: draftPreparationFingerprint,
+        });
+      }
+      preparedDraftOrderIdRef.current = null;
+      preparedDraftFingerprintRef.current = "";
+      setDraftPreparationStatus("idle");
+      return;
+    }
+
+    if (
+      preparedDraftOrderIdRef.current &&
+      preparedDraftFingerprintRef.current === draftPreparationFingerprint
+    ) {
+      setDraftPreparationStatus("ready");
+      console.info("[draft-preparation-reused]", {
+        fingerprint: draftPreparationFingerprint,
+        draftOrderId: preparedDraftOrderIdRef.current,
+      });
+      return;
+    }
+
+    if (
+      draftPreparationPromiseRef.current &&
+      draftPreparationPromiseRef.current.fingerprint === draftPreparationFingerprint
+    ) {
+      setDraftPreparationStatus("preparing");
+      return;
+    }
+
+    draftPreparationTimer.current = setTimeout(() => {
+      previousDraftPreparationFingerprintRef.current = draftPreparationFingerprint;
+      void prepareDraftOrder(draftPreparationFingerprint).catch((error) => {
+        console.warn("[draft-preparation-failed]", {
+          fingerprint: draftPreparationFingerprint,
+          message: error instanceof Error ? error.message : "Unknown draft preparation error",
+        });
+      });
+    }, 450);
+
+    return () => {
+      if (draftPreparationTimer.current) clearTimeout(draftPreparationTimer.current);
+    };
+  }, [
+    canPay,
+    draftPreparationFingerprint,
+    hasAvailabilityBlock,
+    hasCompleteShippingAddress,
+    items.length,
+    loading,
+    prepareDraftOrder,
+    selectedShippingMethod?.id,
+    step,
+    submitting,
+  ]);
 
   useEffect(() => {
     if (step === "payment" && !selectedShippingMethod?.id) {
@@ -1343,6 +1560,12 @@ export default function CheckoutPage() {
     setError(null);
 
     try {
+      const currentDraftFingerprint = draftPreparationFingerprint;
+      console.info("[pay-clicked]", {
+        fingerprint: currentDraftFingerprint,
+        draftStatus: draftPreparationStatus,
+      });
+
       const nameParts = form.fullName.trim().split(/\s+/).filter(Boolean);
       const firstName = nameParts.slice(0, -1).join(" ");
       const lastName = nameParts.at(-1) ?? "";
@@ -1351,53 +1574,77 @@ export default function CheckoutPage() {
         throw new Error("Enter your first and last name.");
       }
 
-      const draftRes = await fetch("/api/checkout/draft-order", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          cartItemIds: items.map((item) => item.id),
-          address: {
-            firstName,
-            lastName,
-            addressLine1: form.address,
-            addressLine2: form.apartment || null,
-            city: form.city,
-            state: form.state.trim() || form.stateCode.trim() || null,
-            stateCode: form.stateCode.trim() || form.state.trim() || null,
-            postalCode: form.postalCode,
-            countryCode: form.country,
-            email: form.email,
-            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
-          },
-          customer: {
-            fullName: form.fullName,
-            email: form.email,
-            phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
-            country: form.country,
-            countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
-            address: form.address,
-            apartment: form.apartment,
-            city: form.city,
-            state: form.state.trim() || form.stateCode.trim() || null,
-            stateCode: form.stateCode.trim() || form.state.trim() || null,
-            postalCode: form.postalCode,
-          },
-          shippingMethod: selectedShippingMethod,
-        }),
-      });
-      const draftData = await draftRes.json().catch(() => null);
-      if (!draftRes.ok || !draftData?.success) {
-        throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
+      let draftOrderIdForCheckout = preparedDraftOrderIdRef.current;
+      if (
+        !draftOrderIdForCheckout ||
+        preparedDraftFingerprintRef.current !== currentDraftFingerprint
+      ) {
+        if (
+          draftPreparationPromiseRef.current &&
+          draftPreparationPromiseRef.current.fingerprint === currentDraftFingerprint
+        ) {
+          console.info("[pay-using-prepared-draft]", { mode: "await-inflight", fingerprint: currentDraftFingerprint });
+          draftOrderIdForCheckout = await draftPreparationPromiseRef.current.promise;
+        } else {
+          console.info("[pay-fallback-create-draft]", { fingerprint: currentDraftFingerprint });
+          const draftRes = await fetch("/api/checkout/draft-order", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({
+              cartItemIds: items.map((item) => item.id),
+              address: {
+                firstName,
+                lastName,
+                addressLine1: form.address,
+                addressLine2: form.apartment || null,
+                city: form.city,
+                state: form.state.trim() || form.stateCode.trim() || null,
+                stateCode: form.stateCode.trim() || form.state.trim() || null,
+                postalCode: form.postalCode,
+                countryCode: form.country,
+                email: form.email,
+                phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+              },
+              customer: {
+                fullName: form.fullName,
+                email: form.email,
+                phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
+                country: form.country,
+                countryIso: resolveCheckoutCountry(form.country)?.iso ?? null,
+                address: form.address,
+                apartment: form.apartment,
+                city: form.city,
+                state: form.state.trim() || form.stateCode.trim() || null,
+                stateCode: form.stateCode.trim() || form.state.trim() || null,
+                postalCode: form.postalCode,
+              },
+              shippingMethod: selectedShippingMethod,
+            }),
+          });
+          const draftData = await draftRes.json().catch(() => null);
+          if (!draftRes.ok || !draftData?.success) {
+            throw new Error(draftData?.message || draftData?.error || "Failed to prepare draft order");
+          }
+          draftOrderIdForCheckout = draftData.draftOrderId ?? null;
+          preparedDraftOrderIdRef.current = draftOrderIdForCheckout;
+          preparedDraftFingerprintRef.current = currentDraftFingerprint;
+          setDraftOrderId(draftOrderIdForCheckout);
+        }
       }
-      setDraftOrderId(draftData.draftOrderId ?? null);
+      if (!draftOrderIdForCheckout) {
+        throw new Error("Failed to prepare draft order");
+      }
+      console.info("[pay-using-prepared-draft]", { fingerprint: currentDraftFingerprint, draftOrderId: draftOrderIdForCheckout });
+      setDraftPreparationStatus("ready");
+      setDraftOrderId(draftOrderIdForCheckout);
 
       const res = await fetch("/api/checkout", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: draftData.draftOrderId }),
+        body: JSON.stringify({ ...buildSecureCheckoutPayload(), draftOrderId: draftOrderIdForCheckout }),
       });
 
       const data = await res.json().catch(() => null);
@@ -1408,10 +1655,12 @@ export default function CheckoutPage() {
       }
 
       if (data?.url) {
+        console.info("[redirect-started]", { target: "stripe", hasSessionUrl: true });
         window.location.href = data.url;
         return;
       }
       if (data?.checkoutUrl) {
+        console.info("[redirect-started]", { target: "stripe", hasSessionUrl: true });
         window.location.href = data.checkoutUrl;
         return;
       }
