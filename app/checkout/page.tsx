@@ -59,6 +59,7 @@ import {
   resolveGelatoPrintFiles,
 } from "./_lib/checkout";
 import { normalizeShippingMethods, type NormalizedShippingMethod } from "@/lib/gelato/shipping-methods";
+import NavbarBrand from "@/app/components/Navbar/NavbarBrand";
 import type {
   AddressSuggestion,
   CartItem,
@@ -1621,9 +1622,7 @@ export default function CheckoutPage() {
           <button type="button" onClick={() => router.back()} className="flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-4 text-sm font-black text-white/80 transition active:scale-[0.98] hover:bg-white/[0.06]">
             <ArrowLeft size={16} /> Back
           </button>
-          <div className="flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-4 text-sm font-black text-white/75">
-            <Lock size={14} /> Secure checkout
-          </div>
+          <NavbarBrand />
         </header>
 
         <section className="mb-5 sm:mb-7">
@@ -1631,7 +1630,7 @@ export default function CheckoutPage() {
           <h1 className="mt-3 text-[clamp(2.5rem,5vw,4.4rem)] font-black tracking-[-0.09em] leading-[0.95]">Finish your order</h1>
         </section>
 
-        <nav className="mb-5 rounded-full border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.22)] sm:mb-8">
+        <nav className="mb-5 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.22)] sm:mb-8">
           <div className="grid grid-cols-3 gap-1.5">
             {[
               ["shipping", "Shipping"],
@@ -1650,7 +1649,7 @@ export default function CheckoutPage() {
                     if (id === "review" && shippingComplete) setStep("review");
                     if (id === "payment" && shippingComplete && items.length > 0) setStep("payment");
                   }}
-                  className={`flex h-12 items-center justify-center gap-2 rounded-full text-sm font-black transition ${
+                  className={`flex h-12 items-center justify-center gap-2 rounded-xl text-sm font-black transition ${
                     active ? "bg-white text-[#0b0b12] shadow-[0_8px_24px_rgba(255,255,255,0.18)]" : done ? "text-white/88" : "text-white/38"
                   }`}
                 >
@@ -1797,7 +1796,7 @@ export default function CheckoutPage() {
                       ).map(([, variant]) => variant);
 
                       return (
-                        <article key={item.id} className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.025] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-5">
+                        <article key={item.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.025] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-5">
                           <div className="grid gap-5 lg:grid-cols-[minmax(210px,240px)_minmax(0,1fr)] lg:items-start">
                             <div className="space-y-4">
                               <ProductPreviewImage
@@ -1808,12 +1807,12 @@ export default function CheckoutPage() {
                               />
                               <div>
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {colorGroups.length > 0 ? colorGroups.slice(0, 8).map(({ color, variant }) => {
+                                <div className="grid grid-cols-8 gap-2">
+                                  {colorGroups.length > 0 ? colorGroups.slice(0, 16).map(({ color, variant }) => {
                                     const active = color === currentColor;
                                     return (
-                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
-                                        <span className="h-8 w-8 rounded-full border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-10 w-10 place-items-center rounded-lg border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                        <span className="h-7 w-7 rounded-md border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
                                       </button>
                                     );
                                   }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
@@ -1844,7 +1843,7 @@ export default function CheckoutPage() {
                                       const active = size === currentSize;
                                       const available = isVariantAvailable(variant);
                                       return (
-                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-11 rounded-xl border px-3 py-2 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
+                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-11 rounded-none border px-3 py-2 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
                                           <span className="block text-sm font-black leading-4">{size}</span>
                                         </button>
                                       );
@@ -1929,7 +1928,7 @@ export default function CheckoutPage() {
                   <p className="mt-2 text-sm font-medium leading-6 text-white/45">You are one step away. Confirm the total and continue to payment.</p>
                 </div>
                 <div className="space-y-4">
-                  <div className="rounded-[28px] border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
                     <div className="flex items-center gap-3">
                       <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/15 text-purple-200"><CreditCard size={21} /></div>
                       <div>
@@ -1950,7 +1949,7 @@ export default function CheckoutPage() {
                       <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/45"><Lock size={13} /> Your payment information is encrypted and secure.</p>
                     </div>
                   </div>
-                  <div className="rounded-[28px] border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Shipping to</p>
