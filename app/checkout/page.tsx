@@ -1807,12 +1807,12 @@ export default function CheckoutPage() {
                               />
                               <div>
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
-                                <div className="grid grid-cols-8 gap-2">
+                                <div className="grid grid-cols-8 gap-1.5">
                                   {colorGroups.length > 0 ? colorGroups.slice(0, 16).map(({ color, variant }) => {
                                     const active = color === currentColor;
                                     return (
-                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-10 w-10 place-items-center rounded-lg border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
-                                        <span className="h-7 w-7 rounded-md border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-9 w-9 place-items-center rounded-md border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                        <span className="h-6 w-6 rounded-sm border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
                                       </button>
                                     );
                                   }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
@@ -1837,13 +1837,13 @@ export default function CheckoutPage() {
                               {visibleSizes.length > 0 && (
                                 <div className="mt-5">
                                   <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Size</p>
-                                  <div className="flex flex-wrap gap-2">
+                                  <div className="flex flex-wrap gap-1.5">
                                     {visibleSizes.map((variant) => {
                                       const size = variantSize(variant);
                                       const active = size === currentSize;
                                       const available = isVariantAvailable(variant);
                                       return (
-                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-11 rounded-none border px-3 py-2 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
+                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-10 rounded-none border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
                                           <span className="block text-sm font-black leading-4">{size}</span>
                                         </button>
                                       );
@@ -1853,10 +1853,10 @@ export default function CheckoutPage() {
                               )}
                               <div className="mt-5">
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
-                                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] p-1">
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-11 w-11 place-items-center rounded-full text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={15} /></button>
-                                  <span className="grid h-11 min-w-12 place-items-center rounded-full px-2 text-base font-black">{quantity}</span>
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-11 w-11 place-items-center rounded-full text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={15} /></button>
+                                <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
+                                  <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={13} /></button>
+                                  <span className="grid h-9 min-w-10 place-items-center rounded-none px-2 text-sm font-black">{quantity}</span>
+                                  <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={13} /></button>
                                 </div>
                               </div>
                             </div>
