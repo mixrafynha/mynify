@@ -1928,7 +1928,7 @@ export default function CheckoutPage() {
                   <p className="mt-2 text-sm font-medium leading-6 text-white/45">You are one step away. Confirm the total and continue to payment.</p>
                 </div>
                 <div className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4 sm:p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
                     <div className="flex items-center gap-3">
                       <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/15 text-purple-200"><CreditCard size={21} /></div>
                       <div>
@@ -1936,9 +1936,9 @@ export default function CheckoutPage() {
                         <p className="mt-1 text-xs font-semibold text-white/40">Handled by your secure checkout route.</p>
                       </div>
                     </div>
-                    <div className="mt-5 border-t border-white/10 pt-5">
-                      <p className="text-sm font-black text-white/80">Secure & flexible payments</p>
-                      <div className="mt-4 flex flex-wrap gap-2">
+                    <div className="mt-4 border-t border-white/10 pt-4">
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-white/80">Secure & flexible payments</p>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
                         <CardBrandIcon brand="visa" />
                         <CardBrandIcon brand="mastercard" />
                         <CardBrandIcon brand="apple-pay" />
@@ -1946,7 +1946,7 @@ export default function CheckoutPage() {
                         <CardBrandIcon brand="klarna" />
                         <CardBrandIcon brand="link" />
                       </div>
-                      <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/45"><Lock size={13} /> Your payment information is encrypted and secure.</p>
+                      <p className="mt-3 flex items-center gap-2 text-[11px] font-medium text-white/45"><Lock size={12} /> Your payment information is encrypted and secure.</p>
                     </div>
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">

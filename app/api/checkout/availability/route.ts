@@ -260,12 +260,17 @@ function normalizeAvailabilityPrintFiles(files: Array<{ type?: string; url?: str
 }
 
 function shippingUnavailableMessage(item?: {
+  title?: string | null;
+  productId?: string | null;
   color?: string | null;
   size?: string | null;
 }) {
-  const label = [item?.color, item?.size].map(safeText).filter(Boolean).join(" / ");
-  return label
-    ? `${label} is not available for delivery to this address. Choose another size or color.`
+  const labelParts = [item?.title, item?.color, item?.size].map(safeText).filter(Boolean);
+  const label = labelParts.join(" / ");
+  const fallback = [item?.productId, item?.color, item?.size].map(safeText).filter(Boolean).join(" / ");
+  const subject = label || fallback;
+  return subject
+    ? `${subject} is not available for delivery to this address. Choose another size or color.`
     : "One or more items are not available for delivery to this address. Choose another size or color.";
 }
 
@@ -307,8 +312,10 @@ async function identifyShippingIncompatibleItems(input: {
   );
   const incompatible: Array<{
     cartItemId: string | null;
+    title: string | null;
     variantId: string | null;
     productUid: string;
+    productId: string | null;
     color: string | null;
     size: string | null;
     reason: string;
@@ -330,8 +337,10 @@ async function identifyShippingIncompatibleItems(input: {
       const source = sourceByReference.get(quoteItem.itemReferenceId) ?? null;
       incompatible.push({
         cartItemId: safeText(source?.cartItemId) || safeText(source?.itemId) || null,
+        title: safeText(source?.title) || null,
         variantId: safeText(source?.variantId) || null,
         productUid: quoteItem.productUid,
+        productId: safeText(source?.productId) || null,
         color: source?.color ?? null,
         size: source?.size ?? null,
         reason: quoteHasInvalidInternalShipping(quote) ? "invalid_internal_shipping_method" : "no_valid_shipping_method",
@@ -963,8 +972,10 @@ export async function POST(req: Request) {
           unavailableItems: incompatibleItems.map((item) => ({
             itemId: item.cartItemId ?? item.variantId ?? item.productUid,
             cartItemId: item.cartItemId,
+            title: item.title,
             variantId: item.variantId,
             productUid: item.productUid,
+            productId: item.productId,
             color: item.color,
             size: item.size,
             available: false,
