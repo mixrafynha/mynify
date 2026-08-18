@@ -180,11 +180,10 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
       <div className={baseClass}>
         <svg viewBox="0 0 120 40" className="h-6 w-[54px]" fill="none" aria-hidden="true">
           <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#1234A7" />
-          <path d="M21 26.5h7.2l4.5-13h-7.2L21 26.5Z" fill="#fff" />
-          <path d="M38.4 13.5h5.2l-2.7 13h-5.2l2.7-13Z" fill="#fff" />
-          <path d="M51 13.4h6.3c2.7 0 4.6 1.2 4.6 3.5 0 2.2-1.8 3.8-4.4 3.8h-3.2l-.9 4.3h-4.7L51 13.4Zm4.4 5.6c.9 0 1.5-.4 1.5-1.1 0-.7-.5-1-1.3-1H54l-.4 2.1h1.8Z" fill="#fff" />
-          <path d="M70.4 13.4h5.3l4.8 13h-5l-.6-1.9h-4.1l-.9 1.9h-4.7l5.2-13Zm1.1 8.1h2.6l-1-4.1-1.6 4.1Z" fill="#fff" />
-          <path d="M85.7 13.4h4.7l1.6 7.5 3.7-7.5h4.8l-7.5 13h-5L85.7 13.4Z" fill="#fff" />
+          <path d="M21.3 13.5h6.3l-4.1 13h-6.2l4-13Z" fill="#fff" />
+          <path d="M31 13.5h5l2 8.1 4.8-8.1h5.5l-7.8 13h-5.1l-4.4-13Z" fill="#fff" />
+          <path d="M49.2 13.5h6.5c3.3 0 5.6 1.6 5.6 4.5 0 3.2-2.7 5.4-6.3 5.4h-3.1L51 26.5h-5l3.2-13Zm4.1 6.3c1.2 0 2-.5 2-1.5 0-.9-.7-1.3-1.8-1.3h-1.2l-.7 2.8h1.7Z" fill="#fff" />
+          <path d="M69.5 13.5h5.8l4.5 13h-5.1l-.7-2.1h-4.2l-1 2.1h-4.8l5.5-13Zm1.3 8h2.8l-1-4.2-1.8 4.2Z" fill="#fff" />
         </svg>
       </div>
     );
@@ -195,9 +194,9 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
       <div className={baseClass}>
         <svg viewBox="0 0 120 40" className="h-6 w-[54px]" aria-hidden="true">
           <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#111117" />
-          <circle cx="49" cy="20" r="10" fill="#EA001B" />
-          <circle cx="61" cy="20" r="10" fill="#FF5F00" fillOpacity="0.96" />
-          <path d="M55 12.4a10 10 0 0 1 0 15.2 10 10 0 1 0 0-15.2Z" fill="#F79E1B" opacity="0.96" />
+          <circle cx="49" cy="20" r="10.5" fill="#EA001B" />
+          <circle cx="61" cy="20" r="10.5" fill="#FF5F00" fillOpacity="0.96" />
+          <path d="M55 12.2a10.5 10.5 0 0 1 0 15.6 10.5 10.5 0 1 0 0-15.6Z" fill="#F79E1B" opacity="0.96" />
         </svg>
       </div>
     );
@@ -232,9 +231,9 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
     return (
       <div className={baseClass}>
         <svg viewBox="0 0 120 40" className="h-6 w-[54px]" aria-hidden="true">
-          <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#ffb7d5" />
-          <path d="M38 12.5h6.2v15H38zM47 12.5h6.2v15H47zM56 12.5h6.2v15H56zM68 12.5h6.2v15H68z" fill="#111117" />
-          <path d="M88.8 13c2.9 0 5 2 5 4.8 0 2.1-1.2 3.8-3.1 4.5l3.7 6.7h-4.7l-3-6h-1.3v6h-4V13h7.4Zm-3.4 7h2.9c1.2 0 2-.8 2-2s-.8-2-2-2h-2.9v4Z" fill="#111117" />
+          <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#FFB6D6" />
+          <path d="M37.8 12.8h5.2v14.4h-5.2zM45.5 12.8h5.2v14.4h-5.2zM53.2 12.8h5.2v14.4h-5.2zM63.2 12.8h5.2v14.4h-5.2z" fill="#111117" />
+          <path d="M81.5 13.1h4.5l-5.2 6.6 5.6 7.5h-4.6l-4.3-5.8h-1.4v5.8h-3.8V13.1h9.2Zm-4.4 5.9h3.1c1.1 0 1.9-.7 1.9-1.7 0-1.1-.8-1.7-2-1.7h-3v3.4Z" fill="#111117" />
         </svg>
       </div>
     );
@@ -242,9 +241,9 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
 
   return (
     <div className={baseClass}>
-      <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
-        <rect x="1" y="1" width="118" height="38" rx="12" fill="#1a1a1a" />
-        <path d="M41 12h6v16h-6zM50 12h6l4 7 4-7h6l-6 10 6 6h-6l-4-4-4 4h-6l6-6-6-10Z" fill="#00C05F" />
+      <svg viewBox="0 0 120 40" className="h-6 w-[54px]" aria-hidden="true">
+        <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#1a1a1a" />
+        <path d="M41 12.5h6v15h-6zM50 12.5h6l4.1 6.8 4.1-6.8h6.1l-6.2 9.8 6.2 5.2h-6.2l-4.1-3.8-4.1 3.8H44l6.2-5.2-6.2-9.8Z" fill="#00C05F" />
       </svg>
     </div>
   );
