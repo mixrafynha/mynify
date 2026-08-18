@@ -1800,8 +1800,6 @@ export default function CheckoutPage() {
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="line-clamp-2 text-xl font-black leading-[1.06] sm:text-2xl">{item.title}</p>
-                              <p className="mt-1 text-sm text-white/52">{[currentColor, currentSize].filter(Boolean).join(" • ") || "Custom product"}</p>
-                              <p className="mt-1 text-xs text-white/34">Variant: {[currentColor, currentSize].filter(Boolean).join(" / ") || "Selected variant"}</p>
                             </div>
                             <button type="button" disabled={busy} onClick={() => removeItem(item.id)} className="grid h-10 w-10 shrink-0 place-items-center rounded-none border border-white/10 bg-white/[0.03] text-white/75 transition hover:bg-white/[0.08] disabled:opacity-35" aria-label="Remove item">
                               <Trash2 size={16} />
@@ -1819,23 +1817,19 @@ export default function CheckoutPage() {
 
                           <div className="mt-4">
                             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
-                            <div className="grid grid-cols-8 gap-1.5">
+                            <div className="grid grid-cols-8 gap-1">
                               {colorGroups.length > 0 ? colorGroups.slice(0, 16).map(({ color, variant }) => {
                                 const active = color === currentColor;
                                 return (
-                                  <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-9 w-9 place-items-center rounded-md border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
-                                    <span className="h-6 w-6 rounded-sm border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                  <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-8 w-8 place-items-center rounded-none border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                    <span className="h-5 w-5 rounded-none border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
                                   </button>
                                 );
                               }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
                             </div>
                           </div>
 
-                          <div className="mt-4 flex items-start justify-between gap-4 border-t border-white/10 pt-4">
-                            <div>
-                              <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
-                              <p className="text-xs text-white/38">Excl. tax</p>
-                            </div>
+                          <div className="mt-3 border-t border-white/10 pt-3">
                             {visibleSizes.length > 0 && (
                               <div className="max-w-[320px] text-right">
                                 <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Size</p>
@@ -1855,12 +1849,18 @@ export default function CheckoutPage() {
                             )}
                           </div>
 
-                          <div className="mt-4">
-                            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
-                            <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
-                              <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={13} /></button>
-                              <span className="grid h-9 min-w-10 place-items-center rounded-none px-2 text-sm font-black">{quantity}</span>
-                              <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={13} /></button>
+                          <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/10 pt-4">
+                            <div className="min-w-0">
+                              <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
+                              <p className="text-xs text-white/38">Excl. tax</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
+                              <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
+                                <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={13} /></button>
+                                <span className="grid h-9 min-w-10 place-items-center rounded-none px-2 text-sm font-black">{quantity}</span>
+                                <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={13} /></button>
+                              </div>
                             </div>
                           </div>
                         </article>
