@@ -303,7 +303,7 @@ function cleanUuid(value: unknown) {
 }
 
 function resolveCheckoutAvailabilityVariantId(item: CartItem) {
-  return cleanUuid(item.variant_id);
+  return cleanUuid(item.variant_id ?? (item as CartItem & { variantId?: string | null }).variantId ?? null);
 }
 
 function buildCheckoutAvailabilityItems(items: CartItem[]) {
@@ -312,7 +312,6 @@ function buildCheckoutAvailabilityItems(items: CartItem[]) {
     cartItemId: item.id,
     title: item.title,
     productId: getCartProductId(item),
-    productUid: item.gelato_product_uid ?? item.gelatoProductUid ?? item.productUid ?? item.product_uid ?? null,
     variantId: resolveCheckoutAvailabilityVariantId(item),
     designId: item.design_id ?? item.designId ?? item.user_product_id ?? item.userProductId ?? null,
     userProductId: item.user_product_id ?? item.userProductId ?? item.design_id ?? item.designId ?? null,
