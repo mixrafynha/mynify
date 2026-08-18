@@ -7,13 +7,14 @@ type ProductPreviewImageProps = {
   title: string;
   frontImage?: string | null;
   backImage?: string | null;
+  className?: string;
 };
 
 function cleanUrl(value?: string | null) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-export default function ProductPreviewImage({ title, frontImage, backImage }: ProductPreviewImageProps) {
+export default function ProductPreviewImage({ title, frontImage, backImage, className }: ProductPreviewImageProps) {
   const [activeSide, setActiveSide] = useState<"front" | "back">("front");
 
   const images = useMemo(
@@ -35,7 +36,7 @@ export default function ProductPreviewImage({ title, frontImage, backImage }: Pr
   };
 
   return (
-    <div className="relative h-[132px] w-[132px] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] shadow-[0_18px_55px_rgba(0,0,0,0.25)] sm:h-[168px] sm:w-[168px]">
+    <div className={`relative h-[132px] w-[132px] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] shadow-[0_18px_55px_rgba(0,0,0,0.25)] sm:h-[168px] sm:w-[168px] ${className ?? ""}`}>
       {activeImage ? (
         <button
           type="button"

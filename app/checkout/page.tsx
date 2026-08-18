@@ -171,11 +171,80 @@ function formatShipsFrom(countryCode: string | null | undefined) {
   return `Ships from ${label}`;
 }
 
-function PaymentBadge({ label }: { label: string }) {
+function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" | "google-pay" | "klarna" | "link" }) {
+  const baseClass = "h-10 w-[72px] rounded-2xl border border-white/10 bg-white/[0.03] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+
+  if (brand === "visa") {
+    return (
+      <div className={baseClass}>
+        <svg viewBox="0 0 120 40" className="h-full w-full" fill="none" aria-hidden="true">
+          <rect x="1" y="1" width="118" height="38" rx="12" fill="#122a66" />
+          <path d="M20 28h9l5-16h-9l-5 16Z" fill="#fff" />
+          <path d="M43 28h7l3.6-16H46l-3 16Z" fill="#fff" />
+          <path d="M57 12h6.5c2.9 0 5.3 1.2 5.3 4 0 2.7-2.2 4.4-5.1 4.4H61l-1.1 5.6h-6.2L57 12Zm4.8 6.4c1.1 0 1.8-.5 1.8-1.4 0-.8-.6-1.2-1.6-1.2H60l-.5 2.6h2.3Z" fill="#fff" />
+          <path d="M76 12h6.4L87 28h-6.2l-.5-2h-5.1l-1 2H68l8-16Zm1.3 9.5h3.1l-1.1-4.5-2 4.5Z" fill="#fff" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (brand === "mastercard") {
+    return (
+      <div className={baseClass}>
+        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
+          <rect x="1" y="1" width="118" height="38" rx="12" fill="#111" />
+          <circle cx="48" cy="20" r="10" fill="#EA001B" />
+          <circle cx="60" cy="20" r="10" fill="#FF5F00" fillOpacity="0.95" />
+          <path d="M54 12.4a10 10 0 0 1 0 15.2 10 10 0 1 0 0-15.2Z" fill="#F79E1B" opacity="0.95" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (brand === "apple-pay") {
+    return (
+      <div className={baseClass}>
+        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
+          <rect x="1" y="1" width="118" height="38" rx="12" fill="#111" />
+          <path d="M61 27c-1.4 0-2.4-.7-3.1-.7-.8 0-1.9.7-3.1.7-2.5 0-5.5-4.9-5.5-8.8 0-3.9 2.4-5.9 4.7-5.9 1.2 0 2.2.8 2.9.8.7 0 1.9-.8 3.3-.8 1.2 0 3 .6 4.1 2.1-3.6 2-3 7.2.7 8.3-.4 1.2-1.6 4.3-4 4.3Zm-1.2-14.5c.7-.8 1.2-1.9 1.1-3.1-1 .1-2.1.7-2.8 1.5-.7.8-1.3 1.9-1.1 3 1.1 0 2.2-.6 2.8-1.4Z" fill="#fff" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (brand === "google-pay") {
+    return (
+      <div className={baseClass}>
+        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
+          <rect x="1" y="1" width="118" height="38" rx="12" fill="#111" />
+          <path d="M39 20a8 8 0 0 1 8-8h6v4h-6a4 4 0 1 0 0 8h3v-3h-3v-4h7v9h-7a8 8 0 0 1-8-8Z" fill="#4285F4" />
+          <path d="M58 12h4v16h-4z" fill="#34A853" />
+          <path d="M65 12h4l4 7 4-7h4l-6.2 10 6.2 6h-4.7l-4.2-4.2L64.7 28H60l6.1-6L65 12Z" fill="#EA4335" />
+          <path d="M86 12h4l5 16h-4l-1-3h-5l-1 3h-4l5-16Zm1.2 9h3.6l-1.8-5.6-1.8 5.6Z" fill="#FBBC05" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (brand === "klarna") {
+    return (
+      <div className={baseClass}>
+        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
+          <rect x="1" y="1" width="118" height="38" rx="12" fill="#ffb7d5" />
+          <path d="M38 12h7v16h-7zM48 12h7v16h-7zM58 12h7v16h-7zM70 12h7v16h-7z" fill="#111" opacity="0.92" />
+          <path d="M90 13c2.9 0 5 2 5 4.8 0 2.1-1.2 3.8-3.1 4.5l3.7 6.7h-4.7l-3-6h-1.3v6h-4V13h7.4Zm-3.4 7h2.9c1.2 0 2-.8 2-2s-.8-2-2-2h-2.9v4Z" fill="#111" opacity="0.92" />
+        </svg>
+      </div>
+    );
+  }
+
   return (
-    <span className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 text-sm font-black text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-      {label}
-    </span>
+    <div className={baseClass}>
+      <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
+        <rect x="1" y="1" width="118" height="38" rx="12" fill="#1a1a1a" />
+        <path d="M41 12h6v16h-6zM50 12h6l4 7 4-7h6l-6 10 6 6h-6l-4-4-4 4h-6l6-6-6-10Z" fill="#00C05F" />
+      </svg>
+    </div>
   );
 }
 
@@ -459,6 +528,7 @@ export default function CheckoutPage() {
   const availabilityAbortController = useRef<AbortController | null>(null);
   const availabilityRequestId = useRef(0);
   const availabilityRequestSignatureRef = useRef("");
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -515,6 +585,7 @@ export default function CheckoutPage() {
   const checkoutAvailabilityItemsReady = items.length > 0 && checkoutAvailabilityItems.every((item) => Boolean(item.variantId));
   const availabilityRequestSignature = useMemo(() => {
     return JSON.stringify({
+      refreshKey: availabilityRefreshKey,
       fullName: form.fullName.trim(),
       email: form.email.trim(),
       phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
@@ -531,7 +602,7 @@ export default function CheckoutPage() {
         printFiles: item.printFiles.map((file) => `${file.type}:${file.url}`),
       })),
     });
-  }, [checkoutAvailabilityItems, hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode]);
+  }, [availabilityRefreshKey, checkoutAvailabilityItems, hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -1259,6 +1330,7 @@ export default function CheckoutPage() {
           : entry,
       ),
     );
+    setAvailabilityRefreshKey((value) => value + 1);
 
     await updateCartItem(item, {
       variantId: nextVariantId,
@@ -1626,8 +1698,28 @@ export default function CheckoutPage() {
 
                       return (
                         <article key={item.id} className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.025] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-5">
-                          <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-5">
-                            <ProductPreviewImage title={item.title} frontImage={previewImages.front} backImage={previewImages.back} />
+                          <div className="grid gap-5 lg:grid-cols-[minmax(210px,240px)_minmax(0,1fr)] lg:items-start">
+                            <div className="space-y-4">
+                              <ProductPreviewImage
+                                title={item.title}
+                                frontImage={previewImages.front}
+                                backImage={previewImages.back}
+                                className="h-[220px] w-full sm:h-[240px] sm:w-full"
+                              />
+                              <div>
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {colorGroups.length > 0 ? colorGroups.slice(0, 8).map(({ color, variant }) => {
+                                    const active = color === currentColor;
+                                    return (
+                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_3px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                        <span className="h-8 w-8 rounded-full border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                      </button>
+                                    );
+                                  }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
+                                </div>
+                              </div>
+                            </div>
                             <div className="min-w-0">
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
@@ -1642,19 +1734,6 @@ export default function CheckoutPage() {
                               <div className="mt-4 border-t border-white/10 pt-4">
                                 <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
                                 <p className="text-xs text-white/38">Excl. tax</p>
-                              </div>
-                              <div className="mt-5">
-                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
-                                <div className="flex flex-wrap gap-2">
-                                  {colorGroups.length > 0 ? colorGroups.slice(0, 8).map(({ color, variant }) => {
-                                    const active = color === currentColor;
-                                    return (
-                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 disabled:opacity-35 ${active ? "border-white" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
-                                        <span className="h-8 w-8 rounded-full border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
-                                      </button>
-                                    );
-                                  }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
-                                </div>
                               </div>
                               {visibleSizes.length > 0 && (
                                 <div className="mt-5">
@@ -1761,7 +1840,12 @@ export default function CheckoutPage() {
                     <div className="mt-5 border-t border-white/10 pt-5">
                       <p className="text-sm font-black text-white/80">Secure & flexible payments</p>
                       <div className="mt-4 flex flex-wrap gap-2">
-                        {["VISA", "Mastercard", "Apple Pay", "Google Pay", "Klarna", "link"].map((label) => <PaymentBadge key={label} label={label} />)}
+                        <CardBrandIcon brand="visa" />
+                        <CardBrandIcon brand="mastercard" />
+                        <CardBrandIcon brand="apple-pay" />
+                        <CardBrandIcon brand="google-pay" />
+                        <CardBrandIcon brand="klarna" />
+                        <CardBrandIcon brand="link" />
                       </div>
                       <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/45"><Lock size={13} /> Your payment information is encrypted and secure.</p>
                     </div>
@@ -1805,15 +1889,11 @@ export default function CheckoutPage() {
                 <p className="pt-1 text-[10px] font-semibold leading-4 text-white/32">Applicable tax is calculated from the delivery country at payment.</p>
               </div>
               <div className="mt-5 hidden lg:block">
-                {step === "payment" ? (
-                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#8b28ff] px-5 text-sm font-black text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
-                    {submitting ? <Loader2 size={16} className="animate-spin" /> : <>Pay now {money(total)}</>}
-                  </button>
-                ) : (
+                {step !== "payment" ? (
                   <button type="button" disabled={(step === "shipping" && !shippingComplete) || (step === "review" && items.length === 0)} onClick={goNext} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     Continue <ArrowRight size={15} />
                   </button>
-                )}
+                ) : null}
               </div>
               {shippingComplete && (
                 <button type="button" onClick={() => setStep("shipping")} className="mt-5 flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-left text-xs font-bold text-white/55 hover:bg-white/[0.05]">
