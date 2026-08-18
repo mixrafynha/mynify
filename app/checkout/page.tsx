@@ -1940,13 +1940,10 @@ export default function CheckoutPage() {
                     </div>
                     <div className="mt-4 border-t border-white/10 pt-4">
                       <p className="text-xs font-black uppercase tracking-[0.18em] text-white/80">Secure & flexible payments</p>
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <CardBrandIcon brand="visa" />
                         <CardBrandIcon brand="mastercard" />
-                        <CardBrandIcon brand="apple-pay" />
-                        <CardBrandIcon brand="google-pay" />
                         <CardBrandIcon brand="klarna" />
-                        <CardBrandIcon brand="link" />
                       </div>
                       <p className="mt-3 flex items-center gap-2 text-[11px] font-medium text-white/45"><Lock size={12} /> Your payment information is encrypted and secure.</p>
                     </div>
@@ -1961,7 +1958,7 @@ export default function CheckoutPage() {
                       <button type="button" onClick={() => setStep("shipping")} className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-white/60 hover:bg-white/[0.05]">Edit</button>
                     </div>
                   </div>
-                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="flex h-[60px] w-full items-center justify-center gap-2 rounded-full bg-[#8b28ff] text-sm font-black text-white shadow-[0_24px_40px_rgba(139,40,255,0.28)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="hidden h-[60px] w-full items-center justify-center gap-2 rounded-full bg-[#8b28ff] text-sm font-black text-white shadow-[0_24px_40px_rgba(139,40,255,0.28)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:flex">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}
                   </button>
                 </div>
