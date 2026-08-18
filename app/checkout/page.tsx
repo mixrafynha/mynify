@@ -1797,68 +1797,66 @@ export default function CheckoutPage() {
 
                       return (
                         <article key={item.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/[0.025] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-5">
-                          <div className="grid gap-5 lg:grid-cols-[minmax(210px,240px)_minmax(0,1fr)] lg:items-start">
-                            <div className="space-y-4">
-                              <ProductPreviewImage
-                                title={item.title}
-                                frontImage={previewImages.front}
-                                backImage={previewImages.back}
-                                className="h-[220px] w-full sm:h-[240px] sm:w-full"
-                              />
-                              <div>
-                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
-                                <div className="grid grid-cols-8 gap-1.5">
-                                  {colorGroups.length > 0 ? colorGroups.slice(0, 16).map(({ color, variant }) => {
-                                    const active = color === currentColor;
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="line-clamp-2 text-xl font-black leading-[1.06] sm:text-2xl">{item.title}</p>
+                              <p className="mt-1 text-sm text-white/52">{[currentColor, currentSize].filter(Boolean).join(" • ") || "Custom product"}</p>
+                              <p className="mt-1 text-xs text-white/34">Variant: {[currentColor, currentSize].filter(Boolean).join(" / ") || "Selected variant"}</p>
+                            </div>
+                            <button type="button" disabled={busy} onClick={() => removeItem(item.id)} className="grid h-10 w-10 shrink-0 place-items-center rounded-none border border-white/10 bg-white/[0.03] text-white/75 transition hover:bg-white/[0.08] disabled:opacity-35" aria-label="Remove item">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                          <div className="mt-4">
+                            <ProductPreviewImage
+                              title={item.title}
+                              frontImage={previewImages.front}
+                              backImage={previewImages.back}
+                              className="h-[220px] w-full sm:h-[240px] sm:w-full"
+                            />
+                          </div>
+                          <div className="mt-4">
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
+                            <div className="grid grid-cols-8 gap-1.5">
+                              {colorGroups.length > 0 ? colorGroups.slice(0, 16).map(({ color, variant }) => {
+                                const active = color === currentColor;
+                                return (
+                                  <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-9 w-9 place-items-center rounded-md border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                    <span className="h-6 w-6 rounded-sm border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                  </button>
+                                );
+                              }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
+                            </div>
+                          </div>
+                          <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/10 pt-4">
+                            <div>
+                              <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
+                              <p className="text-xs text-white/38">Excl. tax</p>
+                            </div>
+                            {visibleSizes.length > 0 && (
+                              <div className="max-w-[320px] text-right">
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Size</p>
+                                <div className="flex flex-wrap justify-end gap-1.5">
+                                  {visibleSizes.map((variant) => {
+                                    const size = variantSize(variant);
+                                    const active = size === currentSize;
+                                    const available = isVariantAvailable(variant);
                                     return (
-                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-9 w-9 place-items-center rounded-md border transition active:scale-95 disabled:opacity-35 ${active ? "border-white shadow-[0_0_0_2px_rgba(255,255,255,0.12)]" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
-                                        <span className="h-6 w-6 rounded-sm border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                      <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-10 rounded-none border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
+                                        <span className="block text-sm font-black leading-4">{size}</span>
                                       </button>
                                     );
-                                  }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
+                                  })}
                                 </div>
                               </div>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 text-xl font-black leading-[1.06] sm:text-2xl">{item.title}</p>
-                                  <p className="mt-1 text-sm text-white/52">{[currentColor, currentSize].filter(Boolean).join(" • ") || "Custom product"}</p>
-                                  <p className="mt-1 text-xs text-white/34">Variant: {[currentColor, currentSize].filter(Boolean).join(" / ") || "Selected variant"}</p>
-                                </div>
-                                <button type="button" disabled={busy} onClick={() => removeItem(item.id)} className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.03] text-white/75 transition hover:bg-white/[0.08] disabled:opacity-35" aria-label="Remove item">
-                                  <Trash2 size={16} />
-                                </button>
-                              </div>
-                              <div className="mt-4 border-t border-white/10 pt-4">
-                                <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
-                                <p className="text-xs text-white/38">Excl. tax</p>
-                              </div>
-                              {visibleSizes.length > 0 && (
-                                <div className="mt-5">
-                                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Size</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {visibleSizes.map((variant) => {
-                                      const size = variantSize(variant);
-                                      const active = size === currentSize;
-                                      const available = isVariantAvailable(variant);
-                                      return (
-                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-10 rounded-none border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
-                                          <span className="block text-sm font-black leading-4">{size}</span>
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                              <div className="mt-5">
-                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
-                                <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={13} /></button>
-                                  <span className="grid h-9 min-w-10 place-items-center rounded-none px-2 text-sm font-black">{quantity}</span>
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={13} /></button>
-                                </div>
-                              </div>
+                            )}
+                          </div>
+                          <div className="mt-4">
+                            <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
+                            <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
+                              <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={13} /></button>
+                              <span className="grid h-9 min-w-10 place-items-center rounded-none px-2 text-sm font-black">{quantity}</span>
+                              <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-none text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={13} /></button>
                             </div>
                           </div>
                         </article>
