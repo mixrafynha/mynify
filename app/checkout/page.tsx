@@ -173,17 +173,18 @@ function formatShipsFrom(countryCode: string | null | undefined) {
 }
 
 function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" | "google-pay" | "klarna" | "link" }) {
-  const baseClass = "h-10 w-[72px] rounded-2xl border border-white/10 bg-white/[0.03] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
+  const baseClass = "flex h-10 w-[74px] items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] px-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]";
 
   if (brand === "visa") {
     return (
       <div className={baseClass}>
-        <svg viewBox="0 0 120 40" className="h-full w-full" fill="none" aria-hidden="true">
-          <rect x="1" y="1" width="118" height="38" rx="12" fill="#122a66" />
-          <path d="M20 28h9l5-16h-9l-5 16Z" fill="#fff" />
-          <path d="M43 28h7l3.6-16H46l-3 16Z" fill="#fff" />
-          <path d="M57 12h6.5c2.9 0 5.3 1.2 5.3 4 0 2.7-2.2 4.4-5.1 4.4H61l-1.1 5.6h-6.2L57 12Zm4.8 6.4c1.1 0 1.8-.5 1.8-1.4 0-.8-.6-1.2-1.6-1.2H60l-.5 2.6h2.3Z" fill="#fff" />
-          <path d="M76 12h6.4L87 28h-6.2l-.5-2h-5.1l-1 2H68l8-16Zm1.3 9.5h3.1l-1.1-4.5-2 4.5Z" fill="#fff" />
+        <svg viewBox="0 0 120 40" className="h-6 w-[54px]" fill="none" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#1234A7" />
+          <path d="M21 26.5h7.2l4.5-13h-7.2L21 26.5Z" fill="#fff" />
+          <path d="M38.4 13.5h5.2l-2.7 13h-5.2l2.7-13Z" fill="#fff" />
+          <path d="M51 13.4h6.3c2.7 0 4.6 1.2 4.6 3.5 0 2.2-1.8 3.8-4.4 3.8h-3.2l-.9 4.3h-4.7L51 13.4Zm4.4 5.6c.9 0 1.5-.4 1.5-1.1 0-.7-.5-1-1.3-1H54l-.4 2.1h1.8Z" fill="#fff" />
+          <path d="M70.4 13.4h5.3l4.8 13h-5l-.6-1.9h-4.1l-.9 1.9h-4.7l5.2-13Zm1.1 8.1h2.6l-1-4.1-1.6 4.1Z" fill="#fff" />
+          <path d="M85.7 13.4h4.7l1.6 7.5 3.7-7.5h4.8l-7.5 13h-5L85.7 13.4Z" fill="#fff" />
         </svg>
       </div>
     );
@@ -192,11 +193,11 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
   if (brand === "mastercard") {
     return (
       <div className={baseClass}>
-        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
-          <rect x="1" y="1" width="118" height="38" rx="12" fill="#111" />
-          <circle cx="48" cy="20" r="10" fill="#EA001B" />
-          <circle cx="60" cy="20" r="10" fill="#FF5F00" fillOpacity="0.95" />
-          <path d="M54 12.4a10 10 0 0 1 0 15.2 10 10 0 1 0 0-15.2Z" fill="#F79E1B" opacity="0.95" />
+        <svg viewBox="0 0 120 40" className="h-6 w-[54px]" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#111117" />
+          <circle cx="49" cy="20" r="10" fill="#EA001B" />
+          <circle cx="61" cy="20" r="10" fill="#FF5F00" fillOpacity="0.96" />
+          <path d="M55 12.4a10 10 0 0 1 0 15.2 10 10 0 1 0 0-15.2Z" fill="#F79E1B" opacity="0.96" />
         </svg>
       </div>
     );
@@ -230,10 +231,10 @@ function CardBrandIcon({ brand }: { brand: "visa" | "mastercard" | "apple-pay" |
   if (brand === "klarna") {
     return (
       <div className={baseClass}>
-        <svg viewBox="0 0 120 40" className="h-full w-full" aria-hidden="true">
-          <rect x="1" y="1" width="118" height="38" rx="12" fill="#ffb7d5" />
-          <path d="M38 12h7v16h-7zM48 12h7v16h-7zM58 12h7v16h-7zM70 12h7v16h-7z" fill="#111" opacity="0.92" />
-          <path d="M90 13c2.9 0 5 2 5 4.8 0 2.1-1.2 3.8-3.1 4.5l3.7 6.7h-4.7l-3-6h-1.3v6h-4V13h7.4Zm-3.4 7h2.9c1.2 0 2-.8 2-2s-.8-2-2-2h-2.9v4Z" fill="#111" opacity="0.92" />
+        <svg viewBox="0 0 120 40" className="h-6 w-[54px]" aria-hidden="true">
+          <rect x="0.5" y="0.5" width="119" height="39" rx="11" fill="#ffb7d5" />
+          <path d="M38 12.5h6.2v15H38zM47 12.5h6.2v15H47zM56 12.5h6.2v15H56zM68 12.5h6.2v15H68z" fill="#111117" />
+          <path d="M88.8 13c2.9 0 5 2 5 4.8 0 2.1-1.2 3.8-3.1 4.5l3.7 6.7h-4.7l-3-6h-1.3v6h-4V13h7.4Zm-3.4 7h2.9c1.2 0 2-.8 2-2s-.8-2-2-2h-2.9v4Z" fill="#111117" />
         </svg>
       </div>
     );
