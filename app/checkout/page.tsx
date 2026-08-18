@@ -171,6 +171,14 @@ function formatShipsFrom(countryCode: string | null | undefined) {
   return `Ships from ${label}`;
 }
 
+function PaymentBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 bg-white/[0.03] px-4 text-sm font-black text-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+      {label}
+    </span>
+  );
+}
+
 function resolvePreviewImageSources(item: CartItem) {
   const customDesignItem = isCustomDesignItem(item);
   const designData = item.design_data ?? item.designData ?? {};
@@ -1429,82 +1437,78 @@ export default function CheckoutPage() {
     if (step === "review" && items.length > 0 && selectedShippingMethod?.id) setStep("payment");
   };
 
-  const stepIndex = step === "shipping" ? 0 : step === "review" ? 1 : 2;
+  const stepIndex = step === "shipping" ? 1 : step === "review" ? 2 : 3;
 
   return (
-    <main data-ryfio-checkout-page className="fixed inset-0 z-[9999] min-h-dvh overflow-y-auto bg-[#05050b] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_-8%,rgba(168,85,247,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.026),transparent_28%)]" />
+    <main data-ryfio-checkout-page className="fixed inset-0 z-[9999] min-h-dvh overflow-y-auto bg-[#04040a] text-white">
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_20%_-10%,rgba(168,85,247,0.2),transparent_32%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.08),transparent_26%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent_26%)]" />
+      <div className="pointer-events-none fixed inset-0 opacity-[0.22] [background-image:radial-gradient(rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:26px_26px]" />
 
-      <div className="relative mx-auto flex min-h-dvh w-full max-w-6xl flex-col px-3 pb-[calc(7rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-4 lg:px-8">
-        <header className="mb-4 flex items-center justify-between gap-2 sm:mb-5 sm:gap-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="flex h-10 items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 text-sm font-black text-white/75 transition active:scale-[0.98] hover:bg-white/[0.06]"
-          >
+      <div className="relative mx-auto flex min-h-dvh w-full max-w-[1080px] flex-col px-4 pb-[calc(6.5rem+env(safe-area-inset-bottom))] pt-3 sm:px-6 sm:pt-4 lg:px-8">
+        <header className="mb-4 flex items-center justify-between gap-2 sm:mb-6 sm:gap-4">
+          <button type="button" onClick={() => router.back()} className="flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-4 text-sm font-black text-white/80 transition active:scale-[0.98] hover:bg-white/[0.06]">
             <ArrowLeft size={16} /> Back
           </button>
-
-          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-3 py-2 text-xs font-black text-white/70">
+          <div className="flex h-12 items-center gap-2 rounded-full border border-white/10 bg-white/[0.025] px-4 text-sm font-black text-white/75">
             <Lock size={14} /> Secure checkout
           </div>
         </header>
 
-        <section className="mb-6">
-          <p className="text-[11px] font-black uppercase tracking-[0.28em] text-purple-200/70">Ryfio checkout</p>
-          <h1 className="mt-2 text-3xl font-black tracking-[-0.07em] sm:text-5xl sm:tracking-[-0.08em]">Finish your order</h1>
+        <section className="mb-5 sm:mb-7">
+          <p className="text-[11px] font-black uppercase tracking-[0.38em] text-purple-200/80">RYFIO CHECKOUT</p>
+          <h1 className="mt-3 text-[clamp(2.5rem,5vw,4.4rem)] font-black tracking-[-0.09em] leading-[0.95]">Finish your order</h1>
         </section>
 
-        <nav className="mb-5 grid grid-cols-3 gap-1 rounded-full border border-white/10 bg-white/[0.025] p-1 sm:mb-6 sm:gap-2">
-          {[
-            ["shipping", "Shipping"],
-            ["review", "Review"],
-            ["payment", "Payment"],
-          ].map(([id, label], index) => {
-            const active = step === id;
-            const done = index < stepIndex;
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => {
-                  if (id === "shipping") setStep("shipping");
-                  if (id === "review" && shippingComplete) setStep("review");
-                  if (id === "payment" && shippingComplete && items.length > 0) setStep("payment");
-                }}
-                className={`flex h-11 items-center justify-center gap-2 rounded-full text-xs font-black transition ${
-                  active ? "bg-white text-[#080812]" : done ? "text-purple-100" : "text-white/40"
-                }`}
-              >
-                {done ? <Check size={14} /> : <span className="grid h-5 w-5 place-items-center rounded-full border border-current text-[10px]">{index + 1}</span>}
-                {label}
-              </button>
-            );
-          })}
+        <nav className="mb-5 rounded-full border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_12px_30px_rgba(0,0,0,0.22)] sm:mb-8">
+          <div className="grid grid-cols-3 gap-1.5">
+            {[
+              ["shipping", "Shipping"],
+              ["review", "Review"],
+              ["payment", "Payment"],
+            ].map(([id, label], index) => {
+              const metaIndex = index + 1;
+              const active = step === id;
+              const done = metaIndex < stepIndex;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    if (id === "shipping") setStep("shipping");
+                    if (id === "review" && shippingComplete) setStep("review");
+                    if (id === "payment" && shippingComplete && items.length > 0) setStep("payment");
+                  }}
+                  className={`flex h-12 items-center justify-center gap-2 rounded-full text-sm font-black transition ${
+                    active ? "bg-white text-[#0b0b12] shadow-[0_8px_24px_rgba(255,255,255,0.18)]" : done ? "text-white/88" : "text-white/38"
+                  }`}
+                >
+                  {done ? <Check size={14} /> : <span className="grid h-6 w-6 place-items-center rounded-full border border-current text-[10px]">{metaIndex}</span>}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </nav>
 
         {error && <div className="mb-5 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-100">{error}</div>}
 
-        <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
+        <div className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_390px] lg:gap-8">
           <section className="min-w-0">
             {step === "shipping" && (
-              <div className="mx-auto max-w-2xl">
-                <div className="mb-6 border-b border-white/10 pb-4 sm:mb-8 sm:pb-5">
+              <div className="mx-auto max-w-[760px]">
+                <div className="mb-6 sm:mb-7">
                   <h2 className="text-2xl font-black tracking-[-0.06em]">Shipping details</h2>
-                  <p className="mt-2 text-sm font-medium leading-6 text-white/45">Type your street and choose the right result. The checkout fills city, postal code and country when the API can detect them.</p>
+                  <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-white/45">Type your street and choose the right result. The checkout fills city, postal code and country when the API can detect them.</p>
                 </div>
-
                 <div className="space-y-6 sm:space-y-7">
                   <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                     <label className="sm:col-span-2">
                       <span className="mb-2 flex items-center gap-2 text-xs font-black text-white/55"><Mail size={13} /> Email</span>
                       <input className={fieldClass} type="email" autoComplete="email" required value={form.email} onChange={(e) => updateField("email", e.target.value)} placeholder="you@example.com" aria-invalid={Boolean(form.email.trim()) && !emailValid} />
-                      {form.email.trim() && !emailValid && <span className="mt-2 block text-xs font-bold text-red-200/85">Enter a valid email address.</span>}
                     </label>
                     <label>
                       <span className="mb-2 block text-xs font-black text-white/55">Full name</span>
-                      <input className={fieldClass} autoComplete="name" value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="First and last name" aria-invalid={Boolean(form.fullName.trim()) && !fullNameValid} />
-                      {form.fullName.trim() && !fullNameValid && <span className="mt-2 block text-xs font-bold text-red-200/85">Enter your first and last name.</span>}
+                      <input className={fieldClass} autoComplete="name" value={form.fullName} onChange={(e) => updateField("fullName", e.target.value)} placeholder="First and last name" />
                     </label>
                     <label>
                       <span className="mb-2 flex items-center gap-2 text-xs font-black text-white/55"><Phone size={13} /> Phone</span>
@@ -1514,18 +1518,12 @@ export default function CheckoutPage() {
                         </select>
                         <input className={fieldClass} inputMode="tel" autoComplete="tel-national" required value={form.phone} onChange={(e) => updatePhone(e.target.value)} placeholder={phoneValidation.rule.example} aria-invalid={Boolean(form.phone.trim()) && !phoneValid} />
                       </div>
-                      {form.phone.trim() && !phoneValid && <span className="mt-2 block text-xs font-bold text-red-200/85">Enter a valid phone number for {form.phoneCountry}.</span>}
                     </label>
                   </div>
-
                   <div className="h-px bg-white/10" />
-
                   <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
                     <label>
-                      <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black text-white/55">
-                        <span>Delivery country</span>
-                        {productAvailability.loading ? <span className="flex items-center gap-1 text-[10px] text-white/35"><Loader2 size={11} className="animate-spin" /> checking</span> : null}
-                      </span>
+                      <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black text-white/55"><span>Delivery country</span>{productAvailability.loading ? <span className="flex items-center gap-1 text-[10px] text-white/35"><Loader2 size={11} className="animate-spin" /> checking</span> : null}</span>
                       <select className={selectClass} value={form.country} onChange={(e) => updateField("country", e.target.value)} autoComplete="country-name" style={{ colorScheme: "dark" }}>
                         <option value="" className="bg-[#0b0b13] text-white">Auto-detect from address</option>
                         {GELATO_COUNTRIES.map((item) => <option key={item.iso} value={item.country} className="bg-[#0b0b13] text-white">{item.country}</option>)}
@@ -1538,7 +1536,6 @@ export default function CheckoutPage() {
                         {addressSearching && <Loader2 className="absolute right-0 top-1/2 -translate-y-1/2 animate-spin text-white/35" size={16} />}
                       </div>
                     </label>
-
                     <label className="sm:col-span-2">
                       <span className="mb-2 flex items-center justify-between gap-3 text-xs font-black text-white/55"><span>Street and door number</span><span className="text-[10px] text-white/35">Editable after selection</span></span>
                       <div className="relative">
@@ -1546,7 +1543,6 @@ export default function CheckoutPage() {
                         {addressSearching && <Loader2 className="absolute right-0 top-1/2 -translate-y-1/2 animate-spin text-white/35" size={16} />}
                       </div>
                     </label>
-
                     {addressSuggestions.length > 0 && (
                       <div className="sm:col-span-2 overflow-hidden rounded-2xl border border-white/10 bg-[#0c0c14]">
                         {addressSuggestions.map((suggestion) => (
@@ -1556,9 +1552,8 @@ export default function CheckoutPage() {
                         ))}
                       </div>
                     )}
-
                     <label className="sm:col-span-2">
-                      <span className="mb-2 block text-xs font-black text-white/55">Apartment, floor, door or company — optional</span>
+                      <span className="mb-2 block text-xs font-black text-white/55">Apartment, floor, door or company - optional</span>
                       <input className={fieldClass} autoComplete="address-line2" value={form.apartment} onChange={(e) => updateField("apartment", e.target.value)} placeholder="Apartment, floor, door, building, company" />
                     </label>
                     <label>
@@ -1567,53 +1562,29 @@ export default function CheckoutPage() {
                     </label>
                     <label>
                       <span className="mb-2 block text-xs font-black text-white/55">{getAddressStateLabel(resolveCheckoutCountry(form.country)?.iso ?? form.country)}</span>
-                      <input
-                        className={fieldClass}
-                        autoComplete="address-level1"
-                        value={form.state}
-                        onChange={(e) => updateField("state", e.target.value)}
-                        placeholder={stateRequired ? "Required when needed" : "Optional"}
-                        aria-required={stateRequired}
-                      />
+                      <input className={fieldClass} autoComplete="address-level1" value={form.state} onChange={(e) => updateField("state", e.target.value)} placeholder={stateRequired ? "Required when needed" : "Optional"} aria-required={stateRequired} />
                     </label>
-
-                    {productAvailability.checked && form.country && hasAvailabilityBlock && (
-                      <div className="sm:col-span-2 rounded-2xl border border-red-400/25 bg-red-500/10 px-4 py-3 text-xs font-bold leading-5 text-red-100">
-                        <p>Some products or variants in your cart are not available for {form.country}.</p>
-                        {productAvailability.unavailableItems.length > 0 && (
-                          <ul className="mt-2 list-disc space-y-1 pl-4 text-red-100/80">
-                            {productAvailability.unavailableItems.map((item) => <li key={item.itemId}>{item.title}{item.reason ? ` — ${item.reason}` : ""}</li>)}
-                          </ul>
-                        )}
-                      </div>
-                    )}
                   </div>
-
                   <div className="h-px bg-white/10" />
-
-                  <button type="button" disabled={!shippingComplete} onClick={goNext} className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">
-                    {step === "shipping" ? "Continue to review" : "Continue"} <ArrowRight size={15} />
+                  <button type="button" disabled={!shippingComplete} onClick={goNext} className="mt-2 flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 lg:hidden">
+                    Continue <ArrowRight size={16} />
                   </button>
                 </div>
               </div>
             )}
 
             {step === "review" && (
-              <div className="mx-auto max-w-3xl">
-                <div className="mb-6 flex items-end justify-between gap-4 border-b border-white/10 pb-5">
-                  <div>
-                    <h2 className="text-2xl font-black tracking-[-0.06em]">Review products</h2>
-                    <p className="mt-2 text-sm font-medium text-white/45">Change color, size and quantity before payment.</p>
-                  </div>
-                  <button type="button" onClick={() => router.push("/stepcategory")} className="hidden rounded-full border border-white/10 px-4 py-2 text-xs font-black text-white/60 hover:bg-white/[0.05] sm:block">Add more</button>
+              <div className="mx-auto max-w-[760px]">
+                <div className="mb-6 sm:mb-7">
+                  <h2 className="text-2xl font-black tracking-[-0.06em]">Review products</h2>
+                  <p className="mt-2 text-sm font-medium text-white/45">Change color, size and quantity before payment.</p>
                 </div>
-
                 {loading ? (
                   <div className="grid h-64 place-items-center text-sm font-semibold text-white/45"><span className="flex items-center gap-2"><Loader2 size={17} className="animate-spin" /> Loading cart...</span></div>
                 ) : items.length === 0 ? (
                   <EmptyCart onAdd={() => router.push("/stepcategory")} />
                 ) : (
-                  <div className="divide-y divide-white/10">
+                  <div className="space-y-4">
                     {items.map((item) => {
                       const variants = getItemVariants(item);
                       const current = getCurrentVariant(item);
@@ -1622,23 +1593,10 @@ export default function CheckoutPage() {
                       const quantity = Math.max(1, Number(item.quantity) || 1);
                       const customDesign = isCustomDesignItem(item);
                       const checkoutCountryIso = resolveCheckoutCountry(form.country)?.iso ?? null;
-                      const secondPrintCharge = customSecondPrintCharge(
-                        item,
-                        current,
-                        checkoutCountryIso,
-                        item.currency || "EUR",
-                      );
-                      const price = customDesign && checkoutCountryIso
-                        ? (current
-                            ? variantPrice(current, Math.max(0, Number(item.price) || 0))
-                            : Math.max(0, (Number(item.price) || 0) - secondPrintCharge)) + secondPrintCharge
-                        : customDesign
-                          ? Math.max(0, Number(item.price) || 0)
-                        : variantPrice(current, Math.max(0, Number(item.price) || 0));
+                      const secondPrintCharge = customSecondPrintCharge(item, current, checkoutCountryIso, item.currency || "EUR");
+                      const price = customDesign && checkoutCountryIso ? (current ? variantPrice(current, Math.max(0, Number(item.price) || 0)) : Math.max(0, (Number(item.price) || 0) - secondPrintCharge)) + secondPrintCharge : customDesign ? Math.max(0, Number(item.price) || 0) : variantPrice(current, Math.max(0, Number(item.price) || 0));
                       const busy = updatingItemId === item.id || removingItemId === item.id;
                       const previewImages = resolvePreviewImageSources(item);
-                      const currentSku = variantSku(current) || item.sku || null;
-                      const currentStock = current ? variantStock(current) : null;
 
                       const colorGroups = Array.from(
                         variants.reduce((map, variant) => {
@@ -1655,9 +1613,8 @@ export default function CheckoutPage() {
                         return { color, variant: selected };
                       });
 
-                      const sizeChoices = (currentColor ? variants.filter((variant) => variantColor(variant) === currentColor) : variants);
                       const visibleSizes = Array.from(
-                        sizeChoices.reduce((map, variant) => {
+                        (currentColor ? variants.filter((variant) => variantColor(variant) === currentColor) : variants).reduce((map, variant) => {
                           const size = variantSize(variant);
                           if (!size) return map;
                           const existing = map.get(size);
@@ -1668,120 +1625,60 @@ export default function CheckoutPage() {
                       ).map(([, variant]) => variant);
 
                       return (
-                        <article key={item.id} className="py-4 sm:py-5">
-                          <div className="grid grid-cols-[104px_minmax(0,1fr)] gap-3 sm:grid-cols-[152px_minmax(0,1fr)] sm:gap-5">
-  <ProductPreviewImage
-    title={item.title}
-    frontImage={previewImages.front}
-    backImage={previewImages.back}
-  />
-
+                        <article key={item.id} className="overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.025] p-4 shadow-[0_20px_60px_rgba(0,0,0,0.18)] sm:p-5">
+                          <div className="grid grid-cols-[132px_minmax(0,1fr)] gap-4 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-5">
+                            <ProductPreviewImage title={item.title} frontImage={previewImages.front} backImage={previewImages.back} />
                             <div className="min-w-0">
-                              <div className="flex items-start gap-3">
+                              <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
-                                  <p className="line-clamp-2 text-base font-black leading-5 sm:text-lg">{item.title}</p>
-                                  <p className="mt-1 text-xs font-bold text-white/35">{[currentColor, currentSize].filter(Boolean).join(" / ") || "Custom product"}</p>
-                                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] font-medium text-white/35 sm:text-[11px]">
-                                    <span>{`Variant: ${[currentColor, currentSize].filter(Boolean).join(" / ") || "Custom product"}`}</span>
-                                    {secondPrintCharge > 0 ? <span className="text-purple-200">Second print side +{money(secondPrintCharge)}</span> : null}
-                                    <span>Excl. tax</span>
-                                  </div>
+                                  <p className="line-clamp-2 text-xl font-black leading-[1.06] sm:text-2xl">{item.title}</p>
+                                  <p className="mt-1 text-sm text-white/52">{[currentColor, currentSize].filter(Boolean).join(" • ") || "Custom product"}</p>
+                                  <p className="mt-1 text-xs text-white/34">Variant: {[currentColor, currentSize].filter(Boolean).join(" / ") || "Selected variant"}</p>
                                 </div>
-                                <button type="button" onClick={() => removeItem(item.id)} disabled={busy} className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white/42 transition hover:bg-red-500/10 hover:text-red-200 disabled:opacity-40" aria-label="Remove item">
-                                  {removingItemId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+                                <button type="button" disabled={busy} onClick={() => removeItem(item.id)} className="grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-white/[0.03] text-white/75 transition hover:bg-white/[0.08] disabled:opacity-35" aria-label="Remove item">
+                                  <Trash2 size={16} />
                                 </button>
                               </div>
-
-                              {colorGroups.length > 0 && (
-                                <div className="mt-3">
-                                  <div className="mb-2 flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Color</p>
-                                    {currentColor ? <span className="text-[11px] font-bold text-white/45">{currentColor} · {money(price)}</span> : null}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {colorGroups.map(({ color, variant }) => {
-                                      const active = color === currentColor;
-                                      const available = isVariantAvailable(variant);
-                                      const optionSecondPrintCharge = customSecondPrintCharge(
-                                        item,
-                                        variant,
-                                        checkoutCountryIso,
-                                        item.currency || "EUR",
-                                      );
-                                      const optionPrice = customDesign
-                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + optionSecondPrintCharge
-                                        : variantPrice(variant, price);
-                                      return (
-                                        <button key={`${color}-${variantId(variant)}`} type="button" title={`${color} · ${money(optionPrice)}`} aria-label={`Select ${color}`} disabled={busy || !available} onClick={() => changeVariantByColor(item, color)} className={`group grid h-10 w-10 place-items-center rounded-full border transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white/12 ring-2 ring-white/25" : "border-white/15 hover:border-white/35"}`}>
-                                          <span
-                                            className="h-7 w-7 rounded-full border border-black/25"
-                                            style={
-                                              String(variantHex(variant)).includes("gradient(")
-                                                ? { backgroundImage: variantHex(variant) }
-                                                : { backgroundColor: variantHex(variant) }
-                                            }
-                                          />
-                                        </button>
-                                      );
-                                    })}
-                                  </div>
+                              <div className="mt-4 border-t border-white/10 pt-4">
+                                <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
+                                <p className="text-xs text-white/38">Excl. tax</p>
+                              </div>
+                              <div className="mt-5">
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {colorGroups.length > 0 ? colorGroups.slice(0, 8).map(({ color, variant }) => {
+                                    const active = color === currentColor;
+                                    return (
+                                      <button key={color} type="button" disabled={busy} onClick={() => changeVariantByColor(item, color)} className={`grid h-11 w-11 place-items-center rounded-full border transition active:scale-95 disabled:opacity-35 ${active ? "border-white" : "border-white/10 bg-white/[0.03]"}`} aria-label={`Select color ${color}`}>
+                                        <span className="h-8 w-8 rounded-full border border-black/20" style={String(variantHex(variant)).includes("gradient(") ? { backgroundImage: variantHex(variant) } : { backgroundColor: variantHex(variant) }} />
+                                      </button>
+                                    );
+                                  }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
                                 </div>
-                              )}
-
+                              </div>
                               {visibleSizes.length > 0 && (
-                                <div className="mt-3">
-                                  <div className="mb-2 flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Size</p>
-                                    {currentSize ? <span className="text-[11px] font-bold text-white/45">{currentSize} · {money(price)}</span> : null}
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
+                                <div className="mt-5">
+                                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Size</p>
+                                  <div className="flex flex-wrap gap-2">
                                     {visibleSizes.map((variant) => {
                                       const size = variantSize(variant);
                                       const active = size === currentSize;
                                       const available = isVariantAvailable(variant);
-                                      const optionSecondPrintCharge = customSecondPrintCharge(
-                                        item,
-                                        variant,
-                                        checkoutCountryIso,
-                                        item.currency || "EUR",
-                                      );
-                                      const optionPrice = customDesign
-                                        ? variantPrice(variant, Math.max(0, price - secondPrintCharge)) + optionSecondPrintCharge
-                                        : variantPrice(variant, price);
                                       return (
-                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-12 rounded-2xl border px-2.5 py-1.5 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-white bg-white text-[#080812]" : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"}`}>
-                                          <span className="block text-xs font-black leading-4">{size}</span>
-                                          <span className="block text-[9px] font-black leading-3 opacity-70">{money(optionPrice)}</span>
+                                        <button key={variantId(variant)} type="button" disabled={busy || !available} onClick={() => changeVariantBySize(item, size)} className={`min-w-11 rounded-xl border px-3 py-2 text-center transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-35 ${active ? "border-[#a855f7] bg-[#a855f7] text-white" : "border-white/10 bg-white/[0.03] text-white/65 hover:bg-white/[0.06]"}`}>
+                                          <span className="block text-sm font-black leading-4">{size}</span>
                                         </button>
                                       );
                                     })}
                                   </div>
                                 </div>
                               )}
-
-                              {colorGroups.length === 0 && currentColor && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Color</p>
-                                  <span className="inline-flex rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-black text-white/70">{currentColor}</span>
-                                </div>
-                              )}
-
-                              {visibleSizes.length === 0 && currentSize && (
-                                <div className="mt-3">
-                                  <p className="mb-2 text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Size</p>
-                                  <span className="inline-flex rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-black text-white/70">{currentSize}</span>
-                                </div>
-                              )}
-
-                              <div className="mt-4 flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-1.5">
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.035] text-white/70 transition active:scale-95 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35" aria-label="Decrease quantity"><Minus size={14} /></button>
-                                  <span className="grid h-9 min-w-10 place-items-center rounded-full bg-white/[0.06] px-2 text-xs font-black">{quantity}</span>
-                                  <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-white/[0.035] text-white/70 transition active:scale-95 hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-35" aria-label="Increase quantity"><Plus size={14} /></button>
-                                </div>
-                                <div className="text-right">
-                                  <span className="block text-base font-black text-purple-100">{money(price * quantity)}</span>
-                                  <span className="block text-[10px] font-bold text-white/35">excl. tax</span>
+                              <div className="mt-5">
+                                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
+                                <div className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.03] p-1">
+                                  <button type="button" onClick={() => changeQuantity(item.id, quantity - 1)} disabled={quantity <= 1 || busy} className="grid h-11 w-11 place-items-center rounded-full text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Decrease quantity"><Minus size={15} /></button>
+                                  <span className="grid h-11 min-w-12 place-items-center rounded-full px-2 text-base font-black">{quantity}</span>
+                                  <button type="button" onClick={() => changeQuantity(item.id, quantity + 1)} disabled={busy} className="grid h-11 w-11 place-items-center rounded-full text-white/70 transition hover:bg-white/[0.06] disabled:opacity-35" aria-label="Increase quantity"><Plus size={15} /></button>
                                 </div>
                               </div>
                             </div>
@@ -1791,16 +1688,13 @@ export default function CheckoutPage() {
                     })}
                   </div>
                 )}
-
                 {step === "review" && (
-                  <div className="mt-6 space-y-4 rounded-3xl border border-white/10 bg-white/[0.025] p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.18em] text-white/40">Shipping & delivery</p>
-
+                  <div className="mt-6 space-y-4 rounded-[28px] border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
+                    <p className="text-xs font-black uppercase tracking-[0.24em] text-white/40">Secure & flexible payments</p>
                     {printFilesPending ? (
                       <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4">
-                        <p className="text-sm font-black text-white">Preparing your design for printing…</p>
+                        <p className="text-sm font-black text-white">Preparing your design for printing...</p>
                         <p className="mt-2 text-sm font-medium text-white/45">Delivery options will appear automatically.</p>
-                        <p className="mt-2 text-sm font-medium text-white/35">This usually takes a few seconds.</p>
                       </div>
                     ) : productAvailability.loading ? (
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -1815,10 +1709,10 @@ export default function CheckoutPage() {
                           const isFastest = index === shippingMethodsForDisplay.length - 1;
                           return (
                             <button key={method.id} type="button" onClick={() => {
-                            setSelectedShippingMethodId(method.id);
-                            setShippingMethodSelection(method);
-                            setForm((prev) => ({ ...prev, shippingMethod: method.id }));
-                          }} className={`rounded-xl border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
+                              setSelectedShippingMethodId(method.id);
+                              setShippingMethodSelection(method);
+                              setForm((prev) => ({ ...prev, shippingMethod: method.id }));
+                            }} className={`rounded-[24px] border px-4 py-4 text-left transition active:scale-[0.99] ${active ? "border-purple-300/50 bg-purple-500/10" : "border-white/10 bg-white/[0.02] hover:bg-white/[0.04]"}`}>
                               <span className="flex items-start justify-between gap-3">
                                 <span className="min-w-0">
                                   <span className="block text-sm font-black leading-5">{method.name}</span>
@@ -1838,17 +1732,11 @@ export default function CheckoutPage() {
                         })}
                       </div>
                     ) : productAvailability.checked && !productAvailability.available ? (
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
-                        {productAvailability.message || "This product cannot currently be delivered to this address."}
-                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">{productAvailability.message || "This product cannot currently be delivered to this address."}</div>
                     ) : productAvailability.checked && productAvailability.available && !shippingMethodsForDisplay?.length ? (
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">
-                        {productAvailability.message || "No delivery methods are available for this address."}
-                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/55">{productAvailability.message || "No delivery methods are available for this address."}</div>
                     ) : (
-                      <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">
-                        {productAvailability.message || "Complete your shipping address in the previous step."}
-                      </div>
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-4 text-sm font-semibold text-white/45">{productAvailability.message || "Complete your shipping address in the previous step."}</div>
                     )}
                   </div>
                 )}
@@ -1856,14 +1744,13 @@ export default function CheckoutPage() {
             )}
 
             {step === "payment" && (
-              <div className="mx-auto max-w-2xl">
-                <div className="mb-6 border-b border-white/10 pb-4 sm:mb-8 sm:pb-5">
+              <div className="mx-auto max-w-[760px]">
+                <div className="mb-6 sm:mb-7">
                   <h2 className="text-2xl font-black tracking-[-0.06em]">Payment</h2>
                   <p className="mt-2 text-sm font-medium leading-6 text-white/45">You are one step away. Confirm the total and continue to payment.</p>
                 </div>
-
                 <div className="space-y-4">
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-5">
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
                     <div className="flex items-center gap-3">
                       <div className="grid h-12 w-12 place-items-center rounded-2xl bg-purple-500/15 text-purple-200"><CreditCard size={21} /></div>
                       <div>
@@ -1871,9 +1758,15 @@ export default function CheckoutPage() {
                         <p className="mt-1 text-xs font-semibold text-white/40">Handled by your secure checkout route.</p>
                       </div>
                     </div>
+                    <div className="mt-5 border-t border-white/10 pt-5">
+                      <p className="text-sm font-black text-white/80">Secure & flexible payments</p>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {["VISA", "Mastercard", "Apple Pay", "Google Pay", "Klarna", "link"].map((label) => <PaymentBadge key={label} label={label} />)}
+                      </div>
+                      <p className="mt-4 flex items-center gap-2 text-xs font-medium text-white/45"><Lock size={13} /> Your payment information is encrypted and secure.</p>
+                    </div>
                   </div>
-
-                  <div className="rounded-3xl border border-white/10 bg-white/[0.025] p-5">
+                  <div className="rounded-[28px] border border-white/10 bg-white/[0.025] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.18)]">
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Shipping to</p>
@@ -1883,8 +1776,7 @@ export default function CheckoutPage() {
                       <button type="button" onClick={() => setStep("shipping")} className="rounded-full border border-white/10 px-3 py-2 text-xs font-black text-white/60 hover:bg-white/[0.05]">Edit</button>
                     </div>
                   </div>
-
-                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="flex h-[56px] w-full items-center justify-center gap-2 rounded-full bg-purple-600 text-sm font-black text-white shadow-[0_0_26px_rgba(147,51,234,0.25)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId) || !selectedShippingMethod?.id} onClick={handleCheckout} className="flex h-[60px] w-full items-center justify-center gap-2 rounded-full bg-[#8b28ff] text-sm font-black text-white shadow-[0_24px_40px_rgba(139,40,255,0.28)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <><Loader2 size={16} className="animate-spin" /> Creating checkout...</> : <><Lock size={16} /> Pay now {money(total)}</>}
                   </button>
                 </div>
@@ -1893,7 +1785,7 @@ export default function CheckoutPage() {
           </section>
 
           <aside className="lg:sticky lg:top-5 lg:self-start">
-            <div className="rounded-[26px] border border-white/10 bg-white/[0.025] p-4 backdrop-blur-xl sm:rounded-[30px] sm:p-5">
+            <div className="rounded-[28px] border border-white/10 bg-white/[0.025] p-4 backdrop-blur-xl sm:rounded-[32px] sm:p-5">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-purple-200/70">Summary</p>
@@ -1901,43 +1793,33 @@ export default function CheckoutPage() {
                 </div>
                 <div className="grid h-11 w-11 place-items-center rounded-full bg-purple-600/15 text-purple-200"><ShoppingBag size={18} /></div>
               </div>
-
               <div className="mt-5 space-y-3 border-t border-white/10 pt-4">
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Products</span><span className="font-black">{money(subtotal)}</span></div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-2 font-semibold text-white/50"><Truck size={15} /> Shipping</span>
-                  <span className="font-black">
-                    {step === "shipping" || !printFilesReady
-                      ? "Calculated in review"
-                      : typeof shippingDisplay === "number"
-                        ? money(shippingDisplay)
-                        : "Select a method"}
-                  </span>
+                  <span className="font-black">{step === "shipping" || !printFilesReady ? "Calculated in review" : typeof shippingDisplay === "number" ? money(shippingDisplay) : "Select a method"}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm"><span className="font-semibold text-white/50">Tax</span><span className="text-right text-xs font-black text-white/45">{taxDisplay}</span></div>
                 <div className="h-px bg-white/10" />
                 <div className="flex items-end justify-between gap-4"><span className="text-sm font-semibold text-white/50">Total before tax</span><span className="text-3xl font-black tracking-[-0.06em]">{money(totalBeforeTax)}</span></div>
                 <p className="pt-1 text-[10px] font-semibold leading-4 text-white/32">Applicable tax is calculated from the delivery country at payment.</p>
               </div>
-
               <div className="mt-5 hidden lg:block">
                 {step === "payment" ? (
-                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-purple-600 px-5 text-sm font-black text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
+                  <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[#8b28ff] px-5 text-sm font-black text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
                     {submitting ? <Loader2 size={16} className="animate-spin" /> : <>Pay now {money(total)}</>}
                   </button>
                 ) : (
                   <button type="button" disabled={(step === "shipping" && !shippingComplete) || (step === "review" && items.length === 0)} onClick={goNext} className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white px-5 text-sm font-black text-[#080812] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40">
-                    {step === "shipping" ? "Continue to review" : "Continue"} <ArrowRight size={15} />
+                    Continue <ArrowRight size={15} />
                   </button>
                 )}
               </div>
-
               {shippingComplete && (
                 <button type="button" onClick={() => setStep("shipping")} className="mt-5 flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.02] px-4 py-3 text-left text-xs font-bold text-white/55 hover:bg-white/[0.05]">
                   <span className="min-w-0"><span className="block text-white/80">{form.city || "Shipping"}</span><span className="line-clamp-1">{form.address}</span></span><ChevronRight size={15} />
                 </button>
               )}
-
               <div className="mt-5 grid grid-cols-2 gap-2 text-[11px] font-bold text-white/42">
                 <div className="flex items-center gap-1.5"><ShieldCheck size={13} /> Protected</div>
                 <div className="flex items-center justify-end gap-1.5"><Check size={13} /> Editable</div>
@@ -1947,7 +1829,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 z-[10000] border-t border-white/10 bg-[#05050b]/92 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-xl sm:px-4 sm:py-3 lg:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-[10000] border-t border-white/10 bg-[#05050b]/92 px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-6xl items-center gap-2.5 sm:gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/35">Total before tax</p>
@@ -1955,12 +1837,12 @@ export default function CheckoutPage() {
             <p className="text-[10px] font-bold text-white/32">Tax calculated at payment</p>
           </div>
           {step === "payment" ? (
-            <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-full bg-purple-600 px-4 text-sm font-black text-white disabled:opacity-40 sm:h-12 sm:min-w-[150px] sm:px-5">
+            <button type="button" disabled={!canPay || submitting || loading || Boolean(updatingItemId) || Boolean(removingItemId)} onClick={handleCheckout} className="flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-full bg-[#8b28ff] px-4 text-sm font-black text-white disabled:opacity-40 sm:h-12 sm:min-w-[150px] sm:px-5">
               {submitting ? <Loader2 size={16} className="animate-spin" /> : "Pay now"}
             </button>
           ) : (
             <button type="button" disabled={(step === "shipping" && !shippingComplete) || (step === "review" && items.length === 0)} onClick={goNext} className="flex h-11 min-w-[132px] items-center justify-center gap-2 rounded-full bg-white px-4 text-sm font-black text-[#080812] disabled:opacity-40 sm:h-12 sm:min-w-[150px] sm:px-5">
-              {step === "shipping" ? "Continue to review" : "Continue"} <ArrowRight size={15} />
+              Continue <ArrowRight size={15} />
             </button>
           )}
         </div>

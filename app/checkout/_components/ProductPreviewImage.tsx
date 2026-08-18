@@ -35,7 +35,7 @@ export default function ProductPreviewImage({ title, frontImage, backImage }: Pr
   };
 
   return (
-    <div className="relative h-[132px] w-[132px] overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.035] shadow-[0_18px_55px_rgba(0,0,0,0.25)] sm:h-[168px] sm:w-[168px]">
+    <div className="relative h-[132px] w-[132px] overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.015))] shadow-[0_18px_55px_rgba(0,0,0,0.25)] sm:h-[168px] sm:w-[168px]">
       {activeImage ? (
         <button
           type="button"
@@ -46,7 +46,7 @@ export default function ProductPreviewImage({ title, frontImage, backImage }: Pr
           <img
             src={activeImage}
             alt={`${title} ${activeSide}`}
-            className="h-full w-full object-contain p-2"
+            className="h-full w-full object-contain p-2 drop-shadow-[0_16px_20px_rgba(0,0,0,0.25)]"
             loading="eager"
             decoding="async"
           />
