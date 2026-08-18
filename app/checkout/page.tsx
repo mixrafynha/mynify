@@ -528,6 +528,9 @@ export default function CheckoutPage() {
   const availabilityRequestId = useRef(0);
   const availabilityRequestSignatureRef = useRef("");
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
+  const variantMutationSeqRef = useRef(0);
+  const [variantMutationPendingCount, setVariantMutationPendingCount] = useState(0);
+  const [availabilityMutationBlock, setAvailabilityMutationBlock] = useState(0);
 
   const [step, setStep] = useState<Step>(() => readCheckoutStep());
   const [items, setItems] = useState<CartItem[]>([]);
@@ -585,6 +588,7 @@ export default function CheckoutPage() {
   const availabilityRequestSignature = useMemo(() => {
     return JSON.stringify({
       refreshKey: availabilityRefreshKey,
+      mutationBlock: availabilityMutationBlock,
       fullName: form.fullName.trim(),
       email: form.email.trim(),
       phone: `${form.phoneCountry}${form.phone.replace(/^\+/, "").replace(/\s/g, "")}`,
@@ -601,7 +605,7 @@ export default function CheckoutPage() {
         printFiles: item.printFiles.map((file) => `${file.type}:${file.url}`),
       })),
     });
-  }, [availabilityRefreshKey, checkoutAvailabilityItems, hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode]);
+  }, [availabilityRefreshKey, availabilityMutationBlock, checkoutAvailabilityItems, hasCompleteShippingAddress, form.address, form.apartment, form.city, form.country, form.email, form.fullName, form.phone, form.phoneCountry, form.postalCode, form.state, form.stateCode, variantMutationPendingCount]);
 
   const { subtotal, totalItems } = useMemo(() => {
     return items.reduce(
@@ -918,6 +922,15 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (variantMutationPendingCount > 0) {
+      setProductAvailability((current) => ({
+        ...current,
+        loading: false,
+        message: current.message ?? null,
+      }));
+      return;
+    }
+
     const country = form.country.trim();
     const countryData = resolveCheckoutCountry(country);
 
@@ -1073,7 +1086,7 @@ export default function CheckoutPage() {
       if (availabilityLookupTimer.current) clearTimeout(availabilityLookupTimer.current);
       availabilityAbortController.current?.abort();
     };
-  }, [availabilityRequestSignature, checkoutAvailabilityItems, checkoutAvailabilityItemsReady, items.length, loading, printFilesPending, step]);
+  }, [availabilityRequestSignature, checkoutAvailabilityItems, checkoutAvailabilityItemsReady, items.length, loading, printFilesPending, step, variantMutationPendingCount]);
 
   const updateField = (key: keyof CheckoutForm, value: string) => {
     if (key === "address") {
@@ -1269,19 +1282,22 @@ export default function CheckoutPage() {
       const data = await res.json().catch(() => null);
       if (!res.ok) throw new Error(data?.error || "Error updating item");
       const updatedItem = data?.item ?? data?.data;
-      if (updatedItem) {
-        setItems((current) => current.map((entry) => (entry.id === item.id ? { ...entry, ...updatedItem } : entry)));
-      }
+      return updatedItem ?? null;
     } catch {
       setItems(previousItems);
       setError("Could not update this item. Please try again.");
+      return null;
     } finally {
       setUpdatingItemId(null);
     }
   };
 
   const changeVariant = async (item: CartItem, selected: CartVariant) => {
-    if (removingItemId || updatingItemId === item.id) return;
+    if (removingItemId) return;
+
+    const mutationSeq = ++variantMutationSeqRef.current;
+    setVariantMutationPendingCount((count) => count + 1);
+    setAvailabilityMutationBlock(mutationSeq);
 
     const nextColor = variantColor(selected) ?? item.color ?? null;
     const nextSize = variantSize(selected) ?? item.size ?? null;
@@ -1312,35 +1328,120 @@ export default function CheckoutPage() {
       : variantImage(selected) || item.image || null;
     const nextSku = variantSku(selected) || item.sku || null;
     const nextProductColorId = variantProductColorId(selected) || item.product_color_id || null;
+    const nextProductUid =
+      selected.gelato_product_uid ||
+      selected.gelatoProductUid ||
+      selected.product_uid ||
+      selected.productUid ||
+      selected.product_uid_v4 ||
+      selected.productUidV4 ||
+      selected.gelato_product_uid_v4 ||
+      selected.gelatoProductUidV4 ||
+      item.gelato_product_uid ||
+      item.gelatoProductUid ||
+      item.product_uid ||
+      item.productUid ||
+      item.product_uid_v4 ||
+      item.productUidV4 ||
+      item.gelato_product_uid_v4 ||
+      item.gelatoProductUidV4 ||
+      null;
 
-    setAvailabilityRefreshKey((value) => value + 1);
-    setItems((current) =>
-      current.map((entry) =>
-        entry.id === item.id
-          ? {
-              ...entry,
-              variant_id: nextVariantId,
-              color: nextColor,
-              size: nextSize,
-              price: nextPrice,
-              image: nextImage,
-              sku: nextSku,
-              product_color_id: nextProductColorId,
-            }
-          : entry,
-      ),
-    );
+    try {
+      const confirmedItem = await updateCartItem(item, {
+        variantId: nextVariantId,
+        variant_id: nextVariantId,
+        product_color_id: nextProductColorId,
+        product_uid: nextProductUid,
+        gelato_product_uid: nextProductUid,
+        color: nextColor,
+        size: nextSize,
+        sku: nextSku,
+        image: nextImage,
+        price: nextPrice,
+      });
 
-    await updateCartItem(item, {
-      variantId: nextVariantId,
-      variant_id: nextVariantId,
-      product_color_id: nextProductColorId,
-      color: nextColor,
-      size: nextSize,
-      sku: nextSku,
-      image: nextImage,
-      price: nextPrice,
-    });
+      if (mutationSeq !== variantMutationSeqRef.current) return;
+
+      if (!confirmedItem) {
+        throw new Error("No updated item returned");
+      }
+
+      const confirmedVariantId =
+        cleanUuid((confirmedItem as CartItem).variant_id) ||
+        nextVariantId ||
+        null;
+      const confirmedProductUid =
+        (confirmedItem as CartItem).product_uid ||
+        (confirmedItem as CartItem).productUid ||
+        (confirmedItem as CartItem).gelato_product_uid ||
+        (confirmedItem as CartItem).gelatoProductUid ||
+        nextProductUid ||
+        null;
+      const confirmedProductColorId =
+        variantProductColorId(selected) ||
+        (confirmedItem as CartItem).product_color_id ||
+        nextProductColorId;
+      const confirmedColor = (confirmedItem as CartItem).color ?? nextColor;
+      const confirmedSize = (confirmedItem as CartItem).size ?? nextSize;
+      const confirmedSku = (confirmedItem as CartItem).sku ?? nextSku;
+      const confirmedImage = (confirmedItem as CartItem).image ?? nextImage ?? null;
+      const confirmedPrice = customDesign
+        ? variantPrice(
+            selected,
+            Math.max(0, (Number(item.price) || 0) - currentSecondPrintCharge),
+          ) + nextSecondPrintCharge
+        : variantPrice(selected, Math.max(0, Number(item.price) || 0));
+
+      console.info("[checkout:variant-mutation]", {
+        mutationSeq,
+        requestedVariant: {
+          variantId: nextVariantId,
+          productId: getCartProductId(item),
+          productUid: nextProductUid,
+          color: nextColor,
+          size: nextSize,
+        },
+        confirmedVariant: {
+          variantId: confirmedVariantId,
+          productId: getCartProductId(item),
+          productUid: confirmedProductUid,
+          color: confirmedColor,
+          size: confirmedSize,
+        },
+      });
+
+      setItems((current) =>
+        current.map((entry) =>
+          entry.id === item.id && mutationSeq === variantMutationSeqRef.current
+            ? {
+                ...entry,
+                variant_id: confirmedVariantId,
+                color: confirmedColor,
+                size: confirmedSize,
+                price: confirmedPrice,
+                image: confirmedImage,
+                sku: confirmedSku,
+                product_color_id: confirmedProductColorId,
+                product_uid: confirmedProductUid,
+                gelato_product_uid: confirmedProductUid,
+                productUid: confirmedProductUid,
+                gelatoProductUid: confirmedProductUid,
+                selectedVariant: selected,
+              }
+            : entry,
+        ),
+      );
+
+      setAvailabilityRefreshKey((value) => value + 1);
+    } finally {
+      if (mutationSeq === variantMutationSeqRef.current) {
+        setVariantMutationPendingCount((count) => Math.max(0, count - 1));
+        setAvailabilityMutationBlock((current) => (current === mutationSeq ? 0 : current));
+      } else {
+        setVariantMutationPendingCount((count) => Math.max(0, count - 1));
+      }
+    }
   };
 
   const changeVariantByColor = (item: CartItem, color: string | null) => {
