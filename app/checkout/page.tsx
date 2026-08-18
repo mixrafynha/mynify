@@ -1807,6 +1807,7 @@ export default function CheckoutPage() {
                               <Trash2 size={16} />
                             </button>
                           </div>
+
                           <div className="mt-4">
                             <ProductPreviewImage
                               title={item.title}
@@ -1815,6 +1816,7 @@ export default function CheckoutPage() {
                               className="h-[220px] w-full sm:h-[240px] sm:w-full"
                             />
                           </div>
+
                           <div className="mt-4">
                             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Color</p>
                             <div className="grid grid-cols-8 gap-1.5">
@@ -1828,7 +1830,8 @@ export default function CheckoutPage() {
                               }) : <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-black text-white/70">{currentColor || "Color"}</span>}
                             </div>
                           </div>
-                          <div className="mt-4 flex items-end justify-between gap-4 border-t border-white/10 pt-4">
+
+                          <div className="mt-4 flex items-start justify-between gap-4 border-t border-white/10 pt-4">
                             <div>
                               <p className="text-2xl font-black tracking-[-0.05em]">{money(price)}</p>
                               <p className="text-xs text-white/38">Excl. tax</p>
@@ -1851,6 +1854,7 @@ export default function CheckoutPage() {
                               </div>
                             )}
                           </div>
+
                           <div className="mt-4">
                             <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-white/42">Quantity</p>
                             <div className="inline-flex items-center rounded-none border border-white/10 bg-white/[0.03] p-0.5">
