@@ -1314,6 +1314,7 @@ export default function CheckoutPage() {
     const nextSku = variantSku(selected) || item.sku || null;
     const nextProductColorId = variantProductColorId(selected) || item.product_color_id || null;
 
+    setAvailabilityRefreshKey((value) => value + 1);
     setItems((current) =>
       current.map((entry) =>
         entry.id === item.id
@@ -1330,7 +1331,6 @@ export default function CheckoutPage() {
           : entry,
       ),
     );
-    setAvailabilityRefreshKey((value) => value + 1);
 
     await updateCartItem(item, {
       variantId: nextVariantId,
