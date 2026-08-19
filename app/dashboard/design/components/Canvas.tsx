@@ -512,7 +512,7 @@ export default function Canvas({
     <div
       ref={setWrapperNode}
       data-mockup-export-root={side}
-      className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden bg-[#05070d] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="relative flex h-full w-full touch-none items-center justify-center overflow-hidden bg-[#090714] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       onPointerDown={handleCanvasPointerDown}
       onPointerMove={onPanMove}
       onPointerUp={endPan}
@@ -524,6 +524,8 @@ export default function Canvas({
       onWheel={handleWheel}
       style={{ overscrollBehavior: "none" }}
     >
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(168,85,247,.24),transparent_34%),radial-gradient(circle_at_20%_78%,rgba(236,72,153,.14),transparent_24%),linear-gradient(180deg,rgba(20,10,36,.92)_0%,rgba(8,7,20,.98)_100%)]" />
+
       {!isPreviewMode && (
         <ColorSelector
           mockupColor={mockupColor}
@@ -561,7 +563,7 @@ export default function Canvas({
         ref={mockupRootRef}
         data-mockup-capture-root={side}
         data-mockup-capture-side={currentSide}
-        className="relative shrink-0 will-change-transform md:will-change-auto"
+        className="relative z-[1] shrink-0 will-change-transform md:will-change-auto"
         style={{
           width: MOCKUP_AREA.width,
           height: MOCKUP_AREA.height,

@@ -115,7 +115,7 @@ function MobileFloatingEditToolbar({
       onPointerDown={stopEvent}
       onMouseDown={stopEvent}
       onTouchStart={stopEvent}
-      className="fixed inset-x-0 bottom-0 z-[10000] border-t border-violet-300/15 bg-[#070817]/97 text-white shadow-[0_-18px_60px_rgba(0,0,0,0.38)] backdrop-blur-2xl md:hidden"
+      className="fixed inset-x-0 bottom-0 z-[10000] border-t border-violet-300/20 bg-[linear-gradient(180deg,rgba(24,14,44,.94)_0%,rgba(8,7,18,.98)_100%)] text-white shadow-[0_-18px_60px_rgba(0,0,0,0.42),0_0_28px_rgba(168,85,247,0.12)] backdrop-blur-2xl md:hidden"
       style={{ paddingBottom: "max(env(safe-area-inset-bottom), 0px)" }}
     >
       <div className="flex h-[66px] items-center gap-2 overflow-x-auto px-2">
