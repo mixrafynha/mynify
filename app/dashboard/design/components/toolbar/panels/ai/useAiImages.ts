@@ -472,6 +472,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         width: image.width,
         height: image.height,
         dpi: image.dpi,
+        status: "completed",
+        isSaved: false,
         transparent: true,
         saved: false,
         qualityMode: AI_IMAGE_QUALITY.mode,
