@@ -337,7 +337,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
 
   const saveImage = useCallback(
     async (item: AiImageItem) => {
-      if (item.saved || item.isSaved || item.id) return;
+      if (item.saved || item.isSaved) return;
 
       if (savedCount >= savedLimit) {
         setError("You've reached your saved image limit. Delete one of your saved images or upgrade your plan.");
@@ -346,6 +346,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
 
       const imageUrl = getImageSrc(item);
       const generationId = String(item.generationId || item.generation_id || "").trim();
+      const rowId = String(item.id || "").trim();
       const status = String(item.status || "").toLowerCase();
 
       if (status !== "completed" || !isValidImageUrl(imageUrl)) {
@@ -354,12 +355,15 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
       }
 
       try {
-        const localSavingId = item.id || generationId || imageUrl;
+        const localSavingId = rowId || generationId || imageUrl;
 
         setSavingId(localSavingId);
         setError("");
         setNotice("Saving image...");
-        console.info("[AI_UI_SAVE_START]", { generationId: generationId || null });
+        console.info("[AI_SAVE_CLICK]", {
+          rowId: rowId || null,
+          frontendIsSaved: Boolean(item.isSaved),
+        });
 
         const { response, data } = await saveGeneratedImage(item);
 
@@ -394,16 +398,29 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         setGeneratedImages((prev) =>
           prev.map((current) =>
             sameGeneratedImage(current, item)
-              ? { ...current, saved: true, isSaved: true, id: savedItem.id, status: "completed" }
+              ? {
+                  ...current,
+                  saved: true,
+                  isSaved: true,
+                  id: savedItem.id,
+                  generationId: savedItem.generationId || current.generationId,
+                  status: "completed",
+                }
               : current,
           ),
         );
         setSavedCount(nextSavedCount);
         setSavedLimit(nextSavedLimit);
-        console.info("[AI_UI_SAVE_SUCCESS]", { generationId: generationId || null });
+        console.info("[AI_SAVE_DB_CHECK]", {
+          rowId: rowId || null,
+          databaseIsSaved: savedItem.isSaved === true,
+        });
         setNotice(`Image saved. ${nextSavedCount}/${nextSavedLimit} saved.`);
       } catch {
-        console.info("[AI_UI_SAVE_FAILED]", { generationId: generationId || null });
+        console.info("[AI_SAVE_DB_CHECK]", {
+          rowId: rowId || null,
+          databaseIsSaved: null,
+        });
         setError("Could not save this image.");
       } finally {
         setSavingId(null);
@@ -479,10 +496,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         qualityMode: AI_IMAGE_QUALITY.mode,
       };
 
-      setGeneratedImages((prev) => [
-        newItem,
-        ...prev.filter((current) => !sameGeneratedImage(current, newItem)),
-      ]);
+      setGeneratedImages([newItem]);
 
       const nextCredits = readCreditBalance(data);
       if (nextCredits !== null) setCredits(nextCredits);

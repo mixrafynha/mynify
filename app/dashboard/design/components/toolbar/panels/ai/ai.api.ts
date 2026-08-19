@@ -49,23 +49,12 @@ export async function requestAiImage(cleanPrompt: string) {
 }
 
 export async function saveGeneratedImage(item: AiImageItem) {
-  const imageUrl = getImageSrc(item);
-
   const response = await fetch("/api/user-generated-images", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      id: item.id || null,
       prompt: item.prompt || item.title || "AI design",
-      imageUrl,
-      image_url: imageUrl,
-      printUrl: imageUrl,
-      src: imageUrl,
-      url: imageUrl,
-      storageKey: item.storage_key || item.r2Key,
-      storage_key: item.storage_key || item.r2Key,
-      r2Key: item.r2Key || item.storage_key,
-      generationId: item.generationId,
-      generation_id: item.generationId,
       originalImageUrl: item.originalImageUrl,
       original_image_url: item.originalImageUrl,
     }),

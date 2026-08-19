@@ -170,12 +170,15 @@ export async function releaseFinalization(
 export function toResponseRow(row: GenerationRow | null) {
   if (!row) return null;
   return {
+    id: row.id,
     generationId: row.generation_id,
     predictionId: row.prediction_id,
     status: row.status,
     replicateStatus: row.replicate_status,
     imageUrl: row.image_url,
     outputUrl: row.output_url,
+    isSaved: row.is_saved,
+    savedAt: row.saved_at ?? null,
     error: row.error_message,
     prompt: row.prompt,
     originalPrompt: row.original_prompt,

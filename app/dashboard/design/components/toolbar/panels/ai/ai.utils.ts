@@ -77,7 +77,7 @@ export function normalizeGeneratedImageResponse(data: any): AiImageItem | null {
     id: data?.id || null,
     generationId: data?.generationId || data?.generation_id || null,
     status: data?.status || null,
-    isSaved: Boolean(data?.isSaved || data?.is_saved),
+    isSaved: data?.isSaved === true || data?.is_saved === true,
     originalImageUrl: data?.originalImageUrl || data?.original_image_url || null,
     width:
       Number(data?.width || data?.naturalWidth || data?.metadata?.width) ||
@@ -98,7 +98,7 @@ export function normalizeSavedImage(row: any): AiImageItem {
     id: row?.id,
     generationId: row?.generation_id || row?.generationId,
     status: row?.status || null,
-    isSaved: Boolean(row?.isSaved || row?.is_saved),
+    isSaved: row?.isSaved === true || row?.is_saved === true,
     prompt: row?.prompt,
     title: row?.prompt,
     src,

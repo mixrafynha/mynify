@@ -29,6 +29,7 @@ export type GenerationRow = {
   replicate_status: string | null;
   error_message: string | null;
   is_saved: boolean | null;
+  saved_at?: string | null;
   created_at: string | null;
   updated_at: string | null;
   credit_reserved_at?: string | null;

@@ -100,17 +100,6 @@ async function seedStarterImagesOnce(user: { id: string; app_metadata?: Record<s
   if (metadataError) throw metadataError;
 }
 
-function getImageUrl(body: any) {
-  return String(
-    body?.imageUrl ||
-      body?.image_url ||
-      body?.printUrl ||
-      body?.src ||
-      body?.url ||
-      "",
-  ).trim();
-}
-
 function json(data: unknown, status = 200) {
   return NextResponse.json(data, { status, headers: jsonHeaders });
 }
@@ -192,13 +181,10 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const imageUrl = getImageUrl(body);
-    const storageKey = String(body?.storage_key || body?.r2Key || "").trim();
-    const generationId = String(body?.generationId || body?.generation_id || "").trim();
     const rowId = String(body?.id || body?.rowId || body?.row_id || "").trim();
 
-    if (!imageUrl) {
-      return json({ success: false, error: "Missing image URL" }, 400);
+    if (!rowId) {
+      return json({ success: false, error: "Missing image row id" }, 400);
     }
 
     const { count, error: countError } = await supabase
@@ -223,43 +209,39 @@ export async function POST(req: Request) {
       );
     }
 
-    const baseSelect = "id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at";
-    const resolvedRowId = rowId || (() => "");
-    let targetRowId = resolvedRowId;
+    const { data: existingRow, error: findError } = await supabase
+      .from(TABLE)
+      .select("id,is_saved")
+      .eq("id", rowId)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    if (!targetRowId && generationId) {
-      const { data: existingRow, error: findError } = await supabase
-        .from(TABLE)
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("generation_id", generationId)
-        .maybeSingle();
-
-      if (findError) {
-        return json({ success: false, error: "Could not resolve saved AI row" }, 500);
-      }
-
-      targetRowId = String(existingRow?.id || "").trim();
+    if (findError) {
+      return json({ success: false, error: "Could not check saved AI row" }, 500);
     }
 
-    if (!targetRowId) {
+    if (!existingRow) {
       return json({ success: false, error: "Saved AI row not found" }, 404);
+    }
+
+    console.info("[AI_SAVE_DB_CHECK]", {
+      rowId,
+      databaseIsSaved: existingRow.is_saved === true,
+    });
+
+    if (existingRow.is_saved === true) {
+      return json({ success: false, error: "Saved already" }, 200);
     }
 
     const { data: savedImage, error: saveError } = await supabase
       .from(TABLE)
       .update({
-        generation_id: generationId || null,
-        prompt: body?.prompt || body?.title || null,
-        image_url: imageUrl,
-        storage_key: storageKey || null,
-        original_image_url: body?.originalImageUrl || body?.original_image_url || null,
         is_saved: true,
         saved_at: new Date().toISOString(),
       })
-      .eq("id", targetRowId)
+      .eq("id", rowId)
       .eq("user_id", user.id)
-      .select(baseSelect)
+      .select("id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at")
       .single();
 
     if (saveError) {
