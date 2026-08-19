@@ -32,6 +32,10 @@ function hasValidInternalSecret(req: Request) {
   return safeSecretMatch(expected, actual);
 }
 
+function hasConfiguredInternalSecret() {
+  return Boolean(process.env.AI_INTERNAL_SECRET);
+}
+
 function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status });
 }
@@ -81,10 +85,18 @@ export async function POST(req: Request) {
     data: { user },
   } = await supabase.auth.getUser();
   const isInternalRequest = hasValidInternalSecret(req);
+  const isInternalHeaderPresent = Boolean(req.headers.get("x-ai-internal-secret"));
 
   if (!user && !isInternalRequest) {
+    if (isInternalHeaderPresent && !hasConfiguredInternalSecret()) {
+      return jsonError("AI_INTERNAL_SECRET obrigatoria", 500);
+    }
     return jsonError("Unauthorized", 401);
   }
+
+  console.info("[REMOVE_BG_AUTH]", {
+    mode: user ? "user" : "internal",
+  });
 
   try {
     try {
