@@ -453,9 +453,6 @@ async function createReplicatePrediction(args: {
         },
         webhook: args.replicateWebhookUrl,
         webhook_events_filter: ["completed"],
-        metadata: {
-          generationId: args.generationId,
-        },
       }),
     },
   );
@@ -593,6 +590,8 @@ export async function POST(req: Request) {
   let serviceSupabase: ReturnType<typeof getServiceSupabase> | null = null;
   let userId: string | null = null;
   let creditConsumed = false;
+  let currentGenerationId: string | null = null;
+  let currentPredictionId: string | null = null;
 
   async function refundIfNeeded(generationId?: string | null, predictionId?: string | null) {
     if (!serviceSupabase || !userId || !creditConsumed) return;
@@ -601,8 +600,8 @@ export async function POST(req: Request) {
       await refundCredit(serviceSupabase, userId);
       creditConsumed = false;
       console.info("[AI_CREDIT_REFUNDED]", {
-        generationId,
-        predictionId,
+        generationId: generationId ?? currentGenerationId,
+        predictionId: predictionId ?? currentPredictionId,
         source: "post-refund",
       });
     } catch (error) {
@@ -706,6 +705,7 @@ export async function POST(req: Request) {
     });
 
     const generationId = crypto.randomUUID();
+    currentGenerationId = generationId;
     const now = new Date().toISOString();
     const baseRow = {
       user_id: user.id,
@@ -738,10 +738,11 @@ export async function POST(req: Request) {
       req,
       generationId,
       prompt,
-      replicateWebhookUrl: `${getBaseUrl(req)}/api/ai-image/webhook`,
+      replicateWebhookUrl: `${getBaseUrl(req)}/api/ai-image/webhook?generationId=${encodeURIComponent(generationId)}`,
     });
 
     const predictionId = String(prediction?.id || "").trim();
+    currentPredictionId = predictionId || null;
     const predictionStatus = normalizePredictionStatus(prediction?.status);
 
     const updatePayload: Record<string, unknown> = {
@@ -806,7 +807,10 @@ export async function POST(req: Request) {
       { status: 202, headers: jsonHeaders },
     );
   } catch (error) {
-    await refundIfNeeded();
+    const shouldRefund = creditConsumed && !currentPredictionId;
+    if (shouldRefund) {
+      await refundIfNeeded(currentGenerationId, currentPredictionId);
+    }
 
     console.error("[AI_GENERATION_FAILED]", error);
 

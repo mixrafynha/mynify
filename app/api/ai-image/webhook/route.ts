@@ -55,12 +55,6 @@ async function verifyReplicateWebhook(req: Request, rawBody: string) {
 
 function extractGenerationId(payload: any) {
   return String(
-    payload?.metadata?.generationId ||
-      payload?.metadata?.generation_id ||
-      payload?.metadata?.idempotencyKey ||
-      payload?.metadata?.idempotency_key ||
-      payload?.metadata?.userGenerationId ||
-      payload?.metadata?.user_generation_id ||
       "",
   ).trim();
 }
@@ -81,7 +75,8 @@ export async function POST(req: Request) {
 
     const payload = JSON.parse(rawBody || "{}");
     const serviceSupabase = getServiceSupabase();
-    const generationId = extractGenerationId(payload);
+    const url = new URL(req.url);
+    const generationId = String(url.searchParams.get("generationId") || extractGenerationId(payload) || "").trim();
     const predictionId = extractPredictionId(payload);
 
     let query = serviceSupabase.from("user_generated_images").select("*");
