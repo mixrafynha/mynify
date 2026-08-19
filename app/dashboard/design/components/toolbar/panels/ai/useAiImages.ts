@@ -90,6 +90,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [savedCount, setSavedCount] = useState(0);
   const [savedLimit, setSavedLimit] = useState(FREE_SAVED_IMAGE_LIMIT);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<string>("idle");
   const pollGenerationRef = useRef<string | null>(null);
   const generationStageRef = useRef<Map<string, string>>(new Map());
 
@@ -205,6 +206,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         const previousStatus = generationStageRef.current.get(generationId) || "pending";
         if (stageRank(status) < stageRank(previousStatus)) return;
         generationStageRef.current.set(generationId, status);
+        setGenerationStatus(status);
 
         console.info("[AI_UI_POLL_RESULT]", {
           generationId,
@@ -230,6 +232,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           ]);
           pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          setLoading(false);
+          setGenerationStatus("completed");
           if (timer) clearTimeout(timer);
           timer = null;
           console.info("[AI_UI_POLL_STOP]", {
@@ -244,6 +248,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         if (status === "failed" || status === "canceled") {
           pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          setLoading(false);
+          setGenerationStatus(status);
           if (timer) clearTimeout(timer);
           timer = null;
           console.info("[AI_UI_POLL_STOP]", {
@@ -268,6 +274,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
       if (!generationStageRef.current.has(activeGenerationId)) {
         generationStageRef.current.set(activeGenerationId, "pending");
       }
+      setGenerationStatus(generationStageRef.current.get(activeGenerationId) || "starting");
       console.info("[AI_UI_POLL_START]", { generationId: activeGenerationId });
       timer = setTimeout(pollActiveGeneration, 1000);
     } else {
@@ -384,7 +391,13 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           }),
         ]);
 
-        setGeneratedImages((prev) => prev.filter((current) => !sameGeneratedImage(current, item)));
+        setGeneratedImages((prev) =>
+          prev.map((current) =>
+            sameGeneratedImage(current, item)
+              ? { ...current, saved: true, isSaved: true, id: savedItem.id, status: "completed" }
+              : current,
+          ),
+        );
         setSavedCount(nextSavedCount);
         setSavedLimit(nextSavedLimit);
         console.info("[AI_UI_SAVE_SUCCESS]", { generationId: generationId || null });
@@ -541,6 +554,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     savedCount,
     savedLimit,
     activeGenerationId,
+    generationStatus,
     refreshCredits: loadCredits,
     randomPrompt,
     addImageToCanvas,

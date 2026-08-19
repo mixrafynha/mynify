@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback } from "react";
 import { Coins } from "lucide-react";
 import AiPromptBox from "./AiPromptBox";
+import LightweightCubeLoader from "./ai/LightweightCubeLoader";
 import UserGeneratedImages from "./UserGeneratedImages";
 import { useAiImages } from "./ai/useAiImages";
 import { useCreditPacks } from "./credits/useCreditPacks";
@@ -90,7 +91,13 @@ export default function AiPanel({
         <AiPromptBox
           prompt={ai.prompt}
           loading={ai.loading}
-          notice={ai.loading ? "Creating transparent print asset..." : ai.notice}
+          notice={
+            ai.loading
+              ? ai.generationStatus === "finalizing"
+                ? "Preparing your image..."
+                : "Creating your image..."
+              : ai.notice
+          }
           error={ai.error}
           setPrompt={ai.setPrompt}
           setNotice={ai.setNotice}
@@ -100,26 +107,7 @@ export default function AiPanel({
         />
       </div>
 
-      {ai.loading && (
-        <div className="overflow-hidden rounded-3xl border border-violet-400/20 bg-violet-500/10 p-4">
-          <div className="mb-3 h-2 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-2/3 animate-pulse rounded-full bg-violet-400" />
-          </div>
-
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.16em] text-violet-200">
-                Creating image
-              </p>
-              <p className="mt-1 text-xs font-semibold text-white/45">
-                You can close this panel. The request keeps running.
-              </p>
-            </div>
-
-            <div className="h-8 w-8 shrink-0 animate-spin rounded-full border-2 border-white/10 border-t-violet-300" />
-          </div>
-        </div>
-      )}
+      {ai.loading && <LightweightCubeLoader status={ai.generationStatus} />}
 
       <UserGeneratedImages
         images={(Array.isArray(ai.generatedImages) ? ai.generatedImages : []) as any}

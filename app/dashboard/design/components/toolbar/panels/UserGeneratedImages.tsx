@@ -98,12 +98,15 @@ function UserGeneratedImages({
                     src={src}
                     crossOrigin="anonymous"
                     alt="AI generated design"
-                    className="h-full w-full object-contain p-2"
+                    className="h-full w-full object-contain p-2 opacity-0 transition-opacity duration-300 data-[loaded=true]:opacity-100"
                     draggable={false}
                     decoding="async"
                     loading="lazy"
                     onError={(event) => {
                       event.currentTarget.closest("[data-ai-image-card]")?.classList.add("hidden");
+                    }}
+                    onLoad={(event) => {
+                      event.currentTarget.dataset.loaded = "true";
                     }}
                   />
                 ) : (
