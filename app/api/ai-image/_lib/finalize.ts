@@ -1,17 +1,19 @@
 import { uploadR2Object } from "../../../../trigger/shared/r2";
-import { FINALIZATION_LEASE_SECONDS, getBaseUrl } from "./config";
+import {
+  FINALIZATION_LEASE_SECONDS,
+  FINALIZATION_MAX_ATTEMPTS,
+  getBaseUrl,
+  getFinalizationRetryDelayMs,
+} from "./config";
 import { refundGenerationCreditOnce } from "./credits";
-import { claimFinalization, releaseFinalization, updateGeneration } from "./repository";
+import {
+  claimFinalization,
+  releaseFinalization,
+  scheduleFinalizationRetry,
+  updateGeneration,
+} from "./repository";
 import { extractOutputUrl, normalizePredictionStatus } from "./replicate";
 import type { GenerationRow, ReplicatePrediction, ServiceSupabase } from "./types";
-
-async function downloadImage(url: string) {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) throw new Error(`Could not download Replicate output (${response.status})`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Replicate output was empty");
-  return { buffer, contentType: response.headers.get("content-type") || "image/png" };
-}
 
 async function removeBackground(req: Request, imageUrl: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -33,6 +35,20 @@ async function removeBackground(req: Request, imageUrl: string) {
   return buffer;
 }
 
+function isAuthOrConfigError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /401|403|AI_INTERNAL_SECRET/i.test(message);
+}
+
+function computeNextFinalizationAttempt(row: GenerationRow) {
+  const attempts = Math.min((row.finalization_attempts || 0) + 1, FINALIZATION_MAX_ATTEMPTS);
+  const delayMs = getFinalizationRetryDelayMs(attempts);
+  return {
+    attempts,
+    nextRetryAt: new Date(Date.now() + delayMs).toISOString(),
+  };
+}
+
 export async function finalizePrediction(args: {
   req: Request;
   serviceSupabase: ServiceSupabase;
@@ -42,7 +58,7 @@ export async function finalizePrediction(args: {
 }) {
   const { req, serviceSupabase, prediction, source } = args;
   let row = args.row;
-  const status = normalizePredictionStatus(prediction.status || row.replicate_status);
+  const status = normalizePredictionStatus(row.replicate_status || prediction.status);
 
   if (status === "succeeded") {
     const outputUrl = extractOutputUrl(prediction);
@@ -52,7 +68,7 @@ export async function finalizePrediction(args: {
     // webhook/poll reconciliation can safely retry finalization later.
     row = await updateGeneration(serviceSupabase, row.id, {
       replicate_status: "succeeded",
-      status: row.status === "completed" ? "completed" : "processing",
+      status: row.status === "completed" ? "completed" : "finalizing",
       replicate_output: prediction.output ?? null,
       error_message: null,
     });
@@ -61,8 +77,18 @@ export async function finalizePrediction(args: {
       return { status: "completed", imageUrl: row.image_url };
     }
 
+    const currentAttempts = row.finalization_attempts || 0;
+    if (currentAttempts >= FINALIZATION_MAX_ATTEMPTS) {
+      console.warn("[AI_GENERATION_FINALIZATION_BACKOFF]", {
+        generationId: row.generation_id,
+        predictionId: row.prediction_id,
+        attempts: currentAttempts,
+        source,
+      });
+    }
+
     const claimed = await claimFinalization(serviceSupabase, row, FINALIZATION_LEASE_SECONDS);
-    if (!claimed) return { status: "processing" };
+    if (!claimed) return { status: "finalizing" };
     row = claimed;
 
     try {
@@ -104,14 +130,22 @@ export async function finalizePrediction(args: {
       console.error("[AI_REMOVE_BG_FAILED]", {
         generationId: row.generation_id,
         predictionId: row.prediction_id,
-        status,
+        status: row.status,
         responseBodySafe: message.slice(0, 500),
       });
-      await releaseFinalization(
-        serviceSupabase,
-        row.id,
-        message,
-      ).catch(() => undefined);
+      if (isAuthOrConfigError(error)) {
+        const nextRetry = computeNextFinalizationAttempt(row);
+        await scheduleFinalizationRetry(serviceSupabase, row.id, nextRetry.nextRetryAt, message).catch(() => undefined);
+        console.info("[AI_GENERATION_FINALIZATION_BACKOFF]", {
+          generationId: row.generation_id,
+          predictionId: row.prediction_id,
+          attempts: nextRetry.attempts,
+          nextRetryAt: nextRetry.nextRetryAt,
+          source,
+        });
+      } else {
+        await releaseFinalization(serviceSupabase, row.id, message).catch(() => undefined);
+      }
       throw error;
     }
   }

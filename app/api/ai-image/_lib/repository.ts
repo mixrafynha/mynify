@@ -130,6 +130,25 @@ export async function claimFinalization(
   return data;
 }
 
+export async function scheduleFinalizationRetry(
+  serviceSupabase: ServiceSupabase,
+  rowId: string,
+  nextRetryAt: string,
+  errorMessage?: string,
+) {
+  const { error } = await serviceSupabase
+    .from("user_generated_images")
+    .update({
+      status: "finalizing",
+      finalization_lock_until: nextRetryAt,
+      error_message: errorMessage || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", rowId)
+    .neq("status", "completed");
+  if (error) throw error;
+}
+
 export async function releaseFinalization(
   serviceSupabase: ServiceSupabase,
   rowId: string,

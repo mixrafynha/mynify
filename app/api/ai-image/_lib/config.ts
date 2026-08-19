@@ -1,6 +1,9 @@
 export const MAX_BODY_BYTES = 16 * 1024;
 export const RECONCILE_MIN_INTERVAL_MS = 20_000;
 export const FINALIZATION_LEASE_SECONDS = 300;
+export const FINALIZATION_AUTH_RETRY_BASE_MS = 60_000;
+export const FINALIZATION_AUTH_RETRY_MAX_MS = 15 * 60_000;
+export const FINALIZATION_MAX_ATTEMPTS = 20;
 
 export const JSON_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -64,4 +67,12 @@ export function getProductionWebhookBaseUrl(req: Request) {
   if (appUrl) return appUrl;
 
   return "https://www.ryfio.com";
+}
+
+export function getFinalizationRetryDelayMs(attempts: number) {
+  const safeAttempts = Math.max(1, attempts);
+  const exponential = FINALIZATION_AUTH_RETRY_BASE_MS * 2 ** Math.max(0, safeAttempts - 1);
+  const capped = Math.min(exponential, FINALIZATION_AUTH_RETRY_MAX_MS);
+  const jitter = Math.floor(Math.random() * 30_000);
+  return capped + jitter;
 }
