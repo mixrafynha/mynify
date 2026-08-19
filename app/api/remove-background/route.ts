@@ -79,6 +79,27 @@ function normalizeBase64(value: string) {
   return value;
 }
 
+function logSafeInput(mode: "user" | "internal", imageUrl: string) {
+  try {
+    const parsed = new URL(imageUrl);
+    const pathnameParts = parsed.pathname.split("/").filter(Boolean);
+    const pathname = pathnameParts.length ? `/${pathnameParts.slice(0, 2).join("/")}` : "/";
+    console.info("[REMOVE_BG_INPUT]", {
+      mode,
+      protocol: parsed.protocol,
+      hostname: parsed.hostname,
+      pathname,
+    });
+  } catch {
+    console.info("[REMOVE_BG_INPUT]", {
+      mode,
+      protocol: "invalid",
+      hostname: "invalid",
+      pathname: "invalid",
+    });
+  }
+}
+
 export async function POST(req: Request) {
   const supabase = createSupabaseServer();
   const {
@@ -140,6 +161,7 @@ export async function POST(req: Request) {
     const record = body as Record<string, unknown>;
     const imageUrl = typeof record.imageUrl === "string" ? record.imageUrl.trim() : "";
     const imageBase64 = typeof record.imageBase64 === "string" ? record.imageBase64.trim() : "";
+    const requestMode: "user" | "internal" = user ? "user" : "internal";
 
     if (!imageUrl && !imageBase64) {
       return jsonError("Image URL ou imageBase64 obrigatoria", 400);
@@ -186,10 +208,13 @@ export async function POST(req: Request) {
         return jsonError("imageUrl invalida", 400);
       }
 
+      logSafeInput(requestMode, imageUrl);
+
       let safeUrl: string;
 
       try {
-        safeUrl = await validateSafeRemoteImageUrl(imageUrl);
+        const extraAllowedHosts = requestMode === "internal" ? ["replicate.delivery"] : [];
+        safeUrl = await validateSafeRemoteImageUrl(imageUrl, 0, extraAllowedHosts);
       } catch {
         return jsonError("imageUrl invalida", 400);
       }

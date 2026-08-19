@@ -41,6 +41,11 @@ function isAuthOrConfigError(error: unknown) {
   return /401|403|AI_INTERNAL_SECRET/i.test(message);
 }
 
+function isValidationBackoffError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /400|imageUrl invalida|image url invalida/i.test(message);
+}
+
 function computeNextFinalizationAttempt(row: GenerationRow) {
   const attempts = Math.min((row.finalization_attempts || 0) + 1, FINALIZATION_MAX_ATTEMPTS);
   const delayMs = getFinalizationRetryDelayMs(attempts);
@@ -140,7 +145,7 @@ export async function finalizePrediction(args: {
         status: row.status,
         responseBodySafe: message.slice(0, 500),
       });
-      if (isAuthOrConfigError(error)) {
+      if (isAuthOrConfigError(error) || isValidationBackoffError(error)) {
         const nextRetry = computeNextFinalizationAttempt(row);
         await scheduleFinalizationRetry(serviceSupabase, row.id, nextRetry.nextRetryAt, message).catch(() => undefined);
         console.info("[AI_GENERATION_FINALIZATION_BACKOFF]", {

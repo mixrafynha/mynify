@@ -35,8 +35,9 @@ function allowedHosts() {
   );
 }
 
-function isTrustedRemoteImageHost(hostname: string) {
-  return allowedHosts().has(hostname.toLowerCase());
+function isTrustedRemoteImageHost(hostname: string, extraAllowedHosts: string[] = []) {
+  const hosts = new Set([...allowedHosts(), ...extraAllowedHosts.map((host) => host.toLowerCase())]);
+  return hosts.has(hostname.toLowerCase());
 }
 
 function ipv4ToNumber(ip: string) {
@@ -87,7 +88,7 @@ async function assertSafeHostname(hostname: string) {
   }
 }
 
-async function validateRemoteImageUrl(rawUrl: string) {
+async function validateRemoteImageUrl(rawUrl: string, extraAllowedHosts: string[] = []) {
   let parsed: URL;
 
   try {
@@ -110,7 +111,7 @@ async function validateRemoteImageUrl(rawUrl: string) {
     throw new Error("Blocked remote image port.");
   }
 
-  if (!isTrustedRemoteImageHost(hostname)) {
+  if (!isTrustedRemoteImageHost(hostname, extraAllowedHosts)) {
     throw new Error("Blocked remote image host.");
   }
 
@@ -118,12 +119,16 @@ async function validateRemoteImageUrl(rawUrl: string) {
   return parsed;
 }
 
-export async function validateSafeRemoteImageUrl(rawUrl: string, redirectCount = 0): Promise<string> {
+export async function validateSafeRemoteImageUrl(
+  rawUrl: string,
+  redirectCount = 0,
+  extraAllowedHosts: string[] = [],
+): Promise<string> {
   if (redirectCount > MAX_REDIRECTS) {
     throw new Error("Remote image redirect limit exceeded.");
   }
 
-  const url = await validateRemoteImageUrl(rawUrl);
+  const url = await validateRemoteImageUrl(rawUrl, extraAllowedHosts);
   const response = await fetch(url, {
     method: "HEAD",
     headers: {
@@ -137,7 +142,7 @@ export async function validateSafeRemoteImageUrl(rawUrl: string, redirectCount =
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
     if (!location) throw new Error("Remote image redirect missing location.");
-    return validateSafeRemoteImageUrl(new URL(location, url).toString(), redirectCount + 1);
+    return validateSafeRemoteImageUrl(new URL(location, url).toString(), redirectCount + 1, extraAllowedHosts);
   }
 
   if (!response.ok) {
@@ -213,12 +218,13 @@ async function readLimitedResponse(response: Response, hostname: string) {
 export async function fetchSafeRemoteImageBuffer(
   rawUrl: string,
   redirectCount = 0,
+  extraAllowedHosts: string[] = [],
 ): Promise<{ buffer: Buffer; contentType: string }> {
   if (redirectCount > MAX_REDIRECTS) {
     throw new Error("Remote image redirect limit exceeded.");
   }
 
-  const url = await validateRemoteImageUrl(rawUrl);
+  const url = await validateRemoteImageUrl(rawUrl, extraAllowedHosts);
   const response = await fetch(url, {
     headers: {
       accept: "image/webp,image/png,image/jpeg",
@@ -231,7 +237,7 @@ export async function fetchSafeRemoteImageBuffer(
   if ([301, 302, 303, 307, 308].includes(response.status)) {
     const location = response.headers.get("location");
     if (!location) throw new Error("Remote image redirect missing location.");
-    return fetchSafeRemoteImageBuffer(new URL(location, url).toString(), redirectCount + 1);
+    return fetchSafeRemoteImageBuffer(new URL(location, url).toString(), redirectCount + 1, extraAllowedHosts);
   }
 
   if (!response.ok) {
