@@ -226,6 +226,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
             is_saved: Boolean(generation.isSaved),
           });
 
+          completedItem.saved = generation.isSaved === true;
+
           setGeneratedImages((prev) => [
             completedItem,
             ...prev.filter((current) => !sameGeneratedImage(current, completedItem)),
@@ -400,7 +402,6 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
             sameGeneratedImage(current, item)
               ? {
                   ...current,
-                  saved: true,
                   isSaved: true,
                   id: savedItem.id,
                   generationId: savedItem.generationId || current.generationId,

@@ -21,6 +21,7 @@ type ImageItem = {
   width?: number;
   height?: number;
   dpi?: number;
+  isSaved?: boolean;
   saved?: boolean;
 };
 
@@ -79,7 +80,7 @@ function UserGeneratedImages({
       <div className="grid grid-cols-2 gap-2">
         {validImages.slice(0, 5).map((item, index) => {
           const src = getImageSrc(item);
-          const saved = Boolean(item.saved || item.id);
+          const saved = item.isSaved === true;
           const isLastAdded = Boolean(lastAddedSrc && src === lastAddedSrc);
 
           return (
