@@ -1,5 +1,5 @@
-import { applyPredictionState } from "./finalize";
-import { claimReconciliation } from "./repository";
+import { finalizePrediction } from "./finalize";
+import { claimReconciliation, listStaleReconciliationGenerations } from "./repository";
 import { getReplicatePrediction } from "./replicate";
 import type { GenerationRow, ServiceSupabase } from "./types";
 
@@ -19,11 +19,35 @@ export async function reconcileWithReplicate(args: {
   }
 
   const prediction = await getReplicatePrediction(predictionId);
-  return applyPredictionState({
+  return finalizePrediction({
     req: args.req,
     serviceSupabase: args.serviceSupabase,
     row: args.row,
     prediction,
     source: args.source,
   });
+}
+
+export async function reconcileStaleGenerations(args: {
+  req: Request;
+  serviceSupabase: ServiceSupabase;
+}) {
+  const rows = await listStaleReconciliationGenerations(args.serviceSupabase);
+  const results = [];
+
+  for (const row of rows) {
+    if (!row.prediction_id) continue;
+    const prediction = await getReplicatePrediction(row.prediction_id);
+    results.push(
+      await finalizePrediction({
+        req: args.req,
+        serviceSupabase: args.serviceSupabase,
+        row,
+        prediction,
+        source: "poll",
+      }),
+    );
+  }
+
+  return results;
 }

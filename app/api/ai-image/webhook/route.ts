@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
-import { getEnv } from "../_lib/config";
+import { getReplicateWebhookSecret, validateAiImageWebhookConfig } from "../_lib/config";
 import { applyPredictionState } from "../_lib/finalize";
 import { safeErrorDetails } from "../_lib/http";
 import { loadGenerationForWebhook, updateGeneration } from "../_lib/repository";
@@ -17,7 +17,8 @@ function constantTimeMatch(expected: string, actual: string) {
 }
 
 async function verifyReplicateWebhook(req: Request, rawBody: string) {
-  const signingSecret = getEnv("REPLICATE_WEBHOOK_SECRET").replace(/^whsec_/, "");
+  const signingSecret = getReplicateWebhookSecret();
+  if (!signingSecret) return false;
   const webhookId = req.headers.get("webhook-id") || "";
   const webhookTimestamp = req.headers.get("webhook-timestamp") || "";
   const webhookSignature = req.headers.get("webhook-signature") || "";
@@ -39,8 +40,18 @@ async function verifyReplicateWebhook(req: Request, rawBody: string) {
 
 export async function POST(req: Request) {
   try {
+    if (!validateAiImageWebhookConfig()) {
+      console.error("[AI_WEBHOOK_REJECTED]", { reason: "missing_configuration" });
+      return NextResponse.json(
+        { success: false, error: "AI webhook configuration is missing" },
+        { status: 500 },
+      );
+    }
     const rawBody = await req.text();
     if (!(await verifyReplicateWebhook(req, rawBody))) {
+      console.warn("[AI_WEBHOOK_REJECTED]", {
+        reason: "invalid_signature_or_missing_secret",
+      });
       return NextResponse.json({ success: false, error: "Invalid webhook signature" }, { status: 401 });
     }
 
@@ -60,6 +71,7 @@ export async function POST(req: Request) {
       row = await updateGeneration(serviceSupabase, row.id, { prediction_id: predictionId });
     }
 
+    console.info("[AI_WEBHOOK_VERIFIED]", { generationId, predictionId });
     await applyPredictionState({ req, serviceSupabase, row, prediction: payload, source: "webhook" });
     await updateGeneration(serviceSupabase, row.id, { webhook_processed_at: new Date().toISOString() }).catch(() => undefined);
     return NextResponse.json({ success: true }, { status: 200 });

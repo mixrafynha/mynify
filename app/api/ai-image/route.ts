@@ -1,11 +1,11 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
-import { JSON_HEADERS, MAX_BODY_BYTES, getBaseUrl } from "./_lib/config";
+import { JSON_HEADERS, MAX_BODY_BYTES, getBaseUrl, getProductionWebhookBaseUrl } from "./_lib/config";
 import { getCreditBalance, refundGenerationCreditOnce, reserveGenerationAndCredit } from "./_lib/credits";
 import { applyPredictionState } from "./_lib/finalize";
 import { jsonError, safeErrorDetails, safePublicError } from "./_lib/http";
-import { reconcileWithReplicate } from "./_lib/reconcile";
+import { reconcileStaleGenerations, reconcileWithReplicate } from "./_lib/reconcile";
 import {
   listPendingGenerations,
   loadGenerationById,
@@ -55,10 +55,28 @@ export async function GET(req: Request) {
         row = await loadGenerationById(serviceSupabase, generationId, user.id);
       }
 
+      if (reconcile && row && !APP_PENDING_STATES.includes((row.status || "") as any) && row.prediction_id) {
+        // Keep the endpoint tolerant for stale rows that drifted out of the local pending set.
+        await reconcileWithReplicate({ req, serviceSupabase, row, source: "poll", force: true }).catch((error) => {
+          console.error("[AI_GENERATION_RECONCILE_FAILED]", safeErrorDetails(error));
+        });
+        row = await loadGenerationById(serviceSupabase, generationId, user.id);
+      }
+
       return NextResponse.json(
         { success: true, generation: toResponseRow(row) },
         { headers: JSON_HEADERS },
       );
+    }
+
+    if (reconcile) {
+      console.info("[AI_RECONCILE_START]", { mode: "stale-sweep" });
+      try {
+        const results = await reconcileStaleGenerations({ req, serviceSupabase });
+        console.info("[AI_RECONCILE_SUCCEEDED]", { count: results.length });
+      } catch (error) {
+        console.error("[AI_GENERATION_RECONCILE_FAILED]", safeErrorDetails(error));
+      }
     }
 
     const rows = await listPendingGenerations(serviceSupabase, user.id);
@@ -166,7 +184,7 @@ export async function POST(req: Request) {
 
     const prediction = await createReplicatePrediction({
       prompt,
-      replicateWebhookUrl: `${getBaseUrl(req)}/api/ai-image/webhook?generationId=${encodeURIComponent(generationId)}`,
+      replicateWebhookUrl: `${getProductionWebhookBaseUrl(req)}/api/ai-image/webhook?generationId=${encodeURIComponent(generationId)}`,
     });
     predictionId = String(prediction.id || "").trim();
 

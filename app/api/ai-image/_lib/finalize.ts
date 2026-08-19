@@ -31,7 +31,7 @@ async function removeBackground(req: Request, imageUrl: string) {
   return buffer;
 }
 
-export async function applyPredictionState(args: {
+export async function finalizePrediction(args: {
   req: Request;
   serviceSupabase: ServiceSupabase;
   row: GenerationRow;
@@ -90,10 +90,11 @@ export async function applyPredictionState(args: {
         is_saved: false,
         replicate_output: prediction.output ?? null,
       });
-      console.info("[AI_GENERATION_SUCCEEDED]", {
+      console.info("[AI_GENERATION_FINALIZED]", {
         generationId: row.generation_id,
         predictionId: row.prediction_id,
         source,
+        status: "succeeded",
       });
       return { status: "completed", imageUrl: publicImageUrl };
     } catch (error) {
@@ -124,12 +125,13 @@ export async function applyPredictionState(args: {
       replicate_output: prediction.output ?? null,
       finalization_lock_until: null,
     });
-    console.info("[AI_GENERATION_FAILED]", {
-      generationId: row.generation_id,
-      predictionId: row.prediction_id,
-      source,
-    });
-    return { status: "failed" };
+      console.info("[AI_GENERATION_FINALIZED]", {
+        generationId: row.generation_id,
+        predictionId: row.prediction_id,
+        source,
+        status: "failed",
+      });
+      return { status: "failed" };
   }
 
   if (status === "canceled") {
@@ -142,7 +144,7 @@ export async function applyPredictionState(args: {
       replicate_output: prediction.output ?? null,
       finalization_lock_until: null,
     });
-    console.info("[AI_GENERATION_RECONCILED]", {
+    console.info("[AI_GENERATION_FINALIZED]", {
       generationId: row.generation_id,
       predictionId: row.prediction_id,
       status,
@@ -166,3 +168,5 @@ export async function applyPredictionState(args: {
   });
   return { status: localStatus };
 }
+
+export const applyPredictionState = finalizePrediction;
