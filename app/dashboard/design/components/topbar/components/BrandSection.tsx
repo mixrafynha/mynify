@@ -29,9 +29,9 @@ function BrandSection() {
     >
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/[0.10] bg-white text-black shadow-[0_8px_22px_rgba(0,0,0,.22)] sm:h-8 sm:w-8 sm:rounded-xl">
         <img
-          src="/icon-192.png"
+          src="/favicon.ico"
           alt="RYFIO"
-          className="h-full w-full object-cover p-0"
+          className="h-full w-full object-contain p-0"
           draggable={false}
           onError={(event) => {
             event.currentTarget.style.display = "none";
@@ -39,10 +39,36 @@ function BrandSection() {
         />
       </span>
 
-      <span className="hidden select-none font-[var(--font-logo)] text-[18px] font-normal uppercase leading-none tracking-[-0.045em] text-white xl:inline-flex">
-        <span>R</span>
-        <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(168,85,247,.22)]">
-          YFIO
+      <span
+        className="hidden select-none text-[18px] uppercase leading-none tracking-[-0.03em] xl:inline-flex"
+        style={{
+          fontFamily: "var(--font-logo)",
+          textShadow: "0 0 18px rgba(102, 67, 136, 0.35)",
+        }}
+      >
+        <span className="ryfio-letter text-white" style={{ animationDelay: "0ms" }}>
+          R
+        </span>
+        <span className="ryfio-letter text-white" style={{ animationDelay: "120ms" }}>
+          Y
+        </span>
+        <span
+          className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+          style={{ animationDelay: "240ms" }}
+        >
+          F
+        </span>
+        <span
+          className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+          style={{ animationDelay: "360ms" }}
+        >
+          I
+        </span>
+        <span
+          className="ryfio-letter bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent"
+          style={{ animationDelay: "480ms" }}
+        >
+          O
         </span>
       </span>
 

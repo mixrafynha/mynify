@@ -22,7 +22,7 @@ function TopBarButton({ children, title, onClick, disabled, className = "" }: To
       className={`${iconButtonClass} ${className}`}
     >
       <span className="pointer-events-none absolute inset-x-2 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
-      <span className="relative flex items-center justify-center">{children}</span>
+      <span className="relative flex items-center justify-center scale-[1.02]">{children}</span>
     </button>
   );
 }
