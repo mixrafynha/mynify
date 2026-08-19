@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import sharp from "sharp";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { validateSafeRemoteImageUrl } from "@/lib/server/safe-remote-image";
@@ -17,6 +18,19 @@ const removeBackgroundRateLimiter = getDurableRateLimiter({
   limit: 5,
   window: "1 m",
 });
+
+function safeSecretMatch(expected: string, actual: string) {
+  const expectedBuf = Buffer.from(expected);
+  const actualBuf = Buffer.from(actual);
+  return expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf);
+}
+
+function hasValidInternalSecret(req: Request) {
+  const expected = process.env.AI_INTERNAL_SECRET;
+  const actual = req.headers.get("x-ai-internal-secret") || "";
+  if (!expected || !actual) return false;
+  return safeSecretMatch(expected, actual);
+}
 
 function jsonError(error: string, status: number) {
   return NextResponse.json({ error }, { status });
@@ -66,16 +80,19 @@ export async function POST(req: Request) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const isInternalRequest = hasValidInternalSecret(req);
 
-  if (!user) {
+  if (!user && !isInternalRequest) {
     return jsonError("Unauthorized", 401);
   }
 
   try {
     try {
-      const rateLimit = await removeBackgroundRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
-      if (!rateLimit.success) {
-        return jsonError("Too many remove background requests", 429);
+      if (user) {
+        const rateLimit = await removeBackgroundRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
+        if (!rateLimit.success) {
+          return jsonError("Too many remove background requests", 429);
+        }
       }
     } catch (error) {
       console.error("[remove-background:rate-limit-error]", {
@@ -187,7 +204,10 @@ export async function POST(req: Request) {
 
     if (!response.ok) {
       const text = (await response.text()).slice(0, 1000);
-
+      console.error("[AI_REMOVE_BG_FAILED]", {
+        status: response.status,
+        responseBodySafe: text,
+      });
       return NextResponse.json(
         {
           error: "Erro remove.bg",

@@ -15,9 +15,8 @@ async function downloadImage(url: string) {
 
 async function removeBackground(req: Request, imageUrl: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const cookie = req.headers.get("cookie");
-  if (cookie) headers.cookie = cookie;
-  if (process.env.AI_INTERNAL_SECRET) headers["x-ai-internal-secret"] = process.env.AI_INTERNAL_SECRET;
+  const internalSecret = process.env.AI_INTERNAL_SECRET;
+  if (internalSecret) headers["x-ai-internal-secret"] = internalSecret;
 
   const response = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
     method: "POST",
@@ -25,7 +24,10 @@ async function removeBackground(req: Request, imageUrl: string) {
     body: JSON.stringify({ imageUrl }),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error(`Background removal failed with ${response.status}`);
+  if (!response.ok) {
+    const responseBodySafe = (await response.text().catch(() => "")).slice(0, 500);
+    throw new Error(`Background removal failed with ${response.status}: ${responseBodySafe}`);
+  }
   const buffer = Buffer.from(await response.arrayBuffer());
   if (!buffer.length) throw new Error("Background removal returned an empty image");
   return buffer;
@@ -98,10 +100,17 @@ export async function finalizePrediction(args: {
       });
       return { status: "completed", imageUrl: publicImageUrl };
     } catch (error) {
+      const message = error instanceof Error ? error.message : "AI finalization failed";
+      console.error("[AI_REMOVE_BG_FAILED]", {
+        generationId: row.generation_id,
+        predictionId: row.prediction_id,
+        status,
+        responseBodySafe: message.slice(0, 500),
+      });
       await releaseFinalization(
         serviceSupabase,
         row.id,
-        error instanceof Error ? error.message : "AI finalization failed",
+        message,
       ).catch(() => undefined);
       throw error;
     }

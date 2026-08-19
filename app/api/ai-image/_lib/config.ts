@@ -43,10 +43,10 @@ export function getReplicateWebhookSecret() {
 }
 
 export function getBaseUrl(req: Request) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
   const appProductionUrl = process.env.APP_URL?.replace(/\/$/, "");
   if (appProductionUrl) return appProductionUrl;
-  if (appUrl) return appUrl;
+  const vercelProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.replace(/\/$/, "");
+  if (vercelProductionUrl) return `https://${vercelProductionUrl}`;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return new URL(req.url).origin;
 }
@@ -55,8 +55,13 @@ export function getProductionWebhookBaseUrl(req: Request) {
   const appProductionUrl = process.env.APP_URL?.replace(/\/$/, "");
   if (appProductionUrl) return appProductionUrl;
 
+  const vercelProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.replace(/\/$/, "");
+  if (vercelProductionUrl) return `https://${vercelProductionUrl}`;
+
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (appUrl && !process.env.VERCEL_URL) return appUrl;
+  if (appUrl) return appUrl;
 
   return "https://www.ryfio.com";
 }
