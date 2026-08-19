@@ -158,7 +158,7 @@ function TopBar({
 
   return (
     <>
-      <header className="sticky top-0 z-50 h-[50px] w-full shrink-0 overflow-hidden border-b border-violet-400/18 bg-[#090514]/95 text-white shadow-[0_8px_24px_rgba(0,0,0,.28),0_0_24px_rgba(168,85,247,.10)] backdrop-blur-2xl supports-[backdrop-filter]:bg-[#090514]/82">
+      <header className="sticky top-0 z-50 h-[50px] w-full shrink-0 overflow-hidden border-b border-violet-400/18 bg-[#090714]/96 text-white shadow-[0_8px_24px_rgba(0,0,0,.28),0_0_24px_rgba(168,85,247,.12)] backdrop-blur-2xl supports-[backdrop-filter]:bg-[#090714]/84">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-300/55 to-transparent" />
 
         <div className="relative mx-auto flex h-full w-full max-w-[1840px] items-center gap-1.5 overflow-hidden px-1.5 sm:gap-2 sm:px-3 lg:px-4">

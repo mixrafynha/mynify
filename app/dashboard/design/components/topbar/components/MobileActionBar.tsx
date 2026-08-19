@@ -31,15 +31,15 @@ function MobileActionBar({
   disabled,
 }: MobileActionBarProps) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/[0.08] bg-[#05050d]/94 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2.5 text-white shadow-[0_-20px_60px_rgba(0,0,0,0.52)] backdrop-blur-2xl md:hidden">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/60 to-transparent" />
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-violet-400/18 bg-[#090714]/96 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2.5 text-white shadow-[0_-20px_60px_rgba(0,0,0,0.52),0_0_24px_rgba(168,85,247,0.12)] backdrop-blur-2xl md:hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-fuchsia-300/55 to-transparent" />
 
       <div className="mx-auto grid max-w-[560px] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2">
         <div className="flex items-center gap-1.5">
-          <TopBarButton title="Undo" onClick={onUndo} disabled={!onUndo || disabled}>
+          <TopBarButton title="Undo" onClick={onUndo} disabled={!onUndo || disabled} className="scale-[1.5]">
             <Undo2 size={17} />
           </TopBarButton>
-          <TopBarButton title="Redo" onClick={onRedo} disabled={!onRedo || disabled}>
+          <TopBarButton title="Redo" onClick={onRedo} disabled={!onRedo || disabled} className="scale-[1.5]">
             <Redo2 size={17} />
           </TopBarButton>
         </div>
