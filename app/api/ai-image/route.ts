@@ -81,9 +81,10 @@ export async function POST(req: Request) {
   let predictionId: string | null = null;
   let reserved = false;
   let generationRowId: string | null = null;
+  let user: Awaited<ReturnType<typeof requireUser>> = null;
 
   try {
-    const user = await requireUser();
+    user = await requireUser();
     if (!user) return jsonError(401, "Create a free account and get 3 AI credits.");
 
     try {
@@ -224,7 +225,10 @@ export async function POST(req: Request) {
       try {
         const refund = generationRowId
           ? await refundGenerationCreditOnce(serviceSupabase, generationRowId)
-          : { refunded: false, credits: await getCreditBalance(serviceSupabase, user.id) };
+          : {
+              refunded: false,
+              credits: user ? await getCreditBalance(serviceSupabase, user.id) : 0,
+            };
         if (refund.refunded) {
           console.info("[AI_CREDIT_REFUNDED]", {
             generationId,
