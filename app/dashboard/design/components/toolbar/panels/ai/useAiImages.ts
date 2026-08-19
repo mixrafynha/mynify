@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AI_IMAGE_QUALITY } from "../../data";
 import { FREE_SAVED_IMAGE_LIMIT, PROMPT_EXAMPLES } from "./ai.constants";
 import type { AiImageItem, UseAiImagesArgs } from "./ai.types";
@@ -61,6 +61,11 @@ function sameGeneratedImage(a: AiImageItem, b: AiImageItem) {
   return Boolean(aSrc && bSrc && aSrc === bSrc);
 }
 
+function pollDelayMs(status: string) {
+  if (status === "finalizing") return 15_000;
+  return 8_000;
+}
+
 export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -77,6 +82,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [savedCount, setSavedCount] = useState(0);
   const [savedLimit, setSavedLimit] = useState(FREE_SAVED_IMAGE_LIMIT);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
+  const pollGenerationRef = useRef<string | null>(null);
 
   const visibleImages = useMemo(() => {
     const savedGenerationIds = new Set(
@@ -173,12 +179,15 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let inFlight = false;
 
     async function pollActiveGeneration() {
-      if (!activeGenerationId) return;
+      const generationId = pollGenerationRef.current;
+      if (!generationId || inFlight) return;
+      inFlight = true;
 
       try {
-        const { response, data } = await fetchAiImageGeneration(activeGenerationId, true);
+        const { response, data } = await fetchAiImageGeneration(generationId, true);
         if (!response.ok || cancelled) return;
 
         const generation = data?.generation || null;
@@ -198,27 +207,42 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
             completedItem,
             ...prev.filter((current) => !sameGeneratedImage(current, completedItem)),
           ]);
+          pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          console.info("[AI_UI_POLL_STOP]", {
+            generationId,
+            reason: "completed",
+          });
           setNotice("Image created. Click Save if you want to keep it.");
           await loadCredits();
           return;
         }
 
         if (status === "failed" || status === "canceled") {
+          pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          console.info("[AI_UI_POLL_STOP]", {
+            generationId,
+            reason: status,
+          });
           setError(status === "canceled" ? "Generation canceled." : "Generation failed.");
           await loadCredits();
           return;
         }
 
-        timer = setTimeout(pollActiveGeneration, 8000);
+        timer = setTimeout(pollActiveGeneration, pollDelayMs(status));
       } catch {
         timer = setTimeout(pollActiveGeneration, 12000);
+      } finally {
+        inFlight = false;
       }
     }
 
     if (activeGenerationId) {
+      pollGenerationRef.current = activeGenerationId;
       timer = setTimeout(pollActiveGeneration, 1000);
+    } else {
+      pollGenerationRef.current = null;
     }
 
     return () => {
@@ -376,7 +400,9 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
       const generationId = image?.generationId || generation?.generationId || generation?.generation_id || null;
 
       if (response.status === 202 || String(generation?.status || "").toLowerCase() !== "completed") {
-        setActiveGenerationId(String(generationId || "").trim() || null);
+        const nextGenerationId = String(generationId || "").trim() || null;
+        pollGenerationRef.current = nextGenerationId;
+        setActiveGenerationId(nextGenerationId);
         shouldKeepLoading = Boolean(generationId);
         setNotice("Generating...");
         return;

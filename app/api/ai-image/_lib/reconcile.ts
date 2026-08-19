@@ -19,6 +19,10 @@ export async function reconcileWithReplicate(args: {
   }
 
   const prediction = await getReplicatePrediction(predictionId);
+  console.info("[AI_REPLICATE_STATUS_FETCH]", {
+    predictionId,
+    remoteStatus: prediction.status || "unknown",
+  });
   return finalizePrediction({
     req: args.req,
     serviceSupabase: args.serviceSupabase,
@@ -38,6 +42,10 @@ export async function reconcileStaleGenerations(args: {
   for (const row of rows) {
     if (!row.prediction_id) continue;
     const prediction = await getReplicatePrediction(row.prediction_id);
+    console.info("[AI_REPLICATE_STATUS_FETCH]", {
+      predictionId: row.prediction_id,
+      remoteStatus: prediction.status || "unknown",
+    });
     results.push(
       await finalizePrediction({
         req: args.req,
