@@ -66,6 +66,14 @@ function pollDelayMs(status: string) {
   return 8_000;
 }
 
+function stageRank(status: string) {
+  if (status === "completed" || status === "failed" || status === "canceled") return 4;
+  if (status === "finalizing") return 3;
+  if (status === "processing") return 2;
+  if (status === "starting") return 1;
+  return 0;
+}
+
 export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -83,6 +91,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [savedLimit, setSavedLimit] = useState(FREE_SAVED_IMAGE_LIMIT);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
   const pollGenerationRef = useRef<string | null>(null);
+  const generationStageRef = useRef<Map<string, string>>(new Map());
 
   const visibleImages = useMemo(() => {
     const savedGenerationIds = new Set(
@@ -192,8 +201,18 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
 
         const generation = data?.generation || null;
         const status = String(generation?.status || "").toLowerCase();
+        const hasImageUrl = Boolean(generation?.imageUrl);
+        const previousStatus = generationStageRef.current.get(generationId) || "pending";
+        if (stageRank(status) < stageRank(previousStatus)) return;
+        generationStageRef.current.set(generationId, status);
 
-        if (status === "completed" && generation?.imageUrl) {
+        console.info("[AI_UI_POLL_RESULT]", {
+          generationId,
+          status,
+          hasImageUrl,
+        });
+
+        if (status === "completed" && hasImageUrl) {
           const completedItem = normalizeSavedImage({
             id: generation.id,
             generation_id: generation.generationId,
@@ -201,6 +220,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
             image_url: generation.imageUrl,
             storage_key: generation.storageKey,
             original_image_url: generation.originalImageUrl,
+            status: "completed",
+            is_saved: Boolean(generation.isSaved),
           });
 
           setGeneratedImages((prev) => [
@@ -209,6 +230,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           ]);
           pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          if (timer) clearTimeout(timer);
+          timer = null;
           console.info("[AI_UI_POLL_STOP]", {
             generationId,
             reason: "completed",
@@ -221,6 +244,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         if (status === "failed" || status === "canceled") {
           pollGenerationRef.current = null;
           setActiveGenerationId(null);
+          if (timer) clearTimeout(timer);
+          timer = null;
           console.info("[AI_UI_POLL_STOP]", {
             generationId,
             reason: status,
@@ -240,6 +265,10 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
 
     if (activeGenerationId) {
       pollGenerationRef.current = activeGenerationId;
+      if (!generationStageRef.current.has(activeGenerationId)) {
+        generationStageRef.current.set(activeGenerationId, "pending");
+      }
+      console.info("[AI_UI_POLL_START]", { generationId: activeGenerationId });
       timer = setTimeout(pollActiveGeneration, 1000);
     } else {
       pollGenerationRef.current = null;
@@ -301,7 +330,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
 
   const saveImage = useCallback(
     async (item: AiImageItem) => {
-      if (item.saved || item.id) return;
+      if (item.saved || item.isSaved || item.id) return;
 
       if (savedCount >= savedLimit) {
         setError("You've reached your saved image limit. Delete one of your saved images or upgrade your plan.");
@@ -309,18 +338,21 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
       }
 
       const imageUrl = getImageSrc(item);
+      const generationId = String(item.generationId || item.generation_id || "").trim();
+      const status = String(item.status || "").toLowerCase();
 
-      if (!isValidImageUrl(imageUrl)) {
+      if (status !== "completed" || !isValidImageUrl(imageUrl)) {
         setError("Invalid image URL. Try generating again.");
         return;
       }
 
       try {
-        const localSavingId = item.generationId || imageUrl;
+        const localSavingId = item.id || generationId || imageUrl;
 
         setSavingId(localSavingId);
         setError("");
         setNotice("Saving image...");
+        console.info("[AI_UI_SAVE_START]", { generationId: generationId || null });
 
         const { response, data } = await saveGeneratedImage(item);
 
@@ -355,8 +387,10 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         setGeneratedImages((prev) => prev.filter((current) => !sameGeneratedImage(current, item)));
         setSavedCount(nextSavedCount);
         setSavedLimit(nextSavedLimit);
+        console.info("[AI_UI_SAVE_SUCCESS]", { generationId: generationId || null });
         setNotice(`Image saved. ${nextSavedCount}/${nextSavedLimit} saved.`);
       } catch {
+        console.info("[AI_UI_SAVE_FAILED]", { generationId: generationId || null });
         setError("Could not save this image.");
       } finally {
         setSavingId(null);

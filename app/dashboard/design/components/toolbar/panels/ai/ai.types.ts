@@ -2,6 +2,8 @@ export type AiImageItem = {
   id?: string | null;
   generationId?: string | null;
   generation_id?: string | null;
+  status?: string | null;
+  isSaved?: boolean;
   title?: string | null;
   prompt?: string | null;
   src?: string | null;

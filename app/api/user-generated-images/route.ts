@@ -195,6 +195,7 @@ export async function POST(req: Request) {
     const imageUrl = getImageUrl(body);
     const storageKey = String(body?.storage_key || body?.r2Key || "").trim();
     const generationId = String(body?.generationId || body?.generation_id || "").trim();
+    const rowId = String(body?.id || body?.rowId || body?.row_id || "").trim();
 
     if (!imageUrl) {
       return json({ success: false, error: "Missing image URL" }, 400);
@@ -222,23 +223,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const payload = {
-      user_id: user.id,
-      generation_id: generationId || null,
-      prompt: body?.prompt || body?.title || null,
-      image_url: imageUrl,
-      storage_key: storageKey || null,
-      original_image_url: body?.originalImageUrl || body?.original_image_url || null,
-      is_saved: true,
-      saved_at: new Date().toISOString(),
-    };
+    const baseSelect = "id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at";
+    const resolvedRowId = rowId || (() => "");
+    let targetRowId = resolvedRowId;
+
+    if (!targetRowId && generationId) {
+      const { data: existingRow, error: findError } = await supabase
+        .from(TABLE)
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("generation_id", generationId)
+        .maybeSingle();
+
+      if (findError) {
+        return json({ success: false, error: "Could not resolve saved AI row" }, 500);
+      }
+
+      targetRowId = String(existingRow?.id || "").trim();
+    }
+
+    if (!targetRowId) {
+      return json({ success: false, error: "Saved AI row not found" }, 404);
+    }
 
     const { data: savedImage, error: saveError } = await supabase
       .from(TABLE)
-      .insert(payload)
-      .select(
-        "id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at",
-      )
+      .update({
+        generation_id: generationId || null,
+        prompt: body?.prompt || body?.title || null,
+        image_url: imageUrl,
+        storage_key: storageKey || null,
+        original_image_url: body?.originalImageUrl || body?.original_image_url || null,
+        is_saved: true,
+        saved_at: new Date().toISOString(),
+      })
+      .eq("id", targetRowId)
+      .eq("user_id", user.id)
+      .select(baseSelect)
       .single();
 
     if (saveError) {
