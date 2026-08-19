@@ -66,7 +66,7 @@ export async function listStaleReconciliationGenerations(serviceSupabase: Servic
   const { data, error } = await serviceSupabase
     .from("user_generated_images")
     .select("*")
-    .in("status", ["starting", "processing", "submitted"])
+    .in("status", ["queued", "starting", "processing", "submitted", "replicate_prediction_created", "finalizing"])
     .not("prediction_id", "is", null)
     .lt("updated_at", cutoff)
     .order("updated_at", { ascending: true })
@@ -95,7 +95,7 @@ export async function claimReconciliation(serviceSupabase: ServiceSupabase, row:
   const now = new Date().toISOString();
   const { data, error } = await serviceSupabase
     .from("user_generated_images")
-    .update({ last_reconciled_at: now, updated_at: now })
+    .update({ last_reconciled_at: now })
     .eq("id", row.id)
     .or(`last_reconciled_at.is.null,last_reconciled_at.lt.${cutoff}`)
     .select("id")

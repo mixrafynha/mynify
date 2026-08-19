@@ -40,22 +40,22 @@ export async function reserveGenerationAndCredit(args: {
     created: Boolean(result.created),
     rowId: result.generation_row_id,
     generationId: result.generation_id,
-    credits: Math.max(0, safeInt(result.credits)),
+    credits: Math.max(0, safeInt(result.balance)),
   };
 }
 
 export async function refundGenerationCreditOnce(
   serviceSupabase: ServiceSupabase,
-  generationId: string,
+  generationRowId: string,
 ) {
   const { data, error } = await serviceSupabase.rpc("refund_ai_generation_credit_once", {
-    p_generation_id: generationId,
+    p_generation_row_id: generationRowId,
   });
   if (error) throw error;
   const result = Array.isArray(data) ? data[0] : data;
   return {
     refunded: Boolean(result?.refunded),
-    credits: Math.max(0, safeInt(result?.credits)),
+    credits: Math.max(0, safeInt(result?.balance)),
   };
 }
 

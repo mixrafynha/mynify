@@ -40,6 +40,8 @@ export type GenerationRow = {
   last_reconciled_at?: string | null;
   finalization_lock_until?: string | null;
   finalization_attempts?: number | null;
+  replicate_output?: unknown;
+  replicate_prediction?: unknown;
 };
 
 export type ReplicatePrediction = {
@@ -55,5 +57,5 @@ export type ReserveGenerationResult = {
   created: boolean;
   generation_row_id: string | null;
   generation_id: string | null;
-  credits: number;
+  balance: number;
 };

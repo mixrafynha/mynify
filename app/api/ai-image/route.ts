@@ -5,7 +5,7 @@ import { JSON_HEADERS, MAX_BODY_BYTES, getBaseUrl, getProductionWebhookBaseUrl }
 import { getCreditBalance, refundGenerationCreditOnce, reserveGenerationAndCredit } from "./_lib/credits";
 import { applyPredictionState } from "./_lib/finalize";
 import { jsonError, safeErrorDetails, safePublicError } from "./_lib/http";
-import { reconcileStaleGenerations, reconcileWithReplicate } from "./_lib/reconcile";
+import { reconcileStaleGenerations } from "./_lib/reconcile";
 import {
   listPendingGenerations,
   loadGenerationById,
@@ -15,7 +15,6 @@ import {
 } from "./_lib/repository";
 import { createReplicatePrediction, normalizePredictionStatus } from "./_lib/replicate";
 import { getAuthSupabase, getServiceSupabase } from "./_lib/supabase";
-import { APP_PENDING_STATES } from "./_lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,23 +45,9 @@ export async function GET(req: Request) {
       let row = await loadGenerationById(serviceSupabase, generationId, user.id);
       if (!row) return jsonError(404, "Generation not found");
 
-      // Compatibility with existing frontend. Reconciliation is DB-throttled so a
-      // polling loop cannot hammer Replicate on every browser request.
-      if (reconcile && row.prediction_id && APP_PENDING_STATES.includes((row.status || "") as any)) {
-        await reconcileWithReplicate({ req, serviceSupabase, row, source: "poll" }).catch((error) => {
-          console.error("[AI_GENERATION_RECONCILE_FAILED]", safeErrorDetails(error));
-        });
-        row = await loadGenerationById(serviceSupabase, generationId, user.id);
-      }
-
-      if (reconcile && row && !APP_PENDING_STATES.includes((row.status || "") as any) && row.prediction_id) {
-        // Keep the endpoint tolerant for stale rows that drifted out of the local pending set.
-        await reconcileWithReplicate({ req, serviceSupabase, row, source: "poll", force: true }).catch((error) => {
-          console.error("[AI_GENERATION_RECONCILE_FAILED]", safeErrorDetails(error));
-        });
-        row = await loadGenerationById(serviceSupabase, generationId, user.id);
-      }
-
+      // IMPORTANT: generation-specific GET is a cheap status read only.
+      // Browser polling must never call Replicate or trigger remove-background.
+      // Completion is owned by the signed webhook and server-side stale reconciliation.
       return NextResponse.json(
         { success: true, generation: toResponseRow(row) },
         { headers: JSON_HEADERS },
@@ -95,6 +80,7 @@ export async function POST(req: Request) {
   let generationId: string | null = null;
   let predictionId: string | null = null;
   let reserved = false;
+  let generationRowId: string | null = null;
 
   try {
     const user = await requireUser();
@@ -170,6 +156,7 @@ export async function POST(req: Request) {
     }
 
     reserved = true;
+    generationRowId = reserve.rowId;
     generationId = reserve.generationId || generationId;
     console.info("[AI_GENERATION_CREATED]", { generationId, idempotencyKey });
     console.info("[AI_CREDIT_RESERVED]", {
@@ -235,7 +222,9 @@ export async function POST(req: Request) {
     // prediction, the webhook/reconciliation path owns the terminal outcome.
     if (reserved && generationId && !predictionId) {
       try {
-        const refund = await refundGenerationCreditOnce(serviceSupabase, generationId);
+        const refund = generationRowId
+          ? await refundGenerationCreditOnce(serviceSupabase, generationRowId)
+          : { refunded: false, credits: await getCreditBalance(serviceSupabase, user.id) };
         if (refund.refunded) {
           console.info("[AI_CREDIT_REFUNDED]", {
             generationId,

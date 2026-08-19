@@ -18,7 +18,8 @@ import type { GenerationRow, ReplicatePrediction, ServiceSupabase } from "./type
 async function removeBackground(req: Request, imageUrl: string) {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const internalSecret = process.env.AI_INTERNAL_SECRET;
-  if (internalSecret) headers["x-ai-internal-secret"] = internalSecret;
+  if (!internalSecret) throw new Error("Missing AI_INTERNAL_SECRET");
+  headers["x-ai-internal-secret"] = internalSecret;
 
   const response = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
     method: "POST",
@@ -58,10 +59,16 @@ export async function finalizePrediction(args: {
 }) {
   const { req, serviceSupabase, prediction, source } = args;
   let row = args.row;
-  const status = normalizePredictionStatus(row.replicate_status || prediction.status);
+  // The fresh Replicate response MUST win over the persisted local snapshot.
+  // Using row.replicate_status first can pin a generation forever in "starting"
+  // even when Replicate has already returned "succeeded".
+  const status = normalizePredictionStatus(prediction.status || row.replicate_status);
 
   if (status === "succeeded") {
-    const outputUrl = extractOutputUrl(prediction);
+    // Prefer the fresh remote output, but allow recovery from a previously
+    // persisted succeeded output without creating another prediction.
+    const persistedPrediction: ReplicatePrediction = { output: row.replicate_output };
+    const outputUrl = extractOutputUrl(prediction) || extractOutputUrl(persistedPrediction);
     if (!outputUrl) throw new Error("Replicate succeeded without an image output");
 
     // Persist remote success before expensive post-processing. If this process dies,
@@ -69,7 +76,7 @@ export async function finalizePrediction(args: {
     row = await updateGeneration(serviceSupabase, row.id, {
       replicate_status: "succeeded",
       status: row.status === "completed" ? "completed" : "finalizing",
-      replicate_output: prediction.output ?? null,
+      replicate_output: prediction.output ?? row.replicate_output ?? null,
       error_message: null,
     });
 
@@ -116,7 +123,7 @@ export async function finalizePrediction(args: {
         finalization_lock_until: null,
         error_message: null,
         is_saved: false,
-        replicate_output: prediction.output ?? null,
+        replicate_output: prediction.output ?? row.replicate_output ?? null,
       });
       console.info("[AI_GENERATION_FINALIZED]", {
         generationId: row.generation_id,
@@ -151,7 +158,7 @@ export async function finalizePrediction(args: {
   }
 
   if (status === "failed") {
-    const refund = await refundGenerationCreditOnce(serviceSupabase, row.generation_id || "");
+    const refund = await refundGenerationCreditOnce(serviceSupabase, row.id);
     if (refund.refunded) {
       console.info("[AI_CREDIT_REFUNDED]", {
         generationId: row.generation_id,
@@ -165,7 +172,7 @@ export async function finalizePrediction(args: {
       replicate_status: "failed",
       failed_at: failedAt,
       error_message: String(prediction.error || prediction.detail || "AI generation failed"),
-      replicate_output: prediction.output ?? null,
+      replicate_output: prediction.output ?? row.replicate_output ?? null,
       finalization_lock_until: null,
     });
       console.info("[AI_GENERATION_FINALIZED]", {
@@ -184,7 +191,7 @@ export async function finalizePrediction(args: {
       replicate_status: "canceled",
       canceled_at: canceledAt,
       error_message: String(prediction.error || "AI generation canceled"),
-      replicate_output: prediction.output ?? null,
+      replicate_output: prediction.output ?? row.replicate_output ?? null,
       finalization_lock_until: null,
     });
     console.info("[AI_GENERATION_FINALIZED]", {
@@ -201,7 +208,7 @@ export async function finalizePrediction(args: {
   await updateGeneration(serviceSupabase, row.id, {
     status: localStatus,
     replicate_status: status,
-    replicate_output: prediction.output ?? null,
+    replicate_output: prediction.output ?? row.replicate_output ?? null,
   });
   console.info(status === "starting" ? "[AI_GENERATION_STARTING]" : "[AI_GENERATION_PROCESSING]", {
     generationId: row.generation_id,
