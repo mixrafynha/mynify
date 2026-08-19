@@ -100,15 +100,6 @@ export default function CanvasMockup({
         transformOrigin: "center center",
       }}
     >
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/2 h-[78%] w-[72%] -translate-x-1/2 -translate-y-1/2 rounded-[42%] bg-[radial-gradient(circle_at_50%_45%,rgba(168,85,247,.16),rgba(168,85,247,.06)_42%,transparent_72%)] blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="absolute left-1/2 top-1/2 h-[86%] w-[80%] -translate-x-1/2 -translate-y-1/2 rounded-[42%] border border-violet-300/10 bg-[radial-gradient(circle_at_50%_50%,rgba(255,255,255,.04),rgba(255,255,255,0)_58%)] opacity-70"
-      />
-
       {tint && (
         <svg aria-hidden="true" className="absolute h-0 w-0">
           <defs>

@@ -100,8 +100,8 @@ export const metadata: Metadata = {
   },
 
   icons: {
-    icon: [{ url: "/favicon.ico", sizes: "any", type: "image/x-icon" }],
-    shortcut: "/favicon.ico",
+    icon: [{ url: "/icon-192.png", sizes: "192x192", type: "image/png" }],
+    shortcut: "/icon-192.png",
     apple: "/apple-touch-icon.png",
   },
 
@@ -119,7 +119,7 @@ const organizationJsonLd = {
   "@type": "Organization",
   name: siteName,
   url: siteUrl,
-  logo: `${siteUrl}/favicon.ico`,
+  logo: `${siteUrl}/icon-192.png`,
 };
 
 const websiteJsonLd = {

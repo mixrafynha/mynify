@@ -29,9 +29,9 @@ function BrandSection() {
     >
       <span className="relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/[0.10] bg-white text-black shadow-[0_8px_22px_rgba(0,0,0,.22)] sm:h-8 sm:w-8 sm:rounded-xl">
         <img
-          src="/favicon.ico"
+          src="/icon-192.png"
           alt="RYFIO"
-          className="h-full w-full object-contain p-0.5"
+          className="h-full w-full object-cover p-0"
           draggable={false}
           onError={(event) => {
             event.currentTarget.style.display = "none";
@@ -39,9 +39,9 @@ function BrandSection() {
         />
       </span>
 
-      <span className="hidden select-none text-[18px] font-black uppercase leading-none tracking-[-0.055em] text-white xl:inline-flex">
+      <span className="hidden select-none font-[var(--font-logo)] text-[18px] font-normal uppercase leading-none tracking-[-0.045em] text-white xl:inline-flex">
         <span>R</span>
-        <span className="bg-gradient-to-r from-violet-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent">
+        <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-300 bg-clip-text text-transparent drop-shadow-[0_0_10px_rgba(168,85,247,.22)]">
           YFIO
         </span>
       </span>
