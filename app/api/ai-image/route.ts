@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import Replicate from "replicate";
+import crypto from "crypto";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { uploadR2Object } from "../../../trigger/shared/r2";
 
@@ -14,7 +14,10 @@ const jsonHeaders = {
   Pragma: "no-cache",
   Expires: "0",
 };
+
 const MAX_BODY_BYTES = 16 * 1024;
+const POLL_STATES = ["queued", "starting", "processing", "credit_reserved", "replicate_prediction_created"] as const;
+const TERMINAL_STATES = ["succeeded", "failed", "canceled"] as const;
 const aiImageRateLimiter = getDurableRateLimiter({
   namespace: "ai-image",
   limit: 5,
@@ -23,6 +26,25 @@ const aiImageRateLimiter = getDurableRateLimiter({
 
 type ProfileCreditRow = {
   credits: number | string | null;
+};
+
+type GenerationRow = {
+  id: string;
+  user_id: string;
+  generation_id: string | null;
+  idempotency_key: string | null;
+  prediction_id: string | null;
+  prompt: string | null;
+  original_prompt: string | null;
+  image_url: string | null;
+  storage_key: string | null;
+  output_url: string | null;
+  status: string | null;
+  replicate_status: string | null;
+  error_message: string | null;
+  is_saved: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 function getEnv(name: string) {
@@ -40,12 +62,10 @@ function safeInt(value: unknown, fallback = 0) {
 function firstString(...values: unknown[]): string | null {
   for (const value of values) {
     if (typeof value === "string" && value.trim()) return value.trim();
-
     if (Array.isArray(value)) {
       const found = firstString(...value);
       if (found) return found;
     }
-
     if (value && typeof value === "object" && !(value instanceof ReadableStream)) {
       const record = value as Record<string, unknown>;
       const found = firstString(record.url, record.image, record.src, record.output);
@@ -70,7 +90,6 @@ async function firstImageBuffer(value: unknown): Promise<Buffer | null> {
 
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
-
     return (
       (await firstImageBuffer(record.output)) ||
       (await firstImageBuffer(record.image)) ||
@@ -188,55 +207,385 @@ No huge empty transparent border.
 Generate only the isolated printable artwork, centered, fully visible, sharp, detailed, high contrast, vibrant, and print-ready.`;
 }
 
-async function getCreditBalance(
-  serviceSupabase: ReturnType<typeof getServiceSupabase>,
-  userId: string,
-) {
+async function getCreditBalance(serviceSupabase: ReturnType<typeof getServiceSupabase>, userId: string) {
   const { data, error } = await serviceSupabase
     .from("profiles")
     .select("credits")
     .eq("id", userId)
     .single<ProfileCreditRow>();
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   return Math.max(0, safeInt(data?.credits));
 }
 
-async function consumeCredit(
-  serviceSupabase: ReturnType<typeof getServiceSupabase>,
-  userId: string,
-) {
+async function consumeCredit(serviceSupabase: ReturnType<typeof getServiceSupabase>, userId: string) {
   const { data, error } = await serviceSupabase.rpc("consume_ai_credit", {
     p_user_id: userId,
     p_amount: 1,
   });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+  if (error) throw new Error(error.message);
 
   const result = Array.isArray(data) ? data[0] : data;
-
   return {
     consumed: Boolean(result?.consumed),
     balance: Math.max(0, safeInt(result?.credits)),
   };
 }
 
-async function refundCredit(
-  serviceSupabase: ReturnType<typeof getServiceSupabase>,
-  userId: string,
-) {
+async function refundCredit(serviceSupabase: ReturnType<typeof getServiceSupabase>, userId: string) {
   const { error } = await serviceSupabase.rpc("increment_ai_credits", {
     p_user_id: userId,
     p_amount: 1,
   });
+  if (error) throw new Error(error.message);
+}
 
-  if (error) {
-    throw new Error(error.message);
+function normalizePredictionStatus(value: unknown) {
+  const status = String(value || "").trim().toLowerCase();
+  if (!status) return "unknown";
+  return status;
+}
+
+function extractOutputUrl(prediction: any) {
+  return firstString(prediction?.output, prediction?.image, prediction?.images, prediction?.urls);
+}
+
+async function finalizePrediction(params: {
+  req: Request;
+  serviceSupabase: ReturnType<typeof getServiceSupabase>;
+  row: GenerationRow;
+  prediction: any;
+  source: "post" | "webhook" | "poll";
+}) {
+  const { req, serviceSupabase, row, prediction, source } = params;
+  const status = normalizePredictionStatus(prediction?.status || row.replicate_status);
+  const outputUrl = extractOutputUrl(prediction);
+
+  if (status === "succeeded") {
+    console.info("[AI_GENERATION_SUCCEEDED]", {
+      generationId: row.generation_id,
+      predictionId: row.prediction_id,
+      source,
+    });
+
+    const imageUrl = outputUrl;
+    const generatedImageBuffer = imageUrl ? null : await firstImageBuffer(prediction?.output);
+
+    if (!imageUrl && !generatedImageBuffer) {
+      throw new Error("Replicate succeeded without an image output");
+    }
+
+    const removeBgResponse = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        cookie: req.headers.get("cookie") ?? "",
+      },
+      body: JSON.stringify(
+        generatedImageBuffer
+          ? { imageBase64: generatedImageBuffer.toString("base64") }
+          : { imageUrl },
+      ),
+    });
+
+    if (!removeBgResponse.ok) {
+      throw new Error(`Background removal failed with ${removeBgResponse.status}`);
+    }
+
+    const pngBuffer = Buffer.from(await removeBgResponse.arrayBuffer());
+    if (!pngBuffer.length) {
+      throw new Error("Background removal returned an empty image");
+    }
+
+    const objectKey = row.storage_key || ["ai-images", row.user_id, `${row.generation_id || row.id}-${Date.now()}.png`].join("/");
+    const publicImageUrl = await uploadR2Object({
+      key: objectKey,
+      body: pngBuffer,
+      contentType: "image/png",
+      cacheControl: "public, max-age=31536000, immutable",
+    });
+
+    const completedAt = new Date().toISOString();
+    const update = {
+      status: "completed",
+      replicate_status: status,
+      output_url: publicImageUrl,
+      image_url: publicImageUrl,
+      storage_key: objectKey,
+      completed_at: completedAt,
+      updated_at: completedAt,
+      error_message: null,
+      is_saved: false,
+      webhook_processed_at: completedAt,
+      replicate_output: prediction?.output ?? null,
+    } as Record<string, unknown>;
+
+    const { error } = await serviceSupabase.from("user_generated_images").update(update).eq("id", row.id);
+    if (error) throw error;
+
+    return { status: "completed", imageUrl: publicImageUrl };
+  }
+
+  if (status === "failed") {
+    console.info("[AI_GENERATION_FAILED]", {
+      generationId: row.generation_id,
+      predictionId: row.prediction_id,
+      source,
+    });
+
+    const failedAt = new Date().toISOString();
+    const { data: refreshed, error: refreshError } = await serviceSupabase
+      .from("user_generated_images")
+      .select("id,status,credit_refunded_at,user_id,generation_id,prediction_id")
+      .eq("id", row.id)
+      .maybeSingle();
+    if (refreshError) throw refreshError;
+
+    let refunded = false;
+    if (refreshed && !refreshed.credit_refunded_at) {
+      await refundCredit(serviceSupabase, row.user_id);
+      refunded = true;
+      console.info("[AI_CREDIT_REFUNDED]", {
+        generationId: row.generation_id,
+        predictionId: row.prediction_id,
+        source,
+      });
+    }
+
+    const { error } = await serviceSupabase
+      .from("user_generated_images")
+      .update({
+        status: "failed",
+        replicate_status: status,
+        failed_at: failedAt,
+        updated_at: failedAt,
+        error_message: prediction?.error || prediction?.detail || "AI generation failed",
+        credit_refunded_at: refunded ? failedAt : refreshed?.credit_refunded_at ?? null,
+        replicate_output: prediction?.output ?? null,
+      })
+      .eq("id", row.id);
+    if (error) throw error;
+
+    return { status: "failed" };
+  }
+
+  if (status === "canceled") {
+    const canceledAt = new Date().toISOString();
+    const { error } = await serviceSupabase
+      .from("user_generated_images")
+      .update({
+        status: "canceled",
+        replicate_status: status,
+        canceled_at: canceledAt,
+        updated_at: canceledAt,
+        error_message: prediction?.error || "AI generation canceled",
+        replicate_output: prediction?.output ?? null,
+      })
+      .eq("id", row.id);
+    if (error) throw error;
+
+    console.info("[AI_GENERATION_RECONCILED]", {
+      generationId: row.generation_id,
+      predictionId: row.prediction_id,
+      status,
+      source,
+    });
+
+    return { status: "canceled" };
+  }
+
+  const pendingAt = new Date().toISOString();
+  const { error } = await serviceSupabase
+    .from("user_generated_images")
+    .update({
+      status: status === "queued" ? "queued" : status === "starting" ? "starting" : "processing",
+      replicate_status: status,
+      updated_at: pendingAt,
+      replicate_output: prediction?.output ?? null,
+    })
+    .eq("id", row.id);
+  if (error) throw error;
+
+  console.info(
+    status === "starting" ? "[AI_GENERATION_STARTING]" : "[AI_GENERATION_PROCESSING]",
+    {
+      generationId: row.generation_id,
+      predictionId: row.prediction_id,
+      source,
+    },
+  );
+
+  return { status };
+}
+
+async function createReplicatePrediction(args: {
+  req: Request;
+  generationId: string;
+  prompt: string;
+  replicateWebhookUrl: string;
+}) {
+  const token = getEnv("REPLICATE_API_TOKEN");
+  const model = process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-dev";
+  const [owner, name] = model.split("/");
+  if (!owner || !name) {
+    throw new Error("Invalid REPLICATE_FLUX_MODEL. Use owner/model.");
+  }
+
+  const response = await fetch(
+    `https://api.replicate.com/v1/models/${owner}/${name}/predictions`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input: {
+          prompt: buildQualityPrompt(args.prompt),
+          aspect_ratio: "1:1",
+          num_outputs: 1,
+          output_format: "png",
+          output_quality: 100,
+          num_inference_steps: 40,
+          guidance_scale: 5,
+        },
+        webhook: args.replicateWebhookUrl,
+        webhook_events_filter: ["completed"],
+        metadata: {
+          generationId: args.generationId,
+        },
+      }),
+    },
+  );
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.error || "Replicate prediction failed");
+  }
+
+  return data;
+}
+
+async function loadGenerationById(serviceSupabase: ReturnType<typeof getServiceSupabase>, generationId: string, userId: string) {
+  const { data, error } = await serviceSupabase
+    .from("user_generated_images")
+    .select("*")
+    .eq("generation_id", generationId)
+    .eq("user_id", userId)
+    .maybeSingle<GenerationRow>();
+
+  if (error) throw error;
+  return data;
+}
+
+async function reconcileWithReplicate(args: {
+  req: Request;
+  serviceSupabase: ReturnType<typeof getServiceSupabase>;
+  row: GenerationRow;
+  source: "post" | "webhook" | "poll";
+}) {
+  const token = getEnv("REPLICATE_API_TOKEN");
+  const { row } = args;
+  const predictionId = row.prediction_id;
+  if (!predictionId) return { status: row.status || "pending" };
+
+  const response = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const prediction = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(prediction?.detail || prediction?.error || "Could not reconcile prediction");
+  }
+
+  return finalizePrediction({
+    req: args.req,
+    serviceSupabase: args.serviceSupabase,
+    row: args.row,
+    prediction,
+    source: args.source,
+  });
+}
+
+function toResponseRow(row: GenerationRow | null) {
+  if (!row) return null;
+  return {
+    generationId: row.generation_id,
+    predictionId: row.prediction_id,
+    status: row.status,
+    replicateStatus: row.replicate_status,
+    imageUrl: row.image_url,
+    outputUrl: row.output_url,
+    error: row.error_message,
+    prompt: row.prompt,
+    originalPrompt: row.original_prompt,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function GET(req: Request) {
+  try {
+    const authSupabase = await getAuthSupabase();
+    const serviceSupabase = getServiceSupabase();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await authSupabase.auth.getUser();
+
+    if (authError || !user) {
+      return jsonError(401, "Authentication required");
+    }
+
+    const url = new URL(req.url);
+    const generationId = String(url.searchParams.get("generationId") || "").trim();
+    const reconcile = String(url.searchParams.get("reconcile") || "").trim() === "1";
+
+    if (generationId) {
+      const row = await loadGenerationById(serviceSupabase, generationId, user.id);
+      if (!row) return jsonError(404, "Generation not found");
+
+      if (reconcile && row.prediction_id && POLL_STATES.includes((row.status || "") as any)) {
+        await reconcileWithReplicate({ req, serviceSupabase, row, source: "poll" });
+      }
+
+      const nextRow = await loadGenerationById(serviceSupabase, generationId, user.id);
+      return NextResponse.json(
+        {
+          success: true,
+          generation: toResponseRow(nextRow),
+        },
+        { headers: jsonHeaders },
+      );
+    }
+
+    const { data, error } = await serviceSupabase
+      .from("user_generated_images")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("is_saved", false)
+      .in("status", [...POLL_STATES, "pending"])
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if (error) {
+      return jsonError(500, "Could not load AI generations");
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        generations: (data || []).map(toResponseRow),
+      },
+      { headers: jsonHeaders },
+    );
+  } catch (error) {
+    return jsonError(500, "Could not load AI generations", {
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -245,29 +594,24 @@ export async function POST(req: Request) {
   let userId: string | null = null;
   let creditConsumed = false;
 
-  async function refundIfNeeded() {
-    if (!serviceSupabase || !userId || !creditConsumed) {
-      return;
-    }
+  async function refundIfNeeded(generationId?: string | null, predictionId?: string | null) {
+    if (!serviceSupabase || !userId || !creditConsumed) return;
 
     try {
       await refundCredit(serviceSupabase, userId);
       creditConsumed = false;
-      console.log("AI_IMAGE_REFUND_OK");
+      console.info("[AI_CREDIT_REFUNDED]", {
+        generationId,
+        predictionId,
+        source: "post-refund",
+      });
     } catch (error) {
       console.error("AI_IMAGE_REFUND_ERROR:", error);
     }
   }
 
   try {
-    console.log("AI_IMAGE_START");
-
-    const replicateToken = getEnv("REPLICATE_API_TOKEN");
-
-    if (!process.env.REMOVE_BG_API_KEY) {
-      console.error("AI_IMAGE_MISSING_REMOVE_BG_API_KEY");
-      return jsonError(500, "AI image service is not configured");
-    }
+    console.info("[AI_GENERATION_CREATED]");
 
     const authSupabase = await getAuthSupabase();
     serviceSupabase = getServiceSupabase();
@@ -278,12 +622,10 @@ export async function POST(req: Request) {
     } = await authSupabase.auth.getUser();
 
     if (authError || !user) {
-      console.error("AI_IMAGE_AUTH_ERROR:", authError);
       return jsonError(401, "Create a free account and get 3 AI credits.");
     }
 
     userId = user.id;
-    console.log("AI_IMAGE_USER:", user.id);
 
     try {
       const rateLimit = await aiImageRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
@@ -313,16 +655,40 @@ export async function POST(req: Request) {
     } catch {
       return jsonError(400, "Invalid request body");
     }
-    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
 
+    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
     if (!prompt) {
-      console.error("AI_IMAGE_EMPTY_PROMPT");
       return jsonError(400, "Prompt required");
     }
 
-    const creditResult = await consumeCredit(serviceSupabase, user.id);
-    console.log("AI_IMAGE_CREDIT_RESULT:", creditResult);
+    const idempotencyKey =
+      String(body?.idempotencyKey || body?.idempotency_key || req.headers.get("idempotency-key") || "").trim() ||
+      crypto.randomUUID();
 
+    const existingByIdempotency = await serviceSupabase
+      .from("user_generated_images")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("idempotency_key", idempotencyKey)
+      .maybeSingle<GenerationRow>();
+    if (existingByIdempotency.error) throw existingByIdempotency.error;
+
+    if (existingByIdempotency.data) {
+      console.info("[AI_GENERATION_RECONCILED]", {
+        generationId: existingByIdempotency.data.generation_id,
+        predictionId: existingByIdempotency.data.prediction_id,
+        source: "idempotency",
+      });
+      return NextResponse.json(
+        {
+          success: true,
+          generation: toResponseRow(existingByIdempotency.data),
+        },
+        { status: existingByIdempotency.data.status === "completed" ? 200 : 202, headers: jsonHeaders },
+      );
+    }
+
+    const creditResult = await consumeCredit(serviceSupabase, user.id);
     if (!creditResult.consumed) {
       return jsonError(402, "You have 0 AI credits left.", {
         credits: creditResult.balance,
@@ -333,140 +699,116 @@ export async function POST(req: Request) {
     }
 
     creditConsumed = true;
-
-    const replicate = new Replicate({ auth: replicateToken });
-    const fluxModel = process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-dev";
-
-    let fluxOutput: unknown;
-
-    try {
-      console.log("AI_IMAGE_REPLICATE_START:", fluxModel);
-
-      fluxOutput = await replicate.run(fluxModel as any, {
-        input: {
-          prompt: buildQualityPrompt(prompt),
-          aspect_ratio: "1:1",
-          num_outputs: 1,
-          output_format: "png",
-          output_quality: 100,
-          num_inference_steps: 40,
-          guidance_scale: 5,
-        },
-      });
-
-      console.log("AI_IMAGE_REPLICATE_OK:", fluxOutput);
-    } catch (error) {
-      console.error("AI_IMAGE_REPLICATE_ERROR:", error);
-      throw error;
-    }
-
-    const imageUrl = firstString(fluxOutput);
-    const generatedImageBuffer = imageUrl ? null : await firstImageBuffer(fluxOutput);
-
-    console.log("AI_IMAGE_OUTPUT_PARSED:", {
-      hasImageUrl: Boolean(imageUrl),
-      hasGeneratedBuffer: Boolean(generatedImageBuffer),
+    console.info("[AI_CREDIT_RESERVED]", {
+      userId: user.id,
+      balance: creditResult.balance,
+      idempotencyKey,
     });
-
-    if (!imageUrl && !generatedImageBuffer) {
-      await refundIfNeeded();
-      return jsonError(500, "AI image generation failed");
-    }
-
-    console.log("AI_IMAGE_REMOVE_BG_START");
-
-    const removeBgResponse = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        cookie: req.headers.get("cookie") ?? "",
-      },
-      body: JSON.stringify(
-        generatedImageBuffer
-          ? { imageBase64: generatedImageBuffer.toString("base64") }
-          : { imageUrl },
-      ),
-    });
-
-    console.log("AI_IMAGE_REMOVE_BG_STATUS:", {
-      status: removeBgResponse.status,
-      statusText: removeBgResponse.statusText,
-    });
-
-    if (!removeBgResponse.ok) {
-      await refundIfNeeded();
-      return jsonError(500, "Image generated but background removal failed", {
-        originalImageUrl: imageUrl,
-        removeBgStatus: removeBgResponse.status,
-      });
-    }
-
-    const pngBuffer = Buffer.from(await removeBgResponse.arrayBuffer());
-
-    console.log("AI_IMAGE_PNG_SIZE:", pngBuffer.length);
-
-    if (!pngBuffer.length) {
-      await refundIfNeeded();
-      return jsonError(500, "Background removal returned an empty image", {
-        originalImageUrl: imageUrl,
-      });
-    }
 
     const generationId = crypto.randomUUID();
-    const objectKey = ["ai-images", user.id, `${generationId}-${Date.now()}.png`].join("/");
+    const now = new Date().toISOString();
+    const baseRow = {
+      user_id: user.id,
+      generation_id: generationId,
+      idempotency_key: idempotencyKey,
+      prompt,
+      original_prompt: String(body?.originalPrompt || body?.original_prompt || prompt).trim(),
+      status: "credit_reserved",
+      replicate_status: "credit_reserved",
+      is_saved: false,
+      created_at: now,
+      updated_at: now,
+      credit_reserved_at: now,
+      request_payload: body,
+    };
 
-    let publicImageUrl: string;
+    const { data: insertedRow, error: insertError } = await serviceSupabase
+      .from("user_generated_images")
+      .insert(baseRow)
+      .select("*")
+      .single<GenerationRow>();
+    if (insertError) throw insertError;
 
-    try {
-      console.log("AI_IMAGE_R2_UPLOAD_START:", objectKey);
-
-      publicImageUrl = await uploadR2Object({
-        key: objectKey,
-        body: pngBuffer,
-        contentType: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-      });
-
-      console.log("AI_IMAGE_R2_UPLOAD_OK:", publicImageUrl);
-    } catch (error) {
-      console.error("AI_IMAGE_R2_UPLOAD_ERROR:", error);
-      await refundIfNeeded();
-      return jsonError(500, "Image generated but upload failed", {
-        originalImageUrl: imageUrl,
-      });
-    }
-
-    creditConsumed = false;
-
-    const nextBalance = await getCreditBalance(serviceSupabase, user.id);
-
-    console.log("AI_IMAGE_SUCCESS:", {
+    console.info("[AI_GENERATION_STARTING]", {
       generationId,
-      nextBalance,
+      source: "create-row",
     });
 
+    const prediction = await createReplicatePrediction({
+      req,
+      generationId,
+      prompt,
+      replicateWebhookUrl: `${getBaseUrl(req)}/api/ai-image/webhook`,
+    });
+
+    const predictionId = String(prediction?.id || "").trim();
+    const predictionStatus = normalizePredictionStatus(prediction?.status);
+
+    const updatePayload: Record<string, unknown> = {
+      prediction_id: predictionId || null,
+      status: predictionStatus === "succeeded" ? "processing" : predictionStatus,
+      replicate_status: predictionStatus,
+      replicate_prediction: prediction ?? null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: updatedRow, error: updateError } = await serviceSupabase
+      .from("user_generated_images")
+      .update(updatePayload)
+      .eq("id", insertedRow.id)
+      .select("*")
+      .single<GenerationRow>();
+    if (updateError) throw updateError;
+
+    if (predictionStatus === "succeeded" || predictionStatus === "failed" || predictionStatus === "canceled") {
+      await finalizePrediction({
+        req,
+        serviceSupabase,
+        row: updatedRow,
+        prediction,
+        source: "post",
+      });
+
+      const finalRow = await loadGenerationById(serviceSupabase, generationId, user.id);
+      const balance = await getCreditBalance(serviceSupabase, user.id);
+
+      return NextResponse.json(
+        {
+          success: finalRow?.status === "completed",
+          generation: toResponseRow(finalRow),
+          credits: balance,
+          balance,
+          aiCredits: balance,
+          credit_balance: balance,
+        },
+        { status: finalRow?.status === "completed" ? 200 : 202, headers: jsonHeaders },
+      );
+    }
+
+    console.info(
+      predictionStatus === "starting" ? "[AI_GENERATION_STARTING]" : "[AI_GENERATION_PROCESSING]",
+      {
+        generationId,
+        predictionId,
+      },
+    );
+
+    const balance = await getCreditBalance(serviceSupabase, user.id);
     return NextResponse.json(
       {
         success: true,
-        imageUrl: publicImageUrl,
-        src: publicImageUrl,
-        url: publicImageUrl,
-        image: publicImageUrl,
-        printUrl: publicImageUrl,
-        r2Key: objectKey,
-        originalImageUrl: imageUrl,
-        generationId,
-        credits: nextBalance,
-        balance: nextBalance,
-        aiCredits: nextBalance,
-        credit_balance: nextBalance,
+        generation: toResponseRow(updatedRow),
+        credits: balance,
+        balance,
+        aiCredits: balance,
+        credit_balance: balance,
       },
-      { headers: jsonHeaders },
+      { status: 202, headers: jsonHeaders },
     );
   } catch (error) {
     await refundIfNeeded();
 
-    console.error("AI_IMAGE_ERROR:", error);
+    console.error("[AI_GENERATION_FAILED]", error);
 
     return jsonError(500, "Internal AI image error", {
       details: error instanceof Error ? error.message : String(error),

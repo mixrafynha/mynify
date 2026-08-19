@@ -7,6 +7,7 @@ import type { AiImageItem, UseAiImagesArgs } from "./ai.types";
 import {
   deleteSavedImage,
   fetchSavedImages,
+  fetchAiImageGeneration,
   requestAiImage,
   saveGeneratedImage,
 } from "./ai.api";
@@ -75,6 +76,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [credits, setCredits] = useState<number | null>(null);
   const [savedCount, setSavedCount] = useState(0);
   const [savedLimit, setSavedLimit] = useState(FREE_SAVED_IMAGE_LIMIT);
+  const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
 
   const visibleImages = useMemo(() => {
     const savedGenerationIds = new Set(
@@ -138,6 +140,92 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     loadCredits();
     loadSavedImages();
   }, [loadCredits, loadSavedImages]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPendingGenerations() {
+      try {
+        const { response, data } = await fetchAiImageGeneration(null, false);
+        if (!response.ok || cancelled) return;
+
+        const generations = Array.isArray(data?.generations) ? data.generations : [];
+        const pending = generations.find((item: any) => {
+          const status = String(item?.status || "").toLowerCase();
+          return status === "pending" || status === "queued" || status === "credit_reserved" || status === "starting" || status === "processing";
+        });
+
+        if (pending?.generationId) {
+          setActiveGenerationId(String(pending.generationId));
+          setLoading(true);
+          setNotice("Generating...");
+        }
+      } catch {}
+    }
+
+    loadPendingGenerations();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    async function pollActiveGeneration() {
+      if (!activeGenerationId) return;
+
+      try {
+        const { response, data } = await fetchAiImageGeneration(activeGenerationId, true);
+        if (!response.ok || cancelled) return;
+
+        const generation = data?.generation || null;
+        const status = String(generation?.status || "").toLowerCase();
+
+        if (status === "completed" && generation?.imageUrl) {
+          const completedItem = normalizeSavedImage({
+            id: generation.id,
+            generation_id: generation.generationId,
+            prompt: generation.prompt,
+            image_url: generation.imageUrl,
+            storage_key: generation.storageKey,
+            original_image_url: generation.originalImageUrl,
+          });
+
+          setGeneratedImages((prev) => [
+            completedItem,
+            ...prev.filter((current) => !sameGeneratedImage(current, completedItem)),
+          ]);
+          setActiveGenerationId(null);
+          setNotice("Image created. Click Save if you want to keep it.");
+          await loadCredits();
+          return;
+        }
+
+        if (status === "failed" || status === "canceled") {
+          setActiveGenerationId(null);
+          setError(status === "canceled" ? "Generation canceled." : "Generation failed.");
+          await loadCredits();
+          return;
+        }
+
+        timer = setTimeout(pollActiveGeneration, 8000);
+      } catch {
+        timer = setTimeout(pollActiveGeneration, 12000);
+      }
+    }
+
+    if (activeGenerationId) {
+      timer = setTimeout(pollActiveGeneration, 1000);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [activeGenerationId, loadCredits]);
 
   const randomPrompt = useCallback(() => {
     const item = PROMPT_EXAMPLES[Math.floor(Math.random() * PROMPT_EXAMPLES.length)];
@@ -257,6 +345,8 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     const cleanPrompt = safePrompt(prompt);
     if (!cleanPrompt || loading) return;
 
+    let shouldKeepLoading = false;
+
     try {
       setLoading(true);
       setError("");
@@ -278,9 +368,19 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         return;
       }
 
-      if (!response.ok) throw new Error(data.error || "AI generation failed");
+      if (!response.ok && response.status !== 202) throw new Error(data.error || "AI generation failed");
 
       const image = normalizeGeneratedImageResponse(data);
+
+      const generation = data?.generation || null;
+      const generationId = image?.generationId || generation?.generationId || generation?.generation_id || null;
+
+      if (response.status === 202 || String(generation?.status || "").toLowerCase() !== "completed") {
+        setActiveGenerationId(String(generationId || "").trim() || null);
+        shouldKeepLoading = Boolean(generationId);
+        setNotice("Generating...");
+        return;
+      }
 
       if (!image?.src || !isValidImageUrl(image.src)) throw new Error("Missing image");
 
@@ -318,9 +418,12 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
       setError("Generation failed. If a credit was charged, the backend will refund it automatically.");
       await loadCredits();
     } finally {
-      setLoading(false);
+      if (!shouldKeepLoading) {
+        setActiveGenerationId(null);
+        setLoading(false);
+      }
     }
-  }, [prompt, loading, loadCredits]);
+  }, [prompt, loading, loadCredits, activeGenerationId]);
 
   const deleteImage = useCallback(async (item: AiImageItem) => {
     if (!item.id) {
@@ -377,6 +480,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
     credits,
     savedCount,
     savedLimit,
+    activeGenerationId,
     refreshCredits: loadCredits,
     randomPrompt,
     addImageToCanvas,

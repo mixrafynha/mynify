@@ -85,3 +85,16 @@ export async function deleteSavedImage(id: string) {
   const data = await response.json().catch(() => ({}));
   return { response, data };
 }
+
+export async function fetchAiImageGeneration(generationId?: string | null, reconcile = false) {
+  const params = new URLSearchParams();
+  if (generationId) params.set("generationId", generationId);
+  if (reconcile) params.set("reconcile", "1");
+
+  const response = await fetch(`/api/ai-image${params.toString() ? `?${params.toString()}` : ""}`, {
+    cache: "no-store",
+  });
+
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
