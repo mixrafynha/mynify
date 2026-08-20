@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
+import { resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import {
+  TrustedPrintFileError,
+  type TrustedPrintFile,
+} from "@/lib/server/trusted-print-files";
+import {
+  authorizeAvailabilityRequest,
+  buildSafeAvailabilityQuoteLog,
+  resolveAvailabilityTrustedPrintFiles,
+} from "./security";
 
 const MAX_BODY_BYTES = 32 * 1024;
 const MAX_ITEMS = 10;
 const MAX_QUANTITY = 10;
-const MAX_PRINT_FILES_PER_ITEM = 2;
 const MAX_TEXT_LENGTH = 160;
-const MAX_URL_LENGTH = 2_000;
 const checkoutAvailabilityRateLimiter = getDurableRateLimiter({
   namespace: "checkout-availability",
   limit: 60,
@@ -30,8 +37,6 @@ type AvailabilityItem = {
   size?: string | null;
   quantity?: number;
   productUid?: string | null;
-  printFiles?: Array<{ type?: string; url?: string }>;
-  files?: Array<{ type?: string; url?: string }>;
 };
 
 type ResolvedVariantSource = {
@@ -52,13 +57,6 @@ function isUuid(value: unknown) {
   return (
     typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value.trim())
-  );
-}
-
-function rejectRateLimited() {
-  return NextResponse.json(
-    { ok: false, code: "RATE_LIMITED", message: "Too many shipping checks. Try again shortly." },
-    { status: 429 },
   );
 }
 
@@ -94,30 +92,6 @@ function safeLog(value: unknown) {
   }
 }
 
-function safeProtocol(url: unknown) {
-  if (typeof url !== "string") return null;
-  const trimmed = url.trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol.replace(":", "");
-  } catch {
-    return null;
-  }
-}
-
-function isPublicHttpsUrl(value: unknown) {
-  if (typeof value !== "string") return false;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > MAX_URL_LENGTH) return false;
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === "https:" && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
-  } catch {
-    return false;
-  }
-}
-
 function validateIncomingItems(value: unknown) {
   if (!Array.isArray(value) || value.length === 0) return { items: null, code: "MISSING_ITEMS" };
   if (value.length > MAX_ITEMS) return { items: null, code: "TOO_MANY_ITEMS" };
@@ -131,8 +105,6 @@ function validateIncomingItems(value: unknown) {
     if (!variantId || !isUuid(variantId)) {
       console.warn("[availability:INVALID_VARIANT]", {
         itemIndex,
-        cartItemId: entry.cartItemId ?? null,
-        variantId: entry.variantId ?? null,
         variantIdType: typeof entry.variantId,
       });
       return { items: null, code: "INVALID_VARIANT" };
@@ -144,30 +116,11 @@ function validateIncomingItems(value: unknown) {
 
     const designId = boundedText(entry.designId) || null;
     const userProductId = boundedText(entry.userProductId) || null;
-    const cartItemId = boundedText(entry.cartItemId) || null;
+    const cartItemId = boundedText(entry.cartItemId) || boundedText(entry.itemId) || null;
     const itemId = boundedText(entry.itemId) || undefined;
     if (designId && !isUuid(designId)) return { items: null, code: "INVALID_DESIGN" };
     if (userProductId && !isUuid(userProductId)) return { items: null, code: "INVALID_DESIGN" };
-    if (cartItemId && !isUuid(cartItemId)) return { items: null, code: "INVALID_CART_ITEM" };
-
-    const rawPrintFiles = Array.isArray(entry.printFiles)
-      ? entry.printFiles
-      : Array.isArray(entry.files)
-        ? entry.files
-        : [];
-    const normalizedPrintFiles = normalizeAvailabilityPrintFiles(
-      rawPrintFiles.map((file) => ({
-        type: safeText(file?.type) || "default",
-        url: safeText(file?.url),
-      })),
-    );
-
-    for (const file of normalizedPrintFiles) {
-      if (!isRecord(file)) return { items: null, code: "INVALID_PRINT_FILE" };
-      const url = safeText(file.url);
-      if (url && !isPublicHttpsUrl(url)) return { items: null, code: "INVALID_PRINT_FILE_URL" };
-      if (safeText(file.type).length > MAX_TEXT_LENGTH) return { items: null, code: "INVALID_PRINT_FILE" };
-    }
+    if (!cartItemId || !isUuid(cartItemId)) return { items: null, code: "INVALID_CART_ITEM" };
 
     const productUid = boundedText(entry.productUid, 240) || null;
     items.push({
@@ -182,81 +135,10 @@ function validateIncomingItems(value: unknown) {
       size: boundedText(entry.size) || null,
       quantity,
       productUid,
-      printFiles: normalizedPrintFiles,
-      files: normalizedPrintFiles,
     });
   }
 
   return { items, code: null };
-}
-
-function extractPrintableFiles(source: unknown): Array<{ type: string; url: string }> {
-  const files: Array<{ type: string; url: string }> = [];
-  const push = (type: unknown, url: unknown) => {
-    if (!isPublicHttpsUrl(url)) return;
-    const safeUrl = typeof url === "string" ? url.trim() : "";
-    if (!safeUrl) return;
-    files.push({
-      type: typeof type === "string" && type.trim() ? type.trim() : "default",
-      url: safeUrl,
-    });
-  };
-
-  if (!source) return files;
-
-  if (Array.isArray(source)) {
-    source.forEach((entry) => {
-      if (!entry || typeof entry !== "object") return;
-      const record = entry as Record<string, unknown>;
-      push(record.type ?? record.side, record.url ?? record.fileUrl ?? record.printFileUrl ?? record.print_file_url ?? record.output_url ?? record.export_url ?? record.final_design_url ?? record.artwork_url ?? record.design_file_url);
-    });
-    return files;
-  }
-
-  if (typeof source === "object") {
-    const record = source as Record<string, unknown>;
-    ["default", "front", "back", "print", "production"].forEach((type) => {
-      const entry = record[type];
-      if (!entry) return;
-      if (typeof entry === "string") {
-        push(type, entry);
-        return;
-      }
-      if (typeof entry === "object") {
-        const fileRecord = entry as Record<string, unknown>;
-        push(
-          fileRecord.type ?? type,
-          fileRecord.url ?? fileRecord.fileUrl ?? fileRecord.printFileUrl ?? fileRecord.print_file_url ?? fileRecord.output_url ?? fileRecord.export_url ?? fileRecord.final_design_url ?? fileRecord.artwork_url ?? fileRecord.design_file_url,
-        );
-      }
-    });
-
-    push(
-      record.type ?? "default",
-      record.url ?? record.fileUrl ?? record.printFileUrl ?? record.print_file_url ?? record.output_url ?? record.export_url ?? record.final_design_url ?? record.artwork_url ?? record.design_file_url,
-    );
-  }
-
-  return files;
-}
-
-function normalizeAvailabilityPrintFiles(files: Array<{ type?: string; url?: string }>) {
-  const seen = new Set<string>();
-  const normalized: Array<{ type: string; url: string }> = [];
-
-  for (const file of files) {
-    const url = safeText(file?.url);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    normalized.push({
-      type: safeText(file?.type) || "default",
-      url,
-    });
-
-    if (normalized.length >= MAX_PRINT_FILES_PER_ITEM) break;
-  }
-
-  return normalized;
 }
 
 function shippingUnavailableMessage(item?: {
@@ -353,12 +235,11 @@ async function identifyShippingIncompatibleItems(input: {
 
 async function resolveCartItemSources(
   supabase: ReturnType<typeof createSupabaseServer>,
-  userId: string | null,
+  userId: string,
   items: AvailabilityItem[],
 ) {
   const variantIds = [...new Set(items.map((item) => safeText(item.variantId)).filter(Boolean))];
   const cartItemIds = [...new Set(items.map((item) => safeText(item.cartItemId) || safeText(item.itemId)).filter(Boolean))];
-  const userProductIds = [...new Set(items.map((item) => safeText(item.userProductId) || safeText(item.designId)).filter(Boolean))];
 
   const variantMap = new Map<string, ResolvedVariantSource>();
   if (variantIds.length) {
@@ -415,12 +296,50 @@ async function resolveCartItemSources(
     });
   }
 
+  const cartItemMap = new Map<string, {
+    user_product_id: string | null;
+    design_id: string | null;
+    variant_id: string | null;
+    product_id: string | null;
+  }>();
+  if (cartItemIds.length) {
+    const { data: cartRows } = await supabase
+      .from("cart_items")
+      .select("id, user_id, user_product_id, design_id, variant_id, product_id")
+      .eq("user_id", userId)
+      .in("id", cartItemIds);
+
+    (cartRows ?? []).forEach((row) => {
+      const record = row as {
+        id?: string | null;
+        user_product_id?: string | null;
+        design_id?: string | null;
+        variant_id?: string | null;
+        product_id?: string | null;
+      };
+      if (record.id) {
+        cartItemMap.set(record.id, {
+          user_product_id: record.user_product_id ?? null,
+          design_id: record.design_id ?? null,
+          variant_id: record.variant_id ?? null,
+          product_id: record.product_id ?? null,
+        });
+      }
+    });
+  }
+
+  const userProductIds = [
+    ...new Set(
+      [...cartItemMap.values()]
+        .map((item) => item.user_product_id ?? item.design_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
   const userProductMap = new Map<string, Record<string, unknown>>();
-  const cartItemMap = new Map<string, { user_product_id: string | null; design_id: string | null; variant_id: string | null }>();
-  if (userId && userProductIds.length) {
+  if (userProductIds.length) {
     const { data: userProductRows } = await supabase
       .from("user_products")
-      .select("id, print_files, design_data, mockups")
+      .select("id, user_id, print_files")
       .eq("user_id", userId)
       .in("id", userProductIds);
 
@@ -430,42 +349,34 @@ async function resolveCartItemSources(
     });
   }
 
-  if (userId && cartItemIds.length) {
-    const { data: cartRows } = await supabase
-      .from("cart_items")
-      .select("id, user_id, user_product_id, design_id, variant_id, product_id")
-      .eq("user_id", userId)
-      .in("id", cartItemIds);
-
-    (cartRows ?? []).forEach((row) => {
-      const record = row as { id?: string | null; user_product_id?: string | null; design_id?: string | null; variant_id?: string | null };
-      if (record.id) {
-        cartItemMap.set(record.id, {
-          user_product_id: record.user_product_id ?? null,
-          design_id: record.design_id ?? null,
-          variant_id: record.variant_id ?? null,
-        });
-      }
-    });
-  }
-
   return { variantMap, userProductMap, cartItemMap };
 }
 
 export async function POST(req: Request) {
+  const requestId = crypto.randomUUID();
   try {
     const supabase = createSupabaseServer();
-    const { data: authData } = await supabase.auth.getUser();
-    const rateLimitKey = `${authData?.user?.id ?? "guest"}:${getTrustedRequestIp(req)}`;
-
-    try {
-      const rateLimit = await checkoutAvailabilityRateLimiter.limit(rateLimitKey);
-      if (!rateLimit.success) return rejectRateLimited();
-    } catch (error) {
-      console.error("[checkout-availability:rate-limit-error]", {
-        message: error instanceof Error ? error.message : String(error),
-      });
+    const access = await authorizeAvailabilityRequest({
+      loadUserId: async () => {
+        const { data, error } = await supabase.auth.getUser();
+        return error ? null : data.user?.id ?? null;
+      },
+      consumeRateLimit: (key) => checkoutAvailabilityRateLimiter.limit(key),
+      requestIp: getTrustedRequestIp(req),
+    });
+    if (!access.ok) {
+      if (access.code === "RATE_LIMIT_UNAVAILABLE") {
+        console.error("[checkout-availability:rate-limit-error]", {
+          requestId,
+          code: access.code,
+        });
+      }
+      return NextResponse.json(
+        { ok: false, code: access.code, message: access.message },
+        { status: access.status },
+      );
     }
+    const userId = access.userId;
 
     const contentLength = Number(req.headers.get("content-length") ?? 0);
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
@@ -498,26 +409,6 @@ export async function POST(req: Request) {
     const country = boundedText(body.country) || boundedText(shippingAddressInput.countryCode);
     const countryIso = (boundedText(body.countryIso) || boundedText(shippingAddressInput.countryCode)).toUpperCase() || null;
 
-    if (process.env.NODE_ENV !== "production") {
-      console.log(
-        "[CHECKOUT_AVAILABILITY_RECEIVED]",
-        safeLog({
-          itemsCount: items.length,
-          countryCode: shippingAddressInput.countryCode ?? body.countryIso ?? body.country ?? null,
-          postalCodePresent: Boolean(shippingAddressInput.postalCode ?? body.postalCode),
-          cityPresent: Boolean(shippingAddressInput.city ?? body.city),
-          addressLine1Present: Boolean(shippingAddressInput.addressLine1 ?? body.addressLine1 ?? body.address),
-          items: items.map((item) => ({
-            productId: item.productId ?? null,
-            variantId: item.variantId ?? null,
-            productUid: item.productUid ?? null,
-            quantity: item.quantity ?? null,
-            printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : Array.isArray(item.files) ? item.files.length : 0,
-          })),
-        }),
-      );
-    }
-
     if (!country && !countryIso) {
       return NextResponse.json(
         {
@@ -536,6 +427,24 @@ export async function POST(req: Request) {
 
     const resolvedCountryIso = resolveCountryCode(countryIso ?? country);
     if (!resolvedCountryIso) return badRequest("INVALID_COUNTRY", "Select a valid delivery country.");
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        "[CHECKOUT_AVAILABILITY_RECEIVED]",
+        safeLog({
+          requestId,
+          itemsCount: items.length,
+          countryCode: resolvedCountryIso,
+          postalCodePresent: Boolean(shippingAddressInput.postalCode ?? body.postalCode),
+          cityPresent: Boolean(shippingAddressInput.city ?? body.city),
+          addressLine1Present: Boolean(shippingAddressInput.addressLine1 ?? body.addressLine1 ?? body.address),
+          items: items.map((item) => ({
+            productId: item.productId ?? null,
+            variantId: item.variantId ?? null,
+            quantity: item.quantity ?? null,
+          })),
+        }),
+      );
+    }
     const fullName =
       boundedText(body.fullName) ||
       boundedText(body.name) ||
@@ -608,7 +517,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, authData?.user?.id ?? null, items);
+    const { variantMap, userProductMap, cartItemMap } = await resolveCartItemSources(supabase, userId, items);
 
     for (const item of items) {
       const variantId = safeText(item.variantId);
@@ -704,7 +613,7 @@ export async function POST(req: Request) {
       itemReferenceId: string;
       productUid: string;
       quantity: number;
-      printFiles: Array<{ type: string; url: string }>;
+      printFiles: TrustedPrintFile[];
     }> = [];
     const rejectedItems: Array<{
       productId: string | null;
@@ -715,7 +624,6 @@ export async function POST(req: Request) {
       productUidPresent: boolean;
       quantity: number | null;
       printFilesCount: number;
-      printFiles: Array<{ type: string | null; hasUrl: boolean; protocol: string | null }>;
       reason: string;
     }> = [];
 
@@ -724,35 +632,44 @@ export async function POST(req: Request) {
       const variantId = safeText(item.variantId);
       const cartItemId = safeText(item.cartItemId) || safeText(item.itemId) || null;
       const cartItemRow = cartItemId ? cartItemMap.get(cartItemId) ?? null : null;
-      const designId = safeText(item.designId) || safeText(item.userProductId) || (cartItemRow?.design_id ?? cartItemRow?.user_product_id ?? null);
+      const requestedUserProductId = safeText(item.userProductId) || safeText(item.designId) || null;
+      const designId = cartItemRow?.user_product_id ?? cartItemRow?.design_id ?? null;
       const productId = safeText(item.productId) || null;
       const quantity = normalizeStrictQuantity(item.quantity);
       const productUidFromVariant = variantId ? variantMap.get(variantId)?.productUid ?? null : null;
       const productUidFromFrontend = safeText(item.productUid) || null;
       const resolvedProductUid = productUidFromVariant;
-      const designLookupAttempted = Boolean(designId || cartItemId);
       const designFound = Boolean(designId && userProductMap.has(designId));
 
       const userProductRecord = designId ? userProductMap.get(designId) ?? null : null;
-      const serverFiles = extractPrintableFiles(
-        userProductRecord?.print_files ??
-          userProductRecord?.printFiles ??
-          userProductRecord?.design_data ??
-          userProductRecord?.designData,
-      );
-      const frontendFiles = Array.isArray(item.printFiles) ? item.printFiles : Array.isArray(item.files) ? item.files : [];
-      const resolvedPrintFiles = serverFiles.length > 0
-        ? serverFiles
-        : frontendFiles
-            .map((file) => ({
-              type: safeText(file?.type) || "default",
-              url: safeText(file?.url),
-            }))
-            .filter((file) => isPublicHttpsUrl(file.url));
-      const availabilityPrintFiles = normalizeAvailabilityPrintFiles(resolvedPrintFiles);
+      let availabilityPrintFiles: Array<{ type: "default" | "back"; url: string }> = [];
+      let printFileErrorCode: string | null = null;
+      if (userProductRecord && designId) {
+        try {
+          availabilityPrintFiles = resolveAvailabilityTrustedPrintFiles({
+            storedPrintFiles: isRecord(userProductRecord.print_files)
+              ? userProductRecord.print_files
+              : null,
+            userId,
+            userProductId: designId,
+          });
+        } catch (error) {
+          printFileErrorCode = error instanceof TrustedPrintFileError
+            ? error.code
+            : "PRINT_FILE_VALIDATION_FAILED";
+        }
+      }
 
       let reason = "";
-      if (!variantId) {
+      if (!cartItemRow) {
+        reason = "CART_ITEM_NOT_FOUND";
+      } else if (cartItemRow.variant_id !== variantId) {
+        reason = "INVALID_CART_VARIANT";
+      } else if (productId && cartItemRow.product_id !== productId) {
+        reason = "INVALID_CART_PRODUCT";
+      } else if (requestedUserProductId && requestedUserProductId !== designId) {
+        reason = "INVALID_USER_PRODUCT";
+      } else if (!variantId) {
         reason = "MISSING_VARIANT";
       } else if (!productUidFromVariant) {
         reason = "VARIANT_NOT_FOUND";
@@ -762,10 +679,10 @@ export async function POST(req: Request) {
         reason = "INVALID_PRODUCT_UID";
       } else if (quantity === null) {
         reason = "INVALID_QUANTITY";
-      } else if (frontendFiles.some((file) => file?.url && !isPublicHttpsUrl(file.url))) {
-        reason = "INVALID_PRINT_FILE_URL";
+      } else if (printFileErrorCode) {
+        reason = printFileErrorCode;
       } else if (!availabilityPrintFiles.length) {
-        reason = designLookupAttempted && !designFound ? "DESIGN_NOT_FOUND" : "MISSING_PRINT_FILES";
+        reason = !designFound ? "DESIGN_NOT_FOUND" : "MISSING_PRINT_FILES";
       }
 
       console.log(
@@ -773,7 +690,7 @@ export async function POST(req: Request) {
           variantId,
           productUidSource: productUidFromVariant ? "database" : "missing",
           productUidPresent: Boolean(resolvedProductUid),
-          printFilesSource: serverFiles.length > 0 ? "user_product" : frontendFiles.length > 0 ? "frontend" : "missing",
+          printFilesSource: availabilityPrintFiles.length > 0 ? "trusted_user_product" : "missing",
           printFilesCount: availabilityPrintFiles.length,
           quantity,
         })}`,
@@ -788,12 +705,7 @@ export async function POST(req: Request) {
           productUid: resolvedProductUid,
           productUidPresent: Boolean(resolvedProductUid),
           quantity,
-          printFilesCount: Array.isArray(frontendFiles) ? frontendFiles.length : 0,
-          printFiles: (Array.isArray(frontendFiles) ? frontendFiles : []).map((file) => ({
-            type: typeof file?.type === "string" ? file.type : null,
-            hasUrl: Boolean(file?.url),
-            protocol: typeof file?.url === "string" ? safeProtocol(file.url) : null,
-          })),
+          printFilesCount: availabilityPrintFiles.length,
           reason,
         };
         rejectedItems.push(rejection);
@@ -841,9 +753,6 @@ export async function POST(req: Request) {
         quantity: item.quantity,
         printFilesCount: Array.isArray(item.printFiles) ? item.printFiles.length : 0,
         printFileTypes: Array.isArray(item.printFiles) ? item.printFiles.map((file) => file.type) : [],
-        printFileProtocols: Array.isArray(item.printFiles)
-          ? item.printFiles.map((file) => (typeof file.url === "string" ? file.url.split(":")[0] : null))
-          : [],
       })),
     });
 
@@ -857,43 +766,22 @@ export async function POST(req: Request) {
       phonePresent: Boolean(shippingAddress.phone),
     });
 
-    const quotePayload = buildGelatoCheckoutQuotePayload({
-      productUid: quoteItems[0].productUid,
-      quantity: quoteItems[0].quantity,
-      shippingAddress,
-      printFiles: quoteItems[0].printFiles,
-      items: quoteItems,
-      currencyIsoCode: boundedText(body.currency, 3) || "EUR",
-      customerReferenceId: boundedText(body.customerReferenceId) || undefined,
-      orderReferenceId: boundedText(body.orderReferenceId) || undefined,
-    });
-    const safeQuotePayload = {
-      ...quotePayload,
-      shippingAddress: quotePayload.recipient
-        ? {
-            country: quotePayload.recipient.countryIsoCode ?? null,
-            postCodePresent: Boolean(quotePayload.recipient.postcode),
-            cityPresent: Boolean(quotePayload.recipient.city),
-            addressLine1Present: Boolean(quotePayload.recipient.addressLine1),
-          }
-        : null,
-      products: Array.isArray(quotePayload.products)
-        ? quotePayload.products.map((item) => ({
-            itemReferenceId: item.itemReferenceId ?? null,
-            productUid: item.productUid ?? null,
-            quantity: item.quantity ?? null,
-            pdfUrlPresent: Boolean(item.pdfUrl),
-          }))
-        : [],
-    };
-    console.info("[checkout:availability:08-gelato-quote-payload]", JSON.stringify(safeQuotePayload, null, 2));
+    console.info(
+      "[checkout:availability:08-gelato-quote-payload]",
+      buildSafeAvailabilityQuoteLog({
+        requestId,
+        userId,
+        countryCode: shippingAddress.countryCode,
+        items: quoteItems,
+      }),
+    );
 
     if (process.env.NODE_ENV !== "production") {
       console.log(
         "[GELATO_QUOTE_CALL_START]",
         safeLog({
           quoteItemsCount: quoteItems.length,
-          countryCode: countryIso ?? country,
+          countryCode: shippingAddress.countryCode,
           postalCodePresent: Boolean(body.postalCode || shippingAddressInput.postalCode),
         }),
       );
@@ -918,12 +806,10 @@ export async function POST(req: Request) {
     });
     if (quote.errorCode || quote.errorMessage || quote.requestId || quote.details) {
       console.error("[checkout:availability:10-gelato-error]", {
+        correlationId: requestId,
         httpStatus: quote.httpStatus,
         code: quote.errorCode ?? null,
-        message: quote.errorMessage ?? null,
-        requestId: quote.requestId ?? null,
-        details: quote.details ?? null,
-        responseKeys: quote.responseKeys,
+        providerRequestId: quote.requestId ?? null,
       });
     }
 
@@ -1019,11 +905,6 @@ export async function POST(req: Request) {
       })),
     });
     console.info("[checkout:availability:11-quote-shape]", {
-      responseKeys: quote.rawQuote && typeof quote.rawQuote === "object" ? Object.keys(quote.rawQuote as Record<string, unknown>) : [],
-      dataKeys:
-        quote.rawQuote && typeof quote.rawQuote === "object" && (quote.rawQuote as Record<string, unknown>).data && typeof (quote.rawQuote as Record<string, unknown>).data === "object"
-          ? Object.keys((quote.rawQuote as Record<string, unknown>).data as Record<string, unknown>)
-          : [],
       shippingMethodsCount: shippingMethods.length,
     });
     for (const method of shippingMethods) {

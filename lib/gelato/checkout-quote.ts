@@ -475,7 +475,6 @@ export async function resolveCheckoutQuote(
 
     const rawText = await response.text();
     const contentType = response.headers.get("content-type");
-    const rawPreview = rawText.slice(0, 500);
     let rawJson: JsonValue | null = null;
     let jsonParseFailed = false;
 
@@ -493,13 +492,12 @@ export async function resolveCheckoutQuote(
       durationMs: Date.now() - startedAt,
       contentType,
       bodyLength: rawText.length,
-      bodyPreview: rawPreview,
     });
 
     if (jsonParseFailed) {
       logLine("[GELATO_QUOTE_JSON_PARSE_ERROR]", {
         httpStatus: response.status,
-        bodyPreview: rawPreview,
+        bodyLength: rawText.length,
       });
     }
 
@@ -545,14 +543,7 @@ export async function resolveCheckoutQuote(
     const errorDetails = {
       durationMs: Date.now() - startedAt,
       name: error instanceof Error ? error.name : "UnknownError",
-      message: error instanceof Error ? error.message : String(error),
-      cause:
-        error instanceof Error && "cause" in error && error.cause
-          ? String(error.cause)
-          : null,
-      stack: error instanceof Error ? error.stack?.split("\n").slice(0, 4).join("\n") ?? null : null,
       signalAborted: controller.signal.aborted,
-      abortReason: controller.signal.reason instanceof Error ? controller.signal.reason.message : controller.signal.reason ?? null,
       timeout: isTimeout,
     };
 
