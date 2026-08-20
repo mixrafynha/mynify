@@ -1,7 +1,7 @@
 import Sidebar from "@/app/components/sidebar";
 import Link from "next/link";
 import { createSupabaseServer } from "@/lib/supabase-server";
-import { ArrowRight, Headphones, ImageIcon } from "lucide-react";
+import { ArrowRight, Headphones } from "lucide-react";
 
 type OrderItem = {
   id: string;
@@ -178,52 +178,13 @@ function resolveItemBackImage(item: OrderItem | null) {
   return item.mockup_back || null;
 }
 
-function resolveItemMockupHtml(item: OrderItem, side: "front" | "back") {
-  const printFiles =
-    item.print_files && typeof item.print_files === "object"
-      ? (item.print_files as Record<string, unknown>)
-      : {};
-  const selectedVariant =
-    item.selected_variant && typeof item.selected_variant === "object"
-      ? (item.selected_variant as Record<string, unknown>)
-      : {};
-
-  const candidates = [
-    side === "front" ? printFiles.front_html : printFiles.back_html,
-    side === "front" ? printFiles.mockup_html_front : printFiles.mockup_html_back,
-    side === "front" ? printFiles.html_front : printFiles.html_back,
-    side === "front" ? selectedVariant.front_html : selectedVariant.back_html,
-    side === "front" ? selectedVariant.mockup_html_front : selectedVariant.mockup_html_back,
-  ];
-
-  for (const value of candidates) {
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-
-  return null;
-}
-
 function renderMockupPanel({
   title,
   image,
-  html,
 }: {
   title: string;
   image: string | null;
-  html: string | null;
   }) {
-  const fallbackHtml = image
-    ? `
-      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#0b0c19,#090914);">
-        <img src="${image}" alt="${title}" style="max-width:100%;max-height:100%;object-fit:contain;display:block;" />
-      </div>
-    `
-    : `
-      <div style="display:flex;align-items:center;justify-content:center;height:100%;background:linear-gradient(180deg,#0b0c19,#090914);color:#7c83a3;font:600 14px/1.2 Arial,sans-serif;">
-        No mockup available
-      </div>
-    `;
-
   return (
     <div className="overflow-hidden rounded-none border border-white/[0.08] bg-white/[0.045] shadow-[0_20px_60px_rgba(0,0,0,0.22)] backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-4 sm:px-6">
@@ -233,16 +194,18 @@ function renderMockupPanel({
         <span className="h-2 w-2 rounded-none bg-gradient-to-r from-fuchsia-400 to-cyan-400 shadow-[0_0_16px_rgba(168,85,247,0.35)]" />
       </div>
       <div className="aspect-[5/6] bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.1),transparent_42%),linear-gradient(180deg,#0a0a15_0%,#080814_100%)]">
-        {html ? (
-          <div
-            className="h-full w-full overflow-hidden"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
+        {image ? (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#0b0c19] to-[#090914]">
+            <img
+              src={image}
+              alt={title}
+              className="block max-h-full max-w-full object-contain"
+            />
+          </div>
         ) : (
-          <div
-            className="h-full w-full overflow-hidden"
-            dangerouslySetInnerHTML={{ __html: fallbackHtml }}
-          />
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-b from-[#0b0c19] to-[#090914] font-sans text-sm font-semibold text-[#7c83a3]">
+            No mockup available
+          </div>
         )}
       </div>
     </div>
@@ -319,12 +282,10 @@ export default async function OrderPage({
             {renderMockupPanel({
               title: "Front mockup",
               image: resolvedFrontImage,
-              html: frontItem ? resolveItemMockupHtml(frontItem, "front") : null,
             })}
             {renderMockupPanel({
               title: "Back mockup",
               image: resolvedBackImage,
-              html: backItem ? resolveItemMockupHtml(backItem, "back") : null,
             })}
           </div>
 

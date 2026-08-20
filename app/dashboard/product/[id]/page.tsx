@@ -174,12 +174,24 @@ async function getProduct(supabase: Awaited<ReturnType<typeof createSupabaseServ
   }
 }
 
-async function getUser(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
+async function getViewer(supabase: Awaited<ReturnType<typeof createSupabaseServer>>) {
   console.info("[product-perf] auth_getUser_start");
   const authStartedAt = Date.now();
   const { data } = await supabase.auth.getUser();
   console.info("[product-perf] auth_getUser_done durationMs=" + (Date.now() - authStartedAt));
-  return data.user;
+
+  if (!data.user) return { user: null, role: null };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+
+  return {
+    user: data.user,
+    role: typeof profile?.role === "string" ? profile.role : null,
+  };
 }
 
 export default async function ProductPage({
@@ -205,7 +217,7 @@ export default async function ProductPage({
   const clientStartedAt = Date.now();
   const supabase = await createSupabaseServer();
   console.info("[product-perf] supabase_client_created durationMs=" + (Date.now() - clientStartedAt));
-  const [product, user] = await Promise.all([getProduct(supabase, id), getUser(supabase)]);
+  const [product, viewer] = await Promise.all([getProduct(supabase, id), getViewer(supabase)]);
   console.info("[product-perf] auth_done durationMs=" + (Date.now() - authStartedAt));
 
   if (!product) {
@@ -217,7 +229,7 @@ export default async function ProductPage({
   }
 
   const productData = product as Record<string, any>;
-  const isAdmin = user?.user_metadata?.role === "admin";
+  const isAdmin = viewer.role === "admin";
   console.info("[product-perf] payload_start");
   const payloadEstimateBytes = Buffer.byteLength(
     JSON.stringify({
@@ -283,25 +295,6 @@ export default async function ProductPage({
                   </button>
                 </Link>
 
-                <form
-                  action={async () => {
-                    "use server";
-
-                    await fetch(
-                      `${process.env.NEXT_PUBLIC_SITE_URL}/api/products/${productData.id}`,
-                      {
-                        method: "DELETE",
-                      }
-                    );
-                  }}
-                >
-                  <button
-                    type="submit"
-                    className="w-full rounded-full bg-red-400/15 px-4 py-2.5 font-black text-red-200 transition active:scale-[0.98] sm:w-auto md:hover:bg-red-400/25"
-                  >
-                    Delete
-                  </button>
-                </form>
               </div>
             </div>
           )}
