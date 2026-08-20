@@ -4,7 +4,7 @@ create table if not exists public.checkout_drafts (
   cart_item_ids uuid[] not null default '{}',
   idempotency_key text not null unique,
   status text not null default 'draft',
-  gelato_draft_order_id text not null,
+  gelato_draft_order_id text null,
   order_reference_id text null,
   selected_shipping_method jsonb not null default '{}'::jsonb,
   shipping_address jsonb not null default '{}'::jsonb,
@@ -29,15 +29,14 @@ alter table public.checkout_drafts enable row level security;
 drop policy if exists "Users can view own checkout drafts" on public.checkout_drafts;
 create policy "Users can view own checkout drafts"
 on public.checkout_drafts for select
-using (auth.uid() = user_id);
+to authenticated
+using ((select auth.uid()) = user_id);
 
 drop policy if exists "Users can create own checkout drafts" on public.checkout_drafts;
-create policy "Users can create own checkout drafts"
-on public.checkout_drafts for insert
-with check (auth.uid() = user_id);
-
 drop policy if exists "Users can update own checkout drafts" on public.checkout_drafts;
-create policy "Users can update own checkout drafts"
-on public.checkout_drafts for update
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+
+revoke all on table public.checkout_drafts from anon;
+revoke insert, update, delete, truncate, references, trigger
+on table public.checkout_drafts from authenticated;
+grant select on table public.checkout_drafts to authenticated;
+grant select, insert, update, delete on table public.checkout_drafts to service_role;

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { hasVisiblePrintElements, resolveSecondPrintCharge } from "@/lib/gelato/second-print-price";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gelato/checkout-quote";
 import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
@@ -501,7 +502,7 @@ function isStaleClaim(updatedAt: string | null | undefined, ttlMs = PROCESSING_C
 }
 
 async function loadCheckoutDraftRow(
-  supabase: ReturnType<typeof createSupabaseServer>,
+  supabase: ReturnType<typeof createSupabaseAdmin>,
   idempotencyKey: string,
   userId: string,
 ) {
@@ -540,7 +541,7 @@ async function loadCheckoutDraftRow(
 }
 
 async function claimCheckoutDraftRow(input: {
-  supabase: ReturnType<typeof createSupabaseServer>;
+  supabase: ReturnType<typeof createSupabaseAdmin>;
   idempotencyKey: string;
   userId: string;
   cartItemIds: string[];
@@ -701,7 +702,7 @@ async function claimCheckoutDraftRow(input: {
 }
 
 async function waitForCheckoutDraft(
-  supabase: ReturnType<typeof createSupabaseServer>,
+  supabase: ReturnType<typeof createSupabaseAdmin>,
   idempotencyKey: string,
   userId: string,
   timeoutMs = WAIT_FOR_DRAFT_TIMEOUT_MS,
@@ -827,12 +828,12 @@ export async function POST(req: Request) {
       userIdSuffix: authData.user?.id ? authData.user.id.slice(-8) : null,
     });
     if (!authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const draftSupabase = createSupabaseAdmin();
 
     if (!cartItemIds.length) return NextResponse.json({ code: "MISSING_CART_ITEMS", success: false }, { status: 400 });
     if (
       !shippingMethodInput?.id ||
-      !shippingMethodInput.shipmentMethodUid ||
-      !shippingMethodInput.name
+      !shippingMethodInput.shipmentMethodUid
     ) {
       return NextResponse.json({ code: "MISSING_SHIPPING_METHOD", success: false }, { status: 400 });
     }
@@ -1347,20 +1348,7 @@ export async function POST(req: Request) {
       ],
     });
 
-    const matched = {
-      id: shippingMethodInput.id,
-      code: shippingMethodInput.code ?? null,
-      shipmentMethodUid: requestedShipmentMethodUid ?? shippingMethodInput.shipmentMethodUid,
-      carrierUid: requestedCarrierUid,
-      serviceType: requestedServiceType,
-      fulfillmentCountry: requestedFulfillmentCountry,
-      name: shippingMethodInput.name,
-      price: Number(shippingMethodInput.price),
-      currency: shippingMethodInput.currency ?? "EUR",
-    };
-    const resolutionSource: "exact_uid" | "stable_service_identity" | null = "exact_uid";
-    const resolvedShipmentMethodUid = matched.shipmentMethodUid?.trim();
-    if (!resolvedShipmentMethodUid) {
+    if (!requestedShipmentMethodUid) {
       return NextResponse.json(
         {
           success: false,
@@ -1370,20 +1358,8 @@ export async function POST(req: Request) {
         { status: 422 },
       );
     }
-    if (isInvalidSelectedShippingMethod({ shipmentMethodUid: resolvedShipmentMethodUid, serviceType: requestedServiceType })) {
+    if (isInvalidSelectedShippingMethod({ shipmentMethodUid: requestedShipmentMethodUid, serviceType: requestedServiceType })) {
       return shippingUnavailable();
-    }
-
-    const shippingAmount = Number(matched.price);
-    if (!Number.isFinite(shippingAmount) || shippingAmount < 0) {
-      return NextResponse.json(
-        {
-          success: false,
-          code: "INVALID_SHIPPING_AMOUNT",
-          message: "Unable to resolve a valid shipping amount.",
-        },
-        { status: 422 },
-      );
     }
 
     const quoteValidationStartedAt = Date.now();
@@ -1403,7 +1379,7 @@ export async function POST(req: Request) {
     const validatedShippingMethod = validShippingMethods.find((method) =>
       shippingMethodMatches({
         requestedId: shippingMethodInput.id ?? null,
-        requestedShipmentMethodUid: resolvedShipmentMethodUid,
+        requestedShipmentMethodUid,
         requestedCarrierUid,
         requestedServiceType,
         requestedFulfillmentCountry,
@@ -1416,7 +1392,7 @@ export async function POST(req: Request) {
       retryable: quote.retryable,
       reason: quote.reason,
       shippingMethodsCount: validShippingMethods.length,
-      requestedShipmentMethodUid: resolvedShipmentMethodUid,
+      requestedShipmentMethodUid,
       matched: Boolean(validatedShippingMethod),
     });
 
@@ -1431,6 +1407,36 @@ export async function POST(req: Request) {
         quoteReason: quote.reason ?? quote.quoteReason ?? null,
       });
     }
+
+    const resolvedShipmentMethodUid = validatedShippingMethod.shipmentMethodUid?.trim();
+    const shippingAmount = validatedShippingMethod.price;
+    const shippingCurrency = validatedShippingMethod.currency.trim().toUpperCase();
+
+    if (!resolvedShipmentMethodUid) {
+      return shippingUnavailable({ quoteReason: "validated_method_missing_uid" });
+    }
+    if (!Number.isFinite(shippingAmount) || shippingAmount === null || shippingAmount < 0) {
+      return shippingUnavailable({ quoteReason: "validated_method_invalid_price" });
+    }
+    if (shippingCurrency !== quoteCurrency) {
+      return shippingUnavailable({ quoteReason: "validated_method_invalid_currency" });
+    }
+
+    const matched = {
+      id: validatedShippingMethod.id,
+      code: validatedShippingMethod.code,
+      shipmentMethodUid: resolvedShipmentMethodUid,
+      carrierUid: validatedShippingMethod.carrierUid ?? null,
+      serviceType: validatedShippingMethod.serviceType ?? null,
+      fulfillmentCountry: validatedShippingMethod.fulfillmentCountry ?? null,
+      name: validatedShippingMethod.name,
+      price: shippingAmount,
+      currency: shippingCurrency,
+    };
+    const resolutionSource: "exact_uid" | "stable_service_identity" =
+      resolvedShipmentMethodUid === requestedShipmentMethodUid
+        ? "exact_uid"
+        : "stable_service_identity";
 
     log("[checkout:draft-quote]", {
       available: true,
@@ -1490,7 +1496,7 @@ export async function POST(req: Request) {
     });
 
     const idempotencyLookupStartedAt = Date.now();
-    const existingDraft = await loadCheckoutDraftRow(supabase, idempotencyKey, authData.user.id);
+    const existingDraft = await loadCheckoutDraftRow(draftSupabase, idempotencyKey, authData.user.id);
     timings.idempotencyMs += elapsedSince(idempotencyLookupStartedAt);
 
     if (existingDraft?.gelato_draft_order_id) {
@@ -1515,7 +1521,7 @@ export async function POST(req: Request) {
 
     const idempotencyClaimStartedAt = Date.now();
     const claim = await claimCheckoutDraftRow({
-      supabase,
+      supabase: draftSupabase,
       idempotencyKey,
       userId: authData.user.id,
       cartItemIds,
@@ -1538,7 +1544,7 @@ export async function POST(req: Request) {
     timings.idempotencyMs += elapsedSince(idempotencyClaimStartedAt);
 
     if (!claim.claimed) {
-      const waitedDraft = await waitForCheckoutDraft(supabase, idempotencyKey, authData.user.id);
+      const waitedDraft = await waitForCheckoutDraft(draftSupabase, idempotencyKey, authData.user.id);
       if (waitedDraft?.gelato_draft_order_id) {
         return NextResponse.json({
           success: true,
@@ -1745,7 +1751,7 @@ export async function POST(req: Request) {
     });
     if (!gelatoDraftOrderId) {
       const persistErrorStartedAt = Date.now();
-      await supabase
+      await draftSupabase
         .from("checkout_drafts")
         .update({
           status: "error",
@@ -1807,7 +1813,7 @@ export async function POST(req: Request) {
 
     console.info("[checkout:draft:19-insert-start]");
     const persistStartedAt = Date.now();
-    const { data: savedDraft, error: saveError } = await supabase
+    const { data: savedDraft, error: saveError } = await draftSupabase
       .from("checkout_drafts")
       .update(draftRow)
       .eq("id", claim.draftId)

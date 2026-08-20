@@ -381,13 +381,24 @@ export async function POST(req: Request) {
       );
     }
 
-    const requestedCartItemIds = Array.isArray(body.cartItemIds)
-      ? [...new Set(body.cartItemIds.filter(isUuid))]
-      : [];
+    if (!isUuid(body.draftOrderId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "MISSING_DRAFT_ORDER",
+          message: "A valid prepared order is required before payment.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const draftOrderId = body.draftOrderId;
     let draftCheckout:
       | {
           cart_item_ids: string[] | null;
+          status: string | null;
           gelato_draft_order_id: string | null;
+          gelato_response: { id?: unknown } | null;
           selected_shipping_method: { id?: string | null; code?: string | null; shipmentMethodUid?: string | null; name?: string | null; price?: number | null; currency?: string | null } | null;
           shipping_address: Record<string, unknown> | null;
           subtotal: number | null;
@@ -397,16 +408,16 @@ export async function POST(req: Request) {
         }
       | null = null;
 
-    if (body.draftOrderId) {
+    if (draftOrderId) {
       const draftStartedAt = Date.now();
       const { data: draftRow, error: draftError } = await supabase
         .from("checkout_drafts")
-        .select("cart_item_ids, gelato_draft_order_id, selected_shipping_method, shipping_address, subtotal, shipping_amount, total, currency")
-        .eq("id", body.draftOrderId)
+        .select("cart_item_ids, status, gelato_draft_order_id, gelato_response, selected_shipping_method, shipping_address, subtotal, shipping_amount, total, currency")
+        .eq("id", draftOrderId)
         .eq("user_id", user.id)
         .maybeSingle();
       console.info("[checkout:final:03-draft-resolution]", {
-        draftOrderId: body.draftOrderId,
+        draftOrderId,
         found: Boolean(draftRow),
         ownerMatches: Boolean(draftRow),
         error: draftError?.message ?? null,
@@ -419,7 +430,7 @@ export async function POST(req: Request) {
         );
       }
       logCheckoutPerf("draft_load_done", draftStartedAt, {
-        draftOrderId: body.draftOrderId,
+        draftOrderId,
         found: Boolean(draftRow),
       });
 
@@ -430,13 +441,47 @@ export async function POST(req: Request) {
         );
       }
 
+      const gelatoDraftOrderId = normalizeAddressField(draftRow.gelato_draft_order_id);
+      const gelatoResponseId = normalizeAddressField(draftRow.gelato_response?.id);
+      if (draftRow.status !== "draft") {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "INVALID_DRAFT_STATUS",
+            message: "The prepared order is not ready for payment.",
+          },
+          { status: 409 },
+        );
+      }
+      if (!isUuid(gelatoDraftOrderId) || gelatoResponseId !== gelatoDraftOrderId) {
+        return NextResponse.json(
+          {
+            success: false,
+            code: "INVALID_GELATO_DRAFT",
+            message: "The prepared Gelato order is invalid.",
+          },
+          { status: 409 },
+        );
+      }
+
       draftCheckout = draftRow;
     }
 
-    const effectiveCartItemIds =
-      draftCheckout?.cart_item_ids?.length
-        ? [...new Set(draftCheckout.cart_item_ids.filter(isUuid))]
-        : requestedCartItemIds;
+    const persistedCartItemIds = draftCheckout?.cart_item_ids ?? [];
+    const effectiveCartItemIds = [...new Set(persistedCartItemIds.filter(isUuid))];
+    if (
+      effectiveCartItemIds.length === 0 ||
+      effectiveCartItemIds.length !== persistedCartItemIds.length
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          code: "INVALID_DRAFT_CART",
+          message: "The prepared order contains invalid cart items.",
+        },
+        { status: 409 },
+      );
+    }
     const draftShippingMethod = draftCheckout?.selected_shipping_method ?? null;
     const draftShippingAddress = draftCheckout?.shipping_address ?? null;
 
@@ -1031,26 +1076,39 @@ export async function POST(req: Request) {
         );
       }
 
-      const draftShippingPriceRaw =
-        draftCheckout?.shipping_amount ?? draftShippingMethod?.price ?? null;
-      const draftShippingPrice = Number(draftShippingPriceRaw);
-      const draftShippingCurrency =
-        normalizeAddressField(draftCheckout?.currency) ??
-        normalizeAddressField(draftShippingMethod?.currency) ??
-        checkoutCurrency;
+      const draftShippingPrice = Number(draftCheckout?.shipping_amount);
+      const draftMethodPrice = Number(draftShippingMethod.price);
+      const draftSubtotal = Number(draftCheckout?.subtotal);
+      const draftTotal = Number(draftCheckout?.total);
+      const draftShippingCurrency = normalizeAddressField(draftCheckout?.currency)?.toUpperCase();
+      const draftMethodCurrency = normalizeAddressField(draftShippingMethod.currency)?.toUpperCase();
 
-      if (!Number.isFinite(draftShippingPrice) || draftShippingPrice < 0) {
+      if (
+        !Number.isFinite(draftShippingPrice) ||
+        !Number.isFinite(draftMethodPrice) ||
+        !Number.isFinite(draftSubtotal) ||
+        !Number.isFinite(draftTotal) ||
+        draftShippingPrice < 0 ||
+        draftMethodPrice < 0 ||
+        draftSubtotal < 0 ||
+        draftTotal < 0 ||
+        Math.abs(draftShippingPrice - draftMethodPrice) > 0.009 ||
+        Math.abs(draftTotal - (draftSubtotal + draftShippingPrice)) > 0.009
+      ) {
         return NextResponse.json(
           {
             success: false,
-            code: "INVALID_DRAFT_SHIPPING_AMOUNT",
-            message: "The prepared order has no valid shipping amount.",
+            code: "INVALID_DRAFT_TOTALS",
+            message: "The prepared order totals are inconsistent.",
           },
           { status: 409 },
         );
       }
 
-      if (draftShippingCurrency.toUpperCase() !== checkoutCurrency) {
+      if (
+        draftShippingCurrency !== checkoutCurrency ||
+        draftMethodCurrency !== checkoutCurrency
+      ) {
         return NextResponse.json(
           {
             success: false,
@@ -1075,7 +1133,7 @@ export async function POST(req: Request) {
       };
 
       console.info("[checkout:final:shipping-from-draft]", {
-        draftOrderId: body.draftOrderId ?? null,
+        draftOrderId,
         shipmentMethodUid,
         name: selectedQuoteOption.name,
         price: selectedQuoteOption.price,
@@ -1135,27 +1193,25 @@ export async function POST(req: Request) {
         status: "pending",
         payment_status: "pending",
         gelato_status: "draft",
-        checkout_draft_id: body.draftOrderId ?? null,
+        checkout_draft_id: draftOrderId,
         gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? null,
         subtotal: computedSubtotal,
         shipping_amount: computedShipping,
         total: computedTotal,
         shipping_address: draftShippingAddress ?? shippingAddress,
         shipping_method: draftShippingMethod ?? selectedQuoteOption,
-        idempotency_key: body.draftOrderId
-          ? `ryfio-checkout:${user.id}:${body.draftOrderId}`
-          : null,
+        idempotency_key: `ryfio-checkout:${user.id}:${draftOrderId}`,
         updated_at: new Date().toISOString(),
       };
 
       let order: PersistedCheckoutOrder | null = null;
 
-      if (body.draftOrderId) {
+      if (draftOrderId) {
         const ordersLookupStartedAt = Date.now();
         const { data: existingOrder, error: existingOrderError } = await supabase
           .from("orders")
           .select("id, stripe_session_id, payment_status, status")
-          .eq("checkout_draft_id", body.draftOrderId)
+          .eq("checkout_draft_id", draftOrderId)
           .eq("user_id", user.id)
           .maybeSingle();
         timings.ordersLookupMs += elapsedSince(ordersLookupStartedAt);
@@ -1197,7 +1253,7 @@ export async function POST(req: Request) {
                 console.info("[checkout:final:reuse-stripe-session]", {
                   orderId: existingOrder.id,
                   stripeSessionId: existingSession.id,
-                  draftOrderId: body.draftOrderId,
+                  draftOrderId,
                 });
 
                 return NextResponse.json({
@@ -1269,7 +1325,7 @@ export async function POST(req: Request) {
 
       console.info("[checkout:final:order-resolution]", {
         orderId: order.id,
-        draftOrderId: body.draftOrderId ?? null,
+        draftOrderId,
         persistedAtomically: true,
       });
 
@@ -1281,7 +1337,7 @@ export async function POST(req: Request) {
             console.info("[checkout:final:reuse-stripe-session-after-persist]", {
               orderId: order.id,
               stripeSessionId: existingSession.id,
-              draftOrderId: body.draftOrderId,
+              draftOrderId,
             });
 
             return NextResponse.json({
@@ -1302,9 +1358,7 @@ export async function POST(req: Request) {
         }
       }
 
-      const stripeIdempotencyKey = body.draftOrderId
-        ? `ryfio-checkout:${user.id}:${body.draftOrderId}`
-        : undefined;
+      const stripeIdempotencyKey = `ryfio-checkout:${user.id}:${draftOrderId}`;
 
       const stripeSessionStartedAt = Date.now();
       const session = await stripe.checkout.sessions.create({
@@ -1333,7 +1387,7 @@ export async function POST(req: Request) {
           type: "ryfio_order",
           order_id: order.id,
           user_id: user.id,
-          checkout_draft_id: body.draftOrderId ?? "",
+          checkout_draft_id: draftOrderId,
           gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? "",
           source: "ryfio_checkout",
           cart_item_ids: effectiveCartItemIds.join(",").slice(0, 500),
@@ -1350,7 +1404,7 @@ export async function POST(req: Request) {
             type: "ryfio_order",
             order_id: order.id,
             user_id: user.id,
-            checkout_draft_id: body.draftOrderId ?? "",
+            checkout_draft_id: draftOrderId,
             gelato_draft_order_id: draftCheckout?.gelato_draft_order_id ?? "",
             source: "ryfio_checkout",
           },
