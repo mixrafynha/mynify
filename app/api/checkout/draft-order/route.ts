@@ -8,6 +8,10 @@ import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/li
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import {
+  resolveTrustedPrintFiles,
+  TrustedPrintFileError,
+} from "@/lib/server/trusted-print-files";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -323,27 +327,6 @@ function asUrl(value: unknown): string | null {
   if (typeof record.fileUrl === "string" && record.fileUrl.trim()) return record.fileUrl.trim();
   if (typeof record.printFileUrl === "string" && record.printFileUrl.trim()) return record.printFileUrl.trim();
   return null;
-}
-
-function buildProductionFiles(printFiles: Record<string, unknown> | null | undefined) {
-  const record = printFiles && typeof printFiles === "object" ? printFiles : {};
-  const seen = new Set<string>();
-  const files: GelatoFile[] = [];
-  const push = (type: "default" | "back", value: unknown) => {
-    const url = asUrl(value);
-    if (!url || url.includes("/mockups/") || seen.has(`${type}:${url}`) || seen.has(url)) return;
-    seen.add(`${type}:${url}`);
-    seen.add(url);
-    files.push({ type, url });
-  };
-
-  push("default", record.front);
-  push("default", record.default);
-  push("default", record.front_url);
-  push("back", record.back);
-  push("back", record.back_url);
-
-  return files;
 }
 
 function determineRequiredSides(userProduct: UserProductRow | null) {
@@ -1141,7 +1124,35 @@ export async function POST(req: Request) {
       const mockupsRecord = resolvedUserProduct?.mockups && typeof resolvedUserProduct.mockups === "object"
         ? (resolvedUserProduct.mockups as Record<string, unknown>)
         : {};
-      const printFilesFinal = buildProductionFiles(printFilesRecord);
+      let printFilesFinal: GelatoFile[];
+      try {
+        if (!resolvedUserProduct?.id || resolvedUserProduct.user_id !== authData.user.id) {
+          throw new TrustedPrintFileError("PRINT_FILE_OWNERSHIP_INVALID");
+        }
+
+        printFilesFinal = resolveTrustedPrintFiles({
+          printFiles: printFilesRecord,
+          userId: authData.user.id,
+          userProductId: resolvedUserProduct.id,
+        });
+      } catch (error) {
+        const trustedError = error instanceof TrustedPrintFileError ? error : null;
+        console.warn("[checkout:draft:print-file-rejected]", {
+          cartItemId: cartRow.id,
+          userProductId: resolvedUserProduct?.id ?? null,
+          code: trustedError?.code ?? "PRINT_FILE_VALIDATION_FAILED",
+          side: trustedError?.side ?? null,
+        });
+        return conflict(
+          "PRINT_FILES_INVALID",
+          "The saved production files are invalid. Save the design again before checkout.",
+          {
+            userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
+            side: trustedError?.side ?? null,
+            reason: trustedError?.code ?? "PRINT_FILE_VALIDATION_FAILED",
+          },
+        );
+      }
       const frontPrintFile = printFilesFinal.find((file) => file.type === "default")?.url ?? null;
       const backPrintFile = printFilesFinal.find((file) => file.type === "back")?.url ?? null;
       const hasBack = backHasDesign && Boolean(backPrintFile);
@@ -1209,13 +1220,6 @@ export async function POST(req: Request) {
         });
       }
 
-      const containsMockupPath = printFilesFinal.some((file) => file.url.includes("/mockups/"));
-      if (containsMockupPath) {
-        return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
-          userProductId: resolvedUserProduct?.id ?? cartRow.user_product_id ?? null,
-          missingSides: [],
-        });
-      }
       // Keep the draft financial snapshot aligned with the final Stripe checkout.
       // The current variant is the authoritative base price. If the saved design really
       // has a back print, derive the second-print charge from Gelato printPricing for

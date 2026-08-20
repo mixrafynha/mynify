@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { getAuthenticatedSupabase } from "../auth";
 import { uploadBufferToR2 } from "../r2";
 import { getDurableRateLimiter } from "@/lib/server/rate-limit";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -120,6 +121,7 @@ export async function POST(req: Request) {
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const serviceSupabase = createSupabaseAdmin();
 
     try {
       const rateLimit = await previewUploadRateLimiter.limit(user.id);
@@ -304,7 +306,7 @@ export async function POST(req: Request) {
       },
     };
 
-    const { data: updated, error: updateError } = await supabase
+    const { data: updated, error: updateError } = await serviceSupabase
       .from("user_products")
       .update({
         mockups: nextMockups,

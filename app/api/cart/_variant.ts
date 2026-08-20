@@ -25,6 +25,7 @@ export type ProductVariant = {
   sku: string | null;
   name?: string | null;
   gelato_product_uid?: string | null;
+  gelato_variant_uid?: string | null;
   product_color_id: string | null;
 };
 
@@ -42,6 +43,8 @@ export type ResolvedVariant = {
   name: string | null;
   gelato_product_uid: string | null;
   gelatoProductUid: string | null;
+  gelato_variant_uid: string | null;
+  gelatoVariantUid: string | null;
   gelato_attributes: null;
   gelatoAttributes: null;
   product_uid: string | null;
@@ -103,6 +106,8 @@ export function resolveVariantRow(
     name: variant.name ?? null,
     gelato_product_uid: variant.gelato_product_uid ?? null,
     gelatoProductUid: variant.gelato_product_uid ?? null,
+    gelato_variant_uid: variant.gelato_variant_uid ?? null,
+    gelatoVariantUid: variant.gelato_variant_uid ?? null,
     gelato_attributes: null,
     gelatoAttributes: null,
     product_uid: variant.gelato_product_uid ?? null,
@@ -123,7 +128,7 @@ export async function resolveVariantById(
 ): Promise<ResolvedVariant | null> {
   const { data: variant, error: variantError } = (await supabase
     .from("product_variants")
-    .select("id, size, stock, price, sku, name, gelato_product_uid, product_color_id")
+    .select("id, size, stock, price, sku, name, gelato_product_uid, gelato_variant_uid, product_color_id")
     .eq("id", variantId)
     .maybeSingle()) as SupabaseSingleResponse<ProductVariant>;
 
@@ -170,7 +175,7 @@ export async function getAvailableVariants(
 
   const { data: variants, error: variantsError } = (await supabase
     .from("product_variants")
-    .select("id, size, stock, price, sku, name, gelato_product_uid, product_color_id")
+    .select("id, size, stock, price, sku, name, gelato_product_uid, gelato_variant_uid, product_color_id")
     .in("product_color_id", colorIds)
     .order("size", { ascending: true })) as SupabaseManyResponse<ProductVariant>;
 

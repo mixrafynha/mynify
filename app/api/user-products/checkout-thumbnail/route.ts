@@ -4,6 +4,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import sharp from "sharp";
 import { dataUrlToBuffer } from "../save-design/image-utils";
 import { uploadBufferToR2 } from "../save-design/r2";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,6 +107,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not authenticated" }, { status: 401 });
     }
     const { user, supabase } = auth;
+    const serviceSupabase = createSupabaseAdmin();
 
     const body = await req.json();
     if (process.env.NODE_ENV === "development") {
@@ -169,7 +171,7 @@ export async function POST(req: Request) {
         const timestamp = new Date().toISOString();
         const nextVersion = currentVersion(mockups);
 
-        await supabase
+        await serviceSupabase
           .from("user_products")
           .update({
             mockups: {

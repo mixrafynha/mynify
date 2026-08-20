@@ -371,8 +371,36 @@ export async function uploadDesignImageToR2(
       typeof args.storageKey === "string" && args.storageKey.trim()
         ? args.storageKey.trim().replace(/^\/+/, "")
         : extractR2KeyFromPublicUrl(args.dataUrl);
+    const expectedPrefix = `users/${args.userId}/${args.designId}/${args.kind}/${args.side}.`;
+    const allowedKey =
+      existingKey &&
+      existingKey.startsWith(expectedPrefix) &&
+      /\.(?:png|jpe?g|webp)$/i.test(existingKey);
 
-    return { key: existingKey, url: args.dataUrl };
+    if (!allowedKey) {
+      return { key: null, url: null };
+    }
+
+    const publicBaseValue = process.env.R2_PUBLIC_URL?.trim();
+    if (!publicBaseValue) throw new Error("Missing R2_PUBLIC_URL");
+
+    const publicBase = new URL(publicBaseValue);
+    const suppliedUrl = new URL(args.dataUrl);
+    const expectedPath = `${publicBase.pathname.replace(/\/+$/, "")}/${existingKey}`;
+    if (
+      publicBase.protocol !== "https:" ||
+      suppliedUrl.protocol !== "https:" ||
+      suppliedUrl.hostname.toLowerCase() !== publicBase.hostname.toLowerCase() ||
+      decodeURIComponent(suppliedUrl.pathname) !== decodeURIComponent(expectedPath) ||
+      suppliedUrl.search ||
+      suppliedUrl.hash
+    ) {
+      return { key: null, url: null };
+    }
+
+    const trustedUrl = new URL(publicBase.toString());
+    trustedUrl.pathname = expectedPath;
+    return { key: existingKey, url: trustedUrl.toString() };
   }
 
   if (!isDataImage(args.dataUrl)) {
@@ -452,6 +480,13 @@ export async function buildUserProductSavePayload(args: {
   baseProduct: any;
 }) {
   const { supabase, body, userId, designId, baseProduct } = args;
+  const requestedSchemaVersion = Number(body.schemaVersion);
+  const schemaVersion =
+    Number.isInteger(requestedSchemaVersion) &&
+    requestedSchemaVersion >= 1 &&
+    requestedSchemaVersion <= 10
+      ? requestedSchemaVersion
+      : 4;
 
   const incomingDesignData = objectValue<any>(body.design_data || body.designData, {});
   const incomingPrintFiles = objectValue<any>(body.printFiles || body.print_files, {});
@@ -623,10 +658,16 @@ export async function buildUserProductSavePayload(args: {
     throw new Error("Selected variant does not belong to the base product");
   }
 
+  const trustedSelectedVariant = databaseVariant
+    ? {
+        ...databaseVariant,
+        variantId: databaseVariant.id,
+      }
+    : null;
+
   const basePrice = Number(databaseVariant?.price ?? baseProduct.price ?? 0);
   const hasFrontDesign = hasVisiblePrintElements(frontElements);
   const hasBackDesign = hasVisiblePrintElements(backElements);
-  const selectedVariantRecord = selectedVariant ? (selectedVariant as Record<string, unknown>) : null;
   const secondPrintCharge = resolveSecondPrintCharge({
     hasFrontDesign,
     hasBackDesign,
@@ -650,20 +691,20 @@ export async function buildUserProductSavePayload(args: {
   );
 
   const designData = cleanDataUrls({
-    schemaVersion: body.schemaVersion || incomingDesignData.schemaVersion || 4,
+    schemaVersion,
     productId: baseProduct.id,
-    category: baseProduct.category || body.category || incomingDesignData.category || null,
+    category: baseProduct.category || null,
     color: body.color || body.mockupColor || incomingDesignData.color || null,
     mockupColor: body.mockupColor || body.color || incomingDesignData.mockupColor || null,
     selectedColor,
-    selectedVariant,
-    productUid: selectedVariant?.productUid || incomingDesignData.productUid || incomingDesignData.product_uid || null,
-    product_uid: selectedVariant?.product_uid || incomingDesignData.product_uid || incomingDesignData.productUid || null,
-    gelatoProductUid: selectedVariant?.gelatoProductUid || incomingDesignData.gelatoProductUid || incomingDesignData.gelato_product_uid || null,
-    gelato_product_uid: selectedVariant?.gelato_product_uid || incomingDesignData.gelato_product_uid || incomingDesignData.gelatoProductUid || null,
-    gelatoVariantUid: selectedVariant?.gelatoVariantUid || incomingDesignData.gelatoVariantUid || incomingDesignData.gelato_variant_uid || null,
-    gelato_variant_uid: selectedVariant?.gelato_variant_uid || incomingDesignData.gelato_variant_uid || incomingDesignData.gelatoVariantUid || null,
-    status: body.status || incomingDesignData.status || "draft",
+    selectedVariant: trustedSelectedVariant,
+    productUid: databaseVariant?.gelato_product_uid || null,
+    product_uid: databaseVariant?.gelato_product_uid || null,
+    gelatoProductUid: databaseVariant?.gelato_product_uid || null,
+    gelato_product_uid: databaseVariant?.gelato_product_uid || null,
+    gelatoVariantUid: databaseVariant?.gelato_variant_uid || null,
+    gelato_variant_uid: databaseVariant?.gelato_variant_uid || null,
+    status: "draft",
     sides: {
       front: {
         ...(incomingDesignData?.sides?.front || {}),
@@ -706,20 +747,17 @@ export async function buildUserProductSavePayload(args: {
     null;
 
   const baseImages = Array.isArray(baseProduct.images) ? baseProduct.images : [];
-  const existingMockups = objectValue<any>(body.mockups || body.mockupFiles, {});
   const normalizedMockups = {
-    ...existingMockups,
-    front: mockupFront.url ?? existingMockups.front ?? null,
-    back: mockupBack.url ?? existingMockups.back ?? null,
+    front: mockupFront.url ?? null,
+    back: mockupBack.url ?? null,
   };
-  delete normalizedMockups.keys;
 
   return {
     id: designId,
     user_id: userId,
     base_product_id: baseProduct.id,
-    title: body.title || baseProduct.title,
-    description: body.description ?? baseProduct.description ?? null,
+    title: baseProduct.title,
+    description: baseProduct.description ?? null,
     price: basePrice,
     currency: "EUR",
     image: bestPreviewImage,
@@ -728,7 +766,7 @@ export async function buildUserProductSavePayload(args: {
         ...baseImages,
       ].filter(Boolean)),
     ),
-    category: baseProduct.category || body.category || null,
+    category: baseProduct.category || null,
     slug: `${baseProduct.slug || "product"}-${designId.slice(0, 8)}`,
     design_front: frontElements,
     design_back: backElements,
@@ -750,10 +788,10 @@ export async function buildUserProductSavePayload(args: {
     ai_mockup_images: [],
     markup: productMarkup,
     final_price: finalPrice,
-    status: body.status || "draft",
-    cart_status: body.cartStatus || body.cart_status || "in_cart",
+    status: "draft",
+    cart_status: "in_cart",
     is_active: true,
-    design_version: body.schemaVersion || incomingDesignData.schemaVersion || 4,
+    design_version: schemaVersion,
     updated_at: new Date().toISOString(),
   };
 }

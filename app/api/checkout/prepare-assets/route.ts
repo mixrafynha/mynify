@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
 import { queueDesignAssetJobs } from "@/app/api/user-products/save-design/queue-design-assets";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -47,6 +48,7 @@ export async function POST() {
     if (authError || !user) {
       return NextResponse.json({ ok: false, error: "User not authenticated" }, { status: 401 });
     }
+    const serviceSupabase = createSupabaseAdmin();
 
     const { data: cartItems, error: cartError } = await supabase
       .from("cart_items")
@@ -100,7 +102,7 @@ export async function POST() {
 
         if (queued) {
           const timestamp = new Date().toISOString();
-          await supabase
+          await serviceSupabase
             .from("user_products")
             .update({
               design_data: {

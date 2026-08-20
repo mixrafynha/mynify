@@ -13,6 +13,7 @@ import {
   resolveSavedDesignSides,
 } from "./design-sides";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,6 +119,8 @@ export async function POST(req: Request) {
       );
     }
 
+    const serviceSupabase = createSupabaseAdmin();
+
     const contentLength = Number(req.headers.get("content-length") ?? 0);
     if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
       return NextResponse.json({ error: "Request body too large" }, { status: 413 });
@@ -200,7 +203,7 @@ export async function POST(req: Request) {
 
     saveContext.step = "base-product";
     const { baseProduct, productError } = await getBaseProduct({
-      supabase,
+      supabase: serviceSupabase,
       baseProductId: String(baseProductId),
     });
 
@@ -218,9 +221,37 @@ export async function POST(req: Request) {
       : crypto.randomUUID();
     saveContext.designId = designId;
 
+    const { data: existingUserProduct, error: ownershipError } = await serviceSupabase
+      .from("user_products")
+      .select("id,user_id,base_product_id")
+      .eq("id", designId)
+      .maybeSingle();
+
+    if (ownershipError) {
+      console.error("USER_PRODUCT_OWNERSHIP_CHECK_ERROR", {
+        code: ownershipError.code,
+        designId,
+      });
+      return NextResponse.json({ error: "Unable to validate saved design" }, { status: 500 });
+    }
+
+    if (existingUserProduct && existingUserProduct.user_id !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (
+      existingUserProduct?.base_product_id &&
+      String(existingUserProduct.base_product_id) !== String(baseProduct.id)
+    ) {
+      return NextResponse.json(
+        { error: "Saved design does not belong to this base product" },
+        { status: 409 },
+      );
+    }
+
     saveContext.step = "build-payload";
     const savePayload = await buildUserProductSavePayload({
-      supabase,
+      supabase: serviceSupabase,
       body,
       userId: user.id,
       designId,
@@ -294,13 +325,21 @@ export async function POST(req: Request) {
     });
 
     saveContext.step = "persist-user-product";
-    const { data: userProduct, error: saveError } = await supabase
-      .from("user_products")
-      .upsert(savePayload, {
-        onConflict: "id",
-      })
-      .select()
-      .single();
+    const { id: _id, user_id: _userId, ...ownedUpdatePayload } = savePayload;
+    const persistence = existingUserProduct
+      ? await serviceSupabase
+          .from("user_products")
+          .update(ownedUpdatePayload)
+          .eq("id", designId)
+          .eq("user_id", user.id)
+          .select()
+          .single()
+      : await serviceSupabase
+          .from("user_products")
+          .insert(savePayload)
+          .select()
+          .single();
+    const { data: userProduct, error: saveError } = persistence;
 
     if (saveError) {
       console.error("USER PRODUCT SAVE ERROR:", saveError);
@@ -403,14 +442,15 @@ export async function POST(req: Request) {
         keys: Object.keys(persistedMockups),
       });
 
-      const { error: jobStateError } = await supabase
+      const { error: jobStateError } = await serviceSupabase
         .from("user_products")
         .update({
           design_data: nextDesignData,
           print_files: nextPrintFiles,
           mockups: Object.keys(persistedMockups).length ? persistedMockups : undefined,
         })
-        .eq("id", userProduct.id);
+        .eq("id", userProduct.id)
+        .eq("user_id", user.id);
 
       if (jobStateError) {
         throw new Error(`Failed to persist background job state: ${jobStateError.message}`);
