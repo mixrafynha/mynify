@@ -8,6 +8,7 @@ import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/li
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import { validateCartItemIntegrity } from "@/lib/server/cart-item-integrity";
 import {
   resolveTrustedPrintFiles,
   TrustedPrintFileError,
@@ -80,9 +81,15 @@ type VariantRow = {
   gelato_attributes?: Record<string, unknown> | null;
 };
 
+type ProductColorOwnershipRow = {
+  id: string;
+  product_id: string | null;
+};
+
 type UserProductRow = {
   id: string;
   user_id: string | null;
+  base_product_id: string | null;
   gelato_product_uid: string | null;
   price: number | string | null;
   markup: number | string | null;
@@ -891,7 +898,7 @@ export async function POST(req: Request) {
     const userProductRowsPromise = userProductIds.length
       ? supabase
           .from("user_products")
-          .select("id, user_id, price, markup, final_price, design_data, print_files, mockups")
+          .select("id, user_id, base_product_id, price, markup, final_price, design_data, print_files, mockups")
           .eq("user_id", authData.user.id)
           .in("id", userProductIds)
       : Promise.resolve({ data: [] as UserProductRow[], error: null });
@@ -966,8 +973,31 @@ export async function POST(req: Request) {
       }
     }
 
+    const variantColorIds = Array.from(
+      new Set(
+        allVariantRows
+          .map((variant) => variant.product_color_id)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const { data: productColorRows, error: productColorRowsError } = variantColorIds.length
+      ? await supabase
+          .from("product_colors")
+          .select("id, product_id")
+          .in("id", variantColorIds)
+      : { data: [] as ProductColorOwnershipRow[], error: null };
+    if (productColorRowsError) {
+      return NextResponse.json(
+        { success: false, code: "VARIANT_VALIDATION_FAILED", message: "Unable to validate product variants." },
+        { status: 500 },
+      );
+    }
+
     const productMap = new Map((productRows ?? []).map((row) => [(row as ProductRow).id, row as ProductRow]));
     const variantMap = new Map(allVariantRows.map((row) => [row.id, row]));
+    const productColorProductMap = new Map(
+      ((productColorRows ?? []) as ProductColorOwnershipRow[]).map((color) => [color.id, color.product_id]),
+    );
 
     const resolvedItems: ResolvedCheckoutItem[] = [];
     let subtotal = 0;
@@ -1037,6 +1067,31 @@ export async function POST(req: Request) {
             cartRow.selected_variant && typeof cartRow.selected_variant === "object" ? Object.keys(cartRow.selected_variant) : [],
         });
         return conflict("MISSING_VARIANT", "Unable to resolve a variant for this cart item.", { cartItemId: cartRow.id });
+      }
+
+      const variantProductId = variant.product_color_id
+        ? productColorProductMap.get(variant.product_color_id) ?? null
+        : null;
+      const integrityIssue = validateCartItemIntegrity({
+        cartProductId: cartRow.product_id,
+        variantId: variant.id,
+        variantProductId,
+        userProductId: cartRow.user_product_id,
+        resolvedUserProductId: resolvedUserProduct?.id ?? null,
+        userProductBaseProductId: resolvedUserProduct?.base_product_id ?? null,
+      });
+      if (integrityIssue) {
+        console.warn("[checkout:draft:invalid-cart-relation]", {
+          cartItemId: cartRow.id,
+          code: integrityIssue,
+          productId: cartRow.product_id,
+          variantId: variant.id,
+          userProductId: cartRow.user_product_id ?? null,
+        });
+        return NextResponse.json(
+          { success: false, code: integrityIssue, message: "One or more cart items are invalid." },
+          { status: 400 },
+        );
       }
 
       const availabilityKey = `${variant.id}:${address.countryCode}`;

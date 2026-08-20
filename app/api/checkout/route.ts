@@ -7,6 +7,7 @@ import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 import { isInvalidGelatoShippingMethodUid } from "@/lib/gelato/shipping-methods";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import { validateCartItemIntegrity } from "@/lib/server/cart-item-integrity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +110,8 @@ type ProductColorOwnershipRow = {
 
 type UserProductRow = {
   id: string;
+  user_id: string | null;
+  base_product_id: string | null;
   price: number | string | null;
   markup: number | string | null;
   final_price: number | string | null;
@@ -630,7 +633,8 @@ export async function POST(req: Request) {
       const userProductsPromise = userProductIds.length
         ? supabase
             .from("user_products")
-            .select("id, price, markup, final_price, currency, image, mockups, design_data")
+            .select("id, user_id, base_product_id, price, markup, final_price, currency, image, mockups, design_data")
+            .eq("user_id", user.id)
             .in("id", userProductIds)
         : Promise.resolve({ data: [] as UserProductRow[], error: null });
       let userProductsQueryMs = 0;
@@ -718,28 +722,7 @@ export async function POST(req: Request) {
             .select("id, product_id")
             .in("id", variantColorIds)
         : Promise.resolve({ data: [] as ProductColorOwnershipRow[], error: null });
-      const availabilityStartedAt = Date.now();
-      const availabilityResults = new Map<string, Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>();
-      const availabilityPromise = Promise.all(
-        variants.map(async (variant) => {
-          const result = await checkGelatoRegionalAvailability({
-            variantId: variant.id,
-            countryCode: shippingCountryCode ?? "",
-            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
-            resolveVariant: async () => variant,
-          });
-          availabilityResults.set(variant.id, result);
-        }),
-      );
-
-      const [{ data: productColorRows, error: productColorsError }] = await Promise.all([
-        productColorsPromise,
-        availabilityPromise,
-      ]);
-      timings.availabilityMs += elapsedSince(availabilityStartedAt);
-      logCheckoutPerf("availability_done", availabilityStartedAt, {
-        variantCount: variants.length,
-      });
+      const { data: productColorRows, error: productColorsError } = await productColorsPromise;
       logCheckoutPerf("product_colors_done", productColorsStartedAt, {
         colorCount: variantColorIds.length,
       });
@@ -775,31 +758,59 @@ export async function POST(req: Request) {
       );
 
       for (const cartItem of cartItems) {
-        if (!cartItem.variant_id) continue;
-
-        const variant = variantMap.get(cartItem.variant_id) ?? null;
+        const variant = cartItem.variant_id ? variantMap.get(cartItem.variant_id) ?? null : null;
         const variantProductId = variant?.product_color_id
           ? productColorProductMap.get(variant.product_color_id) ?? null
           : null;
+        const referencedUserProduct = cartItem.user_product_id
+          ? userProductMap.get(cartItem.user_product_id) ?? null
+          : null;
+        const integrityIssue = validateCartItemIntegrity({
+          cartProductId: cartItem.product_id,
+          variantId: cartItem.variant_id,
+          variantProductId,
+          userProductId: cartItem.user_product_id,
+          resolvedUserProductId: referencedUserProduct?.id ?? null,
+          userProductBaseProductId: referencedUserProduct?.base_product_id ?? null,
+        });
 
-        if (!variant || !variantProductId || variantProductId !== cartItem.product_id) {
-          console.warn("[checkout:final:invalid-product-variant]", {
+        if (integrityIssue) {
+          console.warn("[checkout:final:invalid-cart-relation]", {
             cartItemId: cartItem.id,
+            code: integrityIssue,
             productId: cartItem.product_id,
-            variantId: cartItem.variant_id,
-            productColorId: variant?.product_color_id ?? null,
+            variantId: cartItem.variant_id ?? null,
+            userProductId: cartItem.user_product_id ?? null,
           });
 
           return NextResponse.json(
             {
               success: false,
-              code: "INVALID_PRODUCT_VARIANT",
+              code: integrityIssue,
               message: "One or more cart items are invalid.",
             },
             { status: 400 },
           );
         }
       }
+
+      const availabilityStartedAt = Date.now();
+      const availabilityResults = new Map<string, Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>();
+      await Promise.all(
+        variants.map(async (variant) => {
+          const result = await checkGelatoRegionalAvailability({
+            variantId: variant.id,
+            countryCode: shippingCountryCode ?? "",
+            gelatoApiKey: process.env.GELATO_API_KEY?.trim() ?? null,
+            resolveVariant: async () => variant,
+          });
+          availabilityResults.set(variant.id, result);
+        }),
+      );
+      timings.availabilityMs += elapsedSince(availabilityStartedAt);
+      logCheckoutPerf("availability_done", availabilityStartedAt, {
+        variantCount: variants.length,
+      });
 
     type StripeSessionParams = NonNullable<
       Parameters<typeof stripe.checkout.sessions.create>[0]
