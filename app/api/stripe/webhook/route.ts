@@ -1,7 +1,15 @@
-import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import {
+  createAiCreditPurchaseDependencies,
+  processAiCreditCheckoutCompleted,
+  AiCreditPurchaseError,
+} from "@/lib/server/stripe/ai-credit-purchase";
+import {
+  verifyStripeWebhookRequest,
+  StripeWebhookError,
+} from "@/lib/server/stripe/verify-webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,94 +43,6 @@ function getServiceSupabase() {
     },
   });
 }
-
-async function grantAiCredits(
-  event: Stripe.Event,
-  session: Stripe.Checkout.Session,
-) {
-  if (session.payment_status !== "paid") {
-    return {
-      ignored: true,
-      reason: "checkout_not_paid",
-    };
-  }
-
-  if (session.metadata?.type !== "ai_credits") {
-    return {
-      ignored: true,
-      reason: "not_ai_credits",
-    };
-  }
-
-  const userId = session.metadata.user_id;
-  const packId = session.metadata.pack_id;
-
-  if (!userId || !packId) {
-    throw new Error("Invalid AI credits checkout metadata");
-  }
-
-  const supabase = getServiceSupabase();
-
-  const { error: eventInsertError } = await supabase
-    .from("stripe_processed_events")
-    .insert({
-      event_id: event.id,
-      event_type: event.type,
-      session_id: session.id,
-    });
-
-  if (eventInsertError) {
-    if (eventInsertError.code === "23505") {
-      return {
-        ignored: true,
-        reason: "already_processed",
-      };
-    }
-
-    throw new Error(eventInsertError.message);
-  }
-
-  const { data: pack, error: packError } = await supabase
-    .from("ai_credit_packs")
-    .select("id,credits,active")
-    .eq("id", packId)
-    .eq("active", true)
-    .maybeSingle();
-
-  if (packError) {
-    throw new Error(packError.message);
-  }
-
-  if (!pack) {
-    throw new Error("Invalid or inactive AI credits pack");
-  }
-
-  const creditsToAdd = Number(pack.credits ?? 0);
-
-  if (!Number.isFinite(creditsToAdd) || creditsToAdd <= 0) {
-    throw new Error("Invalid AI credits pack amount");
-  }
-
-  const { data: newBalance, error: rpcError } = await supabase.rpc(
-    "increment_ai_credits",
-    {
-      p_user_id: userId,
-      p_amount: creditsToAdd,
-    },
-  );
-
-  if (rpcError) {
-    throw new Error(rpcError.message);
-  }
-
-  return {
-    success: true,
-    credits: creditsToAdd,
-    balance: Number(newBalance ?? 0),
-    packId,
-  };
-}
-
 
 function moneyToCents(value: unknown): number | null {
   const numeric = typeof value === "number" ? value : Number(value);
@@ -416,33 +336,26 @@ async function processRyfioOrder(
 }
 
 export async function POST(req: Request) {
-  if (!webhookSecret) {
-    return NextResponse.json(
-      { error: "Missing STRIPE_WEBHOOK_SECRET" },
-      { status: 500 },
-    );
-  }
-
-  const stripe = getStripeClient();
-  const body = await req.text();
-  const headerStore = await headers();
-  const signature = headerStore.get("stripe-signature");
-
-  if (!signature) {
-    return NextResponse.json(
-      { error: "Missing stripe signature" },
-      { status: 400 },
-    );
+  let stripe: Stripe;
+  try {
+    stripe = getStripeClient();
+  } catch {
+    return NextResponse.json({ error: "WEBHOOK_CONFIG_INVALID" }, { status: 500 });
   }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-  } catch {
+    event = await verifyStripeWebhookRequest({
+      request: req,
+      webhookSecret,
+      stripe,
+    });
+  } catch (error) {
+    const webhookError = error instanceof StripeWebhookError ? error : null;
     return NextResponse.json(
-      { error: "Invalid webhook signature" },
-      { status: 400 },
+      { error: webhookError?.code ?? "WEBHOOK_VERIFICATION_FAILED" },
+      { status: webhookError?.status ?? 400 },
     );
   }
 
@@ -450,9 +363,14 @@ export async function POST(req: Request) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session;
 
-      // AI Credits branch intentionally kept first and unchanged.
+      // AI Credits branch is processed by the single canonical implementation.
       if (session.metadata?.type === "ai_credits") {
-        const result = await grantAiCredits(event, session);
+        const supabase = getServiceSupabase();
+        const result = await processAiCreditCheckoutCompleted({
+          event,
+          eventSession: session,
+          dependencies: createAiCreditPurchaseDependencies({ stripe, supabase }),
+        });
 
         return NextResponse.json({
           received: true,
@@ -475,20 +393,19 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unknown webhook handler error";
+    const code =
+      error instanceof AiCreditPurchaseError
+        ? error.code
+        : "WEBHOOK_HANDLER_FAILED";
 
     console.error("[stripe:webhook:error]", {
       eventId: event.id,
       eventType: event.type,
-      message,
+      code,
     });
 
     return NextResponse.json(
-      {
-        error: "Webhook handler failed",
-        details: message,
-      },
+      { error: "Webhook handler failed" },
       { status: 500 },
     );
   }

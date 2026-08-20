@@ -142,9 +142,9 @@ export async function POST(req: Request) {
       );
     }
 
-    if (!pack.stripe_price_id) {
+    if (!pack.stripe_price_id || !pack.stripe_price_id.startsWith("price_")) {
       return NextResponse.json(
-        { success: false, error: "Missing stripe_price_id for this credit pack" },
+        { success: false, error: "Invalid stripe_price_id for this credit pack" },
         { status: 500 },
       );
     }
@@ -163,7 +163,6 @@ export async function POST(req: Request) {
         type: "ai_credits",
         user_id: user.id,
         pack_id: pack.id,
-        credits: String(credits),
         source,
       },
       line_items: [

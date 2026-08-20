@@ -162,7 +162,6 @@ export async function POST(req: Request) {
         type: "ai_credits",
         user_id: user.id,
         pack_id: pack.id,
-        credits: String(credits),
         source,
       },
       line_items: [
