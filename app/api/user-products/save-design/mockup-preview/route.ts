@@ -1,9 +1,22 @@
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 import { getAuthenticatedSupabase } from "../auth";
 import { uploadBufferToR2 } from "../r2";
+import { getDurableRateLimiter } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const MAX_BODY_BYTES = 20 * 1024 * 1024;
+const MAX_PREVIEW_BYTES = 8 * 1024 * 1024;
+const MAX_PREVIEW_DIMENSION = 6_000;
+const MAX_PREVIEW_PIXELS = 25_000_000;
+const ALLOWED_PREVIEW_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const previewUploadRateLimiter = getDurableRateLimiter({
+  namespace: "mockup-preview-upload",
+  limit: 12,
+  window: "1 m",
+});
 
 function previewKey(userProductId: string, side: "front" | "back") {
   return `user-products/${userProductId}/mockups/${side}.webp`;
@@ -51,10 +64,52 @@ function isFile(value: unknown): value is File {
   return typeof File !== "undefined" && value instanceof File;
 }
 
-async function fileToBuffer(file: File | null) {
+function normalizeMimeType(value: string) {
+  return value.trim().toLowerCase().replace("image/jpg", "image/jpeg");
+}
+
+function detectedMimeType(format: string) {
+  return `image/${format === "jpeg" ? "jpeg" : format}`;
+}
+
+async function fileToPreviewBuffer(file: File | null) {
   if (!file) return null;
+
+  const declaredType = normalizeMimeType(file.type);
+  if (!ALLOWED_PREVIEW_TYPES.has(declaredType)) {
+    throw new Error("Unsupported preview image type");
+  }
+
+  if (!file.size || file.size > MAX_PREVIEW_BYTES) {
+    throw new Error("Preview image exceeds the 8 MB limit");
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
-  return buffer.length ? buffer : null;
+  if (!buffer.length || buffer.length > MAX_PREVIEW_BYTES) {
+    throw new Error("Invalid preview image size");
+  }
+
+  const image = sharp(buffer, { limitInputPixels: MAX_PREVIEW_PIXELS });
+  const metadata = await image.metadata();
+
+  if (!metadata.format || !metadata.width || !metadata.height) {
+    throw new Error("Invalid preview image content");
+  }
+
+  const actualType = detectedMimeType(metadata.format);
+  if (!ALLOWED_PREVIEW_TYPES.has(actualType) || actualType !== declaredType) {
+    throw new Error("Preview image type does not match its content");
+  }
+
+  if (
+    metadata.width > MAX_PREVIEW_DIMENSION ||
+    metadata.height > MAX_PREVIEW_DIMENSION ||
+    metadata.width * metadata.height > MAX_PREVIEW_PIXELS
+  ) {
+    throw new Error("Preview image dimensions are too large");
+  }
+
+  return image.webp({ quality: 92, effort: 4 }).toBuffer();
 }
 
 export async function POST(req: Request) {
@@ -64,6 +119,26 @@ export async function POST(req: Request) {
 
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    try {
+      const rateLimit = await previewUploadRateLimiter.limit(user.id);
+      if (!rateLimit.success) {
+        return NextResponse.json({ error: "Too many preview uploads" }, { status: 429 });
+      }
+    } catch (error) {
+      console.error("[mockup-preview:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json(
+        { error: "Preview upload service is temporarily unavailable" },
+        { status: 503 },
+      );
+    }
+
+    const contentLength = Number(req.headers.get("content-length") ?? 0);
+    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
     }
 
     const formData = await req.formData();
@@ -116,8 +191,20 @@ export async function POST(req: Request) {
       backSize: backFile?.size ?? null,
     });
 
-    const frontBuffer = await fileToBuffer(frontFile);
-    const backBuffer = await fileToBuffer(backFile);
+    let frontBuffer: Buffer | null;
+    let backBuffer: Buffer | null;
+
+    try {
+      [frontBuffer, backBuffer] = await Promise.all([
+        fileToPreviewBuffer(frontFile),
+        fileToPreviewBuffer(backFile),
+      ]);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid preview image" },
+        { status: 413 },
+      );
+    }
 
     let frontUpload: { url: string | null; key?: string | null } | null = null;
     let backUpload: { url: string | null; key?: string | null } | null = null;
@@ -126,7 +213,7 @@ export async function POST(req: Request) {
       try {
         frontUpload = await uploadBufferToR2({
           buffer: frontBuffer,
-          contentType: frontFile?.type || "image/webp",
+          contentType: "image/webp",
           key: previewKey(userProductId, "front"),
         });
         console.info("[mockup-preview] R2 upload completed", {
@@ -144,7 +231,7 @@ export async function POST(req: Request) {
       try {
         backUpload = await uploadBufferToR2({
           buffer: backBuffer,
-          contentType: backFile?.type || "image/webp",
+          contentType: "image/webp",
           key: previewKey(userProductId, "back"),
         });
         console.info("[mockup-preview] R2 upload completed", {
