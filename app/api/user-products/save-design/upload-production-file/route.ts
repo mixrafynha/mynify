@@ -9,6 +9,11 @@ import {
 } from "../image-utils";
 import { uploadBufferToR2 } from "../r2";
 import { getDurableRateLimiter } from "@/lib/server/rate-limit";
+import {
+  parseBoundedJsonBody,
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,12 +111,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const contentLength = Number(req.headers.get("content-length") ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
-    }
-
-    const body = await req.json();
+    const rawBody = await readBoundedRequestBody(req, MAX_BODY_BYTES);
+    const body = parseBoundedJsonBody<Record<string, any>>(rawBody);
     const dataUrl = body.dataUrl;
 
     if (!isDataImage(dataUrl)) {
@@ -162,6 +163,9 @@ export async function POST(req: Request) {
       sizeBytes: byteLength,
     });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
     console.error("UPLOAD_PRODUCTION_FILE_ERROR", error);
     return NextResponse.json({ error: "Failed to upload production file" }, { status: 500 });
   }

@@ -4,6 +4,11 @@ import { getAuthenticatedSupabase } from "../auth";
 import { uploadBufferToR2 } from "../r2";
 import { getDurableRateLimiter } from "@/lib/server/rate-limit";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import {
+  parseBoundedFormDataBody,
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -138,12 +143,8 @@ export async function POST(req: Request) {
       );
     }
 
-    const contentLength = Number(req.headers.get("content-length") ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
-    }
-
-    const formData = await req.formData();
+    const rawBody = await readBoundedRequestBody(req, MAX_BODY_BYTES);
+    const formData = await parseBoundedFormDataBody(req, rawBody);
     const userProductId = String(formData.get("userProductId") || "").trim();
 
     if (!userProductId) {
@@ -373,6 +374,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json(responsePayload);
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
     console.error("[mockup-preview] failed", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to save preview mockups" },

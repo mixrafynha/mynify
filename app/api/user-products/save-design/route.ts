@@ -14,6 +14,11 @@ import {
 } from "./design-sides";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 import { createSupabaseAdmin } from "@/lib/supabase-admin";
+import {
+  parseBoundedJsonBody,
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -121,11 +126,6 @@ export async function POST(req: Request) {
 
     const serviceSupabase = createSupabaseAdmin();
 
-    const contentLength = Number(req.headers.get("content-length") ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
-    }
-
     try {
       const rateLimit = await saveDesignRateLimiter.limit(`${user.id}:${getTrustedRequestIp(req)}`);
       if (!rateLimit.success) {
@@ -138,8 +138,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Save design service is temporarily unavailable" }, { status: 503 });
     }
 
+    const rawBody = await readBoundedRequestBody(req, MAX_BODY_BYTES);
     saveContext.step = "payload";
-    const body = await req.json();
+    const body = parseBoundedJsonBody<Record<string, any>>(rawBody);
     const receivedDesignData = body?.design_data || body?.designData || {};
     const receivedSides = body?.sides || receivedDesignData?.sides || {};
     const receivedFront = receivedSides?.front || null;
@@ -497,6 +498,9 @@ export async function POST(req: Request) {
       redirectTo: "/cart",
     });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
     console.error("[save-design] failed", {
       step: saveContext.step,
       userProductId: saveContext.userProductId,

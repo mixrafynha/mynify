@@ -5,6 +5,11 @@ import sharp from "sharp";
 import { dataUrlToBuffer } from "../save-design/image-utils";
 import { uploadBufferToR2 } from "../save-design/r2";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
+import {
+  parseBoundedJsonBody,
+  readBoundedRequestBody,
+  RequestBodyTooLargeError,
+} from "@/lib/server/bounded-request-body";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -131,12 +136,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Upload service is temporarily unavailable" }, { status: 503 });
     }
 
-    const contentLength = Number(req.headers.get("content-length") ?? 0);
-    if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
-    }
-
-    const body = await req.json();
+    const rawBody = await readBoundedRequestBody(req, MAX_BODY_BYTES);
+    const body = parseBoundedJsonBody<Record<string, any>>(rawBody);
     const parsed = dataUrlToBuffer(body?.dataUrl);
     const normalized = await normalizeUploadBuffer(parsed);
 
@@ -150,6 +151,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ url: uploaded.url, key: uploaded.key });
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError) {
+      return NextResponse.json({ error: "Request body too large" }, { status: 413 });
+    }
     console.error("DESIGN_ELEMENT_IMAGE_UPLOAD_ERROR", error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Unable to upload design image" },
