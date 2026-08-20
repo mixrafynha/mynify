@@ -130,19 +130,14 @@ export async function GET(req: Request) {
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .upsert(
-      {
-        id: user.id,
-        name: safeName(user.email),
-        avatar_url:
-          typeof user.user_metadata?.avatar_url === "string"
-            ? user.user_metadata.avatar_url.slice(0, 500)
-            : null,
-      },
-      {
-        onConflict: "id",
-      }
-    )
+    .update({
+      name: safeName(user.email),
+      avatar_url:
+        typeof user.user_metadata?.avatar_url === "string"
+          ? user.user_metadata.avatar_url.slice(0, 500)
+          : null,
+    })
+    .eq("id", user.id)
     .select("role")
     .single();
 

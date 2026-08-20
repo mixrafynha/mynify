@@ -108,24 +108,13 @@ export async function PUT(req: Request) {
       return Response.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const { data: existing } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle();
-
     const { data, error } = await supabase
       .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          name,
-          username,
-          role: existing?.role ?? "user",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      )
+      .update({
+        name,
+        username,
+      })
+      .eq("id", user.id)
       .select("name, username, role")
       .single();
 
@@ -197,14 +186,19 @@ export async function PATCH(req: Request) {
         );
       }
 
-      await supabase.from("profiles").upsert(
-        {
-          id: user.id,
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({
           email_change_requested_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
+        })
+        .eq("id", user.id);
+
+      if (profileUpdateError) {
+        return Response.json(
+          { error: profileUpdateError.message },
+          { status: 500 }
+        );
+      }
 
       return Response.json({
         success: true,
