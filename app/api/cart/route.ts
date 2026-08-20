@@ -41,6 +41,8 @@ type CartItem = {
 type UserProductAssets = {
   user_product_id: string | null;
   base_product_id: string | null;
+  print_files: Record<string, unknown> | null;
+  printFiles: Record<string, unknown> | null;
   mockups: Record<string, unknown> | null;
   design_data: Record<string, unknown> | null;
   designData: Record<string, unknown> | null;
@@ -247,8 +249,8 @@ export async function GET() {
     const userProductIds = mergeProductIds(cartItems.map((item) => item.user_product_id));
     const [userProductsResult, productColorsResult] = await Promise.all([
       userProductIds.length
-        ? supabase.from("user_products").select("id, base_product_id, mockups, design_data").in("id", userProductIds)
-        : Promise.resolve({ data: [] as { id: string; base_product_id: string | null; mockups: Record<string, unknown> | null; design_data: Record<string, unknown> | null; }[] | null, error: null }),
+        ? supabase.from("user_products").select("id, base_product_id, print_files, mockups, design_data").in("id", userProductIds)
+        : Promise.resolve({ data: [] as { id: string; base_product_id: string | null; print_files: Record<string, unknown> | null; mockups: Record<string, unknown> | null; design_data: Record<string, unknown> | null; }[] | null, error: null }),
       productIds.length
         ? supabase
             .from("product_colors")
@@ -272,6 +274,8 @@ export async function GET() {
       userProductAssetsById.set(row.id, {
         user_product_id: row.id,
         base_product_id: row.base_product_id,
+        print_files: row.print_files,
+        printFiles: row.print_files,
         mockups: parseMockups(row.mockups),
         design_data: row.design_data,
         designData: row.design_data,
@@ -320,6 +324,8 @@ export async function GET() {
           ({
             user_product_id: null,
             base_product_id: null,
+            print_files: null,
+            printFiles: null,
             mockups: null,
             design_data: null,
             designData: null,
@@ -327,6 +333,8 @@ export async function GET() {
         : ({
             user_product_id: null,
             base_product_id: null,
+            print_files: null,
+            printFiles: null,
             mockups: null,
             design_data: null,
             designData: null,
