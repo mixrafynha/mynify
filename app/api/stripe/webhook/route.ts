@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
+import { randomUUID } from "node:crypto";
 import {
   createAiCreditPurchaseDependencies,
   processAiCreditCheckoutCompleted,
@@ -10,6 +11,11 @@ import {
   verifyStripeWebhookRequest,
   StripeWebhookError,
 } from "@/lib/server/stripe/verify-webhook";
+import {
+  ensureGelatoDraftConverted,
+  runRyfioOrderWorkflow,
+  validateRyfioOrderRelations,
+} from "@/lib/server/stripe/ryfio-order-processing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,72 +55,6 @@ function moneyToCents(value: unknown): number | null {
   if (!Number.isFinite(numeric) || numeric < 0) return null;
   const cents = Math.round((numeric + Number.EPSILON) * 100);
   return Number.isSafeInteger(cents) ? cents : null;
-}
-
-async function ensureGelatoDraftConverted(gelatoDraftOrderId: string) {
-  const apiKey = process.env.GELATO_API_KEY?.trim();
-  if (!apiKey) throw new Error("Missing GELATO_API_KEY");
-
-  const url = `https://order.gelatoapis.com/v4/orders/${encodeURIComponent(gelatoDraftOrderId)}`;
-
-  const patchResponse = await fetch(url, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-KEY": apiKey,
-    },
-    body: JSON.stringify({ orderType: "order" }),
-    cache: "no-store",
-  });
-
-  const patchText = await patchResponse.text();
-  let patchBody: Record<string, unknown> | null = null;
-
-  try {
-    patchBody = patchText ? (JSON.parse(patchText) as Record<string, unknown>) : null;
-  } catch {
-    patchBody = null;
-  }
-
-  if (patchResponse.ok) {
-    return {
-      alreadyOrdered: false,
-      body: patchBody,
-      status: patchResponse.status,
-    };
-  }
-
-  // Idempotency/retry safety: if a previous webhook already converted the
-  // Gelato draft but failed later while updating Ryfio, accept the existing
-  // regular order instead of trying to create a second one.
-  const getResponse = await fetch(url, {
-    method: "GET",
-    headers: {
-      "X-API-KEY": apiKey,
-    },
-    cache: "no-store",
-  });
-
-  const getText = await getResponse.text();
-  let getBody: Record<string, unknown> | null = null;
-
-  try {
-    getBody = getText ? (JSON.parse(getText) as Record<string, unknown>) : null;
-  } catch {
-    getBody = null;
-  }
-
-  if (getResponse.ok && getBody?.orderType === "order") {
-    return {
-      alreadyOrdered: true,
-      body: getBody,
-      status: getResponse.status,
-    };
-  }
-
-  throw new Error(
-    `Gelato draft conversion failed (${patchResponse.status}): ${patchText.slice(0, 500)}`,
-  );
 }
 
 async function processRyfioOrder(
@@ -164,21 +104,10 @@ async function processRyfioOrder(
   if (orderError) throw new Error(orderError.message);
   if (!order) throw new Error("Ryfio order not found");
 
-  if (
-    order.payment_status === "paid" &&
-    order.status !== "pending"
-  ) {
-    return {
-      ignored: true,
-      reason: "already_processed",
-      orderId,
-    };
-  }
-
   const { data: draft, error: draftError } = await supabase
     .from("checkout_drafts")
     .select(
-      "id,user_id,gelato_draft_order_id,cart_item_ids,subtotal,shipping_amount,total,currency,status",
+      "id,user_id,gelato_draft_order_id,order_reference_id,cart_item_ids,subtotal,shipping_amount,total,currency,status",
     )
     .eq("id", checkoutDraftId)
     .eq("user_id", userId)
@@ -186,6 +115,19 @@ async function processRyfioOrder(
 
   if (draftError) throw new Error(draftError.message);
   if (!draft) throw new Error("Checkout draft not found");
+
+  const { gelatoDraftOrderId } = validateRyfioOrderRelations({
+    expectedOrderId: orderId,
+    expectedUserId: userId,
+    expectedCheckoutDraftId: checkoutDraftId,
+    expectedStripeSessionId: session.id,
+    metadataGelatoDraftOrderId:
+      typeof session.metadata?.gelato_draft_order_id === "string"
+        ? session.metadata.gelato_draft_order_id
+        : null,
+    order,
+    draft,
+  });
 
   const draftCurrency = String(draft.currency ?? "").toUpperCase();
   if (draftCurrency !== "EUR") {
@@ -205,134 +147,159 @@ async function processRyfioOrder(
     );
   }
 
-  const gelatoDraftOrderId =
-    String(
-      order.gelato_draft_order_id ??
-        draft.gelato_draft_order_id ??
-        session.metadata?.gelato_draft_order_id ??
-        "",
-    ).trim();
+  const cartItemIds = Array.isArray(draft.cart_item_ids)
+    ? draft.cart_item_ids.filter(
+        (value): value is string =>
+          typeof value === "string" && value.length > 0,
+      )
+    : [];
+  const processingToken = randomUUID();
+  const gelatoApiKey = process.env.GELATO_API_KEY?.trim();
 
-  if (!gelatoDraftOrderId) {
-    throw new Error("Missing Gelato draft order id");
-  }
+  if (!gelatoApiKey) throw new Error("Missing GELATO_API_KEY");
 
-  // Shared event table remains exactly the same mechanism used by AI Credits.
-  // For Ryfio orders we remove this claim again on failure so Stripe retries
-  // can safely resume.
-  const { error: eventInsertError } = await supabase
-    .from("stripe_processed_events")
-    .insert({
-      event_id: event.id,
-      event_type: event.type,
-      session_id: session.id,
-    });
+  const workflowResult = await runRyfioOrderWorkflow({
+    claim: async () => {
+      const { data, error } = await supabase.rpc("claim_ryfio_order_webhook", {
+        p_event_id: event.id,
+        p_event_type: event.type,
+        p_session_id: session.id,
+        p_order_id: orderId,
+        p_checkout_draft_id: checkoutDraftId,
+        p_processing_token: processingToken,
+      });
 
-  if (eventInsertError) {
-    if (eventInsertError.code === "23505") {
-      return {
-        ignored: true,
-        reason: "already_processed",
+      if (error) throw new Error(error.message);
+      if (data !== "acquired" && data !== "busy" && data !== "completed") {
+        throw new Error("Invalid Ryfio order webhook claim result");
+      }
+
+      return data;
+    },
+    convertGelatoDraft: async () => {
+      console.info("[stripe:webhook:ryfio-order:gelato-convert-start]", {
         orderId,
-      };
-    }
-    throw new Error(eventInsertError.message);
-  }
-
-  let completed = false;
-
-  try {
-    console.info("[stripe:webhook:ryfio-order:gelato-convert-start]", {
-      orderId,
-      checkoutDraftId,
-      gelatoDraftOrderId,
-      stripeSessionId: session.id,
-      amountTotal: paidTotalCents,
-      currency: "EUR",
-    });
-
-    const gelatoResult = await ensureGelatoDraftConverted(gelatoDraftOrderId);
-    const gelatoBody = gelatoResult.body ?? {};
-
-    const gelatoStatus =
-      typeof gelatoBody.fulfillmentStatus === "string"
-        ? gelatoBody.fulfillmentStatus
-        : typeof gelatoBody.orderType === "string"
-          ? gelatoBody.orderType
-          : "order";
-
-    const { error: updateOrderError } = await supabase
-      .from("orders")
-      .update({
-        status: "processing",
-        payment_status: "paid",
-        gelato_status: gelatoStatus,
-        stripe_session_id: session.id,
-        checkout_draft_id: checkoutDraftId,
-        gelato_draft_order_id: gelatoDraftOrderId,
-        subtotal: Number(draft.subtotal ?? 0),
-        shipping_amount: Number(draft.shipping_amount ?? 0),
-        total: Number(draft.total ?? 0),
+        checkoutDraftId,
+        gelatoDraftOrderId,
+        stripeSessionId: session.id,
+        amountTotal: paidTotalCents,
         currency: "EUR",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", orderId)
-      .eq("user_id", userId);
+      });
 
-    if (updateOrderError) throw new Error(updateOrderError.message);
+      return ensureGelatoDraftConverted({
+        gelatoDraftOrderId,
+        expectedOrderReferenceId:
+          typeof draft.order_reference_id === "string" &&
+          draft.order_reference_id.trim()
+            ? draft.order_reference_id.trim()
+            : null,
+        apiKey: gelatoApiKey,
+      });
+    },
+    updateOrder: async (gelatoResult) => {
+      const gelatoBody = gelatoResult.body ?? {};
+      const gelatoStatus =
+        typeof gelatoBody.fulfillmentStatus === "string"
+          ? gelatoBody.fulfillmentStatus
+          : typeof gelatoBody.orderType === "string"
+            ? gelatoBody.orderType
+            : "order";
 
-    const { error: draftUpdateError } = await supabase
-      .from("checkout_drafts")
-      .update({
-        status: "ordered",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", checkoutDraftId)
-      .eq("user_id", userId);
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: "processing",
+          payment_status: "paid",
+          gelato_status: gelatoStatus,
+          stripe_session_id: session.id,
+          checkout_draft_id: checkoutDraftId,
+          gelato_draft_order_id: gelatoDraftOrderId,
+          subtotal: Number(draft.subtotal ?? 0),
+          shipping_amount: Number(draft.shipping_amount ?? 0),
+          total: Number(draft.total ?? 0),
+          currency: "EUR",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", orderId)
+        .eq("user_id", userId);
 
-    if (draftUpdateError) throw new Error(draftUpdateError.message);
+      if (error) throw new Error(error.message);
+    },
+    updateDraft: async () => {
+      const { error } = await supabase
+        .from("checkout_drafts")
+        .update({
+          status: "ordered",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", checkoutDraftId)
+        .eq("user_id", userId);
 
-    const cartItemIds = Array.isArray(draft.cart_item_ids)
-      ? draft.cart_item_ids.filter(
-          (value): value is string => typeof value === "string" && value.length > 0,
-        )
-      : [];
+      if (error) throw new Error(error.message);
+    },
+    clearPurchasedCartItems: async () => {
+      if (!cartItemIds.length) return;
 
-    if (cartItemIds.length) {
-      const { error: clearCartError } = await supabase
+      const { error } = await supabase
         .from("cart_items")
         .delete()
         .eq("user_id", userId)
         .in("id", cartItemIds);
 
-      if (clearCartError) throw new Error(clearCartError.message);
-    }
+      if (error) throw new Error(error.message);
+    },
+    completeClaim: async () => {
+      const { data, error } = await supabase.rpc(
+        "complete_ryfio_order_webhook",
+        {
+          p_session_id: session.id,
+          p_processing_token: processingToken,
+        },
+      );
+      if (error) throw new Error(error.message);
+      return data === true;
+    },
+    releaseClaim: async () => {
+      const { error } = await supabase.rpc("release_ryfio_order_webhook", {
+        p_session_id: session.id,
+        p_processing_token: processingToken,
+      });
+      if (error) {
+        console.error("[stripe:webhook:ryfio-order:claim-release-failed]", {
+          orderId,
+          checkoutDraftId,
+          stripeSessionId: session.id,
+          code: error.code,
+        });
+      }
+    },
+  });
 
-    completed = true;
-
-    console.info("[stripe:webhook:ryfio-order:success]", {
-      orderId,
-      checkoutDraftId,
-      gelatoDraftOrderId,
-      gelatoAlreadyOrdered: gelatoResult.alreadyOrdered,
-      clearedCartItems: cartItemIds.length,
-    });
-
+  if (workflowResult.alreadyCompleted) {
     return {
-      success: true,
+      ignored: true,
+      reason: "already_processed",
       orderId,
-      checkoutDraftId,
-      gelatoDraftOrderId,
-      gelatoAlreadyOrdered: gelatoResult.alreadyOrdered,
     };
-  } finally {
-    if (!completed) {
-      await supabase
-        .from("stripe_processed_events")
-        .delete()
-        .eq("event_id", event.id);
-    }
   }
+
+  const gelatoResult = workflowResult.gelatoResult;
+
+  console.info("[stripe:webhook:ryfio-order:success]", {
+    orderId,
+    checkoutDraftId,
+    gelatoDraftOrderId,
+    gelatoAlreadyOrdered: gelatoResult?.alreadyOrdered ?? true,
+    clearedCartItems: cartItemIds.length,
+  });
+
+  return {
+    success: true,
+    orderId,
+    checkoutDraftId,
+    gelatoDraftOrderId,
+    gelatoAlreadyOrdered: gelatoResult?.alreadyOrdered ?? true,
+  };
 }
 
 export async function POST(req: Request) {
@@ -340,7 +307,10 @@ export async function POST(req: Request) {
   try {
     stripe = getStripeClient();
   } catch {
-    return NextResponse.json({ error: "WEBHOOK_CONFIG_INVALID" }, { status: 500 });
+    return NextResponse.json(
+      { error: "WEBHOOK_CONFIG_INVALID" },
+      { status: 500 },
+    );
   }
 
   let event: Stripe.Event;
@@ -369,7 +339,10 @@ export async function POST(req: Request) {
         const result = await processAiCreditCheckoutCompleted({
           event,
           eventSession: session,
-          dependencies: createAiCreditPurchaseDependencies({ stripe, supabase }),
+          dependencies: createAiCreditPurchaseDependencies({
+            stripe,
+            supabase,
+          }),
         });
 
         return NextResponse.json({
