@@ -118,8 +118,9 @@ export async function GET() {
     }
 
     await seedStarterImagesOnce(user);
+    const serviceSupabase = getServiceSupabase();
 
-    const { data, error } = await supabase
+    const { data, error } = await serviceSupabase
       .from(TABLE)
       .select(
         "id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at",
@@ -180,6 +181,8 @@ export async function POST(req: Request) {
       return json({ success: false, error: "Unauthorized" }, 401);
     }
 
+    const serviceSupabase = getServiceSupabase();
+
     const body = await req.json().catch(() => ({}));
     const rowId = String(body?.id || body?.rowId || body?.row_id || "").trim();
 
@@ -187,7 +190,7 @@ export async function POST(req: Request) {
       return json({ success: false, error: "Missing image row id" }, 400);
     }
 
-    const { count, error: countError } = await supabase
+    const { count, error: countError } = await serviceSupabase
       .from(TABLE)
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
@@ -209,7 +212,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: existingRow, error: findError } = await supabase
+    const { data: existingRow, error: findError } = await serviceSupabase
       .from(TABLE)
       .select("id,is_saved")
       .eq("id", rowId)
@@ -233,7 +236,7 @@ export async function POST(req: Request) {
       return json({ success: false, error: "Saved already" }, 200);
     }
 
-    const { data: savedImage, error: saveError } = await supabase
+    const { data: savedImage, error: saveError } = await serviceSupabase
       .from(TABLE)
       .update({
         is_saved: true,
@@ -281,6 +284,8 @@ export async function DELETE(req: Request) {
       return json({ success: false, error: "Unauthorized" }, 401);
     }
 
+    const serviceSupabase = getServiceSupabase();
+
     const body = await req.json().catch(() => ({}));
     const id = String(body?.id || "").trim();
 
@@ -288,7 +293,7 @@ export async function DELETE(req: Request) {
       return json({ success: false, error: "Missing image id" }, 400);
     }
 
-    const { data: image, error: findError } = await supabase
+    const { data: image, error: findError } = await serviceSupabase
       .from(TABLE)
       .select("id,user_id")
       .eq("id", id)
@@ -303,7 +308,7 @@ export async function DELETE(req: Request) {
       return json({ success: false, error: "Image not found" }, 404);
     }
 
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await serviceSupabase
       .from(TABLE)
       .delete()
       .eq("id", id)
@@ -322,7 +327,7 @@ export async function DELETE(req: Request) {
       );
     }
 
-    const { count } = await supabase
+    const { count } = await serviceSupabase
       .from(TABLE)
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)

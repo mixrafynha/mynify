@@ -61,11 +61,15 @@ export async function listPendingGenerations(serviceSupabase: ServiceSupabase, u
   return (data || []) as GenerationRow[];
 }
 
-export async function listStaleReconciliationGenerations(serviceSupabase: ServiceSupabase) {
+export async function listStaleReconciliationGenerations(
+  serviceSupabase: ServiceSupabase,
+  userId: string,
+) {
   const cutoff = new Date(Date.now() - RECONCILE_MIN_INTERVAL_MS).toISOString();
   const { data, error } = await serviceSupabase
     .from("user_generated_images")
     .select("*")
+    .eq("user_id", userId)
     .in("status", ["queued", "starting", "processing", "submitted", "replicate_prediction_created", "finalizing"])
     .not("prediction_id", "is", null)
     .lt("updated_at", cutoff)

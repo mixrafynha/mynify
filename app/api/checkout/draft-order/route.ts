@@ -7,9 +7,16 @@ import { buildGelatoCheckoutQuotePayload, resolveCheckoutQuote } from "@/lib/gel
 import { isInvalidGelatoShippingMethodUid, normalizeShippingMethods } from "@/lib/gelato/shipping-methods";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const checkoutDraftRateLimiter = getDurableRateLimiter({
+  namespace: "checkout-draft-order",
+  limit: 12,
+  window: "1 m",
+});
 
 type DraftBody = {
   cartItemIds?: string[];
@@ -828,6 +835,25 @@ export async function POST(req: Request) {
       userIdSuffix: authData.user?.id ? authData.user.id.slice(-8) : null,
     });
     if (!authData.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    try {
+      const rateLimit = await checkoutDraftRateLimiter.limit(
+        `${authData.user.id}:${getTrustedRequestIp(req)}`,
+      );
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          { success: false, code: "RATE_LIMITED", message: "Too many checkout requests." },
+          { status: 429 },
+        );
+      }
+    } catch (error) {
+      console.error("[checkout:draft:rate-limit-error]", describeUnknownError(error));
+      return NextResponse.json(
+        { success: false, code: "CHECKOUT_UNAVAILABLE", message: "Checkout is temporarily unavailable." },
+        { status: 503 },
+      );
+    }
+
     const draftSupabase = createSupabaseAdmin();
 
     if (!cartItemIds.length) return NextResponse.json({ code: "MISSING_CART_ITEMS", success: false }, { status: 400 });
@@ -966,6 +992,13 @@ export async function POST(req: Request) {
     const availabilityByVariantId = new Map<string, Promise<Awaited<ReturnType<typeof checkGelatoRegionalAvailability>>>>();
 
     for (const cartRow of cartRows ?? []) {
+      const quantity = Number(cartRow.quantity);
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100) {
+        return conflict("INVALID_QUANTITY", "Cart quantity must be between 1 and 100.", {
+          cartItemId: cartRow.id,
+        });
+      }
+
       const userProductId = cartRow.user_product_id;
       const userProduct =
         typeof userProductId === "string"
@@ -1176,7 +1209,6 @@ export async function POST(req: Request) {
         });
       }
 
-      const quantity = Math.max(1, Number(cartRow.quantity) || 1);
       const containsMockupPath = printFilesFinal.some((file) => file.url.includes("/mockups/"));
       if (containsMockupPath) {
         return conflict("PRINT_FILES_NOT_READY", "Print files are not ready for this cart item.", {
@@ -1287,13 +1319,19 @@ export async function POST(req: Request) {
     timings.quotePreparationMs += elapsedSince(quotePreparationStartedAt);
 
     const safeQuotePayload = {
-      ...quotePayload,
-      shippingAddress: quotePayload.recipient
+      order: {
+        currencyIsoCode: quotePayload.order.currencyIsoCode ?? null,
+        orderReferenceIdPresent: Boolean(quotePayload.order.orderReferenceId),
+        customerReferenceIdPresent: Boolean(quotePayload.order.customerReferenceId),
+      },
+      recipient: quotePayload.recipient
         ? {
-            country: quotePayload.recipient.countryIsoCode ?? null,
+            countryIsoCode: quotePayload.recipient.countryIsoCode ?? null,
             postCodePresent: Boolean(quotePayload.recipient.postcode),
             cityPresent: Boolean(quotePayload.recipient.city),
             addressLine1Present: Boolean(quotePayload.recipient.addressLine1),
+            emailPresent: Boolean(quotePayload.recipient.email),
+            phonePresent: Boolean(quotePayload.recipient.phone),
           }
         : null,
       products: Array.isArray(quotePayload.products)

@@ -44,24 +44,22 @@ function isStrongPassword(password: string) {
   );
 }
 
-function getSafeOrigin(req: Request) {
-  const fallback =
+function getSafeOrigin() {
+  const configuredOrigin =
     process.env.NEXT_PUBLIC_SITE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     "https://www.ryfio.com";
 
-  const origin = req.headers.get("origin") || fallback;
-
   try {
-    const url = new URL(origin);
+    const url = new URL(configuredOrigin);
 
     if (url.protocol !== "https:" && url.hostname !== "localhost") {
-      return fallback;
+      return "https://www.ryfio.com";
     }
 
     return url.origin;
   } catch {
-    return fallback;
+    return "https://www.ryfio.com";
   }
 }
 
@@ -283,7 +281,7 @@ export async function POST(req: Request) {
       return json("unavailable", "Signup is temporarily unavailable.", 503);
     }
 
-    const origin = getSafeOrigin(req);
+    const origin = getSafeOrigin();
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     await writeSignupLog(req, {

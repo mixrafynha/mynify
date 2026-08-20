@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 
 const ALLOWED_PROVIDERS = ["google", "apple"] as const;
 
@@ -128,7 +129,8 @@ export async function GET(req: Request) {
 
   const provider = getProvider(user.app_metadata?.provider);
 
-  const { data: profile, error: profileError } = await supabase
+  const adminSupabase = createSupabaseAdmin();
+  const { data: profile, error: profileError } = await adminSupabase
     .from("profiles")
     .update({
       name: safeName(user.email),

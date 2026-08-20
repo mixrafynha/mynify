@@ -6,9 +6,16 @@ import { createSupabaseServer } from "@/lib/supabase-server";
 import { resolveCountryCode } from "@/lib/gelato/country-code-map";
 import { checkGelatoRegionalAvailability } from "@/lib/gelato/regional-availability";
 import { isInvalidGelatoShippingMethodUid } from "@/lib/gelato/shipping-methods";
+import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const checkoutRateLimiter = getDurableRateLimiter({
+  namespace: "checkout-final",
+  limit: 10,
+  window: "1 m",
+});
 
 function getStripeClient() {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
@@ -367,6 +374,26 @@ export async function POST(req: Request) {
           message: "Your session expired. Please sign in again.",
         },
         { status: 401 },
+      );
+    }
+
+    try {
+      const rateLimit = await checkoutRateLimiter.limit(
+        `${user.id}:${getTrustedRequestIp(req)}`,
+      );
+      if (!rateLimit.success) {
+        return NextResponse.json(
+          { success: false, code: "RATE_LIMITED", message: "Too many checkout requests." },
+          { status: 429 },
+        );
+      }
+    } catch (error) {
+      console.error("[checkout:rate-limit-error]", {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return NextResponse.json(
+        { success: false, code: "CHECKOUT_UNAVAILABLE", message: "Checkout is temporarily unavailable." },
+        { status: 503 },
       );
     }
 

@@ -1,4 +1,5 @@
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -19,11 +20,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const adminSupabase = createSupabaseAdmin();
+  const { error } = await adminSupabase
     .from("orders")
     .delete()
     .eq("id", id)
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .eq("status", "pending");
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

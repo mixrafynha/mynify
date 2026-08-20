@@ -53,6 +53,14 @@ async function getAuthUser() {
   return { supabase, user, error };
 }
 
+function getServiceSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+}
+
 export async function GET() {
   try {
     const { supabase, user, error: userError } = await getAuthUser();
@@ -91,7 +99,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
-    const { supabase, user, error: userError } = await getAuthUser();
+    const { user, error: userError } = await getAuthUser();
 
     if (userError || !user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -108,7 +116,8 @@ export async function PUT(req: Request) {
       return Response.json({ error: "Nothing to update" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const serviceSupabase = getServiceSupabase();
+    const { data, error } = await serviceSupabase
       .from("profiles")
       .update({
         name,
@@ -145,6 +154,7 @@ export async function PATCH(req: Request) {
     const body = (await req.json()) as SettingsBody;
 
     if (body.type === "email") {
+      const serviceSupabase = getServiceSupabase();
       const newEmail = cleanEmail(body.newEmail);
 
       if (!newEmail || !isEmail(newEmail)) {
@@ -158,7 +168,7 @@ export async function PATCH(req: Request) {
         );
       }
 
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile, error: profileError } = await serviceSupabase
         .from("profiles")
         .select("email_change_requested_at")
         .eq("id", user.id)
@@ -186,7 +196,7 @@ export async function PATCH(req: Request) {
         );
       }
 
-      const { error: profileUpdateError } = await supabase
+      const { error: profileUpdateError } = await serviceSupabase
         .from("profiles")
         .update({
           email_change_requested_at: new Date().toISOString(),

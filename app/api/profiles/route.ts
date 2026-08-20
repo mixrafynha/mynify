@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "@/lib/supabase-server";
+import { createSupabaseAdmin } from "@/lib/supabase-admin";
 import { getDurableRateLimiter, getTrustedRequestIp } from "@/lib/server/rate-limit";
 
 const LIMITS = {
@@ -80,6 +81,7 @@ export async function GET() {
 
 export async function PATCH(req: Request) {
   const supabase = createSupabaseServer();
+  const adminSupabase = createSupabaseAdmin();
 
   const {
     data: { user },
@@ -126,7 +128,7 @@ export async function PATCH(req: Request) {
 
   const body = JSON.parse(rawBody || "{}");
 
-  const { data: currentProfile, error: profileError } = await supabase
+  const { data: currentProfile, error: profileError } = await adminSupabase
     .from("profiles")
     .select(
       `
@@ -197,7 +199,7 @@ export async function PATCH(req: Request) {
     updateData.location_changed_at = now;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await adminSupabase
     .from("profiles")
     .update(updateData)
     .eq("id", user.id)

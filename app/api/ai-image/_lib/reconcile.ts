@@ -35,12 +35,18 @@ export async function reconcileWithReplicate(args: {
 export async function reconcileStaleGenerations(args: {
   req: Request;
   serviceSupabase: ServiceSupabase;
+  userId: string;
 }) {
-  const rows = await listStaleReconciliationGenerations(args.serviceSupabase);
+  const rows = await listStaleReconciliationGenerations(
+    args.serviceSupabase,
+    args.userId,
+  );
   const results = [];
 
   for (const row of rows) {
     if (!row.prediction_id) continue;
+    const claimed = await claimReconciliation(args.serviceSupabase, row);
+    if (!claimed) continue;
     const prediction = await getReplicatePrediction(row.prediction_id);
     console.info("[AI_REPLICATE_STATUS_FETCH]", {
       predictionId: row.prediction_id,

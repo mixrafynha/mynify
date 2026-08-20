@@ -25,6 +25,12 @@ const aiImageRateLimiter = getDurableRateLimiter({
   window: "1 m",
 });
 
+const aiImageReconcileRateLimiter = getDurableRateLimiter({
+  namespace: "ai-image-reconcile",
+  limit: 2,
+  window: "1 m",
+});
+
 async function requireUser() {
   const authSupabase = await getAuthSupabase();
   const { data: { user }, error } = await authSupabase.auth.getUser();
@@ -55,9 +61,25 @@ export async function GET(req: Request) {
     }
 
     if (reconcile) {
+      try {
+        const rateLimit = await aiImageReconcileRateLimiter.limit(
+          `${user.id}:${getTrustedRequestIp(req)}`,
+        );
+        if (!rateLimit.success) {
+          return jsonError(429, "Too many AI reconciliation requests");
+        }
+      } catch (error) {
+        console.error("[ai-image:reconcile-rate-limit-error]", safeErrorDetails(error));
+        return jsonError(503, "AI image service is temporarily unavailable");
+      }
+
       console.info("[AI_RECONCILE_START]", { mode: "stale-sweep" });
       try {
-        const results = await reconcileStaleGenerations({ req, serviceSupabase });
+        const results = await reconcileStaleGenerations({
+          req,
+          serviceSupabase,
+          userId: user.id,
+        });
         console.info("[AI_RECONCILE_SUCCEEDED]", { count: results.length });
       } catch (error) {
         console.error("[AI_GENERATION_RECONCILE_FAILED]", safeErrorDetails(error));
