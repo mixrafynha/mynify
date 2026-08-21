@@ -64,6 +64,10 @@ function rejectRateLimited() {
   return NextResponse.json({ error: "Too many availability checks" }, { status: 429 });
 }
 
+function rejectRateLimitUnavailable() {
+  return NextResponse.json({ error: "RATE_LIMIT_UNAVAILABLE" }, { status: 503 });
+}
+
 function normalizeQuantity(value: unknown) {
   const quantity = Number(value ?? 1);
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) return null;
@@ -243,6 +247,7 @@ export async function POST(req: Request) {
       console.error("[gelato-availability:rate-limit-error]", {
         message: error instanceof Error ? error.message : String(error),
       });
+      return rejectRateLimitUnavailable();
     }
 
     const rawBody = await readLimitedJson(req);

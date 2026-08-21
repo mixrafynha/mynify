@@ -30,6 +30,13 @@ function rejectRateLimited() {
   );
 }
 
+function rejectRateLimitUnavailable() {
+  return NextResponse.json(
+    { status: "unknown", variantId: null, countryCode: null, reason: "RATE_LIMIT_UNAVAILABLE" },
+    { status: 503, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
 export async function POST(req: Request) {
   const requestStartedAt = Date.now();
 
@@ -42,6 +49,7 @@ export async function POST(req: Request) {
       console.error("[product-availability:rate-limit-error]", {
         message: error instanceof Error ? error.message : String(error),
       });
+      return rejectRateLimitUnavailable();
     }
 
     const contentLength = Number(req.headers.get("content-length") ?? 0);
