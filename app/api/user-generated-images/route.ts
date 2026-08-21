@@ -9,6 +9,13 @@ export const dynamic = "force-dynamic";
 const TABLE = "user_generated_images";
 const SAVE_LIMIT = 5;
 
+type AtomicSaveResult = {
+  result: "saved" | "already_saved" | "limit_reached" | "not_found";
+  saved_count: number | string;
+  saved_limit: number;
+  image: Record<string, unknown> | null;
+};
+
 const STARTER_IMAGES = [
   {
     generation_id: "starter-chinese-dragon",
@@ -190,81 +197,59 @@ export async function POST(req: Request) {
       return json({ success: false, error: "Missing image row id" }, 400);
     }
 
-    const { count, error: countError } = await serviceSupabase
-      .from(TABLE)
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .eq("is_saved", true);
-
-    if (countError) {
-      return json({ success: false, error: "Could not check saved image limit" }, 500);
-    }
-
-    if ((count || 0) >= SAVE_LIMIT) {
-      return json(
-        {
-          success: false,
-          error: "You've reached your saved image limit. Delete one of your saved images or upgrade your plan.",
-          savedCount: count || 0,
-          savedLimit: SAVE_LIMIT,
-        },
-        409,
-      );
-    }
-
-    const { data: existingRow, error: findError } = await serviceSupabase
-      .from(TABLE)
-      .select("id,is_saved")
-      .eq("id", rowId)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (findError) {
-      return json({ success: false, error: "Could not check saved AI row" }, 500);
-    }
-
-    if (!existingRow) {
-      return json({ success: false, error: "Saved AI row not found" }, 404);
-    }
-
-    console.info("[AI_SAVE_DB_CHECK]", {
-      rowId,
-      databaseIsSaved: existingRow.is_saved === true,
-    });
-
-    if (existingRow.is_saved === true) {
-      return json({ success: false, error: "Saved already" }, 200);
-    }
-
-    const { data: savedImage, error: saveError } = await serviceSupabase
-      .from(TABLE)
-      .update({
-        is_saved: true,
-        saved_at: new Date().toISOString(),
+    const { data: saveResult, error: saveError } = await serviceSupabase
+      .rpc("save_user_generated_image_atomic", {
+        p_user_id: user.id,
+        p_image_id: rowId,
       })
-      .eq("id", rowId)
-      .eq("user_id", user.id)
-      .select("id,generation_id,prompt,image_url,storage_key,created_at,original_image_url,is_saved,saved_at")
-      .single();
+      .single<AtomicSaveResult>();
 
-    if (saveError) {
+    if (saveError || !saveResult) {
       console.error("USER_GENERATED_IMAGES_SAVE_ERROR:", saveError);
 
       return json(
         {
           success: false,
           error: "Could not save image",
-          details: saveError.message,
+          details: saveError?.message,
         },
         500,
       );
     }
 
+    const savedCount = Number(saveResult.saved_count || 0);
+    const savedLimit = Number(saveResult.saved_limit || SAVE_LIMIT);
+
+    if (saveResult.result === "limit_reached") {
+      return json(
+        {
+          success: false,
+          error: "You've reached your saved image limit. Delete one of your saved images or upgrade your plan.",
+          savedCount,
+          savedLimit,
+        },
+        409,
+      );
+    }
+
+    if (saveResult.result === "not_found") {
+      return json({ success: false, error: "Saved AI row not found" }, 404);
+    }
+
+    console.info("[AI_SAVE_DB_CHECK]", {
+      rowId,
+      databaseIsSaved: saveResult.result === "already_saved",
+    });
+
+    if (saveResult.result === "already_saved") {
+      return json({ success: false, error: "Saved already" }, 200);
+    }
+
     return json({
       success: true,
-      image: savedImage,
-      savedCount: (count || 0) + 1,
-      savedLimit: SAVE_LIMIT,
+      image: saveResult.image,
+      savedCount,
+      savedLimit,
     });
   } catch {
     return json({ success: false, error: "Could not save image" }, 500);
