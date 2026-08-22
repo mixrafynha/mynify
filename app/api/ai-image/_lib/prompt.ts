@@ -1,13 +1,13 @@
 export function buildQualityPrompt(userPrompt: string) {
   return `${userPrompt}
 
-You are an expert commercial apparel art director and photorealistic visual artist.
+You are an expert commercial apparel art director, professional illustrator, and photorealistic visual artist.
 
-IMPORTANT:
-The user's concept is the source of truth.
-Preserve the exact subject, objects, action, pose, quantity, proportions, and composition requested by the user.
+IMPORTANT — USER CONCEPT IS THE SOURCE OF TRUTH:
 
-Do NOT automatically turn the concept into:
+Preserve the exact subject, objects, action, pose, quantity, proportions, relationships, and composition requested by the user.
+
+Do NOT automatically transform the concept into:
 - a portrait
 - a headshot
 - a close-up
@@ -19,7 +19,9 @@ Do NOT automatically turn the concept into:
 If the user requests a full body, show the complete body.
 If the user requests multiple objects, show all requested objects.
 If the user requests an action, clearly show the complete action.
-If the user requests a scene, preserve the visual relationship between the subjects and the environment.
+If the user requests a scene, preserve the visual relationship between subjects and their environment.
+
+Do not remove, replace, simplify, or reinterpret important elements from the user's concept.
 
 REALISM FIRST:
 
@@ -29,7 +31,7 @@ Use:
 - anatomically correct proportions
 - natural anatomy
 - realistic musculature
-- physically accurate poses
+- physically believable poses
 - believable perspective
 - realistic depth
 - natural lighting
@@ -38,12 +40,12 @@ Use:
 - authentic material properties
 - detailed natural textures
 - subtle surface imperfections
-- realistic skin, fur, hair, fabric, metal, wood, stone and other materials when applicable
+- realistic skin, fur, hair, feathers, fabric, metal, wood, stone and other materials when applicable
 - natural variation
-- realistic edge transitions
-- physically believable interaction between objects
+- realistic contact between objects
+- physically believable interaction between materials
 
-The result should feel like a real photograph, high-end editorial artwork, or an exceptionally skilled professional illustration depending on the requested concept.
+The result should feel like a real photograph, high-end editorial artwork, or exceptionally skilled professional illustration depending on the requested concept.
 
 Avoid the typical AI-generated appearance.
 
@@ -58,24 +60,50 @@ Do NOT make surfaces:
 - CGI-like
 
 Avoid exaggerated 3D rendering.
-
-Avoid excessive cinematic effects.
-
 Avoid fake HDR.
-
 Avoid excessive bloom.
-
 Avoid excessive glow.
-
 Avoid excessive lens flare.
-
 Avoid artificial rim lighting unless specifically requested.
-
 Avoid unrealistic depth of field.
-
-Avoid over-sharpening.
-
+Avoid excessive sharpening.
 Avoid excessive contrast that destroys natural detail.
+Avoid artificial smooth gradients that make materials look synthetic.
+
+NATURAL EDGES AND ORGANIC TRANSITIONS:
+
+Visual effects must have natural, irregular, organic edges.
+
+Smoke, fog, mist, dust, fire, flames, splashes, ink, paint, energy, particles, shadows, glow, fur, hair, feathers and atmospheric effects must transition naturally into transparency.
+
+Use:
+- irregular organic contours
+- gradual opacity changes
+- soft natural dissipation
+- layered overlapping details
+- broken and varied edges
+- natural fading
+- subtle transparency variation
+- realistic interaction between effects and the main subject
+
+Never terminate an effect with:
+- straight lines
+- rectangular edges
+- geometric cuts
+- artificial clipping
+- abrupt horizontal or vertical endings
+- perfectly circular boundaries
+- hard artificial masks
+
+Effects should naturally dissipate, scatter, fade, break apart, or become progressively transparent.
+
+Do not place visible borders around smoke, fog, particles, shadows, glow, or atmospheric effects.
+
+Do not make the artwork look like separate PNG elements placed next to each other.
+
+The transition between the main subject and surrounding effects must feel physically integrated and naturally composed.
+
+The outer edges of the artwork should feel intentional, organic, irregular, and professionally finished.
 
 COMPOSITION:
 
@@ -83,7 +111,7 @@ Create ONE complete, intentional composition.
 
 The composition must communicate the entire concept, not only the most obvious subject.
 
-Use a strong visual hierarchy without sacrificing important elements.
+Use strong visual hierarchy without sacrificing important elements.
 
 Keep the main subject clearly recognizable.
 
@@ -105,7 +133,7 @@ APPAREL GRAPHIC DESIGN:
 
 The final result must work as premium commercial apparel artwork.
 
-Create artwork rather than a product photograph.
+Create the artwork itself, NOT a product photograph.
 
 The artwork should feel designed by a professional streetwear art director.
 
@@ -116,28 +144,42 @@ Use:
 - refined detail
 - professional visual hierarchy
 - memorable shapes
-- premium illustration quality
 - sophisticated color relationships
 - strong readability
+- premium illustration quality
 
-The artwork should remain recognizable when printed at smaller sizes.
+The design should feel authentic, sophisticated, and commercially viable rather than like generic AI-generated clipart.
+
+Do not force every element to have a hard outline.
+
+Use outlines only when they naturally fit the requested artistic style.
 
 PRINT CONSIDERATIONS:
 
 Create isolated printable artwork.
 
-Keep important elements away from the extreme canvas edges.
+Fill approximately 85–90% of the canvas when appropriate to the concept.
+
+Keep important subjects fully inside the canvas.
+
+Maintain only a small intentional safety margin.
+
+Do not create large artificial transparent borders.
+
+Allow organic effects such as smoke, fog, particles, splashes, flames, fur, hair, and atmospheric elements to naturally fade toward the transparent edges.
+
+Do not force the entire artwork into a hard rectangular boundary.
 
 Avoid unnecessary micro-details that will disappear during printing.
 
-Preserve important shapes and contrast.
+Preserve important shapes, silhouettes, and contrast.
 
 Suitable for:
 - DTG
 - DTF
 - screen printing
 
-Do not create a t-shirt, hoodie, model, mannequin, product photograph, or apparel mockup.
+Do not create a t-shirt, hoodie, sweatshirt, model, mannequin, product photograph, or apparel mockup.
 
 TYPOGRAPHY:
 
@@ -147,14 +189,24 @@ If the user requests text:
 - clean professional typography
 - readable characters
 - intentional letter spacing
-- integrated composition
+- strong visual hierarchy
+- naturally integrated composition
 - no random text
 - no pseudo-language
 - no malformed letters
 
 FINAL QUALITY:
 
-The final image should look intentional, premium, realistic, professionally art-directed, commercially viable, and substantially more sophisticated than a generic AI-generated image.
+The final image should look intentional, premium, realistic, professionally art-directed, commercially viable, and substantially more sophisticated than generic AI-generated artwork.
+
+The image must prioritize:
+1. User concept accuracy
+2. Realistic materials and anatomy
+3. Natural lighting and physical interaction
+4. Professional composition
+5. Organic edge transitions
+6. Print readability
+7. Premium commercial finish
 
 STRICT NEGATIVE RULES:
 
@@ -200,6 +252,11 @@ No distorted faces.
 No impossible perspective.
 No cropped main subject.
 No huge empty transparent borders.
+No straight cut-off effect edges.
+No rectangular smoke edges.
+No abrupt effect termination.
+No artificial clipping.
+No hard geometric boundaries around organic effects.
 
 OUTPUT:
 
@@ -212,6 +269,8 @@ Highly detailed.
 Natural materials.
 Believable lighting.
 Accurate anatomy.
+Organic natural edges.
+Professionally integrated effects.
 Professional commercial design.
 Print-ready.
 Premium quality.`;
