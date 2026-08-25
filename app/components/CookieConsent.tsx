@@ -73,18 +73,18 @@ export default function CookieConsent() {
     <section
       aria-label="Cookie preferences"
       aria-live="polite"
-      className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-[560px] rounded-2xl border border-white/10 bg-[#090914]/95 p-4 text-white shadow-[0_20px_70px_rgba(0,0,0,0.48)] backdrop-blur-xl sm:inset-x-auto sm:bottom-5 sm:left-5 sm:mx-0"
+      className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-[470px] rounded-xl border border-white/10 bg-[#090914]/95 p-3 text-white shadow-[0_16px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-4"
     >
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300">
-          <Cookie size={17} aria-hidden="true" />
+      <div className="flex items-start gap-2.5">
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-300">
+          <Cookie size={15} aria-hidden="true" />
         </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-extrabold">Your privacy, your choice</h2>
-              <p className="mt-1 text-xs leading-5 text-white/60">
+              <h2 className="text-[13px] font-extrabold">Your privacy, your choice</h2>
+              <p className="mt-0.5 text-[11px] leading-4 text-white/60">
                 We use essential cookies to run Ryfio. With your permission, we
                 may also use analytics and marketing cookies.{" "}
                 <Link href="/cookies" className="font-semibold text-purple-300 hover:text-purple-200">
@@ -106,7 +106,7 @@ export default function CookieConsent() {
           </div>
 
           {showSettings && (
-            <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+            <div className="mt-2.5 space-y-1.5 border-t border-white/10 pt-2.5">
               <PreferenceRow label="Essential" description="Login, security and checkout" checked disabled />
               <PreferenceRow
                 label="Analytics"
@@ -123,12 +123,12 @@ export default function CookieConsent() {
             </div>
           )}
 
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {showSettings ? (
               <button
                 type="button"
                 onClick={() => choose(analytics, marketing)}
-                className="rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3.5 py-2 text-xs font-bold transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1.5 text-[11px] font-bold transition hover:brightness-110"
               >
                 Save choices
               </button>
@@ -136,7 +136,7 @@ export default function CookieConsent() {
               <button
                 type="button"
                 onClick={() => choose(true, true)}
-                className="rounded-xl bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3.5 py-2 text-xs font-bold transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1.5 text-[11px] font-bold transition hover:brightness-110"
               >
                 Accept all
               </button>
@@ -145,7 +145,7 @@ export default function CookieConsent() {
             <button
               type="button"
               onClick={() => choose(false, false)}
-              className="rounded-xl border border-white/15 px-3.5 py-2 text-xs font-bold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+              className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white/85 transition hover:border-white/30 hover:bg-white/5"
             >
               Reject optional
             </button>
@@ -154,7 +154,7 @@ export default function CookieConsent() {
               <button
                 type="button"
                 onClick={() => setShowSettings(true)}
-                className="px-2 py-2 text-xs font-semibold text-white/55 transition hover:text-white"
+                className="px-2 py-1.5 text-[11px] font-semibold text-white/55 transition hover:text-white"
               >
                 Manage
               </button>
@@ -180,17 +180,17 @@ function PreferenceRow({
   onChange?: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex items-center justify-between gap-4 rounded-xl bg-white/[0.035] px-3 py-2">
+    <label className="flex items-center justify-between gap-4 rounded-lg bg-white/[0.035] px-2.5 py-1.5">
       <span>
-        <span className="block text-xs font-bold text-white/90">{label}</span>
-        <span className="block text-[11px] text-white/45">{description}</span>
+        <span className="block text-[11px] font-bold text-white/90">{label}</span>
+        <span className="block text-[10px] text-white/45">{description}</span>
       </span>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange?.(event.target.checked)}
-        className="h-4 w-4 shrink-0 accent-purple-500"
+        className="h-3.5 w-3.5 shrink-0 accent-purple-500"
       />
     </label>
   );
