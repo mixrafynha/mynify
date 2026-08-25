@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+import CookieConsent from "./components/CookieConsent";
 import { LoadingProvider } from "./context/LoadingContext";
 
 export default function Providers({
@@ -41,6 +42,7 @@ function AppWrapper({ children }: { children: React.ReactNode }) {
 
         {!hideGlobalLayout && <Footer />}
       </div>
+      <CookieConsent />
     </>
   );
 }

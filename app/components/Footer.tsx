@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { ArrowUpRight, Gamepad2, ShieldCheck, Sparkles } from "lucide-react";
+import { COOKIE_SETTINGS_EVENT } from "./CookieConsent";
 
 const safeHref = (href: string) => {
   if (typeof href !== "string") return "/";
@@ -74,7 +75,7 @@ export default function Footer() {
   }, [email]);
 
   const handleCookieSettings = useCallback(() => {
-    alert("Open cookie preferences 🍪");
+    window.dispatchEvent(new Event(COOKIE_SETTINGS_EVENT));
   }, []);
 
   return (
