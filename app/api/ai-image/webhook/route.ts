@@ -57,14 +57,13 @@ export async function POST(req: Request) {
 
     const payload = JSON.parse(rawBody || "{}") as ReplicatePrediction;
     const generationId = String(new URL(req.url).searchParams.get("generationId") || "").trim() || null;
-    const stage = String(new URL(req.url).searchParams.get("stage") || "").trim().toLowerCase();
     const predictionId = String(payload.id || "").trim() || null;
     const serviceSupabase = getServiceSupabase();
     let row = await loadGenerationForWebhook(serviceSupabase, generationId, predictionId);
 
-    console.info("[AI_WEBHOOK_RECEIVED]", { generationId, predictionId, stage, status: payload.status });
+    console.info("[AI_WEBHOOK_RECEIVED]", { generationId, predictionId, status: payload.status });
     if (!row) return NextResponse.json({ success: true, ignored: true }, { status: 200 });
-    if (stage !== "background-removal" && (row.status === "completed" || row.status === "failed" || row.status === "canceled")) {
+    if (row.status === "completed" || row.status === "failed" || row.status === "canceled") {
       return NextResponse.json({ success: true, ignored: true }, { status: 200 });
     }
 
@@ -73,17 +72,7 @@ export async function POST(req: Request) {
     }
 
     console.info("[AI_WEBHOOK_VERIFIED]", { generationId, predictionId });
-    if (stage === "background-removal") {
-      const { processBackgroundRemovalPrediction } = await import("../_lib/finalize");
-      await processBackgroundRemovalPrediction({
-        serviceSupabase,
-        row,
-        prediction: payload,
-        source: "webhook",
-      });
-    } else {
-      await applyPredictionState({ req, serviceSupabase, row, prediction: payload, source: "webhook" });
-    }
+    await applyPredictionState({ req, serviceSupabase, row, prediction: payload, source: "webhook" });
     await updateGeneration(serviceSupabase, row.id, { webhook_processed_at: new Date().toISOString() }).catch(() => undefined);
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (error) {

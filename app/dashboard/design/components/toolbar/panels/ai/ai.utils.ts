@@ -79,9 +79,6 @@ export function normalizeGeneratedImageResponse(data: any): AiImageItem | null {
     status: data?.status || null,
     isSaved: data?.isSaved === true || data?.is_saved === true,
     originalImageUrl: data?.originalImageUrl || data?.original_image_url || null,
-    originalStorageKey: data?.originalStorageKey || data?.original_storage_key || null,
-    backgroundRemovalStatus: data?.backgroundRemovalStatus || data?.background_removal_status || null,
-    backgroundRemovalError: data?.backgroundRemovalError || data?.background_removal_error || null,
     width:
       Number(data?.width || data?.naturalWidth || data?.metadata?.width) ||
       AI_IMAGE_QUALITY.targetOutputPixels,
@@ -112,9 +109,6 @@ export function normalizeSavedImage(row: any): AiImageItem {
     r2Key: row?.storage_key || row?.r2Key,
     storage_key: row?.storage_key || row?.r2Key,
     originalImageUrl: row?.original_image_url || row?.originalImageUrl || null,
-    originalStorageKey: row?.original_storage_key || row?.originalStorageKey || null,
-    backgroundRemovalStatus: row?.background_removal_status || row?.backgroundRemovalStatus || null,
-    backgroundRemovalError: row?.background_removal_error || row?.backgroundRemovalError || null,
     width: AI_IMAGE_QUALITY.targetOutputPixels,
     height: AI_IMAGE_QUALITY.targetOutputPixels,
     dpi: AI_IMAGE_QUALITY.dpi,
