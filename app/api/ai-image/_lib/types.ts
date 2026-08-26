@@ -24,9 +24,14 @@ export type GenerationRow = {
   original_prompt: string | null;
   image_url: string | null;
   storage_key: string | null;
+  original_image_url: string | null;
+  original_storage_key: string | null;
   output_url: string | null;
   status: string | null;
   replicate_status: string | null;
+  background_removal_status: string | null;
+  background_removal_prediction_id: string | null;
+  background_removal_error: string | null;
   error_message: string | null;
   is_saved: boolean | null;
   saved_at?: string | null;

@@ -34,10 +34,29 @@ export async function createReplicatePrediction(args: {
   prompt: string;
   replicateWebhookUrl: string;
 }) {
+  return createReplicatePredictionForModel({
+    model: process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-dev",
+    input: {
+      prompt: buildQualityPrompt(args.prompt),
+      aspect_ratio: "1:1",
+      num_outputs: 1,
+      output_format: "png",
+      output_quality: 100,
+      num_inference_steps: 40,
+      guidance_scale: 5,
+    },
+    replicateWebhookUrl: args.replicateWebhookUrl,
+  });
+}
+
+export async function createReplicatePredictionForModel(args: {
+  model: string;
+  input: Record<string, unknown>;
+  replicateWebhookUrl?: string;
+}) {
   const token = getEnv("REPLICATE_API_TOKEN");
-  const model = process.env.REPLICATE_FLUX_MODEL || "black-forest-labs/flux-dev";
-  const [owner, name] = model.split("/");
-  if (!owner || !name) throw new Error("Invalid REPLICATE_FLUX_MODEL. Use owner/model.");
+  const [owner, name] = args.model.split("/");
+  if (!owner || !name) throw new Error("Invalid replicate model. Use owner/model.");
 
   const response = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}/predictions`, {
     method: "POST",
@@ -46,17 +65,13 @@ export async function createReplicatePrediction(args: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      input: {
-        prompt: buildQualityPrompt(args.prompt),
-        aspect_ratio: "1:1",
-        num_outputs: 1,
-        output_format: "png",
-        output_quality: 100,
-        num_inference_steps: 40,
-        guidance_scale: 5,
-      },
-      webhook: args.replicateWebhookUrl,
-      webhook_events_filter: ["completed"],
+      input: args.input,
+      ...(args.replicateWebhookUrl
+        ? {
+            webhook: args.replicateWebhookUrl,
+            webhook_events_filter: ["completed"],
+          }
+        : {}),
     }),
   });
 

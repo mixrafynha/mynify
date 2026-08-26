@@ -1,58 +1,189 @@
 import { uploadR2Object } from "../../../../trigger/shared/r2";
-import {
-  FINALIZATION_LEASE_SECONDS,
-  FINALIZATION_MAX_ATTEMPTS,
-  getBaseUrl,
-  getFinalizationRetryDelayMs,
-} from "./config";
+import { getBaseUrl } from "./config";
 import { refundGenerationCreditOnce } from "./credits";
-import {
-  claimFinalization,
-  releaseFinalization,
-  scheduleFinalizationRetry,
-  updateGeneration,
-} from "./repository";
-import { extractOutputUrl, normalizePredictionStatus } from "./replicate";
+import { updateGeneration } from "./repository";
+import { createReplicatePredictionForModel, extractOutputUrl, normalizePredictionStatus } from "./replicate";
 import type { GenerationRow, ReplicatePrediction, ServiceSupabase } from "./types";
 
-async function removeBackground(req: Request, imageUrl: string) {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const internalSecret = process.env.AI_INTERNAL_SECRET;
-  if (!internalSecret) throw new Error("Missing AI_INTERNAL_SECRET");
-  headers["x-ai-internal-secret"] = internalSecret;
-
-  const response = await fetch(`${getBaseUrl(req)}/api/remove-background`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ imageUrl }),
-    cache: "no-store",
-  });
+async function fetchImageBuffer(imageUrl: string) {
+  const response = await fetch(imageUrl, { cache: "no-store" });
   if (!response.ok) {
     const responseBodySafe = (await response.text().catch(() => "")).slice(0, 500);
-    throw new Error(`Background removal failed with ${response.status}: ${responseBodySafe}`);
+    throw new Error(`Image download failed with ${response.status}: ${responseBodySafe}`);
   }
   const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Background removal returned an empty image");
+  if (!buffer.length) throw new Error("Downloaded image was empty");
   return buffer;
 }
 
-function isAuthOrConfigError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "");
-  return /401|403|AI_INTERNAL_SECRET/i.test(message);
+async function uploadR2Image(args: { key: string; body: Buffer; contentType: string }) {
+  return uploadR2Object({
+    key: args.key,
+    body: args.body,
+    contentType: args.contentType,
+    cacheControl: "public, max-age=31536000, immutable",
+  });
 }
 
-function isValidationBackoffError(error: unknown) {
-  const message = error instanceof Error ? error.message : String(error || "");
-  return /400|imageUrl invalida|image url invalida/i.test(message);
+async function storeOriginalImage(args: {
+  serviceSupabase: ServiceSupabase;
+  row: GenerationRow;
+  outputUrl: string;
+}) {
+  const originalBuffer = await fetchImageBuffer(args.outputUrl);
+  const originalKey = args.row.original_storage_key || [
+    "ai-images",
+    args.row.user_id,
+    "original",
+    `${args.row.generation_id || args.row.id}.png`,
+  ].join("/");
+
+  const originalImageUrl = await uploadR2Image({
+    key: originalKey,
+    body: originalBuffer,
+    contentType: "image/png",
+  });
+
+  const completedAt = new Date().toISOString();
+  const updated = await updateGeneration(args.serviceSupabase, args.row.id, {
+    status: "completed",
+    replicate_status: "succeeded",
+    output_url: originalImageUrl,
+    image_url: originalImageUrl,
+    original_image_url: originalImageUrl,
+    storage_key: originalKey,
+    original_storage_key: originalKey,
+    completed_at: completedAt,
+    webhook_processed_at: completedAt,
+    finalization_lock_until: null,
+    error_message: null,
+    is_saved: false,
+    replicate_output: args.row.replicate_output ?? null,
+  });
+
+  return updated;
 }
 
-function computeNextFinalizationAttempt(row: GenerationRow) {
-  const attempts = Math.min((row.finalization_attempts || 0) + 1, FINALIZATION_MAX_ATTEMPTS);
-  const delayMs = getFinalizationRetryDelayMs(attempts);
-  return {
-    attempts,
-    nextRetryAt: new Date(Date.now() + delayMs).toISOString(),
-  };
+async function uploadTransparentImage(args: {
+  serviceSupabase: ServiceSupabase;
+  row: GenerationRow;
+  transparentOutputUrl: string;
+  prediction: ReplicatePrediction;
+}) {
+  const transparentBuffer = await fetchImageBuffer(args.transparentOutputUrl);
+  const transparentKey = args.row.original_storage_key
+    ? args.row.original_storage_key.replace(/\/original\/([^/]+)$/, "/transparent/$1")
+    : [
+        "ai-images",
+        args.row.user_id,
+        "transparent",
+        `${args.row.generation_id || args.row.id}.png`,
+      ].join("/");
+
+  const transparentImageUrl = await uploadR2Image({
+    key: transparentKey,
+    body: transparentBuffer,
+    contentType: "image/png",
+  });
+
+  const completedAt = new Date().toISOString();
+  await updateGeneration(args.serviceSupabase, args.row.id, {
+    status: "completed",
+    replicate_status: "succeeded",
+    image_url: transparentImageUrl,
+    output_url: transparentImageUrl,
+    storage_key: transparentKey,
+    background_removal_status: "succeeded",
+    background_removal_error: null,
+    completed_at: completedAt,
+    finalization_lock_until: null,
+    replicate_output: args.prediction.output ?? args.row.replicate_output ?? null,
+  });
+
+  return transparentImageUrl;
+}
+
+export async function processBackgroundRemovalPrediction(args: {
+  serviceSupabase: ServiceSupabase;
+  row: GenerationRow;
+  prediction: ReplicatePrediction;
+  source: "poll" | "webhook" | "post";
+}) {
+  const remoteStatus = normalizePredictionStatus(args.prediction.status || args.row.background_removal_status);
+  if (!["queued", "starting", "processing", "succeeded", "failed", "canceled"].includes(remoteStatus)) {
+    return { status: remoteStatus };
+  }
+
+  await updateGeneration(args.serviceSupabase, args.row.id, {
+    background_removal_prediction_id: args.prediction.id || args.row.background_removal_prediction_id || null,
+    background_removal_status: remoteStatus,
+    background_removal_error: null,
+  });
+
+  if (remoteStatus === "succeeded") {
+    const transparentOutputUrl = extractOutputUrl(args.prediction);
+    if (!transparentOutputUrl) throw new Error("Background remover succeeded without an image output");
+    const imageUrl = await uploadTransparentImage({
+      serviceSupabase: args.serviceSupabase,
+      row: args.row,
+      transparentOutputUrl,
+      prediction: args.prediction,
+    });
+    return { status: "completed", imageUrl };
+  }
+
+  if (remoteStatus === "failed" || remoteStatus === "canceled") {
+    await updateGeneration(args.serviceSupabase, args.row.id, {
+      background_removal_status: "failed",
+      background_removal_error: String(args.prediction.error || args.prediction.detail || "Background removal failed"),
+      status: "completed",
+      replicate_status: "succeeded",
+      image_url: args.row.original_image_url || args.row.image_url,
+      output_url: args.row.original_image_url || args.row.output_url,
+      finalization_lock_until: null,
+    });
+    return { status: "completed", imageUrl: args.row.original_image_url || args.row.image_url };
+  }
+
+  return { status: remoteStatus };
+}
+
+async function triggerBackgroundRemoval(args: {
+  req: Request;
+  serviceSupabase: ServiceSupabase;
+  row: GenerationRow;
+}) {
+  const webhookUrl = `${getBaseUrl(args.req)}/api/ai-image/webhook?generationId=${encodeURIComponent(
+    args.row.generation_id || "",
+  )}&stage=background-removal`;
+  const prediction = await createReplicatePredictionForModel({
+    model: "851-labs/background-remover",
+    input: {
+      image: args.row.original_image_url || "",
+      threshold: 0,
+      background_type: "rgba",
+      format: "png",
+    },
+    replicateWebhookUrl: webhookUrl,
+  });
+
+  const remoteStatus = normalizePredictionStatus(prediction.status);
+  await updateGeneration(args.serviceSupabase, args.row.id, {
+    background_removal_prediction_id: prediction.id || args.row.background_removal_prediction_id || null,
+    background_removal_status: remoteStatus,
+    background_removal_error: null,
+  });
+
+  if (remoteStatus === "succeeded") {
+    return processBackgroundRemovalPrediction({
+      serviceSupabase: args.serviceSupabase,
+      row: args.row,
+      prediction,
+      source: "post",
+    });
+  }
+
+  return { status: remoteStatus };
 }
 
 export async function finalizePrediction(args: {
@@ -75,91 +206,22 @@ export async function finalizePrediction(args: {
     const persistedPrediction: ReplicatePrediction = { output: row.replicate_output };
     const outputUrl = extractOutputUrl(prediction) || extractOutputUrl(persistedPrediction);
     if (!outputUrl) throw new Error("Replicate succeeded without an image output");
-
-    // Persist remote success before expensive post-processing. If this process dies,
-    // webhook/poll reconciliation can safely retry finalization later.
-    row = await updateGeneration(serviceSupabase, row.id, {
-      replicate_status: "succeeded",
-      status: row.status === "completed" ? "completed" : "finalizing",
-      replicate_output: prediction.output ?? row.replicate_output ?? null,
-      error_message: null,
-    });
-
-    if (row.status === "completed" && row.image_url) {
-      return { status: "completed", imageUrl: row.image_url };
-    }
-
-    const currentAttempts = row.finalization_attempts || 0;
-    if (currentAttempts >= FINALIZATION_MAX_ATTEMPTS) {
-      console.warn("[AI_GENERATION_FINALIZATION_BACKOFF]", {
+    row = await storeOriginalImage({ serviceSupabase, row, outputUrl });
+    const backgroundRemovalPromise = triggerBackgroundRemoval({
+      req,
+      serviceSupabase,
+      row,
+    }).catch((error) => {
+      const message = error instanceof Error ? error.message : "Background removal failed";
+      console.warn("[AI_BACKGROUND_REMOVAL_DEFERRED]", {
         generationId: row.generation_id,
         predictionId: row.prediction_id,
-        attempts: currentAttempts,
-        source,
-      });
-    }
-
-    const claimed = await claimFinalization(serviceSupabase, row, FINALIZATION_LEASE_SECONDS);
-    if (!claimed) return { status: "finalizing" };
-    row = claimed;
-
-    try {
-      const pngBuffer = await removeBackground(req, outputUrl);
-      const objectKey = row.storage_key || [
-        "ai-images",
-        row.user_id,
-        `${row.generation_id || row.id}.png`,
-      ].join("/");
-      const publicImageUrl = await uploadR2Object({
-        key: objectKey,
-        body: pngBuffer,
-        contentType: "image/png",
-        cacheControl: "public, max-age=31536000, immutable",
-      });
-      const completedAt = new Date().toISOString();
-      await updateGeneration(serviceSupabase, row.id, {
-        status: "completed",
-        replicate_status: "succeeded",
-        output_url: publicImageUrl,
-        image_url: publicImageUrl,
-        storage_key: objectKey,
-        completed_at: completedAt,
-        webhook_processed_at: source === "webhook" ? completedAt : row.webhook_processed_at ?? null,
-        finalization_lock_until: null,
-        error_message: null,
-        is_saved: false,
-        replicate_output: prediction.output ?? row.replicate_output ?? null,
-      });
-      console.info("[AI_GENERATION_FINALIZED]", {
-        generationId: row.generation_id,
-        predictionId: row.prediction_id,
-        source,
-        status: "succeeded",
-      });
-      return { status: "completed", imageUrl: publicImageUrl };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "AI finalization failed";
-      console.error("[AI_REMOVE_BG_FAILED]", {
-        generationId: row.generation_id,
-        predictionId: row.prediction_id,
-        status: row.status,
         responseBodySafe: message.slice(0, 500),
       });
-      if (isAuthOrConfigError(error) || isValidationBackoffError(error)) {
-        const nextRetry = computeNextFinalizationAttempt(row);
-        await scheduleFinalizationRetry(serviceSupabase, row.id, nextRetry.nextRetryAt, message).catch(() => undefined);
-        console.info("[AI_GENERATION_FINALIZATION_BACKOFF]", {
-          generationId: row.generation_id,
-          predictionId: row.prediction_id,
-          attempts: nextRetry.attempts,
-          nextRetryAt: nextRetry.nextRetryAt,
-          source,
-        });
-      } else {
-        await releaseFinalization(serviceSupabase, row.id, message).catch(() => undefined);
-      }
-      throw error;
-    }
+      return null;
+    });
+    void backgroundRemovalPromise;
+    return { status: "completed", imageUrl: row.image_url };
   }
 
   if (status === "failed") {
@@ -180,13 +242,13 @@ export async function finalizePrediction(args: {
       replicate_output: prediction.output ?? row.replicate_output ?? null,
       finalization_lock_until: null,
     });
-      console.info("[AI_GENERATION_FINALIZED]", {
-        generationId: row.generation_id,
-        predictionId: row.prediction_id,
-        source,
-        status: "failed",
-      });
-      return { status: "failed" };
+    console.info("[AI_GENERATION_FINALIZED]", {
+      generationId: row.generation_id,
+      predictionId: row.prediction_id,
+      source,
+      status: "failed",
+    });
+    return { status: "failed" };
   }
 
   if (status === "canceled") {

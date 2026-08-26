@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       if (!row) return jsonError(404, "Generation not found");
 
       // IMPORTANT: generation-specific GET is a cheap status read only.
-      // Browser polling must never call Replicate or trigger remove-background.
+      // Browser polling must never call Replicate or trigger background-removal work.
       // Completion is owned by the signed webhook and server-side stale reconciliation.
       return NextResponse.json(
         { success: true, generation: toResponseRow(row) },

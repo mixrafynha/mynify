@@ -15,6 +15,12 @@ export type AiImageItem = {
   storage_key?: string | null;
   originalImageUrl?: string | null;
   original_image_url?: string | null;
+  originalStorageKey?: string | null;
+  original_storage_key?: string | null;
+  backgroundRemovalStatus?: string | null;
+  background_removal_status?: string | null;
+  backgroundRemovalError?: string | null;
+  background_removal_error?: string | null;
   width?: number | null;
   height?: number | null;
   dpi?: number | null;

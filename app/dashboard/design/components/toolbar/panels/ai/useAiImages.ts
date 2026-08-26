@@ -74,6 +74,12 @@ function stageRank(status: string) {
   return 0;
 }
 
+function backgroundRemovalRank(status: string) {
+  if (status === "succeeded" || status === "failed" || status === "canceled") return 2;
+  if (status === "processing" || status === "starting" || status === "queued") return 1;
+  return 0;
+}
+
 export function useAiImages({ createElement }: UseAiImagesArgs) {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -203,6 +209,7 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
         const generation = data?.generation || null;
         const status = String(generation?.status || "").toLowerCase();
         const hasImageUrl = Boolean(generation?.imageUrl);
+        const backgroundRemovalStatus = String(generation?.backgroundRemovalStatus || "").toLowerCase();
         const previousStatus = generationStageRef.current.get(generationId) || "pending";
         if (stageRank(status) < stageRank(previousStatus)) return;
         generationStageRef.current.set(generationId, status);
@@ -214,7 +221,13 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           hasImageUrl,
         });
 
-        if (status === "completed" && hasImageUrl) {
+        const backgroundRemovalPending =
+          status === "completed" &&
+          backgroundRemovalRank(backgroundRemovalStatus) < backgroundRemovalRank("succeeded") &&
+          backgroundRemovalStatus !== "failed" &&
+          backgroundRemovalStatus !== "canceled";
+
+        if (status === "completed" && hasImageUrl && !backgroundRemovalPending) {
           const completedItem = normalizeSavedImage({
             id: generation.id,
             generation_id: generation.generationId,
@@ -222,6 +235,9 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
             image_url: generation.imageUrl,
             storage_key: generation.storageKey,
             original_image_url: generation.originalImageUrl,
+            original_storage_key: generation.originalStorageKey,
+            background_removal_status: generation.backgroundRemovalStatus,
+            background_removal_error: generation.backgroundRemovalError,
             status: "completed",
             is_saved: Boolean(generation.isSaved),
           });
@@ -244,6 +260,30 @@ export function useAiImages({ createElement }: UseAiImagesArgs) {
           });
           setNotice("Image created. Click Save if you want to keep it.");
           await loadCredits();
+          return;
+        }
+
+        if (status === "completed" && hasImageUrl && backgroundRemovalPending) {
+          const completedItem = normalizeSavedImage({
+            id: generation.id,
+            generation_id: generation.generationId,
+            prompt: generation.prompt,
+            image_url: generation.imageUrl,
+            storage_key: generation.storageKey,
+            original_image_url: generation.originalImageUrl,
+            original_storage_key: generation.originalStorageKey,
+            background_removal_status: generation.backgroundRemovalStatus,
+            background_removal_error: generation.backgroundRemovalError,
+            status: "completed",
+            is_saved: Boolean(generation.isSaved),
+          });
+
+          completedItem.saved = generation.isSaved === true;
+          setGeneratedImages((prev) => [
+            completedItem,
+            ...prev.filter((current) => !sameGeneratedImage(current, completedItem)),
+          ]);
+          timer = setTimeout(pollActiveGeneration, pollDelayMs("finalizing"));
           return;
         }
 
