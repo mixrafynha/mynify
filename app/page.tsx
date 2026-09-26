@@ -178,7 +178,7 @@ export default function HomePage() {
     <div className="hero-copy-enter z-10 order-1 mt-0 text-center sm:-mt-10 lg:-mt-54 lg:text-left">
       
       <h1
-        className="relative mb-[48px] font-[var(--font-logo)] text-[28px] font-normal uppercase leading-[1.02] tracking-[-0.025em] sm:mb-[74px] sm:text-[39px] sm:leading-[0.98] md:text-[45px] lg:-top-[17px] lg:-translate-x-[10%] lg:translate-y-[20%] lg:whitespace-nowrap lg:text-[48px] xl:text-[50px]"
+        className="relative mb-[48px] font-[var(--font-logo)] text-[28px] font-normal uppercase leading-[1.02] tracking-[-0.025em] sm:mb-[74px] sm:text-[39px] sm:leading-[0.98] md:text-[45px] lg:-top-[27px] lg:-translate-x-[10%] lg:translate-y-[20%] lg:whitespace-nowrap lg:text-[48px] xl:text-[50px]"
         style={{ fontFamily: "var(--font-logo)", textShadow: "0 0 14px rgba(102,67,136,.28)" }}
       >
         <span className="text-white">Turn any idea into a </span>

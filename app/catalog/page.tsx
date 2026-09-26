@@ -208,7 +208,7 @@ export default function CatalogPage() {
             <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">that sell</span>
           </h1>
 
-          <p className="mx-auto mt-4 max-w-[22rem] whitespace-normal text-center text-base leading-relaxed text-white/60 sm:mt-7 sm:max-w-none sm:whitespace-nowrap sm:text-base md:text-xl">
+          <p className="mx-auto mt-4 max-w-[22rem] whitespace-normal text-center text-base leading-relaxed text-white/60 sm:mt-7 sm:max-w-none sm:whitespace-nowrap sm:text-base md:-translate-y-[10px] md:text-xl">
             Choose premium blank apparel and accessories, customise every detail and launch your next product in minutes.
           </p>
         </div>
