@@ -1,7 +1,5 @@
-import { ChevronDown } from "lucide-react";
 import { AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { LINKS } from "./navData";
-import { formatLink } from "./utils";
 
 type Props = {
   open: boolean;
@@ -39,49 +37,15 @@ export default function MobileMenu({
 
           <div className="flex flex-col gap-5 text-[17px] font-semibold text-white/80">
             {LINKS.map((link) => {
-              const isOpen = mobileOpen === link.name;
-
               return (
                 <div key={link.name}>
                   <div
                     className="flex items-center justify-between cursor-pointer hover:text-purple-400 transition"
-                    onClick={() => {
-                      if (link.dropdown) {
-                        toggleMobileDropdown(link.name);
-                      } else if (link.href) {
-                        closeSidebar();
-                        router.push(link.href);
-                      }
-                    }}
+                    onClick={() => { closeSidebar(); router.push(link.href); }}
                   >
                     <span>{link.name}</span>
 
-                    {link.dropdown && (
-                      <ChevronDown
-                        size={18}
-                        className={`transition-transform duration-200 ${
-                          isOpen ? "rotate-180 text-purple-400" : "text-white/60"
-                        }`}
-                      />
-                    )}
                   </div>
-
-                  {link.dropdown && isOpen && (
-                    <div className="mt-2 ml-2 flex flex-col gap-2 text-[14px] text-white/50">
-                      {link.dropdown.map((item) => (
-                        <div
-                          key={item}
-                          onClick={() => {
-                            closeSidebar();
-                            router.push(formatLink(item));
-                          }}
-                          className="cursor-pointer hover:text-purple-300 transition"
-                        >
-                          {item}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               );
             })}

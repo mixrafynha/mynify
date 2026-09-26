@@ -59,7 +59,8 @@ export async function GET(req: Request) {
         rating,
         sales_count,
         audience,
-        created_at
+        created_at,
+        product_colors (color, color_hex, thumbnail, position, product_variants (size, stock))
       `)
       .eq("is_active", true)
       .eq("status", "active")
@@ -86,8 +87,18 @@ export async function GET(req: Request) {
       );
     }
 
+    const catalogProducts = (data ?? []).map((product) => {
+      const row = product as Record<string, unknown> & { product_colors?: Array<{ color?: string | null; color_hex?: string | null; thumbnail?: string | null; product_variants?: Array<{ size?: string | null; stock?: number | null }> }> };
+      return {
+        ...row,
+        colors: (row.product_colors ?? []).map((color) => ({ color: color.color, color_hex: color.color_hex, thumbnail: color.thumbnail })),
+        variants: (row.product_colors ?? []).flatMap((color) => color.product_variants ?? []),
+        product_colors: undefined,
+      };
+    });
+
     return NextResponse.json(
-      { data: data ?? [] },
+      { data: catalogProducts },
       { status: 200, headers: { "Cache-Control": PUBLIC_CACHE } },
     );
   } catch (error) {

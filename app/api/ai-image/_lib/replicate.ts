@@ -1,4 +1,10 @@
 import { getEnv } from "./config";
+import {
+  isAiIpModerationEnabled,
+  isAiIpModerationLogOnly,
+  logPromptModeration,
+  moderatePrompt,
+} from "./moderation";
 import { buildQualityPrompt } from "./prompt";
 import type { ReplicatePrediction } from "./types";
 
@@ -39,6 +45,22 @@ export async function createReplicatePrediction(args: {
   const [owner, name] = model.split("/");
   if (!owner || !name) throw new Error("Invalid REPLICATE_FLUX_MODEL. Use owner/model.");
 
+  let prompt = args.prompt;
+  const logOnly = isAiIpModerationLogOnly();
+  if (isAiIpModerationEnabled() || logOnly) {
+    try {
+      const result = moderatePrompt(args.prompt);
+      logPromptModeration(result, logOnly);
+      if (!logOnly && result.allowed && result.action !== "block") prompt = result.safePrompt;
+    } catch (error) {
+      console.error("[AI_PROMPT_MODERATION_FAILED]", {
+        message: error instanceof Error ? error.message : String(error),
+        fallback: "original-prompt",
+      });
+      prompt = args.prompt;
+    }
+  }
+
   const response = await fetch(`https://api.replicate.com/v1/models/${owner}/${name}/predictions`, {
     method: "POST",
     headers: {
@@ -47,7 +69,7 @@ export async function createReplicatePrediction(args: {
     },
     body: JSON.stringify({
       input: {
-        prompt: buildQualityPrompt(args.prompt),
+        prompt: buildQualityPrompt(prompt),
         aspect_ratio: "1:1",
         num_outputs: 1,
         output_format: "png",

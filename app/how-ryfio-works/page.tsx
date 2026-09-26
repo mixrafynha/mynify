@@ -145,15 +145,15 @@ export default function HowRyfioWorksPage() {
       />
 
       {/* HERO */}
-      <section className="relative mx-auto max-w-7xl px-4 pb-10 pt-20 sm:px-6 md:pb-14 md:pt-24 lg:px-8 lg:pt-28">
-        <div className="grid gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+      <section className="relative mx-auto w-full px-4 pb-10 pt-20 sm:px-6 md:pb-14 md:pt-24 lg:px-12 lg:pt-28">
+        <div className="grid w-full gap-8 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
           <div className="text-center lg:text-left">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] text-purple-300 shadow-[0_0_34px_rgba(168,85,247,0.12)] backdrop-blur-xl">
               <Sparkles size={14} aria-hidden="true" />
               Create • Customize • Sell
             </div>
 
-            <h1 className="mx-auto max-w-4xl text-[42px] font-black uppercase leading-[0.9] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:mx-0 lg:text-8xl">
+            <h1 className="mx-auto max-w-4xl text-[42px] font-black uppercase leading-[0.9] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:mx-0 lg:max-w-none lg:whitespace-nowrap lg:font-[var(--font-logo)] lg:text-8xl lg:font-normal lg:tracking-[-0.045em]" style={{ fontFamily: "var(--font-logo)" }}>
               How{" "}
               <span className="bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent">
                 RYFIO
@@ -161,7 +161,7 @@ export default function HowRyfioWorksPage() {
               works
             </h1>
 
-            <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/60 sm:text-base md:text-lg lg:mx-0">
+            <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-white/60 sm:text-base md:text-lg lg:mx-0 lg:max-w-none lg:whitespace-nowrap lg:text-lg">
               Build custom print-on-demand products with a fast editor, preview
               the final look, then order, test or sell without holding stock.
             </p>

@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronDown, Loader2, SlidersHorizontal } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
 
 type ApiProduct = {
   id: string;
@@ -16,6 +17,8 @@ type ApiProduct = {
   category: string | null;
   is_active?: boolean | null;
   status?: string | null;
+  colors?: Array<{ color?: string | null; color_hex?: string | null; thumbnail?: string | null }>;
+  variants?: Array<{ size?: string | null; stock?: number | null }>;
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -80,6 +83,64 @@ const imageFrom = (product: ApiProduct) => {
   return "/placeholder.png";
 };
 
+const imagesFrom = (product: ApiProduct) => {
+  const images = Array.isArray(product.images)
+    ? product.images.map((item) => typeof item === "string" ? item : item && typeof item === "object" ? String((item as Record<string, unknown>).url ?? (item as Record<string, unknown>).src ?? (item as Record<string, unknown>).image ?? (item as Record<string, unknown>).image_url ?? (item as Record<string, unknown>).publicUrl ?? "") : "").filter(Boolean)
+    : [];
+  return Array.from(new Set([...(product.image ? [product.image] : []), ...images]));
+};
+
+function RotatingProductImage({ product }: { product: ApiProduct }) {
+  const sources = imagesFrom(product);
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (sources.length < 2) return;
+    let timer: number | undefined;
+    let cancelled = false;
+
+    const scheduleNext = () => {
+      const delay = 3600 + Math.floor(Math.random() * 3600);
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        setActiveIndex((current) => {
+          const next = Math.floor(Math.random() * (sources.length - 1));
+          return next >= current ? next + 1 : next;
+        });
+        scheduleNext();
+      }, delay);
+    };
+
+    timer = window.setTimeout(() => {
+      setActiveIndex((current) => {
+        const next = Math.floor(Math.random() * (sources.length - 1));
+        return next >= current ? next + 1 : next;
+      });
+      scheduleNext();
+    }, 1800 + Math.floor(Math.random() * 2600));
+
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [sources.length]);
+
+  return <Image src={sources[activeIndex] || imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 50vw, 33vw" className="object-contain transition-opacity duration-1000 group-hover:scale-105" />;
+}
+
+function ProductMeta({ product }: { product: ApiProduct }) {
+  const colors = product.colors?.filter((color) => color.color_hex || color.color).slice(0, 6) ?? [];
+  const sizes = Array.from(new Set(product.variants?.map((variant) => variant.size).filter(Boolean) ?? [])).slice(0, 5);
+  if (!colors.length && !sizes.length) return null;
+  return <div className="mt-4 flex min-h-7 items-center justify-between gap-3">
+    {colors.length > 0 && <div className="flex items-center gap-1.5" aria-label={`${colors.length} available colors`}>
+      {colors.map((color, index) => <span key={`${color.color}-${index}`} title={color.color || "Available color"} className="h-4 w-4 rounded-full border border-white/30 shadow-sm" style={{ backgroundColor: color.color_hex || "#9ca3af" }} />)}
+      {product.colors && product.colors.length > colors.length && <span className="ml-1 text-[10px] font-bold text-white/45">+{product.colors.length - colors.length}</span>}
+    </div>}
+    {sizes.length > 0 && <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-white/40">{sizes.join(" · ")}</span>}
+  </div>;
+}
+
 const formatPrice = (price: number | null, currency: string | null) => {
   if (price == null || !Number.isFinite(Number(price))) return "Price unavailable";
   return new Intl.NumberFormat("en-US", {
@@ -121,53 +182,59 @@ export default function CatalogPage() {
     return () => controller.abort();
   }, [category]);
 
-  const grouped = useMemo(() => {
-    const map: Record<string, ApiProduct[]> = {};
-    for (const product of products) {
-      const rawKey = (product.category || "Other").trim() || "Other";
-      const normalized = rawKey.toLowerCase();
-      const key = CATEGORY_ALIASES[normalized] || normalized;
-      (map[key] ||= []).push(product);
-    }
-    return map;
-  }, [products]);
-
-  const categories = Object.keys(grouped)
-    .map((key) => ({
-      key,
-      label: CATEGORY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1),
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+  const categories = useMemo(() => Array.from(new Set(products.map((product) => {
+    const raw = (product.category || "Other").trim().toLowerCase();
+    return CATEGORY_ALIASES[raw] || raw;
+  }))).sort(), [products]);
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const reducedMotion = useReducedMotion();
+  const visibleProducts = useMemo(() => products
+    .filter((product) => activeCategory === "all" || (CATEGORY_ALIASES[(product.category || "other").trim().toLowerCase()] || (product.category || "other").trim().toLowerCase()) === activeCategory)
+    .slice()
+    .sort((a, b) => {
+      const difference = (a.price ?? Number.POSITIVE_INFINITY) - (b.price ?? Number.POSITIVE_INFINITY);
+      return sortOrder === "asc" ? difference : -difference;
+    }), [products, activeCategory, sortOrder]);
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
-      <section className="relative overflow-hidden px-4 py-12 md:px-8 lg:px-12 lg:py-16">
+      <section className="relative overflow-hidden border-b border-white/10 px-4 py-10 md:px-8 lg:px-16 lg:py-14">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.30),transparent_30%),radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14),transparent_22%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
-        <div className="relative mx-auto max-w-5xl text-center">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-4 py-2 text-[11px] font-black uppercase tracking-[0.22em] text-purple-200 shadow-[0_0_28px_rgba(168,85,247,0.12)]">
-            <span className="h-2 w-2 rounded-full bg-gradient-to-r from-fuchsia-400 to-cyan-400" />
-            Public catalogue
-          </div>
-
-          <h1 className="mx-auto max-w-4xl text-[40px] font-black uppercase leading-[0.88] tracking-[-0.06em] sm:text-6xl md:text-7xl">
-            <span className="block text-white">Choose</span>
-            <span className="block bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">
-              your product
-            </span>
+        <div className="relative mx-auto max-w-[1600px] py-4 lg:py-8">
+          <h1 className="mx-auto max-w-none whitespace-nowrap font-[var(--font-logo)] text-center text-[28px] font-normal uppercase leading-[0.94] tracking-[-0.045em] sm:text-5xl md:text-7xl" style={{ fontFamily: "var(--font-logo)" }}>
+            <span className="text-white">Create products </span>
+            <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">that sell</span>
           </h1>
 
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-white/55 sm:text-lg md:text-xl">
-            Browse the real catalogue, open any product and start from the right base.
+          <p className="mx-auto mt-7 max-w-none whitespace-nowrap text-center text-sm leading-relaxed text-white/60 sm:text-base md:text-lg">
+            Choose premium blank apparel and accessories, customise every detail and launch your next product in minutes.
           </p>
         </div>
       </section>
 
-      <section className="relative mx-auto max-w-7xl px-4 pb-16 md:px-8 lg:px-12">
+      <section className="relative mx-auto w-full max-w-[1800px] px-4 pb-16 md:px-8 lg:px-12">
         {loading ? (
-          <div className="grid min-h-[260px] place-items-center rounded-[2rem] border border-white/10 bg-white/[0.025]">
-            <div className="flex flex-col items-center gap-4">
-              <Loader2 className="h-8 w-8 animate-spin text-purple-300" />
-              <p className="text-xs font-black uppercase tracking-[0.24em] text-white/35">Loading products</p>
+          <div className="relative py-3 sm:py-6">
+            <div className="mb-8 flex items-center justify-between gap-4">
+              <div className="h-3 w-28 rounded-full bg-white/[0.08]" />
+              <div className="h-10 w-40 rounded-full bg-white/[0.08]" />
+            </div>
+            <div className="grid grid-cols-1 gap-y-14 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-12 lg:grid-cols-3 lg:gap-x-10 lg:gap-y-14">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="animate-pulse">
+                  <div className="relative aspect-[4/5] overflow-hidden bg-white/[0.045] sm:aspect-[3/4]">
+                    <div className="catalog-shimmer absolute inset-0" />
+                  </div>
+                  <div className="mt-5 h-5 w-3/4 rounded-full bg-white/[0.09]" />
+                  <div className="mt-3 h-4 w-1/3 rounded-full bg-white/[0.06]" />
+                </div>
+              ))}
+            </div>
+            <div className="mt-12 flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.24em] text-white/35">
+              <Loader2 className="h-4 w-4 animate-spin text-purple-300" />
+              Preparing your products
             </div>
           </div>
         ) : categories.length === 0 ? (
@@ -179,33 +246,49 @@ export default function CatalogPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-10">
-            {categories.map(({ key, label }) => (
-              <section key={key}>
-                <div className="mb-5 flex items-center justify-between gap-4">
-                  <h2 className="text-3xl font-black uppercase tracking-tight md:text-5xl">{safeText(label)}</h2>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4">
-                  {grouped[key].map((product) => (
-                    <Link key={product.id} href={`/dashboard/product/${product.id}`} className="group overflow-hidden rounded-none border border-white/8 bg-white/[0.028] p-2.5 shadow-[0_0_18px_rgba(168,85,247,0.04)] transition duration-300 hover:-translate-y-1 hover:border-purple-500/35 sm:p-3 lg:p-4">
-                      <div className="relative mb-3 aspect-square overflow-hidden rounded-none bg-black/30 lg:mb-4">
-                        <Image src={imageFrom(product)} alt={product.title} fill sizes="(max-width: 640px) 50vw, (max-width: 1024px) 25vw, 20vw" className="object-contain transition duration-500 group-hover:scale-105" />
+          <div>
+            <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                <button onClick={() => setActiveCategory("all")} className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition ${activeCategory === "all" ? "bg-white text-black" : "bg-white/5 text-white/55 hover:bg-white/10"}`}>All products</button>
+                {categories.map((key) => <button key={key} onClick={() => setActiveCategory(key)} className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition ${activeCategory === key ? "bg-white text-black" : "bg-white/5 text-white/55 hover:bg-white/10"}`}>{CATEGORY_LABELS[key] || key}</button>)}
+              </div>
+              <label className="flex w-full items-center justify-between gap-3 text-xs font-black uppercase tracking-[0.14em] text-white/45 lg:w-auto lg:justify-start">
+                <SlidersHorizontal className="h-4 w-4 text-purple-300" />
+                <span className="hidden sm:inline">Sort by</span>
+                <span className="relative w-full sm:w-auto">
+                  <button type="button" aria-haspopup="listbox" aria-expanded={sortMenuOpen} onClick={() => setSortMenuOpen((open) => !open)} className="flex w-full min-w-0 items-center justify-between gap-4 rounded-full border border-white/15 bg-white/[0.06] px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.14em] text-white shadow-[0_8px_24px_rgba(0,0,0,0.16)] transition hover:border-purple-300/50 hover:bg-white/10 sm:min-w-[188px] sm:text-xs">
+                    {sortOrder === "asc" ? "Price: low to high" : "Price: high to low"}
+                    <ChevronDown className={`h-4 w-4 text-white/60 transition-transform ${sortMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {sortMenuOpen && <div role="listbox" className="absolute right-0 z-20 mt-2 min-w-[230px] overflow-hidden rounded-2xl border border-white/15 bg-[#11111d]/95 p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                    {[{ value: "asc" as const, label: "Price: low to high" }, { value: "desc" as const, label: "Price: high to low" }].map((option) => <button key={option.value} type="button" role="option" aria-selected={sortOrder === option.value} onClick={() => { setSortOrder(option.value); setSortMenuOpen(false); }} className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-[10px] font-black uppercase tracking-[0.12em] transition sm:text-xs ${sortOrder === option.value ? "bg-white text-black" : "text-white/65 hover:bg-white/10 hover:text-white"}`}>{option.label}{sortOrder === option.value && <span className="text-purple-600">✓</span>}</button>)}
+                  </div>}
+                </span>
+              </label>
+            </div>
+            <p className="mb-5 text-sm font-bold text-white/45">{visibleProducts.length} products</p>
+            <div className="grid grid-cols-1 gap-y-14 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-12 lg:grid-cols-3 lg:gap-x-10 lg:gap-y-14">
+              {visibleProducts.map((product, index) => (
+                    <motion.div key={product.id} initial={reducedMotion ? false : { opacity: 0, x: index % 2 === 0 ? -28 : 28 }} animate={{ opacity: 1, x: 0 }} transition={reducedMotion ? { duration: 0 } : { duration: 1.15, delay: Math.min(index * 0.07, 0.55), ease: [0.22, 1, 0.36, 1] }}>
+                    <Link href={`/dashboard/product/${product.id}`} className="group flex h-full flex-col transition duration-700 hover:-translate-y-2">
+                      <div className="relative mb-5 aspect-[4/5] overflow-hidden sm:aspect-[3/4] lg:mb-7">
+                        <RotatingProductImage product={product} />
                       </div>
-                      <h3 className="truncate text-[12px] font-black leading-tight text-white sm:text-base lg:text-[1.05rem]">{safeText(product.title)}</h3>
-                      <div className="mt-1.5 flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-bold text-white/70 sm:text-sm lg:text-[0.95rem]">{formatPrice(product.price, product.currency)}</p>
-                        <span className="rounded-none border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100 lg:px-2.5 lg:py-1 lg:text-[10px]">
+                      <h3 className="min-h-[2.5rem] text-base font-black leading-tight text-white sm:text-base lg:text-xl">{safeText(product.title)}</h3>
+                      <div className="mt-2 flex min-h-7 items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-white/70 sm:text-sm lg:text-[0.95rem]">{formatPrice(product.price, product.currency)}</p>
+                        <span className="text-[9px] font-black uppercase tracking-[0.12em] text-cyan-100/70 lg:text-[10px]">
                           Unisex
                         </span>
                       </div>
-                      <div className="mt-3 flex h-8 items-center justify-center rounded-none bg-gradient-to-r from-purple-600 to-fuchsia-500 text-[10px] font-black uppercase tracking-[0.12em] text-white transition group-hover:scale-[1.02] sm:h-9 sm:text-[11px] lg:mt-4 lg:h-10 lg:text-[12px]">
-                        Design now
+                      <ProductMeta product={product} />
+                      <div className="mt-auto pt-4 text-[11px] font-black uppercase tracking-[0.16em] text-white/45 transition group-hover:text-white sm:text-[11px] lg:text-xs">
+                        Design now <span className="ml-2 text-cyan-300">↗</span>
                       </div>
                     </Link>
-                  ))}
-                </div>
-              </section>
-            ))}
+                    </motion.div>
+              ))}
+            </div>
           </div>
         )}
       </section>

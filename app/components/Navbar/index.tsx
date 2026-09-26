@@ -102,20 +102,9 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="sticky top-0 z-50 w-full overflow-visible bg-[#03030a]/90 backdrop-blur-2xl">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(168,85,247,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.12),transparent_24%)]" />
-
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <button
-              type="button"
-              aria-label="Toggle menu"
-              onClick={toggleSidebar}
-              className="lg:hidden text-2xl text-white hover:text-purple-400 transition"
-            >
-              ☰
-            </button>
-
+      <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/15 bg-[#1d1726]/95 backdrop-blur-xl">
+        <div className="relative hidden min-h-[64px] w-full items-center gap-6 px-6 py-2 lg:flex xl:px-10">
+          <div className="shrink-0">
             <NavbarBrand />
           </div>
 
@@ -127,11 +116,29 @@ export default function Navbar() {
             setClickedDropdown={setClickedDropdown}
           />
 
-          <AuthActions
-            authChecked={authChecked}
-            isAuthenticated={isAuthenticated}
-            role={role}
-          />
+          <div className="ml-auto shrink-0">
+            <AuthActions
+              authChecked={authChecked}
+              isAuthenticated={isAuthenticated}
+              role={role}
+            />
+          </div>
+        </div>
+
+        <div className="relative flex min-h-[58px] w-full items-center justify-between px-4 py-2 sm:px-6 lg:hidden">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              aria-label="Toggle menu"
+              onClick={toggleSidebar}
+              className="lg:hidden text-2xl text-white hover:text-purple-400 transition"
+            >
+              ☰
+            </button>
+
+            <NavbarBrand />
+          </div>
+          <AuthActions authChecked={authChecked} isAuthenticated={isAuthenticated} role={role} />
         </div>
       </nav>
 

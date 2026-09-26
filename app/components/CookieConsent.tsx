@@ -73,18 +73,18 @@ export default function CookieConsent() {
     <section
       aria-label="Cookie preferences"
       aria-live="polite"
-      className="fixed inset-x-3 bottom-3 z-[100] mx-auto max-w-[470px] rounded-xl border border-white/10 bg-[#090914]/95 p-3 text-white shadow-[0_16px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-4"
+      className="fixed inset-x-3 bottom-3 z-[100] mx-auto w-auto max-w-[560px] rounded-2xl border border-white/10 bg-[#090914]/95 p-5 text-white shadow-[0_16px_55px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-5 sm:left-auto sm:right-6 sm:mx-0"
     >
       <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-300">
-          <Cookie size={15} aria-hidden="true" />
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 text-purple-300">
+          <Cookie size={19} aria-hidden="true" />
         </span>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-[13px] font-extrabold">Your privacy, your choice</h2>
-              <p className="mt-0.5 text-[11px] leading-4 text-white/60">
+              <h2 className="text-base font-extrabold">Your privacy, your choice</h2>
+              <p className="mt-1 text-xs leading-5 text-white/65">
                 We use essential cookies to run Ryfio. With your permission, we
                 may also use analytics and marketing cookies.{" "}
                 <Link href="/cookies" className="font-semibold text-purple-300 hover:text-purple-200">
@@ -123,12 +123,12 @@ export default function CookieConsent() {
             </div>
           )}
 
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <div className="mt-4 flex flex-wrap gap-2">
             {showSettings ? (
               <button
                 type="button"
                 onClick={() => choose(analytics, marketing)}
-                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1.5 text-[11px] font-bold transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-2 text-xs font-bold transition hover:brightness-110"
               >
                 Save choices
               </button>
@@ -136,7 +136,7 @@ export default function CookieConsent() {
               <button
                 type="button"
                 onClick={() => choose(true, true)}
-                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-3 py-1.5 text-[11px] font-bold transition hover:brightness-110"
+                className="rounded-lg bg-gradient-to-r from-purple-600 to-fuchsia-500 px-4 py-2 text-xs font-bold transition hover:brightness-110"
               >
                 Accept all
               </button>
@@ -145,7 +145,7 @@ export default function CookieConsent() {
             <button
               type="button"
               onClick={() => choose(false, false)}
-              className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-bold text-white/85 transition hover:border-white/30 hover:bg-white/5"
+              className="rounded-lg border border-white/15 px-4 py-2 text-xs font-bold text-white/85 transition hover:border-white/30 hover:bg-white/5"
             >
               Reject optional
             </button>

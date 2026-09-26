@@ -2,12 +2,14 @@ import Link from "next/link";
 
 export default function NavbarBrand() {
   return (
-    <Link href="/" className="group overflow-visible select-none shrink-0 ml-3">
+    <Link href="/" className="group shrink-0 select-none overflow-visible ml-3 lg:translate-x-[10px]">
       <div className="relative flex items-center">
         <span
           className="
-            text-[27px]
-            md:text-[40px]
+            text-[26px]
+            md:text-[32px]
+            lg:text-[44px]
+            lg:-translate-y-1
             uppercase
             leading-none
             tracking-[-0.03em]

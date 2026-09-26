@@ -11,6 +11,7 @@ body {
 
 body {
   font-family: var(--font-manrope), system-ui, sans-serif;
+  background-color: #1d1726;
   color: #111827;
   line-height: 1.6;
 }
@@ -81,5 +82,30 @@ body {
   }
   100% {
     transform: translateX(380%) skewX(-18deg);
+  }
+}
+
+@keyframes catalogLoadingBreath {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(0.995);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1);
+  }
+}
+
+.catalog-shimmer {
+  background: radial-gradient(circle at 50% 42%, rgba(192, 132, 252, 0.16), transparent 62%);
+  animation: catalogLoadingBreath 2.8s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-shimmer {
+    animation: none;
+    opacity: 0.55;
   }
 }
