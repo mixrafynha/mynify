@@ -175,14 +175,14 @@ export default function HomePage() {
   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(29,23,38,0.25)_0%,#1d1726_100%)] lg:bg-[linear-gradient(90deg,#1d1726_0%,rgba(29,23,38,0.94)_34%,rgba(29,23,38,0.45)_72%,#1d1726_100%)]" />
 
   <div className="relative mx-auto grid w-full max-w-[1800px] items-center gap-2 px-4 pb-3 pt-7 sm:pt-12 md:px-10 lg:min-h-[760px] lg:grid-cols-2 lg:gap-12 lg:px-16 lg:pb-4 lg:pt-20 xl:px-20">
-    <div className="hero-copy-enter z-10 order-1 -mt-6 text-center sm:-mt-10 lg:-mt-54 lg:text-left">
+    <div className="hero-copy-enter z-10 order-1 mt-0 text-center sm:-mt-10 lg:-mt-54 lg:text-left">
       
       <h1
-        className="mb-[74px] font-[var(--font-logo)] text-[30px] font-normal uppercase leading-[0.98] tracking-[-0.025em] sm:text-[39px] md:text-[45px] lg:-translate-x-[10%] lg:translate-y-[20%] lg:whitespace-nowrap lg:text-[48px] xl:text-[57px]"
+        className="relative mb-[48px] font-[var(--font-logo)] text-[28px] font-normal uppercase leading-[1.02] tracking-[-0.025em] sm:mb-[74px] sm:text-[39px] sm:leading-[0.98] md:text-[45px] lg:-top-[17px] lg:-translate-x-[10%] lg:translate-y-[20%] lg:whitespace-nowrap lg:text-[48px] xl:text-[50px]"
         style={{ fontFamily: "var(--font-logo)", textShadow: "0 0 14px rgba(102,67,136,.28)" }}
       >
         <span className="text-white">Turn any idea into a </span>
-        <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">real product.</span>
+        <span className="mt-1 block bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-center text-transparent sm:mt-0 sm:inline">real product.</span>
       </h1>
 
       <p className="mx-auto max-w-2xl text-base font-medium leading-relaxed text-white/70 sm:text-xl md:text-2xl lg:mx-0 lg:mb-8 lg:translate-x-0 lg:whitespace-nowrap">
@@ -218,33 +218,25 @@ export default function HomePage() {
       >
         <div className="relative h-full w-full">
           <Image
-            src="/hero2.webp"
-            alt="Create custom products with Ryfio"
+            src="/hero3.webp"
+            alt="Custom Ryfio product example"
             fill
             priority
             quality={78}
             sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
-            className="hero-slide hero-slide-first -translate-x-[4%] scale-[1.14] object-contain object-center sm:translate-x-0 sm:scale-[1.16] lg:-translate-x-[2%] lg:scale-[1.235]"
+            className="translate-x-[2%] scale-[1.17] object-contain object-center sm:translate-x-0 sm:scale-[1.16] lg:-translate-x-[2%] lg:scale-[1.235]"
           />
 
-          <Image
-            src="/hero3.webp"
-            alt="Custom Ryfio product example"
-            fill
-            quality={78}
-            sizes="(max-width:640px) 100vw, (max-width:1024px) 980px, 1040px"
-            className="hero-slide hero-slide-second translate-x-0 scale-[1.14] object-contain object-center sm:translate-x-0 sm:scale-[1.10] lg:-translate-x-[1%] lg:scale-[1.235]"
-          />
         </div>
       </Link>
     </div>
   </div>
 
   {/* MOBILE CTA */}
-<div className="relative mx-auto w-full max-w-[280px] px-4 pb-6 lg:hidden">
+<div className="relative mx-auto w-full max-w-[320px] px-4 pb-6 lg:hidden">
   <Link
     href={safeHref(CATALOG_HREF)}
-    className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-5 text-[13px] font-semibold text-white shadow-[0_8px_30px_rgba(168,85,247,0.25)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
+    className="group flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-cyan-500 px-5 text-sm font-semibold text-white shadow-[0_8px_30px_rgba(168,85,247,0.25)] transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]"
   >
     <Zap size={15} aria-hidden="true" />
     Start creating
@@ -255,8 +247,8 @@ export default function HomePage() {
 
       <section className="relative mt-0 bg-[#1d1726] py-0">
         <div className="relative mx-auto w-full max-w-none px-0 lg:px-6">
-          <h2 className="mb-8 -translate-y-[20px] whitespace-nowrap px-4 pt-8 font-[var(--font-logo)] text-5xl font-normal uppercase leading-[0.98] tracking-[-0.025em] text-white sm:text-6xl lg:px-0 lg:pt-10" style={{ fontFamily: "var(--font-logo)" }}>
-            See what you can <span className="bg-gradient-to-r from-fuchsia-400 to-purple-400 bg-clip-text text-transparent">create</span>
+          <h2 className="mb-8 whitespace-normal break-words px-4 pt-8 text-center font-[var(--font-logo)] text-3xl font-normal uppercase leading-[0.98] tracking-[-0.025em] text-white sm:text-6xl lg:-translate-y-[20px] lg:whitespace-nowrap lg:px-0 lg:pt-10 lg:text-left" style={{ fontFamily: "var(--font-logo)" }}>
+            See what you can <span className="block text-center bg-gradient-to-r from-fuchsia-400 to-purple-400 bg-clip-text text-transparent sm:inline sm:text-center">create</span>
           </h2>
           <div className="grid w-full grid-cols-2 gap-0 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
             {PRODUCTS.map((product, index) => (
@@ -291,7 +283,7 @@ export default function HomePage() {
               From idea to income
               </div>
 
-              <h2 className="mb-5 text-4xl font-black uppercase leading-[0.94] tracking-tight md:text-6xl lg:whitespace-nowrap">
+              <h2 className="mb-5 text-3xl font-black uppercase leading-[0.94] tracking-tight md:text-6xl lg:whitespace-nowrap">
                 Build a product
                 <span className="block bg-gradient-to-r from-violet-300 via-fuchsia-500 to-cyan-400 bg-clip-text text-transparent lg:inline">
                   people want
@@ -328,7 +320,7 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(168,85,247,0.35),transparent_45%)]" />
 
         <div className="relative mx-auto max-w-5xl px-4 text-center md:px-8 lg:px-12">
-          <h2 className="mb-5 text-4xl font-black uppercase leading-[0.95] tracking-tight md:text-6xl lg:whitespace-nowrap">
+          <h2 className="mb-5 text-3xl font-black uppercase leading-[0.95] tracking-tight md:text-6xl lg:whitespace-nowrap">
             Launch your
             <span className="block bg-gradient-to-r from-purple-400 to-fuchsia-500 bg-clip-text text-transparent lg:inline">
               next bestseller

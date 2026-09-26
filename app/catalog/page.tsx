@@ -200,15 +200,15 @@ export default function CatalogPage() {
 
   return (
     <main className="min-h-screen overflow-hidden bg-[#03030a] text-white">
-      <section className="relative overflow-hidden border-b border-white/10 px-4 py-10 md:px-8 lg:px-16 lg:py-14">
+      <section className="relative overflow-hidden px-4 py-10 md:px-8 lg:px-16 lg:py-14">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(168,85,247,0.30),transparent_30%),radial-gradient(circle_at_20%_10%,rgba(34,211,238,0.14),transparent_22%),linear-gradient(180deg,#03030a_0%,#050511_55%,#03030a_100%)]" />
         <div className="relative mx-auto max-w-[1600px] py-4 lg:py-8">
-          <h1 className="mx-auto max-w-none whitespace-nowrap font-[var(--font-logo)] text-center text-[28px] font-normal uppercase leading-[0.94] tracking-[-0.045em] sm:text-5xl md:text-7xl" style={{ fontFamily: "var(--font-logo)" }}>
+          <h1 className="mx-auto max-w-[22rem] whitespace-normal font-[var(--font-logo)] text-center text-[32px] font-normal uppercase leading-[0.94] tracking-[-0.045em] sm:max-w-none sm:whitespace-nowrap sm:text-5xl md:text-7xl" style={{ fontFamily: "var(--font-logo)" }}>
             <span className="text-white">Create products </span>
             <span className="bg-gradient-to-r from-fuchsia-400 via-purple-500 to-cyan-400 bg-clip-text text-transparent">that sell</span>
           </h1>
 
-          <p className="mx-auto mt-7 max-w-none whitespace-nowrap text-center text-sm leading-relaxed text-white/60 sm:text-base md:text-lg">
+          <p className="mx-auto mt-4 max-w-[22rem] whitespace-normal text-center text-base leading-relaxed text-white/60 sm:mt-7 sm:max-w-none sm:whitespace-nowrap sm:text-base md:text-xl">
             Choose premium blank apparel and accessories, customise every detail and launch your next product in minutes.
           </p>
         </div>
@@ -248,7 +248,7 @@ export default function CatalogPage() {
         ) : (
           <div>
             <div className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 <button onClick={() => setActiveCategory("all")} className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition ${activeCategory === "all" ? "bg-white text-black" : "bg-white/5 text-white/55 hover:bg-white/10"}`}>All products</button>
                 {categories.map((key) => <button key={key} onClick={() => setActiveCategory(key)} className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.14em] transition ${activeCategory === key ? "bg-white text-black" : "bg-white/5 text-white/55 hover:bg-white/10"}`}>{CATEGORY_LABELS[key] || key}</button>)}
               </div>

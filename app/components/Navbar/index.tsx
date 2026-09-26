@@ -103,7 +103,7 @@ export default function Navbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 w-full overflow-visible border-b border-white/15 bg-[#1d1726]/95 backdrop-blur-xl">
-        <div className="relative hidden min-h-[64px] w-full items-center gap-6 px-6 py-2 lg:flex xl:px-10">
+        <div className="relative hidden min-h-[54px] w-full items-center gap-6 px-6 py-1 lg:flex xl:px-10">
           <div className="shrink-0">
             <NavbarBrand />
           </div>

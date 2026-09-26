@@ -9,7 +9,7 @@ export default function NavbarBrand() {
             text-[26px]
             md:text-[32px]
             lg:text-[44px]
-            lg:-translate-y-1
+            -translate-y-[8px]
             uppercase
             leading-none
             tracking-[-0.03em]
