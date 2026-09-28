@@ -140,7 +140,15 @@ export default function ProductClient({
     const colorKey = String(selectedColor).toLowerCase();
 
     return variants.filter(
-      (variant) => String(variant.color).toLowerCase() === colorKey
+      (variant) =>
+        [
+          variant.color,
+          variant.color_hex,
+          variant.color_visual?.hex,
+          variant.color_visual?.cssBackground,
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase() === colorKey)
     );
   }, [variants, selectedColor]);
 
@@ -239,8 +247,8 @@ export default function ProductClient({
   );
 
   return (
-    <div className="w-full min-w-0 space-y-5 bg-transparent">
-      <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(340px,0.95fr)] xl:gap-5">
+    <div className="w-full min-w-0 space-y-5 bg-transparent lg:space-y-8">
+      <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2 lg:gap-8 xl:gap-12">
         <div className="min-w-0">
           <ProductLeft
             images={safeImages}
@@ -248,38 +256,36 @@ export default function ProductClient({
           />
         </div>
 
-        <div className="min-w-0 p-4 lg:sticky lg:top-20">
+        <div className="product-enter-right min-w-0 p-4 lg:sticky lg:top-20 lg:p-4 xl:p-8">
           <ProductRight
             product={product}
             selectedVariant={selectedVariant}
+            variantControls={
+              <div className="product-enter-up order-1 space-y-4 lg:order-none lg:col-span-2">
+                <div className="border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] px-5 py-3 sm:px-6 lg:px-8 lg:py-4">
+                  <SizeSelector
+                    variants={availableVariants}
+                    selectedVariant={selectedVariant}
+                    selectedColor={selectedColor}
+                    onChange={handleSizeChange}
+                  />
+                </div>
+                <div className="border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] px-5 py-5 sm:px-6 lg:px-8 lg:py-7">
+                  <ColorSelector
+                    variants={variants}
+                    selectedColor={selectedColor}
+                    selectedSize={selectedVariant?.size}
+                    selectedVariant={selectedVariant}
+                    onChange={handleColorChange}
+                  />
+                </div>
+              </div>
+            }
           />
         </div>
       </div>
 
-      <section className="rounded-[30px] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.015))] px-5 py-5 sm:px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.45fr)] lg:items-start">
-          <div className="min-w-0">
-            <SizeSelector
-              variants={availableVariants}
-              selectedVariant={selectedVariant}
-              selectedColor={selectedColor}
-              onChange={handleSizeChange}
-            />
-          </div>
-
-          <div className="min-w-0">
-          <ColorSelector
-            variants={variants}
-            selectedColor={selectedColor}
-            selectedSize={selectedVariant?.size}
-            selectedVariant={selectedVariant}
-            onChange={handleColorChange}
-          />
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#15101d]">
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#15101d] [content-visibility:auto] [contain-intrinsic-size:800px]">
         <div className="relative overflow-hidden border-b border-white/[0.06] px-4 py-5 sm:px-6 sm:py-6">
           <div className="relative">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.035] px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-white/65">

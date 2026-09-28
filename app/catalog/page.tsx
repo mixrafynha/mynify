@@ -158,16 +158,32 @@ export default function CatalogPage() {
 
   useEffect(() => {
     const controller = new AbortController();
+    const cacheKey = `ryfio-catalog:${category || "all"}`;
+
+    try {
+      const cached = sessionStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          setProducts(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {
+      sessionStorage.removeItem(cacheKey);
+    }
 
     async function load() {
-      setLoading(true);
+      if (!sessionStorage.getItem(cacheKey)) setLoading(true);
       try {
         const url = new URL("/api/products", window.location.origin);
         if (category) url.searchParams.set("category", category);
         const response = await fetch(url.toString(), { signal: controller.signal, cache: "no-store" });
         if (!response.ok) throw new Error(`Failed to load products: ${response.status}`);
         const json: { data?: ApiProduct[] } = await response.json();
-        setProducts(Array.isArray(json.data) ? json.data : []);
+        const nextProducts = Array.isArray(json.data) ? json.data : [];
+        setProducts(nextProducts);
+        sessionStorage.setItem(cacheKey, JSON.stringify(nextProducts));
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error("CATALOG_PRODUCTS_ERROR", error);

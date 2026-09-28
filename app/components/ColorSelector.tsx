@@ -41,20 +41,24 @@ export default function ColorSelector({
   });
 
   const colors = Array.from(colorMap.values());
-  const visibleColors = useMemo(
-    () => (expanded ? colors : colors.slice(0, VISIBLE_COLOR_COUNT)),
-    [colors, expanded]
-  );
+  const visibleColors = useMemo(() => colors, [colors]);
   const hiddenCount = Math.max(0, colors.length - VISIBLE_COLOR_COUNT);
 
   return (
     <div className="min-w-0">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-[13px] font-semibold tracking-[0.02em] text-white/72">
-            Colors
-          </p>
-          <p className="mt-3 truncate text-sm font-medium text-white">
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-black uppercase tracking-[0.12em] text-white/72">
+              Colors
+            </p>
+            {safeVariants.some(isVariantSelectable) && (
+              <span className="text-[10px] font-black uppercase tracking-[0.12em] text-emerald-400">
+                In stock
+              </span>
+            )}
+          </div>
+          <p className="mt-3 truncate text-base font-bold text-white lg:hidden">
             {selectedColor || selectedVariant?.color || "Choose a color"}
           </p>
         </div>
@@ -63,7 +67,7 @@ export default function ColorSelector({
           <button
             type="button"
             onClick={() => setExpanded(true)}
-            className="shrink-0 rounded-full bg-white/[0.05] px-3 py-1 text-sm font-bold tracking-[0.18em] text-white/64 transition hover:bg-white/[0.08] hover:text-white"
+            className="shrink-0 rounded-full bg-white/[0.05] px-3 py-1 text-sm font-bold tracking-[0.18em] text-white/64 transition hover:bg-white/[0.08] hover:text-white lg:hidden"
             aria-label="Show all colors"
           >
             ...
@@ -71,7 +75,7 @@ export default function ColorSelector({
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2.5">
+      <div className="mt-4 flex flex-wrap gap-3">
         {visibleColors.map((c: any, i: number) => {
           const normalizedColor = normalize(c.label);
           const available = safeVariants.filter(
@@ -113,7 +117,7 @@ export default function ColorSelector({
               className="flex items-center justify-center disabled:cursor-not-allowed"
             >
               <div
-                className={`h-8 w-8 rounded-full transition ${
+                className={`h-6 w-6 rounded-full transition ${
                   isActive
                     ? "scale-110 ring-2 ring-fuchsia-400 ring-offset-2 ring-offset-[#15101d]"
                     : "ring-1 ring-white/20 hover:scale-105"

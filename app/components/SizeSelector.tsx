@@ -26,7 +26,15 @@ export default function SizeSelector({
 
   const filteredByColor = selectedColor
     ? safeVariants.filter(
-        (v: any) => normalize(v.color) === normalize(selectedColor)
+        (v: any) =>
+          [
+            v.color,
+            v.color_hex,
+            v.color_visual?.hex,
+            v.color_visual?.cssBackground,
+          ]
+            .filter(Boolean)
+            .some((value) => normalize(value) === normalize(selectedColor))
       )
     : safeVariants;
 
@@ -48,11 +56,11 @@ export default function SizeSelector({
 
   return (
     <div className="min-w-0">
-      <p className="text-[13px] font-semibold tracking-[0.02em] text-white/72">
+      <p className="text-sm font-black uppercase tracking-[0.12em] text-white/72">
         Variants (Size)
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(42px,1fr))] gap-2">
         {sizes.map((v: any, i: number) => {
           const disabled = !isVariantSelectable(v);
           const isActive =
@@ -67,12 +75,12 @@ export default function SizeSelector({
                 if (disabled) return;
                 onChange(v);
               }}
-              className={`min-w-[40px] rounded-full px-3 py-1.5 text-[11px] font-bold tracking-[0.06em] transition ${
+              className={`grid h-9 min-w-[42px] place-items-center border px-2 text-[11px] font-black tracking-[0.04em] transition ${
                 disabled
-                  ? "cursor-not-allowed bg-white/[0.03] text-white/25"
+                  ? "cursor-not-allowed border-white/[0.06] bg-white/[0.03] text-white/25"
                   : isActive
-                  ? "bg-white text-[#16131d]"
-                  : "bg-white/[0.05] text-white/76 hover:bg-white/[0.1] hover:text-white"
+                  ? "border-white bg-white text-[#16131d] shadow-[0_0_0_2px_rgba(217,70,239,0.45)]"
+                  : "border-white/[0.12] bg-white/[0.05] text-white/76 hover:border-fuchsia-300/50 hover:bg-white/[0.1] hover:text-white"
               }`}
             >
               {v.size}

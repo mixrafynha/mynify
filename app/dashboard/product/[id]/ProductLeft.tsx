@@ -72,8 +72,21 @@ export function ProductLeft({ images, product }: Props) {
   };
 
   return (
-    <div className="min-w-0 bg-transparent">
+    <div className="product-enter-left min-w-0 bg-transparent">
       <style jsx global>{`
+        @keyframes productEnterLeft {
+          from { opacity: 0; transform: translate3d(-42px, 0, 0); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        .product-enter-left {
+          animation: productEnterLeft 700ms cubic-bezier(.22,1,.36,1) both;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .product-enter-left { animation: none; }
+        }
+
         .ryfio-gallery-polish {
           isolation: isolate;
           background: #f5f5f7 !important;

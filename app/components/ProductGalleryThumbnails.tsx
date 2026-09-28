@@ -116,6 +116,8 @@ export default function ProductGalleryThumbnails({
                 alt={`${title?.trim() || "Product"} image ${index + 1}`}
                 fill
                 unoptimized
+                loading="lazy"
+                decoding="async"
                 sizes="(max-width: 640px) 76px, 92px"
                 className="pointer-events-none scale-[1.1] object-contain object-center select-none"
                 onError={() => onError(image)}

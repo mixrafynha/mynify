@@ -51,7 +51,7 @@ export default function ProductGallery({
 
   return (
     <>
-      <div className="relative h-[500px] overflow-hidden bg-white sm:h-[650px] lg:h-[740px]">
+      <div className="relative h-[500px] overflow-hidden bg-white sm:h-[650px] lg:h-[calc(100vh-210px)] lg:min-h-[670px] xl:min-h-[720px]">
         <button
           type="button"
           onClick={() => setFullscreenOpen(true)}
@@ -122,6 +122,8 @@ export default function ProductGallery({
                   alt={title?.trim() || "Product image"}
                   fill
                   unoptimized
+                  loading="lazy"
+                  decoding="async"
                   sizes="100vw"
                   className="object-contain object-center"
                 />

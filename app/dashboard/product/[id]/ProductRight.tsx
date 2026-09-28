@@ -9,6 +9,7 @@ import {
   Minus,
   AlertTriangle,
   Palette,
+  PenTool,
   Plus,
   Sparkles,
   Star,
@@ -67,6 +68,7 @@ function CountryFlag({
 export function ProductRight({
   product,
   selectedVariant,
+  variantControls,
 }: any) {
   const router = useRouter();
   const title = String(product?.title ?? "Untitled product").trim();
@@ -422,23 +424,54 @@ export function ProductRight({
             width: 0%;
           }
         }
+
+        @keyframes productCtaGlow {
+          0%, 100% {
+            box-shadow: 0 0 18px rgba(34, 197, 94, 0.12);
+          }
+          50% {
+            box-shadow: 0 0 28px rgba(45, 212, 191, 0.24);
+          }
+        }
+
+        @keyframes productCtaSweep {
+          0% { transform: translateX(-120%); }
+          55%, 100% { transform: translateX(120%); }
+        }
+
+        @keyframes productEnterRight {
+          from { opacity: 0; transform: translate3d(42px, 0, 0); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        @keyframes productEnterUp {
+          from { opacity: 0; transform: translate3d(0, 24px, 0); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); }
+        }
+
+        .product-enter-right { animation: productEnterRight 700ms cubic-bezier(.22,1,.36,1) both; }
+        .product-enter-up { animation: productEnterUp 650ms 180ms cubic-bezier(.22,1,.36,1) both; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .product-enter-right, .product-enter-up { animation: none; }
+        }
       `}</style>
 
-      <div className="flex min-w-0 flex-col gap-4 sm:gap-5">
-        <div className="space-y-2 text-left">
+      <div className="flex min-w-0 flex-col gap-4 sm:gap-5 lg:grid lg:grid-cols-2 lg:gap-3 lg:items-start">
+        <div className="space-y-2 text-left lg:col-span-2">
           <h1
-            className="max-w-full overflow-hidden text-[1.73rem] uppercase leading-[0.92] tracking-[-0.04em] text-white sm:text-[2.13rem] lg:text-[2.66rem]"
+            className="max-w-full overflow-hidden bg-gradient-to-r from-white via-white to-cyan-200 bg-clip-text text-[1.73rem] uppercase leading-[0.92] tracking-[-0.04em] text-transparent sm:text-[2.13rem] lg:text-[2.66rem]"
             style={{ fontFamily: "var(--font-logo)", textWrap: "balance" }}
           >
             <span className="whitespace-nowrap">{title}</span>
           </h1>
 
-          <p className="max-w-[30rem] text-[11px] font-semibold uppercase tracking-[0.08em] text-white/42 sm:text-[12px]">
+          <p className="max-w-[34rem] text-xs font-semibold uppercase leading-relaxed tracking-[0.09em] text-white/60 sm:text-[13px]">
             Premium customizable products made for creators, online brands and RYFIO stores.
           </p>
         </div>
 
-        <div className="border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] p-4 sm:p-5">
+        <div className="w-full border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] p-4 sm:p-5 lg:flex lg:h-full lg:w-full lg:flex-col">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 space-y-2">
               <div className="text-[1.8rem] font-black tracking-tight text-white sm:text-[2.2rem]">
@@ -457,7 +490,7 @@ export function ProductRight({
               </div>
             </div>
 
-            <div className="min-w-[9rem] text-right">
+            <div className="min-w-0 text-right">
               <div className="text-[9px] font-black uppercase tracking-[0.18em] text-white/44">
                 Available in
               </div>
@@ -516,7 +549,7 @@ export function ProductRight({
           </div>
         </div>
 
-        <div className="border border-white/[0.08] bg-white px-3 py-3 text-[#111111]">
+        <div className="order-2 border border-white/[0.07] bg-[linear-gradient(180deg,#241a31_0%,#191322_100%)] px-3 py-3 text-white lg:order-0 lg:flex lg:h-full lg:w-full lg:flex-col lg:justify-between">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-[10px] font-medium text-[#6b7280]">
               <span>Shipping from</span>
@@ -527,21 +560,29 @@ export function ProductRight({
           </div>
 
           <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-            <div className="min-w-0">
+            <div className="relative min-w-0">
               <div className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#6b7280]">
                 Delivery to
               </div>
 
               <button
                 type="button"
-                onClick={() => setShippingMenuOpen((prev) => !prev)}
-                className="mt-1 flex h-10 w-full items-center justify-between gap-2 border border-[#d8dde5] px-3 text-left text-sm font-semibold text-[#111111]"
+                onPointerDownCapture={(event) => event.stopPropagation()}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShippingMenuOpen((prev) => !prev);
+                }}
+                className="mt-1 flex h-10 w-full items-center justify-between gap-2 border border-white/[0.16] bg-[#0f0b14] px-3 text-left text-sm font-semibold text-white transition hover:border-fuchsia-300/40"
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="text-base leading-none">
                     <CountryFlag iso={selectedShippingCountry?.iso} country={selectedShippingCountry?.country} />
                   </span>
-                  <span className="truncate">
+                  <span className="truncate text-white">
                     {selectedShippingCountry?.country ?? "Portugal"}
                   </span>
                 </span>
@@ -549,19 +590,25 @@ export function ProductRight({
               </button>
 
               {shippingMenuOpen && (
-                <div className="mt-1 max-h-52 overflow-y-auto border border-[#d8dde5] bg-white">
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-52 overflow-y-auto border border-white/[0.16] bg-[#15101d] shadow-xl">
                   {shippingCountries.map((country) => (
                     <button
                       key={country.iso}
                       type="button"
-                      onClick={() => {
+                      onPointerDownCapture={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                      }}
+                      onClick={(event) => {
+                        event.stopPropagation();
                         setShippingCountryIso(country.iso);
                         setShippingMenuOpen(false);
                       }}
-                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-black/[0.03] ${
-                        selectedShippingCountry?.iso === country.iso
-                          ? "font-black text-[#111111]"
-                          : "text-[#333333]"
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition hover:bg-white/[0.08] ${
+                      selectedShippingCountry?.iso === country.iso
+                        ? "font-black text-white"
+                        : "text-white/75"
                       }`}
                     >
                       <span className="text-base leading-none">
@@ -574,11 +621,11 @@ export function ProductRight({
               )}
             </div>
 
-            <div className="min-w-[8rem] text-right">
+            <div className="min-w-0 text-right">
               <div className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-[#6b7280]">
                 {shippingLoading ? "Calculating" : shippingMethodLabel}
               </div>
-              <div className="mt-1 text-[1.45rem] font-black leading-none tracking-[-0.04em] text-[#111111]">
+              <div className="mt-1 text-[1.45rem] font-black leading-none tracking-[-0.04em] text-white">
                 {shippingLoading ? "…" : formatShippingPrice(shippingPrice)}
               </div>
               <div className="mt-1 text-[10px] font-medium text-[#6b7280]">
@@ -587,15 +634,15 @@ export function ProductRight({
             </div>
           </div>
 
-          <div className="mt-3 border-t border-[#e8ebf1] pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6b7280]">
+          <div className="mt-3 border-t border-white/[0.14] pt-3 text-xs font-black uppercase tracking-[0.14em] text-white/65">
             {availabilityChecking ? (
               <span className="inline-flex items-center gap-1.5 text-[#6b7280]">
                 <span className="h-2 w-2 animate-pulse rounded-full bg-[#6b7280]" />
                 CHECKING...
               </span>
             ) : availabilityStatus === "available" ? (
-              <span className="inline-flex items-center gap-1.5 text-[#0f9d58]">
-                <Check size={12} />
+                <span className="inline-flex items-center gap-2 text-sm text-emerald-400">
+                  <Check size={15} />
                 AVAILABLE
               </span>
             ) : availabilityStatus === "unavailable" ? (
@@ -616,31 +663,33 @@ export function ProductRight({
           </div>
         )}
 
-        <div className="grid gap-2">
+        {variantControls}
+
+        <div className="order-3 grid gap-2 lg:order-1 lg:col-span-2 lg:col-start-1 lg:w-full">
           <button
             type="button"
             disabled={loading || availabilityStatus === "unavailable"}
             onClick={handleStartDesigning}
-            className="group relative flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-[#22c55e]/28 bg-[linear-gradient(135deg,#03140a_0%,#0b3b1b_34%,#22c55e_100%)] px-3 text-[11px] font-black uppercase tracking-[0.1em] text-white transition-colors duration-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:h-[58px] md:px-4 md:text-[12px] md:hover:brightness-110"
+            className="group relative flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-fuchsia-300/45 bg-[linear-gradient(110deg,#5b21b6_0%,#c026d3_48%,#22d3ee_100%)] px-3 text-xs font-black uppercase tracking-[0.12em] text-white shadow-[0_0_24px_rgba(192,38,211,0.16)] [animation:productCtaGlow_3s_ease-in-out_infinite] transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45 md:h-[58px] md:px-4 md:text-sm md:hover:scale-[1.01] md:hover:brightness-110 md:hover:shadow-[0_0_30px_rgba(34,211,238,0.35)]"
           >
-            <span className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,0.03),transparent_30%,transparent_70%,rgba(255,255,255,0.08)),radial-gradient(circle_at_82%_18%,rgba(187,247,208,0.18),transparent_26%)] opacity-90" />
-            <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10 md:h-9 md:w-9">
-              <Palette size={14} className="md:h-4 md:w-4" />
+            <span className="absolute inset-y-0 left-0 w-1/3 -skew-x-12 bg-white/25 opacity-70 [animation:productCtaSweep_3.5s_ease-in-out_infinite]" />
+            <span className="relative flex h-10 w-10 items-center justify-center rounded-full bg-black/20 ring-1 ring-white/10 transition-transform duration-300 group-hover:rotate-12 group-hover:scale-110 md:h-11 md:w-11">
+              <PenTool size={18} className="md:h-5 md:w-5" />
             </span>
-            <span className="relative">{loading ? "Opening..." : "BUY FOR YOUR SELF"}</span>
+            <span className="relative">{loading ? "Opening..." : "START DESIGNING"}</span>
           </button>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
+        <div className="hidden gap-2 sm:grid-cols-3 lg:order-2 lg:col-span-2 lg:col-start-1 lg:grid">
+          <span className="inline-flex items-center gap-1.5 px-0 py-1 text-[10px] text-zinc-300 sm:text-[11px]">
             <Check size={12} className="text-cyan-300" />
             Production
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
+          <span className="inline-flex items-center gap-1.5 px-0 py-1 text-[10px] text-zinc-300 sm:text-[11px]">
             <Sparkles size={12} className="text-fuchsia-300" />
             Delivery CO2 0%
           </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1.5 text-[10px] text-zinc-300 sm:px-3 sm:py-2 sm:text-[11px]">
+          <span className="inline-flex items-center gap-1.5 px-0 py-1 text-[10px] text-zinc-300 sm:text-[11px]">
             <Globe2 size={12} className="text-emerald-300" />
             Secure checkout Ready
           </span>
