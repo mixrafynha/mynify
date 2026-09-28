@@ -182,11 +182,13 @@ async function getViewer(supabase: Awaited<ReturnType<typeof createSupabaseServe
 
   if (!data.user) return { user: null, role: null };
 
+  const profileStartedAt = Date.now();
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", data.user.id)
     .maybeSingle();
+  console.info("[product-perf] profile_done durationMs=" + (Date.now() - profileStartedAt));
 
   return {
     user: data.user,

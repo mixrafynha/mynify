@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 
@@ -14,30 +14,25 @@ export default memo(function ProductCard({
   price,
   image,
 }: any) {
-  const router = useRouter();
   const [imageSrc, setImageSrc] = useState<string>(image || PLACEHOLDER_IMAGE);
 
   useEffect(() => {
     setImageSrc(image || PLACEHOLDER_IMAGE);
   }, [image]);
 
-  const handleClick = useCallback(() => {
-    const now = Date.now();
-    if ((window as any)._lastNav > now - 300) return;
-    (window as any)._lastNav = now;
-
-    router.push(`/dashboard/product/${id}`);
-  }, [router, id]);
-
   return (
-    <motion.button
-      onClick={handleClick}
+    <motion.div
       whileHover={{ y: -4, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
       className="group text-left"
     >
-
-      <div className="relative aspect-[1/1.15] overflow-hidden rounded-xl">
+      <Link
+        href={`/dashboard/product/${encodeURIComponent(id)}`}
+        prefetch
+        className="block"
+        aria-label={`Open ${title}`}
+      >
+        <div className="relative aspect-[1/1.15] overflow-hidden rounded-xl">
 
         <Image
           src={imageSrc}
@@ -58,8 +53,8 @@ export default memo(function ProductCard({
           <p className="text-xs opacity-80">{price}</p>
         </div>
 
-      </div>
-
-    </motion.button>
+        </div>
+      </Link>
+    </motion.div>
   );
 });
